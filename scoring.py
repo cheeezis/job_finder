@@ -209,6 +209,8 @@ def is_fulda_area(location):
         "huenfeld",
         "hunfeld",
         "neuhof",
+        "flieden",
+        "burghaun",
         "schluechtern",
         "schluchtern",
         "bad hersfeld",

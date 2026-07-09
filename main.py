@@ -1,11 +1,13 @@
 import json
+import sys
 from pathlib import Path
 
 from scoring import score_job
 
 
 def main():
-    jobs = load_jobs("jobs_sample.json")
+    jobs_file = sys.argv[1] if len(sys.argv) > 1 else "jobs_imported.json"
+    jobs = load_jobs(jobs_file)
     results = []
 
     # Jeden Job einzeln bewerten und das Scoring-Ergebnis an die Jobdaten haengen.

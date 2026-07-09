@@ -160,11 +160,20 @@ def score_location(location, remote):
 
 
 def extract_required_years(text):
-    # Sucht einfache Muster wie "2 Jahre", "3+ years" oder "1 Jahr Erfahrung".
-    matches = re.findall(r"(\d+)\s*\+?\s*(?:jahr|jahre|years|year)", text)
-    if not matches:
+    # Zaehlt nur Jahresangaben, die klar mit Erfahrung verbunden sind.
+    # So wird z.B. "35 Jahre Unternehmensgeschichte" nicht als Erfahrung gelesen.
+    patterns = [
+        r"(\d+)\s*\+?\s*(?:jahr|jahre|years|year)[^.!\n]{0,50}(?:erfahrung|berufserfahrung|experience)",
+        r"(?:erfahrung|berufserfahrung|experience)[^.!\n]{0,50}(\d+)\s*\+?\s*(?:jahr|jahre|years|year)",
+    ]
+    matches = []
+    for pattern in patterns:
+        matches.extend(re.findall(pattern, text))
+
+    years = [int(match) for match in matches if int(match) <= 10]
+    if not years:
         return 0
-    return max(int(match) for match in matches)
+    return max(years)
 
 
 def experience_penalty(years):

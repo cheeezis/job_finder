@@ -41,7 +41,9 @@ def print_results(results):
     print("PASSENDE JOBS")
     print("=" * 60)
     for job in included:
+        new_marker = "NEU | " if job.get("is_new") else ""
         print(
+            new_marker +
             f'{job["match_percent"]:>3}% | '
             f'{job["raw_score"]:>3} Punkte | '
             f'{job["title"]} | {job["company"]} | {job["location"]} | Remote: {job["remote"]}'

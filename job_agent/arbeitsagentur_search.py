@@ -16,7 +16,7 @@ SEARCH_TERMS = [
     "KI",
 ]
 
-DEFAULT_OUTPUT_FILE = "job_links.txt"
+DEFAULT_OUTPUT_FILE = "data/job_links.txt"
 SEARCH_BASE_URL = "https://www.arbeitsagentur.de/jobsuche/suche"
 DETAIL_BASE_URL = "https://www.arbeitsagentur.de/jobsuche/jobdetail"
 

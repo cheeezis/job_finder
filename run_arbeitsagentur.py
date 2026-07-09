@@ -1,15 +1,15 @@
 import json
 from pathlib import Path
 
-from import_arbeitsagentur import fetch_job
-from job_memory import load_memory, save_memory, update_memory
-from main import print_results, score_jobs
-from search_arbeitsagentur import collect_links
+from job_agent.arbeitsagentur_import import fetch_job
+from job_agent.arbeitsagentur_search import collect_links
+from job_agent.main import print_results, score_jobs
+from job_agent.memory import load_memory, save_memory, update_memory
 
 
-LINKS_FILE = "job_links.txt"
-JOBS_FILE = "jobs_imported.json"
-MEMORY_FILE = "seen_jobs.json"
+LINKS_FILE = "data/job_links.txt"
+JOBS_FILE = "data/jobs_imported.json"
+MEMORY_FILE = "data/seen_jobs.json"
 
 
 def main():

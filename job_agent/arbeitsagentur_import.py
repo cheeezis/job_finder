@@ -6,8 +6,8 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 
 
-DEFAULT_LINKS_FILE = "job_links.txt"
-DEFAULT_OUTPUT_FILE = "jobs_imported.json"
+DEFAULT_LINKS_FILE = "data/job_links.txt"
+DEFAULT_OUTPUT_FILE = "data/jobs_imported.json"
 
 
 def main():

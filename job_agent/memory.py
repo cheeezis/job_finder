@@ -3,7 +3,7 @@ from datetime import date
 from pathlib import Path
 
 
-MEMORY_FILE = "seen_jobs.json"
+MEMORY_FILE = "data/seen_jobs.json"
 
 
 def load_memory(path=MEMORY_FILE):

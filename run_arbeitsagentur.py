@@ -2,12 +2,14 @@ import json
 from pathlib import Path
 
 from import_arbeitsagentur import fetch_job
+from job_memory import load_memory, save_memory, update_memory
 from main import print_results, score_jobs
 from search_arbeitsagentur import collect_links
 
 
 LINKS_FILE = "job_links.txt"
 JOBS_FILE = "jobs_imported.json"
+MEMORY_FILE = "seen_jobs.json"
 
 
 def main():
@@ -24,7 +26,15 @@ def main():
     )
     print(f"{len(jobs)} Job(s) gespeichert in {JOBS_FILE}")
 
-    print("\n3/3 Bewerte Jobs")
+    print("\n3/4 Aktualisiere Job-Gedaechtnis")
+    memory = load_memory(MEMORY_FILE)
+    memory_stats = update_memory(jobs, memory)
+    save_memory(memory, MEMORY_FILE)
+    print(f'Neue Jobs: {memory_stats["new"]}')
+    print(f'Bekannte Jobs: {memory_stats["known"]}')
+    print(f"Gedaechtnis gespeichert in {MEMORY_FILE}")
+
+    print("\n4/4 Bewerte Jobs")
     results = score_jobs(jobs)
     print_results(results)
 

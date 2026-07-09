@@ -8,6 +8,11 @@ from scoring import score_job
 def main():
     jobs_file = sys.argv[1] if len(sys.argv) > 1 else "jobs_imported.json"
     jobs = load_jobs(jobs_file)
+    results = score_jobs(jobs)
+    print_results(results)
+
+
+def score_jobs(jobs):
     results = []
 
     # Jeden Job einzeln bewerten und das Scoring-Ergebnis an die Jobdaten haengen.
@@ -22,6 +27,16 @@ def main():
     # Sortierung basiert auf echten Rohpunkten, nicht auf der spaeteren Prozentanzeige.
     included.sort(key=lambda job: job["raw_score"], reverse=True)
     add_match_percent(included)
+
+    return {
+        "included": included,
+        "excluded": excluded,
+    }
+
+
+def print_results(results):
+    included = results["included"]
+    excluded = results["excluded"]
 
     print("PASSENDE JOBS")
     print("=" * 60)

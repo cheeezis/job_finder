@@ -1,5 +1,6 @@
 __pycache__/
 *.pyc
 data/job_links.txt
+data/stepstone_links.txt
 data/jobs_imported.json
 data/seen_jobs.json

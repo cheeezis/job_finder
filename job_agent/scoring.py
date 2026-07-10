@@ -223,7 +223,8 @@ def is_frankfurt(location):
 
 
 def is_full_remote(location, remote):
-    return "remote" in location or remote in ["100%", "100", "full", "fully remote", "remote"]
+    remote_location_words = ["remote", "home-office", "homeoffice", "home office"]
+    return contains_any(location, remote_location_words) or remote in ["100%", "100", "full", "fully remote", "remote"]
 
 
 def is_hybrid(remote):

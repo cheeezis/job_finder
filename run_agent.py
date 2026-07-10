@@ -4,10 +4,12 @@ from pathlib import Path
 from job_agent.main import print_results, score_jobs
 from job_agent.memory import load_memory, save_memory, update_memory
 from job_agent.sources import arbeitsagentur
+from job_agent.sources import stepstone
 
 
 SOURCES = [
     arbeitsagentur,
+    stepstone,
 ]
 
 JOBS_FILE = "data/jobs_imported.json"

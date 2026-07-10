@@ -1,35 +1,43 @@
 """get in IT source adapter.
 
-The search page is a Next.js page with job cards in __NEXT_DATA__. Detail pages
-usually have JobPosting JSON-LD; for a few pages we fall back to the Next.js
-state because their JSON-LD can contain malformed escaping.
+Search uses get-in-IT's public JSON API. Detail pages usually have JobPosting
+JSON-LD; for a few pages we fall back to the Next.js state because their JSON-LD
+can contain malformed escaping.
 """
 
 import json
 import re
 from html import unescape
-from html.parser import HTMLParser
-from urllib.parse import urljoin
-from urllib.request import Request, urlopen
+from urllib.parse import urlencode, urljoin
 
-from job_agent.config import GET_IN_IT_MAX_LINKS
+from job_agent.config import GET_IN_IT_MAX_LINKS, GET_IN_IT_MAX_LINKS_PER_SEARCH
+from job_agent.config import GET_IN_IT_SEARCH_LOCATIONS, GET_IN_IT_SEARCH_TERMS
+from job_agent.http import fetch_json, fetch_text
+from job_agent.remote import detect_remote
+from job_agent.search_plan import append_unique, iter_search_queries, unique_in_order
+from job_agent.text import html_to_text
 
 SOURCE_NAME = "get_in_it"
-SEARCH_URL = "https://www.get-in-it.de/jobsuche"
+API_SEARCH_URL = "https://www.get-in-it.de/api/v2/open/job/search"
+API_PAGE_SIZE = 39
+HESSEN_STATE_ID = 5
 
+THEMATIC_PRIORITIES = {
+    36: "Anwendungsentwicklung",
+    38: "Business Analysis",
+    39: "Datenbankentwicklung/BI",
+    44: "Forschung",
+    35: "System Engineering / Admin",
+    5: "Webentwicklung",
+}
 
-class TextExtractor(HTMLParser):
-    def __init__(self):
-        super().__init__()
-        self.parts = []
-
-    def handle_data(self, data):
-        text = data.strip()
-        if text:
-            self.parts.append(text)
-
-    def text(self):
-        return " ".join(self.parts)
+TERM_PRIORITY_RULES = [
+    (["data", "analytics", "analyst", "bi"], [38, 39]),
+    (["devops", "infrastructure", "system"], [35]),
+    (["ai", "ki", "machine learning", "ml"], [36, 39, 44]),
+    (["backend", "fullstack", "web"], [36, 5]),
+    (["python", "developer", "softwareentwickler", "software"], [36, 5]),
+]
 
 
 def fetch_jobs():
@@ -50,57 +58,110 @@ def fetch_jobs():
 
 
 def collect_links():
-    print("Suche get in IT: Jobsuche")
-    html = fetch_html(SEARCH_URL)
-    links = extract_detail_links(html)[:GET_IN_IT_MAX_LINKS]
-    print(f"  {len(links)} Link(s)")
-    return links
-
-
-def extract_detail_links(html):
-    """Read job links from the search page's embedded Next.js state."""
-    data = extract_next_data(html)
-    jobs = data.get("props", {}).get("initialState", {}).get("jobSearchJobs", {}).get("jobs", [])
     links = []
     seen = set()
 
-    for job in jobs:
+    for search in build_api_searches():
+        print(f"Suche get in IT: {search['label']} / {search['location']}")
+        try:
+            results = search_api(search["priority_id"], search["location"])
+        except Exception as error:
+            print(f"  FEHLER Suche: {error}")
+            continue
+
+        found_links = extract_detail_links_from_api(results)
+        print(f"  {len(found_links)} Link(s)")
+        for url in found_links:
+            append_unique(url, links, seen)
+            if len(links) >= GET_IN_IT_MAX_LINKS:
+                return links
+
+    return links
+
+
+def build_api_searches():
+    """Map our shared search terms to get-in-IT's available category filters."""
+    seen = set()
+
+    for query in iter_search_queries(GET_IN_IT_SEARCH_TERMS, GET_IN_IT_SEARCH_LOCATIONS):
+        for priority_id in priority_ids_for_term(query.term):
+            key = (priority_id, query.location)
+            if key in seen:
+                continue
+
+            seen.add(key)
+            yield {
+                "priority_id": priority_id,
+                "location": query.location,
+                "label": THEMATIC_PRIORITIES.get(priority_id, f"Thema {priority_id}"),
+            }
+
+
+def priority_ids_for_term(term):
+    normalized = term.lower()
+    priority_ids = []
+
+    for keywords, ids in TERM_PRIORITY_RULES:
+        if any(keyword in normalized for keyword in keywords):
+            priority_ids.extend(ids)
+
+    return unique_in_order(priority_ids)
+
+
+def search_api(priority_id, location):
+    limit = min(GET_IN_IT_MAX_LINKS_PER_SEARCH, API_PAGE_SIZE)
+    params = {
+        "start": 0,
+        "limit": limit,
+        "filter[thematic_priority]": priority_id,
+    }
+
+    if location.lower() == "remote":
+        params["filter[homeOffice]"] = 1
+    elif location.lower() == "fulda":
+        # get-in-IT exposes state filters reliably; final Fulda/remote filtering
+        # still happens in scoring, where exact locations and remote text exist.
+        params["filter[state]"] = HESSEN_STATE_ID
+
+    url = f"{API_SEARCH_URL}?{urlencode(params)}"
+    return fetch_json(
+        url,
+        headers={
+            "Accept": "application/json",
+            "X-Requested-With": "XMLHttpRequest",
+        },
+    )
+
+
+def extract_detail_links_from_api(data):
+    results = data.get("items", {}).get("results", [])
+    links = []
+
+    for job in results:
         path = job.get("url")
-        if not path:
-            continue
-
-        url = urljoin("https://www.get-in-it.de", path)
-        if url in seen:
-            continue
-
-        seen.add(url)
-        links.append(url)
+        if path:
+            links.append(urljoin("https://www.get-in-it.de", path))
 
     return links
 
 
 def fetch_job(url):
-    html = fetch_html(url)
+    html = fetch_text(url)
     posting = extract_job_posting(html)
     description = html_to_text(posting.get("description", ""))
     location = format_location(posting.get("jobLocation"))
+    title = posting.get("title", "")
 
     return {
-        "title": posting.get("title", ""),
+        "title": title,
         "company": clean_company(posting.get("hiringOrganization", {}).get("name", "")),
         "location": location,
-        "remote": detect_remote(html, description, location),
+        "remote": detect_remote(title, html, description, location),
         "description": description,
         "url": url,
         "external_url": posting.get("url", ""),
         "source": SOURCE_NAME,
     }
-
-
-def fetch_html(url):
-    request = Request(url, headers={"User-Agent": "job-agent/0.1"})
-    with urlopen(request, timeout=20) as response:
-        return response.read().decode("utf-8")
 
 
 def extract_next_data(html):
@@ -198,12 +259,6 @@ def find_job_posting(data):
     return None
 
 
-def html_to_text(html):
-    parser = TextExtractor()
-    parser.feed(html)
-    return parser.text()
-
-
 def clean_company(company):
     return re.sub(r"\s+", " ", company).strip()
 
@@ -226,18 +281,3 @@ def format_location(job_location):
                 cities.append(city)
 
     return ", ".join(cities) or "unbekannt"
-
-
-def detect_remote(html, description, location):
-    text = f"{html} {description} {location}".lower()
-    if '"homeoffice":true' in text:
-        return "homeoffice"
-    if contains_any(text, ["100% remote", "fully remote"]):
-        return "100%"
-    if contains_any(text, ["homeoffice", "home office", "remote", "mobiles arbeiten", "hybrid"]):
-        return "homeoffice"
-    return "0%"
-
-
-def contains_any(text, words):
-    return any(word in text for word in words)

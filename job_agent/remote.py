@@ -1,0 +1,79 @@
+"""Central remote-work detection shared by all source adapters."""
+
+import re
+
+from job_agent.text import normalize_text
+
+REMOTE_WORDS = [
+    "remote",
+    "homeoffice",
+    "home office",
+    "mobiles arbeiten",
+    "hybrid",
+    "telearbeit",
+]
+
+FULL_REMOTE_PHRASES = [
+    "100% remote",
+    "100 % remote",
+    "fully remote",
+    "full remote",
+    "komplett remote",
+    "vollstaendig remote",
+    "ausschliesslich remote",
+]
+
+NO_REMOTE_PHRASES = [
+    "kein remote",
+    "nicht remote",
+    "ohne remote",
+    "kein homeoffice",
+    "homeoffice nicht moeglich",
+    "remote: 0%",
+    "remote 0%",
+    "0% remote",
+    "0 % remote",
+]
+
+
+def detect_remote(*text_parts, structured_remote=""):
+    """Return 100%, an explicit percentage, homeoffice, or 0%."""
+    text = normalize_text(" ".join(str(part or "") for part in text_parts))
+    structured = normalize_text(structured_remote)
+
+    percent = extract_remote_percent(text)
+    if percent:
+        return f"{percent}%"
+
+    if structured in ["100%", "100", "full", "fully remote", "remote"]:
+        return "100%"
+
+    if contains_any(text, FULL_REMOTE_PHRASES):
+        return "100%"
+
+    if contains_any(text, NO_REMOTE_PHRASES):
+        return "0%"
+
+    if structured == "homeoffice" or contains_any(text, REMOTE_WORDS):
+        return "homeoffice"
+
+    return "0%"
+
+
+def extract_remote_percent(text):
+    """Find the highest percentage that is clearly connected to remote work."""
+    patterns = [
+        r"(?:bis zu|up to)?\s*(100|[1-9]\d)\s*%\s*(?:remote|homeoffice|home office|mobiles arbeiten|hybrid)",
+        r"(?:remote|homeoffice|home office|mobiles arbeiten|hybrid)[^\d%]{0,40}(100|[1-9]\d)\s*%",
+    ]
+    matches = []
+    for pattern in patterns:
+        matches.extend(int(match) for match in re.findall(pattern, text))
+
+    if not matches:
+        return 0
+    return max(matches)
+
+
+def contains_any(text, words):
+    return any(word in text for word in words)

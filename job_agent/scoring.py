@@ -1,20 +1,22 @@
 import re
 
-from job_agent.profile import BLOCKED_TITLE_WORDS, CLOSE_TITLE_PATTERNS, NEARBY_PLACES
+from job_agent.profile import BLOCKED_FOCUS_KEYWORDS, BLOCKED_TITLE_WORDS, CLOSE_TITLE_PATTERNS
+from job_agent.profile import FOCUS_CONTEXT_WORDS, NEARBY_PLACES
 from job_agent.profile import OPTIONAL_EXPERIENCE_PHRASES, POINTS, PROFILE_SKILL_GROUPS
 from job_agent.profile import REMOTE_LOCATION_WORDS, STRONG_TITLE_PATTERNS
+from job_agent.text import normalize_text
 
 
 def score_job(job):
     """Score one normalized job dict against the personal profile."""
-    title = job["title"].lower()
-    location = job["location"].lower()
-    remote = job.get("remote", "").lower()
-    description = job.get("description", "").lower()
+    title = normalize_text(job["title"])
+    location = normalize_text(job["location"])
+    remote = normalize_text(job.get("remote", ""))
+    description = normalize_text(job.get("description", ""))
     full_text = f"{title} {location} {remote} {description}"
 
     # Erst harte Ausschlusskriterien pruefen. Ausgeschlossene Jobs bekommen keinen Score.
-    allowed, filter_reason = passes_hard_filters(title, location, remote)
+    allowed, filter_reason = passes_hard_filters(title, description, location, remote)
     if not allowed:
         return {
             "status": "excluded",
@@ -22,22 +24,30 @@ def score_job(job):
             "reasons": [filter_reason],
         }
 
+    # Danach fachliche Anker pruefen: Ort/Remote allein soll keinen Job passend machen.
+    title_points, title_reason = score_title(title)
+    skill_matches = matching_skill_groups(f"{title} {description}")
+    if title_points == 0 and not skill_matches:
+        return {
+            "status": "excluded",
+            "raw_score": 0,
+            "reasons": ["Kein fachlicher Anker gefunden"],
+        }
+
     score = 0
     reasons = []
 
-    # Danach nur noch erlaubte Jobs bewerten und die Gruende sammelbar machen.
-    title_points, title_reason = score_title(title)
     score += title_points
     reasons.append(title_reason)
 
+    # Ort/Remote bewertet nur noch Jobs, die grundsaetzlich fachlich anschlussfaehig sind.
     location_points, location_reason = score_location(location, remote)
     score += location_points
     reasons.append(location_reason)
 
-    for skill_group in PROFILE_SKILL_GROUPS:
-        if has_keyword(full_text, skill_group["keywords"]):
-            score += skill_group["points"]
-            reasons.append(f'+{skill_group["points"]} {skill_group["label"]}')
+    for skill_group in skill_matches:
+        score += skill_group["points"]
+        reasons.append(f'+{skill_group["points"]} {skill_group["label"]}')
 
     years = extract_required_years(full_text)
     if years and not experience_is_optional(full_text):
@@ -58,11 +68,17 @@ def score_job(job):
     }
 
 
-def passes_hard_filters(title, location, remote):
-    # Diese Begriffe machen den Job direkt uninteressant, unabhaengig von Ort oder Skills.
-    blocked_word = find_first_match(title, BLOCKED_TITLE_WORDS)
+def passes_hard_filters(title, description, location, remote):
+    # Rollen-Level und Jobarten werden nur aus dem Titel hart ausgeschlossen.
+    blocked_word = find_blocked_title_word(title)
     if blocked_word:
         return False, f"Titel enthaelt Ausschlusswort: {blocked_word}"
+
+    # Fachliche Fokus-Blocker duerfen auch aus der Beschreibung kommen, aber nur
+    # wenn sie dort deutlich den Schwerpunkt der Stelle beschreiben.
+    blocked_focus = find_blocked_focus_keyword(title, description)
+    if blocked_focus:
+        return False, f"Fachlicher Fokus passt nicht: {blocked_focus}"
 
     # Fulda und nahe Orte sind immer moeglich, weil kein Umzug noetig ist.
     if is_fulda_area(location):
@@ -81,10 +97,10 @@ def passes_hard_filters(title, location, remote):
 
 def score_title(title):
     """Return title fit points before detailed skill matching happens."""
-    if any(all(part in title for part in pattern) for pattern in STRONG_TITLE_PATTERNS):
+    if any(matches_pattern(title, pattern) for pattern in STRONG_TITLE_PATTERNS):
         return POINTS["strong_title"], f'+{POINTS["strong_title"]} starker Titel-Match'
 
-    if any(all(part in title for part in pattern) for pattern in CLOSE_TITLE_PATTERNS):
+    if any(matches_pattern(title, pattern) for pattern in CLOSE_TITLE_PATTERNS):
         return POINTS["close_title"], f'+{POINTS["close_title"]} fachlich naher Titel-Match'
 
     return 0, "+0 Titel passt nicht besonders gut"
@@ -166,15 +182,61 @@ def remote_percent(remote):
 
 
 def contains_any(text, words):
-    return any(word in text for word in words)
+    return any(contains_keyword(text, word) for word in words)
 
 
-def find_first_match(text, words):
-    for word in words:
-        if word in text:
+def contains_keyword(text, keyword):
+    return re.search(keyword_pattern(keyword), text) is not None
+
+
+def keyword_pattern(keyword):
+    escaped = re.escape(normalize_text(keyword))
+    if re.fullmatch(r"[a-z0-9_]+", normalize_text(keyword)):
+        return rf"(?<!\w){escaped}(?!\w)"
+    return escaped
+
+
+def matches_pattern(text, pattern):
+    return all(contains_keyword(text, part) for part in pattern)
+
+
+def matching_skill_groups(text):
+    return [skill_group for skill_group in PROFILE_SKILL_GROUPS if has_keyword(text, skill_group["keywords"])]
+
+
+def find_blocked_title_word(title):
+    for word in BLOCKED_TITLE_WORDS:
+        # Manche Anzeigen nennen mehrere Level, z.B. "Junior/Senior".
+        # Die bleiben sichtbar, wenn "Junior" explizit im Titel steht.
+        if word == "senior" and contains_keyword(title, "junior"):
+            continue
+        if contains_keyword(title, word):
             return word
     return None
 
 
+def find_blocked_focus_keyword(title, description):
+    for keyword in BLOCKED_FOCUS_KEYWORDS:
+        if contains_keyword(title, keyword):
+            return keyword
+        if is_strong_body_focus(description, keyword):
+            return keyword
+    return None
+
+
+def is_strong_body_focus(description, keyword):
+    """Detect focus keywords in body text without banning one-off mentions."""
+    relevant_text = description[:1500]
+    matches = list(re.finditer(keyword_pattern(keyword), relevant_text))
+    if len(matches) >= 2:
+        return True
+    if not matches:
+        return False
+
+    match = matches[0]
+    window = relevant_text[max(0, match.start() - 80) : match.end() + 80]
+    return contains_any(window, FOCUS_CONTEXT_WORDS)
+
+
 def has_keyword(text, keywords):
-    return any(re.search(rf"\b{re.escape(keyword)}\b", text) for keyword in keywords)
+    return any(contains_keyword(text, keyword) for keyword in keywords)

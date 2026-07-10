@@ -8,9 +8,10 @@ import json
 import re
 from html import unescape
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
 
 from job_agent.config import FULDA_SEARCH_LOCATION, FULDA_SEARCH_RADIUS_KM, SEARCH_TERMS
+from job_agent.http import fetch_text
+from job_agent.remote import detect_remote
 
 SOURCE_NAME = "arbeitsagentur"
 SEARCH_BASE_URL = "https://www.arbeitsagentur.de/jobsuche/suche"
@@ -64,7 +65,7 @@ def collect_links():
 
 
 def search(term):
-    html = fetch_html(build_search_url(term))
+    html = fetch_text(build_search_url(term))
     state = extract_ng_state(html)
     return state.get("suchergebnis", {}).get("ergebnisliste", [])
 
@@ -81,25 +82,23 @@ def build_search_url(term):
 
 
 def fetch_job(url):
-    html = fetch_html(url)
+    html = fetch_text(url)
     detail = extract_jobdetail(html)
+    title = detail.get("stellenangebotsTitel", "")
+    location = format_locations(detail)
+    description = detail.get("stellenangebotsBeschreibung", "")
+    structured_remote = format_remote(detail)
 
     return {
-        "title": detail.get("stellenangebotsTitel", ""),
+        "title": title,
         "company": detail.get("firma", ""),
-        "location": format_locations(detail),
-        "remote": format_remote(detail),
-        "description": detail.get("stellenangebotsBeschreibung", ""),
+        "location": location,
+        "remote": detect_remote(title, description, location, structured_remote=structured_remote),
+        "description": description,
         "url": url,
         "external_url": detail.get("externeURL", ""),
         "source": SOURCE_NAME,
     }
-
-
-def fetch_html(url):
-    request = Request(url, headers={"User-Agent": "job-agent/0.1"})
-    with urlopen(request, timeout=20) as response:
-        return response.read().decode("utf-8")
 
 
 def extract_ng_state(html):

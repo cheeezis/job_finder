@@ -22,6 +22,7 @@ POINTS = {
 # Laufender Lernschwerpunkt: IBM RAG and Agentic AI Professional Certificate.
 AI_ML_KEYWORDS = [
     "ai",
+    "ki",
     "artificial intelligence",
     "machine learning",
     "ml",
@@ -55,11 +56,21 @@ PROFILE_SKILL_GROUPS = [
     {
         "points": POINTS["data_analytics"],
         "label": "Data/Analytics gefunden",
-        "keywords": ["data", "daten", "analytics", "analyse", "analyst"],
+        "keywords": [
+            "data analyst",
+            "data analytics",
+            "data engineer",
+            "data engineering",
+            "data science",
+            "datenanalyse",
+            "datenanalyst",
+            "analytics",
+            "business intelligence",
+        ],
     },
 ]
 
-# Titel mit diesen Begriffen passen grundsaetzlich nicht zu deiner Suche.
+# Rollen-/Karrierelevel, die grundsaetzlich nicht zu deiner Suche passen.
 BLOCKED_TITLE_WORDS = [
     "senior",
     "lead",
@@ -74,6 +85,39 @@ BLOCKED_TITLE_WORDS = [
     "thesis",
     "abschlussarbeit",
     "bachelorarbeit",
+    "professur",
+    "professor",
+    "bildungsreferent",
+    "zaehler",
+    "elektroniker",
+    "elektriker",
+    "servicetechniker",
+]
+
+# Fachliche Schwerpunkte, die meistens an deiner Python/Data/AI-Suche vorbeigehen.
+# Im Titel reicht ein Treffer direkt; im Beschreibungstext wird strenger geprueft.
+BLOCKED_FOCUS_KEYWORDS = [
+    "sap",
+    "abap",
+    "s/4hana",
+    "s4hana",
+    "sps",
+    "tunnelausstattung",
+    "oepnv",
+]
+
+# Kontextwoerter helfen zu erkennen, ob ein Keyword im Fliesstext wirklich den
+# Job-Fokus beschreibt oder nur beilaufig erwaehnt wird.
+FOCUS_CONTEXT_WORDS = [
+    "aufgabe",
+    "aufgaben",
+    "fokus",
+    "schwerpunkt",
+    "rolle",
+    "position",
+    "profil",
+    "taetigkeit",
+    "taetigkeiten",
 ]
 
 STRONG_TITLE_PATTERNS = [
@@ -101,6 +145,7 @@ CLOSE_TITLE_PATTERNS = [
     ["ai", "developer"],
     ["backend", "python"],
     ["backend", "developer"],
+    ["devops", "engineer"],
     ["software", "developer"],
     ["softwareentwickler"],
     ["anwendungsentwickler"],

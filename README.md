@@ -13,7 +13,13 @@ Der Agent kann:
 
 ## Nutzung
 
-Kompletter Arbeitsagentur-Lauf:
+Kompletter Agentenlauf fuer alle angebundenen Quellen:
+
+```powershell
+python run_agent.py
+```
+
+Arbeitsagentur-Lauf als alter Alias:
 
 ```powershell
 python run_arbeitsagentur.py
@@ -47,10 +53,12 @@ python -m job_agent.arbeitsagentur_import
 
 ```text
 job_agent/                  Code
+job_agent/sources/          Quellenadapter
 data/jobs_sample.json       Testdaten
 data/job_links.txt          generierte Arbeitsagentur-Links
 data/jobs_imported.json     importierte Jobdetails
 data/seen_jobs.json         lokales Job-Gedaechtnis
-run_arbeitsagentur.py       kompletter Agentenlauf
+run_agent.py                kompletter Agentenlauf
+run_arbeitsagentur.py       Alias fuer run_agent.py
 main.py                     Bewertungs-Einstieg
 ```

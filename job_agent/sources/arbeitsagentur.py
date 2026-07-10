@@ -1,21 +1,18 @@
+"""Arbeitsagentur source adapter.
+
+The site renders search and detail data into Angular's server-side ng-state
+JSON, so we can read structured data without browser automation.
+"""
+
 import json
 import re
 from html import unescape
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+from job_agent.config import FULDA_SEARCH_LOCATION, FULDA_SEARCH_RADIUS_KM, SEARCH_TERMS
 
 SOURCE_NAME = "arbeitsagentur"
-SEARCH_TERMS = [
-    "Python",
-    "Python Developer",
-    "Developer",
-    "Data Analyst",
-    "AI Engineer",
-    "Machine Learning",
-    "KI",
-]
-
 SEARCH_BASE_URL = "https://www.arbeitsagentur.de/jobsuche/suche"
 DETAIL_BASE_URL = "https://www.arbeitsagentur.de/jobsuche/jobdetail"
 
@@ -77,8 +74,8 @@ def build_search_url(term):
     query = {
         "angebotsart": "1",
         "was": term,
-        "wo": "Fulda",
-        "umkreis": "30",
+        "wo": FULDA_SEARCH_LOCATION,
+        "umkreis": str(FULDA_SEARCH_RADIUS_KM),
     }
     return f"{SEARCH_BASE_URL}?{urlencode(query)}"
 

@@ -1,3 +1,10 @@
+"""get in IT source adapter.
+
+The search page is a Next.js page with job cards in __NEXT_DATA__. Detail pages
+usually have JobPosting JSON-LD; for a few pages we fall back to the Next.js
+state because their JSON-LD can contain malformed escaping.
+"""
+
 import json
 import re
 from html import unescape
@@ -5,10 +12,10 @@ from html.parser import HTMLParser
 from urllib.parse import urljoin
 from urllib.request import Request, urlopen
 
+from job_agent.config import GET_IN_IT_MAX_LINKS
 
 SOURCE_NAME = "get_in_it"
 SEARCH_URL = "https://www.get-in-it.de/jobsuche"
-MAX_LINKS = 25
 
 
 class TextExtractor(HTMLParser):
@@ -45,12 +52,13 @@ def fetch_jobs():
 def collect_links():
     print("Suche get in IT: Jobsuche")
     html = fetch_html(SEARCH_URL)
-    links = extract_detail_links(html)[:MAX_LINKS]
+    links = extract_detail_links(html)[:GET_IN_IT_MAX_LINKS]
     print(f"  {len(links)} Link(s)")
     return links
 
 
 def extract_detail_links(html):
+    """Read job links from the search page's embedded Next.js state."""
     data = extract_next_data(html)
     jobs = data.get("props", {}).get("initialState", {}).get("jobSearchJobs", {}).get("jobs", [])
     links = []
@@ -107,6 +115,7 @@ def extract_next_data(html):
 
 
 def extract_job_posting(html):
+    """Prefer JSON-LD, then fall back to get-in-IT's embedded state."""
     scripts = re.findall(
         r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
         html,
@@ -131,6 +140,7 @@ def extract_job_posting(html):
 
 
 def extract_job_posting_from_next_data(html):
+    """Build a JobPosting-like dict from Next.js state when JSON-LD fails."""
     job = extract_next_data(html).get("props", {}).get("initialState", {}).get("jobJob", {}).get("job")
     if not job:
         return None

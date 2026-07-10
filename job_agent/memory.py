@@ -7,6 +7,7 @@ MEMORY_FILE = "data/seen_jobs.json"
 
 
 def load_memory(path=MEMORY_FILE):
+    """Load the local URL-based job memory."""
     memory_path = Path(path)
     if not memory_path.exists():
         return {}
@@ -21,6 +22,7 @@ def save_memory(memory, path=MEMORY_FILE):
 
 
 def update_memory(jobs, memory):
+    """Mark jobs as new or known and refresh their last-seen metadata."""
     today = date.today().isoformat()
     new_count = 0
     known_count = 0

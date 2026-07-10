@@ -9,6 +9,7 @@ SOURCE_NAME = "arbeitsagentur"
 SEARCH_TERMS = [
     "Python",
     "Python Developer",
+    "Developer",
     "Data Analyst",
     "AI Engineer",
     "Machine Learning",

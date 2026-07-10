@@ -1,19 +1,27 @@
 import json
+import sys
 from pathlib import Path
 
 from job_agent.main import print_results, score_jobs
 from job_agent.memory import load_memory, save_memory, update_memory
 from job_agent.sources import arbeitsagentur
+from job_agent.sources import get_in_it
 from job_agent.sources import stepstone
 
 
 SOURCES = [
     arbeitsagentur,
     stepstone,
+    get_in_it,
 ]
 
 JOBS_FILE = "data/jobs_imported.json"
 MEMORY_FILE = "data/seen_jobs.json"
+
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 
 def main():

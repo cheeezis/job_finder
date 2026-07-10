@@ -19,12 +19,14 @@ JOBS_FILE = "data/jobs_imported.json"
 MEMORY_FILE = "data/seen_jobs.json"
 
 
+# Windows terminals may default to cp1252; job titles often contain Unicode.
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 
 def main():
+    """Run the full pipeline: collect jobs, update memory, then score."""
     print("1/3 Sammle Jobs aus Quellen")
     jobs = collect_jobs()
     Path(JOBS_FILE).write_text(
@@ -47,6 +49,7 @@ def main():
 
 
 def collect_jobs():
+    """Collect jobs from all configured sources and deduplicate by URL."""
     jobs = []
     seen_urls = set()
 

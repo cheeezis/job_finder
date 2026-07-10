@@ -1,3 +1,9 @@
+"""StepStone source adapter.
+
+Search pages provide detail links in HTML. Detail pages expose structured
+schema.org JobPosting JSON-LD, which is more stable than scraping visible text.
+"""
+
 import json
 import re
 from html import unescape
@@ -5,22 +11,11 @@ from html.parser import HTMLParser
 from urllib.parse import quote, urljoin
 from urllib.request import Request, urlopen
 
+from job_agent.config import SEARCH_LOCATIONS, STEPSTONE_MAX_LINKS_PER_SEARCH
+from job_agent.config import STEPSTONE_MAX_TOTAL_LINKS, STEPSTONE_SEARCH_TERMS
 
 SOURCE_NAME = "stepstone"
 SEARCH_BASE_URL = "https://www.stepstone.de/jobs"
-SEARCH_TERMS = [
-    "Python Developer",
-    "Developer",
-    "Data Analyst",
-    "AI Engineer",
-    "Machine Learning",
-]
-SEARCH_LOCATIONS = [
-    "Fulda",
-    "Remote",
-]
-MAX_LINKS_PER_SEARCH = 5
-MAX_TOTAL_SEARCH_LINKS = 25
 
 
 class TextExtractor(HTMLParser):
@@ -68,7 +63,7 @@ def search_links():
     links = []
     seen = set()
 
-    for term in SEARCH_TERMS:
+    for term in STEPSTONE_SEARCH_TERMS:
         for location in SEARCH_LOCATIONS:
             search_url = build_search_url(term, location)
             print(f"Suche StepStone: {term} / {location}")
@@ -78,11 +73,11 @@ def search_links():
                 print(f"  FEHLER Suche: {error}")
                 continue
 
-            found_links = extract_detail_links(html)[:MAX_LINKS_PER_SEARCH]
+            found_links = extract_detail_links(html)[:STEPSTONE_MAX_LINKS_PER_SEARCH]
             print(f"  {len(found_links)} Link(s)")
             for url in found_links:
                 add_link(url, links, seen)
-                if len(links) >= MAX_TOTAL_SEARCH_LINKS:
+                if len(links) >= STEPSTONE_MAX_TOTAL_LINKS:
                     return links
 
     return links
@@ -143,6 +138,7 @@ def fetch_html(url):
 
 
 def extract_job_posting(html):
+    """Find the JobPosting JSON-LD block on a StepStone detail page."""
     scripts = re.findall(
         r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
         html,

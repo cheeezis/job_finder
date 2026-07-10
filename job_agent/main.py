@@ -5,6 +5,7 @@ from pathlib import Path
 from job_agent.scoring import score_job
 
 
+# Keep console output stable for German job titles and company names.
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
@@ -18,6 +19,7 @@ def main():
 
 
 def score_jobs(jobs):
+    """Score imported jobs and split them into included/excluded buckets."""
     results = []
 
     # Jeden Job einzeln bewerten und das Scoring-Ergebnis an die Jobdaten haengen.

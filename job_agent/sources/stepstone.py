@@ -2,16 +2,15 @@ import json
 import re
 from html import unescape
 from html.parser import HTMLParser
-from pathlib import Path
 from urllib.parse import quote, urljoin
 from urllib.request import Request, urlopen
 
 
 SOURCE_NAME = "stepstone"
-LINKS_FILE = "data/stepstone_links.txt"
 SEARCH_BASE_URL = "https://www.stepstone.de/jobs"
 SEARCH_TERMS = [
     "Python Developer",
+    "Developer",
     "Data Analyst",
     "AI Engineer",
     "Machine Learning",
@@ -59,22 +58,10 @@ def collect_links():
     links = []
     seen = set()
 
-    for url in load_links(LINKS_FILE):
-        add_link(url, links, seen)
-
     for url in search_links():
         add_link(url, links, seen)
 
     return links
-
-
-def load_links(path):
-    links_path = Path(path)
-    if not links_path.exists():
-        return []
-
-    lines = links_path.read_text(encoding="utf-8").splitlines()
-    return [line.strip() for line in lines if line.strip() and not line.startswith("#")]
 
 
 def search_links():

@@ -5,6 +5,11 @@ from pathlib import Path
 from job_agent.scoring import score_job
 
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
+
 def main():
     jobs_file = sys.argv[1] if len(sys.argv) > 1 else "data/jobs_imported.json"
     jobs = load_jobs(jobs_file)

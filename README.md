@@ -20,34 +20,16 @@ Kompletter Agentenlauf fuer alle angebundenen Quellen:
 python run_agent.py
 ```
 
-Arbeitsagentur-Lauf als alter Alias:
-
-```powershell
-python run_arbeitsagentur.py
-```
-
 Nur vorhandene importierte Jobs bewerten:
 
 ```powershell
-python main.py
+python -m job_agent.main
 ```
 
 Sample-Daten bewerten:
 
 ```powershell
-python main.py data/jobs_sample.json
-```
-
-Nur Arbeitsagentur-Links suchen:
-
-```powershell
-python -m job_agent.arbeitsagentur_search
-```
-
-Nur vorhandene Links importieren:
-
-```powershell
-python -m job_agent.arbeitsagentur_import
+python -m job_agent.main data/jobs_sample.json
 ```
 
 ## Struktur
@@ -56,11 +38,8 @@ python -m job_agent.arbeitsagentur_import
 job_agent/                  Code
 job_agent/sources/          Quellenadapter
 data/jobs_sample.json       Testdaten
-data/job_links.txt          generierte Arbeitsagentur-Links
 data/stepstone_links.txt    lokale StepStone-Detailinks
 data/jobs_imported.json     importierte Jobdetails
 data/seen_jobs.json         lokales Job-Gedaechtnis
 run_agent.py                kompletter Agentenlauf
-run_arbeitsagentur.py       Alias fuer run_agent.py
-main.py                     Bewertungs-Einstieg
 ```

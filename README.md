@@ -1,6 +1,7 @@
 # Job Agent
 
-Ein kleiner Job-Agent fuer Junior Python/Data/AI-Rollen rund um Fulda oder remote.
+Ein kleiner Job-Agent fuer Junior Python/Data/AI-Rollen im 30-km-Radius um
+Exampletown oder 100 Prozent remote aus Deutschland.
 
 ## Aktueller Stand
 
@@ -11,8 +12,10 @@ Der Agent kann:
 - get-in-IT-Suchergebnisse ueber die oeffentliche JSON-API abrufen
 - Jobdetail-Seiten importieren
 - Jobs nach deinen Regeln bewerten
+- feste, laufuebergreifend vergleichbare Match-Scores von 0 bis 100 erzeugen
+- quellenuebergreifende Duplikate fuer das Review zusammenfuehren
 - bereits gesehene Jobs in `data/seen_jobs.json` merken
-- Review-Dateien fuer manuelles Feintuning erzeugen
+- kompakte Review-Dateien fuer manuelles Feintuning erzeugen
 
 ## Nutzung
 
@@ -34,6 +37,12 @@ Sample-Daten bewerten:
 python -m job_agent.main data/jobs_sample.json
 ```
 
+Scoring-, Filter- und Deduplizierungsregeln testen:
+
+```powershell
+python -m unittest discover -s tests -v
+```
+
 ## Struktur
 
 ```text
@@ -41,7 +50,9 @@ job_agent/                  Code
 job_agent/config.py         Suchbegriffe und Suchorte
 job_agent/http.py           gemeinsame HTTP-Helfer
 job_agent/profile.py        Profil-, Skill- und Scoring-Regeln
+job_agent/deduplication.py  quellenuebergreifende Job-Deduplizierung
 job_agent/remote.py         gemeinsame Remote-Erkennung
+job_agent/reporting.py      JSON- und Markdown-Ausgaben
 job_agent/search_plan.py    gemeinsame Suchplan-Helfer
 job_agent/text.py           gemeinsame Text-/HTML-Helfer
 job_agent/sources/          Quellenadapter
@@ -50,5 +61,6 @@ data/jobs_imported.json     importierte Jobdetails
 data/seen_jobs.json         lokales Job-Gedaechtnis
 data/jobs_scored.json       generierte Scoring-Ergebnisse
 data/jobs_review.md         generierte Review-Datei
+tests/                      automatisierte Scoring- und Filtertests
 run_agent.py                kompletter Agentenlauf
 ```

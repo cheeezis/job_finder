@@ -8,13 +8,29 @@ SEARCH_TERMS = [
     "Developer",
     "Junior Data Analyst",
     "Data Analyst",
+    "Data Engineer",
     "Junior AI Engineer",
     "AI Engineer",
     "AI Developer",
     "Machine Learning Engineer",
     "Backend Developer",
     "Fullstack Developer",
+    "Frontend Developer",
+    "Web Developer",
     "DevOps Engineer",
+    "Site Reliability Engineer",
+    "Cloud Engineer",
+    "Security Engineer",
+    "Network Engineer",
+    "Software Architect",
+    "IT Consultant",
+    "Software Test Engineer",
+    "Test Automation Engineer",
+    "QA Engineer",
+    "Java Developer",
+    "JavaScript Developer",
+    "TypeScript Developer",
+    "Trainee IT",
     "Softwareentwickler Python",
     "KI Entwickler",
     "KI",
@@ -27,24 +43,40 @@ STEPSTONE_SEARCH_TERMS = [
     "Developer",
     "Junior Data Analyst",
     "Data Analyst",
+    "Data Engineer",
     "Junior AI Engineer",
     "AI Engineer",
     "AI Developer",
     "Machine Learning Engineer",
     "Backend Developer",
     "Fullstack Developer",
+    "Frontend Developer",
+    "Web Developer",
     "DevOps Engineer",
+    "Site Reliability Engineer",
+    "Cloud Engineer",
+    "Security Engineer",
+    "Network Engineer",
+    "Software Architect",
+    "IT Consultant",
+    "Software Test Engineer",
+    "Test Automation Engineer",
+    "QA Engineer",
+    "Java Developer",
+    "JavaScript Developer",
+    "TypeScript Developer",
+    "Trainee IT",
     "Softwareentwickler Python",
     "KI Entwickler",
 ]
 
+LOCAL_SEARCH_LOCATION = "Exampletown"
+LOCAL_SEARCH_RADIUS_KM = 30
+
 SEARCH_LOCATIONS = [
-    "Fulda",
+    LOCAL_SEARCH_LOCATION,
     "Remote",
 ]
-
-FULDA_SEARCH_LOCATION = "Fulda"
-FULDA_SEARCH_RADIUS_KM = 30
 
 GET_IN_IT_SEARCH_TERMS = STEPSTONE_SEARCH_TERMS
 GET_IN_IT_SEARCH_LOCATIONS = SEARCH_LOCATIONS

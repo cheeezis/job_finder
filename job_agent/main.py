@@ -2,6 +2,8 @@ import json
 import sys
 from pathlib import Path
 
+from job_agent.deduplication import deduplicate_jobs
+from job_agent.reporting import write_review_files
 from job_agent.scoring import score_job
 
 
@@ -15,6 +17,7 @@ def main():
     jobs_file = sys.argv[1] if len(sys.argv) > 1 else "data/jobs_imported.json"
     jobs = load_jobs(jobs_file)
     results = score_jobs(jobs)
+    write_review_files(results)
     print_results(results)
 
 
@@ -22,8 +25,8 @@ def score_jobs(jobs):
     """Score imported jobs and split them into included/excluded buckets."""
     results = []
 
-    # Jeden Job einzeln bewerten und das Scoring-Ergebnis an die Jobdaten haengen.
-    for job in jobs:
+    # Quellenuebergreifende Duplikate sollen nur einmal im Review auftauchen.
+    for job in deduplicate_jobs(jobs):
         result = score_job(job)
         results.append({**job, **result})
 
@@ -31,9 +34,8 @@ def score_jobs(jobs):
     included = [job for job in results if job["status"] == "included"]
     excluded = [job for job in results if job["status"] == "excluded"]
 
-    # Sortierung basiert auf echten Rohpunkten, nicht auf der spaeteren Prozentanzeige.
-    included.sort(key=lambda job: job["raw_score"], reverse=True)
-    add_match_percent(included)
+    # Einstiegsstellen stehen immer vor Jobs mit hoeherer Erfahrungsanforderung.
+    included.sort(key=lambda job: (job["experience_rank"], -job["match_percent"]))
 
     return {
         "included": included,
@@ -59,27 +61,19 @@ def print_results(results):
             print(f"      - {reason}")
         print()
 
-    print("AUSGESCHLOSSENE JOBS")
+    print(f"AUSGESCHLOSSENE JOBS: {len(excluded)}")
     print("=" * 60)
-    for job in excluded:
+    for job in excluded[:30]:
         print(f'{job["title"]} | {job["company"]} | {job["location"]}')
         print(f'      - {job["reasons"][0]}')
         print()
 
+    if len(excluded) > 30:
+        print(f"... {len(excluded) - 30} weitere in data/jobs_scored.json")
+
 
 def load_jobs(path):
     return json.loads(Path(path).read_text(encoding="utf-8"))
-
-
-def add_match_percent(jobs):
-    # Prozentwerte sind relativ zum besten Job im aktuellen Lauf.
-    # Dadurch bleibt raw_score unbegrenzt, waehrend die Anzeige lesbar bleibt.
-    if not jobs:
-        return
-
-    best_score = jobs[0]["raw_score"]
-    for job in jobs:
-        job["match_percent"] = round(job["raw_score"] / best_score * 100)
 
 
 if __name__ == "__main__":

@@ -16,6 +16,10 @@ REMOTE_WORDS = [
 FULL_REMOTE_PHRASES = [
     "100% remote",
     "100 % remote",
+    "100% homeoffice",
+    "100 % homeoffice",
+    "100% home office",
+    "100 % home office",
     "fully remote",
     "full remote",
     "komplett remote",

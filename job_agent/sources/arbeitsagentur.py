@@ -9,7 +9,7 @@ import re
 from html import unescape
 from urllib.parse import urlencode
 
-from job_agent.config import FULDA_SEARCH_LOCATION, FULDA_SEARCH_RADIUS_KM, SEARCH_TERMS
+from job_agent.config import LOCAL_SEARCH_LOCATION, LOCAL_SEARCH_RADIUS_KM, SEARCH_TERMS
 from job_agent.http import fetch_text
 from job_agent.remote import detect_remote
 
@@ -97,12 +97,12 @@ def search(term):
 
 
 def build_search_url(term, page=1):
-    # Fulda + 30 km bleibt die harte lokale Suche; Remote wird danach bewertet.
+    # The local radius is centered on the configured home location.
     query = {
         "angebotsart": "1",
         "was": term,
-        "wo": FULDA_SEARCH_LOCATION,
-        "umkreis": str(FULDA_SEARCH_RADIUS_KM),
+        "wo": LOCAL_SEARCH_LOCATION,
+        "umkreis": str(LOCAL_SEARCH_RADIUS_KM),
         "page": str(page),
     }
     return f"{SEARCH_BASE_URL}?{urlencode(query)}"

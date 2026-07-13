@@ -1,8 +1,10 @@
+"""Command-line entry point for collecting, remembering, and scoring jobs."""
+
 import json
-import sys
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
+from job_agent.console import configure_utf8_output
 from job_agent.main import print_results, score_jobs
 from job_agent.memory import load_memory, save_memory, update_memory
 from job_agent.reporting import write_review_files
@@ -21,14 +23,9 @@ JOBS_FILE = "data/jobs_imported.json"
 MEMORY_FILE = "data/seen_jobs.json"
 
 
-# Windows terminals may default to cp1252; job titles often contain Unicode.
-if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-
-
 def main():
     """Run the full pipeline: collect jobs, update memory, then score."""
+    configure_utf8_output()
     print("1/3 Sammle Jobs aus Quellen")
     jobs = collect_jobs()
     Path(JOBS_FILE).write_text(
@@ -73,6 +70,7 @@ def collect_jobs():
 
 
 def canonical_url(url):
+    """Remove query parameters and fragments used only for tracking."""
     parts = urlsplit(url or "")
     return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
 

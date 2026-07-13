@@ -36,38 +36,10 @@ SEARCH_TERMS = [
     "KI",
 ]
 
+# Standalone terms are useful for Arbeitsagentur, but too broad on StepStone.
+STEPSTONE_BROAD_TERMS = {"Python", "KI"}
 STEPSTONE_SEARCH_TERMS = [
-    "Junior Python Developer",
-    "Python Developer",
-    "Junior Software Developer",
-    "Developer",
-    "Junior Data Analyst",
-    "Data Analyst",
-    "Data Engineer",
-    "Junior AI Engineer",
-    "AI Engineer",
-    "AI Developer",
-    "Machine Learning Engineer",
-    "Backend Developer",
-    "Fullstack Developer",
-    "Frontend Developer",
-    "Web Developer",
-    "DevOps Engineer",
-    "Site Reliability Engineer",
-    "Cloud Engineer",
-    "Security Engineer",
-    "Network Engineer",
-    "Software Architect",
-    "IT Consultant",
-    "Software Test Engineer",
-    "Test Automation Engineer",
-    "QA Engineer",
-    "Java Developer",
-    "JavaScript Developer",
-    "TypeScript Developer",
-    "Trainee IT",
-    "Softwareentwickler Python",
-    "KI Entwickler",
+    term for term in SEARCH_TERMS if term not in STEPSTONE_BROAD_TERMS
 ]
 
 LOCAL_SEARCH_LOCATION = "Exampletown"

@@ -9,16 +9,19 @@ DEFAULT_HEADERS = {
 
 
 def fetch_text(url, headers=None, timeout=20):
-    request = Request(url, headers=build_headers(headers))
+    """Fetch a URL and decode its response as UTF-8 text."""
+    request = Request(url, headers=_build_headers(headers))
     with urlopen(request, timeout=timeout) as response:
         return response.read().decode("utf-8")
 
 
 def fetch_json(url, headers=None, timeout=20):
+    """Fetch a URL and parse its UTF-8 response as JSON."""
     return json.loads(fetch_text(url, headers=headers, timeout=timeout))
 
 
-def build_headers(headers=None):
+def _build_headers(headers=None):
+    """Merge optional request headers with the agent defaults."""
     merged = dict(DEFAULT_HEADERS)
     merged.update(headers or {})
     return merged

@@ -4,7 +4,6 @@ Search pages provide detail links in HTML. Detail pages expose structured
 schema.org JobPosting JSON-LD, which is more stable than scraping visible text.
 """
 
-import json
 import re
 from html import unescape
 from urllib.parse import quote, urljoin, urlsplit, urlunsplit
@@ -13,6 +12,7 @@ from job_agent.config import SEARCH_LOCATIONS, STEPSTONE_SEARCH_TERMS
 from job_agent.http import fetch_text
 from job_agent.remote import detect_remote
 from job_agent.search_plan import append_unique, iter_search_queries
+from job_agent.structured_data import extract_json_ld_job_posting
 from job_agent.text import html_to_text
 
 SOURCE_NAME = "stepstone"
@@ -20,7 +20,8 @@ SEARCH_BASE_URL = "https://www.stepstone.de/jobs"
 
 
 def fetch_jobs():
-    links = collect_links()
+    """Search StepStone and return imported job details."""
+    links = search_links()
     if not links:
         print("Keine StepStone-Links gefunden")
         return []
@@ -36,17 +37,8 @@ def fetch_jobs():
     return jobs
 
 
-def collect_links():
-    links = []
-    seen = set()
-
-    for url in search_links():
-        append_unique(url, links, seen)
-
-    return links
-
-
 def search_links():
+    """Collect unique detail links from all configured search pages."""
     links = []
     seen = set()
 
@@ -112,8 +104,11 @@ def normalize_detail_url(url):
 
 
 def fetch_job(url):
+    """Import one StepStone detail page from its structured data."""
     html = fetch_text(url)
-    posting = extract_job_posting(html)
+    posting = extract_json_ld_job_posting(html)
+    if not posting:
+        raise ValueError("JobPosting JSON-LD nicht gefunden")
     description = html_to_text(posting.get("description", ""))
     location = format_location(posting.get("jobLocation"))
     title = posting.get("title", "")
@@ -128,25 +123,6 @@ def fetch_job(url):
         "external_url": url,
         "source": SOURCE_NAME,
     }
-
-
-def extract_job_posting(html):
-    """Find the JobPosting JSON-LD block on a StepStone detail page."""
-    scripts = re.findall(
-        r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
-        html,
-        re.DOTALL | re.IGNORECASE,
-    )
-
-    for script in scripts:
-        data = json.loads(unescape(script.strip()))
-        postings = data if isinstance(data, list) else [data]
-        for item in postings:
-            if item.get("@type") == "JobPosting":
-                return item
-
-    raise ValueError("JobPosting JSON-LD nicht gefunden")
-
 
 def clean_company(company):
     return re.sub(r"_20\d{2}-.+$", "", company).strip()

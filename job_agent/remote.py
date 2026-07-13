@@ -67,8 +67,14 @@ def detect_remote(*text_parts, structured_remote=""):
 def extract_remote_percent(text):
     """Find the highest percentage that is clearly connected to remote work."""
     patterns = [
-        r"(?:bis zu|up to)?\s*(100|[1-9]\d)\s*%\s*(?:remote|homeoffice|home office|mobiles arbeiten|hybrid)",
-        r"(?:remote|homeoffice|home office|mobiles arbeiten|hybrid)[^\d%]{0,40}(100|[1-9]\d)\s*%",
+        (
+            r"(?:bis zu|up to)?\s*(100|[1-9]\d)\s*%\s*"
+            r"(?:remote|homeoffice|home office|mobiles arbeiten|hybrid)"
+        ),
+        (
+            r"(?:remote|homeoffice|home office|mobiles arbeiten|hybrid)"
+            r"[^\d%]{0,40}(100|[1-9]\d)\s*%"
+        ),
     ]
     matches = []
     for pattern in patterns:
@@ -80,4 +86,5 @@ def extract_remote_percent(text):
 
 
 def contains_any(text, words):
+    """Return whether text contains any configured phrase."""
     return any(word in text for word in words)

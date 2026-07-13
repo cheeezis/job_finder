@@ -48,12 +48,14 @@ python -m unittest discover -s tests -v
 ```text
 job_agent/                  Code
 job_agent/config.py         Suchbegriffe und Suchorte
+job_agent/console.py        gemeinsame Konsolenkonfiguration
 job_agent/http.py           gemeinsame HTTP-Helfer
 job_agent/profile.py        Profil-, Skill- und Scoring-Regeln
 job_agent/deduplication.py  quellenuebergreifende Job-Deduplizierung
 job_agent/remote.py         gemeinsame Remote-Erkennung
 job_agent/reporting.py      JSON- und Markdown-Ausgaben
 job_agent/search_plan.py    gemeinsame Suchplan-Helfer
+job_agent/structured_data.py gemeinsame JSON-LD-Auswertung
 job_agent/text.py           gemeinsame Text-/HTML-Helfer
 job_agent/sources/          Quellenadapter
 data/jobs_sample.json       Testdaten

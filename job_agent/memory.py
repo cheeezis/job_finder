@@ -1,3 +1,5 @@
+"""Local memory for tracking jobs across agent runs."""
+
 import json
 from datetime import date
 from pathlib import Path
@@ -15,6 +17,7 @@ def load_memory(path=MEMORY_FILE):
 
 
 def save_memory(memory, path=MEMORY_FILE):
+    """Persist the local job memory as UTF-8 JSON."""
     Path(path).write_text(
         json.dumps(memory, indent=2, ensure_ascii=False),
         encoding="utf-8",
@@ -36,8 +39,14 @@ def update_memory(jobs, memory):
             known_count += 1
             job["is_new"] = False
             memory[url]["last_seen"] = today
-            memory[url]["title"] = job.get("title", memory[url].get("title", ""))
-            memory[url]["company"] = job.get("company", memory[url].get("company", ""))
+            memory[url]["title"] = job.get(
+                "title",
+                memory[url].get("title", ""),
+            )
+            memory[url]["company"] = job.get(
+                "company",
+                memory[url].get("company", ""),
+            )
             continue
 
         new_count += 1

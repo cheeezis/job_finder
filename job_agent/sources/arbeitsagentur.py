@@ -9,7 +9,11 @@ import re
 from html import unescape
 from urllib.parse import urlencode
 
-from job_agent.config import LOCAL_SEARCH_LOCATION, LOCAL_SEARCH_RADIUS_KM, SEARCH_TERMS
+from job_agent.config import (
+    LOCAL_SEARCH_LOCATION,
+    LOCAL_SEARCH_RADIUS_KM,
+    SEARCH_TERMS,
+)
 from job_agent.http import fetch_text
 from job_agent.remote import detect_remote
 
@@ -26,7 +30,6 @@ def fetch_jobs():
     for url in links:
         try:
             job = fetch_job(url)
-            job["source"] = SOURCE_NAME
             jobs.append(job)
             print(f"OK: {url}")
         except Exception as error:
@@ -109,6 +112,7 @@ def build_search_url(term, page=1):
 
 
 def fetch_job(url):
+    """Import one Arbeitsagentur detail page from its Angular state."""
     html = fetch_text(url)
     detail = extract_jobdetail(html)
     title = detail.get("stellenangebotsTitel", "")
@@ -120,7 +124,12 @@ def fetch_job(url):
         "title": title,
         "company": detail.get("firma", ""),
         "location": location,
-        "remote": detect_remote(title, description, location, structured_remote=structured_remote),
+        "remote": detect_remote(
+            title,
+            description,
+            location,
+            structured_remote=structured_remote,
+        ),
         "description": description,
         "url": url,
         "external_url": detail.get("externeURL", ""),
@@ -129,7 +138,7 @@ def fetch_job(url):
 
 
 def extract_ng_state(html):
-    # Arbeitsagentur liefert Such- und Detaildaten als Angular-SSR-State aus.
+    """Extract Arbeitsagentur's Angular server-side rendering state."""
     match = re.search(
         r'<script id="ng-state" type="application/json">(.*?)</script>',
         html,
@@ -165,6 +174,4 @@ def format_remote(detail):
     remote_type = detail.get("homeofficetyp", "")
     if remote_type == "AUSSCHLIESSLICH":
         return "100%"
-    if remote_type == "NACH_VEREINBARUNG":
-        return "homeoffice"
     return "homeoffice"

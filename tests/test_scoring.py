@@ -1,3 +1,5 @@
+"""Regression tests for deterministic scoring and deduplication."""
+
 import unittest
 
 from job_agent.deduplication import deduplicate_jobs

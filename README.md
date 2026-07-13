@@ -38,7 +38,7 @@ python -m job_agent.main data/jobs_sample.json
 
 ```text
 job_agent/                  Code
-job_agent/config.py         Suchbegriffe und Quellenlimits
+job_agent/config.py         Suchbegriffe und Suchorte
 job_agent/http.py           gemeinsame HTTP-Helfer
 job_agent/profile.py        Profil-, Skill- und Scoring-Regeln
 job_agent/remote.py         gemeinsame Remote-Erkennung

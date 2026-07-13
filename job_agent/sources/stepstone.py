@@ -9,8 +9,7 @@ import re
 from html import unescape
 from urllib.parse import quote, urljoin, urlsplit, urlunsplit
 
-from job_agent.config import SEARCH_LOCATIONS, STEPSTONE_MAX_LINKS_PER_SEARCH
-from job_agent.config import STEPSTONE_MAX_TOTAL_LINKS, STEPSTONE_SEARCH_TERMS
+from job_agent.config import SEARCH_LOCATIONS, STEPSTONE_SEARCH_TERMS
 from job_agent.http import fetch_text
 from job_agent.remote import detect_remote
 from job_agent.search_plan import append_unique, iter_search_queries
@@ -52,26 +51,43 @@ def search_links():
     seen = set()
 
     for query in iter_search_queries(STEPSTONE_SEARCH_TERMS, SEARCH_LOCATIONS):
-        search_url = build_search_url(query.term, query.location)
         print(f"Suche StepStone: {query.term} / {query.location}")
-        try:
-            html = fetch_text(search_url)
-        except Exception as error:
-            print(f"  FEHLER Suche: {error}")
-            continue
+        page = 1
+        query_seen = set()
 
-        found_links = extract_detail_links(html)[:STEPSTONE_MAX_LINKS_PER_SEARCH]
-        print(f"  {len(found_links)} Link(s)")
-        for url in found_links:
-            append_unique(url, links, seen)
-            if len(links) >= STEPSTONE_MAX_TOTAL_LINKS:
-                return links
+        while True:
+            search_url = build_search_url(query.term, query.location, page)
+            try:
+                html = fetch_text(search_url)
+            except Exception as error:
+                print(f"  FEHLER Seite {page}: {error}")
+                break
+
+            found_links = extract_detail_links(html)
+            page_links = [url for url in found_links if url not in query_seen]
+            for url in page_links:
+                query_seen.add(url)
+
+            globally_new = 0
+            for url in page_links:
+                if append_unique(url, links, seen):
+                    globally_new += 1
+
+            print(
+                f"  Seite {page}: {len(found_links)} Link(s), "
+                f"{globally_new} quellenweit neu"
+            )
+            if not found_links or not page_links:
+                break
+
+            page += 1
 
     return links
 
 
-def build_search_url(term, location):
-    return f"{SEARCH_BASE_URL}/{quote(term.replace(' ', '-'))}/in-{quote(location)}"
+def build_search_url(term, location, page=1):
+    base_url = f"{SEARCH_BASE_URL}/{quote(term.replace(' ', '-'))}/in-{quote(location)}"
+    return f"{base_url}?page={page}"
 
 
 def extract_detail_links(html):

@@ -1,8 +1,4 @@
-"""Central search settings for all source adapters.
-
-Keep source-specific limits here so experiments with broader/narrower searches
-do not require edits across multiple scraper modules.
-"""
+"""Central search settings for all source adapters."""
 
 SEARCH_TERMS = [
     "Junior Python Developer",
@@ -50,10 +46,5 @@ SEARCH_LOCATIONS = [
 FULDA_SEARCH_LOCATION = "Fulda"
 FULDA_SEARCH_RADIUS_KM = 30
 
-STEPSTONE_MAX_LINKS_PER_SEARCH = 50
-STEPSTONE_MAX_TOTAL_LINKS = 1000
-
 GET_IN_IT_SEARCH_TERMS = STEPSTONE_SEARCH_TERMS
 GET_IN_IT_SEARCH_LOCATIONS = SEARCH_LOCATIONS
-GET_IN_IT_MAX_LINKS_PER_SEARCH = 50
-GET_IN_IT_MAX_LINKS = 1000

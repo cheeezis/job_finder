@@ -65,18 +65,45 @@ def collect_links():
 
 
 def search(term):
-    html = fetch_text(build_search_url(term))
-    state = extract_ng_state(html)
-    return state.get("suchergebnis", {}).get("ergebnisliste", [])
+    """Load every available result page for one search term."""
+    results = []
+    seen_references = set()
+    page = 1
+
+    while True:
+        html = fetch_text(build_search_url(term, page))
+        search_result = extract_ng_state(html).get("suchergebnis", {})
+        page_results = (
+            search_result.get("ergebnisliste")
+            or search_result.get("stellenangebote")
+            or []
+        )
+        new_results = [
+            result
+            for result in page_results
+            if result.get("referenznummer") not in seen_references
+        ]
+
+        for result in new_results:
+            seen_references.add(result.get("referenznummer"))
+            results.append(result)
+
+        total = int(search_result.get("maxErgebnisse", 0) or 0)
+        print(f"  Seite {page}: {len(new_results)} neu, {len(results)}/{total} geladen")
+        if not page_results or not new_results or len(results) >= total:
+            return results
+
+        page += 1
 
 
-def build_search_url(term):
+def build_search_url(term, page=1):
     # Fulda + 30 km bleibt die harte lokale Suche; Remote wird danach bewertet.
     query = {
         "angebotsart": "1",
         "was": term,
         "wo": FULDA_SEARCH_LOCATION,
         "umkreis": str(FULDA_SEARCH_RADIUS_KM),
+        "page": str(page),
     }
     return f"{SEARCH_BASE_URL}?{urlencode(query)}"
 

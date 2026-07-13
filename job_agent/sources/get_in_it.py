@@ -10,7 +10,6 @@ import re
 from html import unescape
 from urllib.parse import urlencode, urljoin
 
-from job_agent.config import GET_IN_IT_MAX_LINKS, GET_IN_IT_MAX_LINKS_PER_SEARCH
 from job_agent.config import GET_IN_IT_SEARCH_LOCATIONS, GET_IN_IT_SEARCH_TERMS
 from job_agent.http import fetch_json, fetch_text
 from job_agent.remote import detect_remote
@@ -73,8 +72,6 @@ def collect_links():
         print(f"  {len(found_links)} Link(s)")
         for url in found_links:
             append_unique(url, links, seen)
-            if len(links) >= GET_IN_IT_MAX_LINKS:
-                return links
 
     return links
 
@@ -109,35 +106,51 @@ def priority_ids_for_term(term):
 
 
 def search_api(priority_id, location):
-    limit = min(GET_IN_IT_MAX_LINKS_PER_SEARCH, API_PAGE_SIZE)
-    params = {
-        "start": 0,
-        "limit": limit,
-        "filter[thematic_priority]": priority_id,
-    }
+    results = []
+    seen_ids = set()
+    start = 0
 
-    if location.lower() == "remote":
-        params["filter[homeOffice]"] = 1
-    elif location.lower() == "fulda":
-        # get-in-IT exposes state filters reliably; final Fulda/remote filtering
-        # still happens in scoring, where exact locations and remote text exist.
-        params["filter[state]"] = HESSEN_STATE_ID
+    while True:
+        params = {
+            "start": start,
+            "limit": API_PAGE_SIZE,
+            "filter[thematic_priority]": priority_id,
+        }
 
-    url = f"{API_SEARCH_URL}?{urlencode(params)}"
-    return fetch_json(
-        url,
-        headers={
-            "Accept": "application/json",
-            "X-Requested-With": "XMLHttpRequest",
-        },
-    )
+        if location.lower() == "remote":
+            params["filter[homeOffice]"] = 1
+        elif location.lower() == "fulda":
+            # get-in-IT exposes state filters reliably; final Fulda/remote filtering
+            # still happens in scoring, where exact locations and remote text exist.
+            params["filter[state]"] = HESSEN_STATE_ID
+
+        url = f"{API_SEARCH_URL}?{urlencode(params)}"
+        data = fetch_json(
+            url,
+            headers={
+                "Accept": "application/json",
+                "X-Requested-With": "XMLHttpRequest",
+            },
+        )
+        page_results = data.get("items", {}).get("results", [])
+        new_results = [job for job in page_results if job.get("id") not in seen_ids]
+
+        for job in new_results:
+            seen_ids.add(job.get("id"))
+            results.append(job)
+
+        total = int(data.get("total", 0) or 0)
+        print(f"  API {len(results)}/{total} Treffer geladen")
+        if not page_results or not new_results or len(results) >= total:
+            return results
+
+        start += len(page_results)
 
 
 def extract_detail_links_from_api(data):
-    results = data.get("items", {}).get("results", [])
     links = []
 
-    for job in results:
+    for job in data:
         path = job.get("url")
         if path:
             links.append(urljoin("https://www.get-in-it.de", path))

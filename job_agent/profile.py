@@ -1,186 +1,448 @@
-"""Personal matching profile used by the local scoring rules.
+"""Personal matching profile for deterministic job scoring.
 
-This is intentionally separate from the scraper code: sources collect jobs,
-while this file describes what makes a job interesting for this profile.
+Sources only collect job data. This module describes which roles, skills and
+working conditions fit the current profile.
 """
 
-POINTS = {
-    "strong_title": 40,
-    "close_title": 25,
-    "full_remote": 30,
-    "fulda_area": 20,
-    "fulda_hybrid_bonus": 10,
-    "frankfurt_80_remote": 20,
-    "python": 15,
-    "ai_ml": 15,
-    "typescript_node": 10,
-    "testing": 8,
-    "data_analytics": 10,
-    "many_years_experience_penalty": 30,
+# The five score categories add up to exactly 100 points.
+SCORE_LIMITS = {
+    "role": 30,
+    "skills": 25,
+    "experience": 25,
+    "location": 15,
+    "profile": 5,
 }
 
-# Laufender Lernschwerpunkt: IBM RAG and Agentic AI Professional Certificate.
-AI_ML_KEYWORDS = [
-    "ai",
-    "ki",
-    "artificial intelligence",
-    "machine learning",
-    "ml",
-    "llm",
-    "rag",
-    "agentic",
-    "agenten",
-]
-
-PROFILE_SKILL_GROUPS = [
+ROLE_GROUPS = [
     {
-        "points": POINTS["python"],
-        "label": "Python gefunden",
-        "keywords": ["python"],
+        "id": "python_ai_data",
+        "label": "Python/AI/Data-Kernrolle",
+        "points": 30,
+        "patterns": [
+            ["python", "developer"],
+            ["python", "dev"],
+            ["python", "entwickler"],
+            ["python", "engineer"],
+            ["ai", "engineer"],
+            ["ai", "developer"],
+            ["ai", "entwickler"],
+            ["ki", "engineer"],
+            ["ki", "entwickler"],
+            ["ki", "experte"],
+            ["machine learning", "engineer"],
+            ["ml", "engineer"],
+            ["prompt", "engineer"],
+            ["data", "analyst"],
+            ["daten", "analyst"],
+            ["datenanalyst"],
+            ["data", "engineer"],
+            ["daten", "ingenieur"],
+            ["data", "scientist"],
+        ],
     },
     {
-        "points": POINTS["ai_ml"],
-        "label": "AI/Machine Learning gefunden",
-        "keywords": AI_ML_KEYWORDS,
+        "id": "software_development",
+        "label": "Softwareentwicklung",
+        "points": 27,
+        "patterns": [
+            ["backend", "developer"],
+            ["backend", "dev"],
+            ["backend", "entwickler"],
+            ["backend", "engineer"],
+            ["fullstack", "developer"],
+            ["fullstack", "dev"],
+            ["fullstack", "entwickler"],
+            ["fullstack", "engineer"],
+            ["full stack", "developer"],
+            ["full stack", "dev"],
+            ["full stack", "entwickler"],
+            ["full stack", "engineer"],
+            ["software", "developer"],
+            ["software", "dev"],
+            ["software", "entwickler"],
+            ["softwareentwickler"],
+            ["software", "engineer"],
+            ["anwendungsentwickler"],
+            ["application", "developer"],
+            ["frontend", "developer"],
+            ["frontend", "engineer"],
+            ["frontend", "entwickler"],
+            ["web", "developer"],
+            ["webentwickler"],
+            ["it", "entwickler"],
+        ],
     },
     {
-        "points": POINTS["typescript_node"],
-        "label": "TypeScript/Node.js gefunden",
-        "keywords": ["typescript", "javascript", "node", "node.js"],
+        "id": "testing",
+        "label": "Software-Testautomatisierung/QA",
+        "points": 23,
+        "patterns": [
+            ["test automation", "engineer"],
+            ["testautomatisierung"],
+            ["software test", "engineer"],
+            ["software", "tester"],
+            ["softwaretester"],
+            ["qa", "engineer"],
+            ["quality assurance", "engineer"],
+            ["verification", "engineer"],
+        ],
     },
     {
-        "points": POINTS["testing"],
-        "label": "Testing-Erfahrung passt",
-        "keywords": ["playwright", "jest", "mocha", "chai", "unit-test", "unit-tests", "e2e", "end-to-end"],
+        "id": "technical_consulting",
+        "label": "Technisches IT-Consulting",
+        "points": 23,
+        "patterns": [
+            ["it", "consultant"],
+            ["technical", "consultant"],
+            ["software", "consultant"],
+            ["data", "consultant"],
+            ["ai", "consultant"],
+            ["ki", "consultant"],
+            ["cloud", "consultant"],
+            ["security", "consultant"],
+            ["it", "berater"],
+            ["technischer", "berater"],
+        ],
     },
     {
-        "points": POINTS["data_analytics"],
-        "label": "Data/Analytics gefunden",
-        "keywords": [
-            "data analyst",
-            "data analytics",
-            "data engineer",
-            "data engineering",
-            "data science",
-            "datenanalyse",
-            "datenanalyst",
-            "analytics",
-            "business intelligence",
+        "id": "infrastructure",
+        "label": "DevOps/Cloud/Security/Network",
+        "points": 20,
+        "patterns": [
+            ["devops", "engineer"],
+            ["devops", "entwickler"],
+            ["cloud", "engineer"],
+            ["cloud", "entwickler"],
+            ["security", "engineer"],
+            ["security", "entwickler"],
+            ["network", "engineer"],
+            ["netzwerk", "engineer"],
+            ["netzwerk", "spezialist"],
+            ["network", "administrator"],
+            ["netzwerkadministrator"],
+            ["site reliability", "engineer"],
+            ["database reliability", "engineer"],
+            ["platform operations", "engineer"],
+            ["sysops", "engineer"],
+            ["netops", "engineer"],
+            ["cloud", "specialist"],
+            ["devops"],
+        ],
+    },
+    {
+        "id": "architecture",
+        "label": "Software-Architektur",
+        "points": 20,
+        "patterns": [
+            ["software", "architect"],
+            ["software", "architekt"],
+        ],
+    },
+    {
+        "id": "trainee",
+        "label": "Technisches Traineeprogramm",
+        "points": 23,
+        "patterns": [
+            ["trainee", "it"],
+            ["trainee", "software"],
+            ["trainee", "data"],
+            ["trainee", "ai"],
+            ["trainee", "ki"],
         ],
     },
 ]
 
-# Rollen-/Karrierelevel, die grundsaetzlich nicht zu deiner Suche passen.
+SKILL_GROUPS = [
+    {
+        "id": "python",
+        "label": "Python",
+        "points": 10,
+        "keywords": ["python"],
+    },
+    {
+        "id": "ai_ml",
+        "label": "AI/ML/RAG/Agenten",
+        "points": 10,
+        "keywords": [
+            "ai",
+            "ki",
+            "ml",
+            "artificial intelligence",
+            "machine learning",
+            "llm",
+            "large language model",
+            "rag",
+            "agentic",
+            "ki-agent",
+            "ki agent",
+            "ai agent",
+        ],
+    },
+    {
+        "id": "data",
+        "label": "Data/Analytics",
+        "points": 7,
+        "keywords": [
+            "data analyst",
+            "data analytics",
+            "data engineer",
+            "data science",
+            "datenanalyse",
+            "datenanalyst",
+            "business intelligence",
+            "zeitreihe",
+            "time series",
+        ],
+    },
+    {
+        "id": "testing",
+        "label": "Testautomatisierung",
+        "points": 6,
+        "keywords": [
+            "test automation",
+            "testautomatisierung",
+            "playwright",
+            "jest",
+            "mocha",
+            "chai",
+            "unit-test",
+            "unit test",
+            "api-test",
+            "api test",
+            "end-to-end",
+            "e2e",
+        ],
+    },
+    {
+        "id": "javascript",
+        "label": "JavaScript/TypeScript/Node.js",
+        "points": 5,
+        "keywords": ["javascript", "typescript", "node.js", "nodejs"],
+    },
+    {
+        "id": "java",
+        "label": "Java",
+        "points": 4,
+        "keywords": ["java"],
+    },
+    {
+        "id": "devops",
+        "label": "DevOps/Cloud-Automatisierung",
+        "points": 5,
+        "keywords": [
+            "ci/cd",
+            "continuous integration",
+            "docker",
+            "kubernetes",
+            "terraform",
+            "infrastructure as code",
+            "ansible",
+            "deployment",
+            "automatisierung",
+            "automation",
+        ],
+    },
+    {
+        "id": "security",
+        "label": "Security/Network",
+        "points": 4,
+        "keywords": [
+            "cybersecurity",
+            "cyber security",
+            "it-security",
+            "informationssicherheit",
+            "network security",
+            "firewall",
+        ],
+    },
+    {
+        "id": "web_api",
+        "label": "Web/API",
+        "points": 3,
+        "keywords": ["rest api", "rest-api", "backend", "webanwendung", "web application"],
+    },
+]
+
+# Roles and employment types that are incompatible with an entry-level search.
 BLOCKED_TITLE_WORDS = [
     "senior",
     "lead",
     "principal",
     "head",
     "manager",
+    "testmanager",
+    "test manager",
     "werkstudent",
     "working student",
     "praktikum",
     "praktikant",
-    "praktikanten",
     "thesis",
     "abschlussarbeit",
     "bachelorarbeit",
     "professur",
     "professor",
-    "bildungsreferent",
-    "zaehler",
-    "elektroniker",
-    "elektriker",
-    "servicetechniker",
+    "freelance",
+    "freelancer",
+    "freiberuflich",
+    "quereinstieg",
 ]
 
-# Fachliche Schwerpunkte, die meistens an deiner Python/Data/AI-Suche vorbeigehen.
-# Im Titel reicht ein Treffer direkt; im Beschreibungstext wird strenger geprueft.
-BLOCKED_FOCUS_KEYWORDS = [
-    "sap",
+# These technologies are excluded only when the title makes them the role's
+# explicit core and no supported core technology appears in the title.
+UNSUPPORTED_TITLE_TECHNOLOGIES = [
+    "c#",
+    ".net",
+    "c++",
+    "cobol",
+    "salesforce",
+    "go",
+    "golang",
+    "embedded",
     "abap",
-    "s/4hana",
-    "s4hana",
     "sps",
-    "tunnelausstattung",
-    "oepnv",
 ]
 
-# Kontextwoerter helfen zu erkennen, ob ein Keyword im Fliesstext wirklich den
-# Job-Fokus beschreibt oder nur beilaufig erwaehnt wird.
-FOCUS_CONTEXT_WORDS = [
-    "aufgabe",
-    "aufgaben",
-    "fokus",
-    "schwerpunkt",
-    "rolle",
-    "position",
-    "profil",
-    "taetigkeit",
-    "taetigkeiten",
+SUPPORTED_TITLE_TECHNOLOGIES = [
+    "python",
+    "java",
+    "javascript",
+    "typescript",
+    "node.js",
+    "ai",
+    "ki",
+    "machine learning",
+    "data",
 ]
 
-STRONG_TITLE_PATTERNS = [
-    ["junior", "python", "dev"],
-    ["junior", "python", "developer"],
-    ["junior", "data", "analyst"],
-    ["ai", "engineer", "junior"],
-    ["junior", "ai", "engineer"],
-    ["junior", "ai", "developer"],
-    ["junior", "softwareentwickler", "python"],
-    ["junior", "software", "developer"],
-    ["junior", "backend", "developer"],
+BLOCKED_FOCUS_KEYWORDS = ["sap", "abap", "s/4hana", "s4hana", "sps"]
+
+EXPLICIT_FOCUS_PHRASES = [
+    "schwerpunkt {keyword}",
+    "fokus {keyword}",
+    "{keyword} entwickler",
+    "{keyword}-entwickler",
+    "{keyword} developer",
+    "{keyword} consultant",
+    "{keyword} berater",
 ]
 
-# Close matches are allowed because many entry-level roles avoid the word
-# "Junior" even when the requirements are realistic for a graduate.
-CLOSE_TITLE_PATTERNS = [
-    ["python", "developer"],
-    ["python", "dev"],
-    ["data", "analyst"],
-    ["data", "engineer"],
-    ["machine learning", "engineer"],
-    ["ml", "engineer"],
-    ["ai", "engineer"],
-    ["ai", "developer"],
-    ["backend", "python"],
-    ["backend", "developer"],
-    ["devops", "engineer"],
-    ["software", "developer"],
-    ["softwareentwickler"],
-    ["anwendungsentwickler"],
-    ["fullstack", "developer"],
-    ["fullstack", "entwickler"],
-]
-
-# Local places that are realistic without moving away from the Fulda area.
-NEARBY_PLACES = [
+# Approximate 30 km local area around Exampletown (Wasserkuppe).
+LOCAL_PLACES = [
+    "exampletown",
     "fulda",
     "kuenzell",
     "kunzell",
     "eichenzell",
     "petersberg",
-    "huenfeld",
-    "hunfeld",
+    "gersfeld",
+    "ebersburg",
+    "dipperz",
+    "hofbieber",
+    "hilders",
+    "ehrenberg",
+    "tann",
+    "motten",
+    "kalbach",
     "neuhof",
-    "flieden",
-    "burghaun",
-    "schluechtern",
-    "schluchtern",
-    "bad hersfeld",
+    "hosenfeld",
 ]
 
-REMOTE_LOCATION_WORDS = [
-    "remote",
-    "home-office",
-    "homeoffice",
-    "home office",
+GERMANY_LOCATION_WORDS = [
+    "deutschland",
+    "germany",
+    "bundesweit",
+    "deutschlandweit",
+]
+
+FOREIGN_ONLY_LOCATION_WORDS = [
+    "portugal",
+    "spanien",
+    "spain",
+    "frankreich",
+    "france",
+    "italien",
+    "italy",
+    "oesterreich",
+    "austria",
+    "schweiz",
+    "switzerland",
+    "poland",
+    "polen",
+    "netherlands",
+    "niederlande",
+    "united kingdom",
+    "uk only",
+]
+
+ENTRY_LEVEL_WORDS = [
+    "junior",
+    "entry level",
+    "entry-level",
+    "berufseinsteiger",
+    "graduate",
+    "absolvent",
+    "trainee",
+    "keine berufserfahrung erforderlich",
+    "ohne berufserfahrung",
+    "0 jahre erfahrung",
+]
+
+FIRST_EXPERIENCE_PHRASES = [
+    "erste erfahrung",
+    "erste berufserfahrung",
+    "erste praktische erfahrung",
+    "erste projekterfahrung",
 ]
 
 OPTIONAL_EXPERIENCE_PHRASES = [
+    "wuenschenswert",
+    "von vorteil",
+    "ein plus",
+    "waere ideal",
+    "waeren gut",
+    "hilfreich",
     "kein muss",
     "nicht erforderlich",
     "nicht notwendig",
-    "keine berufserfahrung",
-    "keine erfahrung",
 ]
+
+STRONG_EXPERIENCE_PHRASES = [
+    "mehrjaehrige berufserfahrung",
+    "mehrjaehrige erfahrung",
+    "fundierte berufserfahrung",
+    "fundierte erfahrung",
+    "einschlaegige berufserfahrung",
+    "einschlaegige erfahrung",
+]
+
+PROFILE_DOMAIN_KEYWORDS = [
+    "sensordaten",
+    "sensor data",
+    "zeitreihe",
+    "time series",
+    "industrial data",
+    "industriedaten",
+    "iot",
+    "industrie 4.0",
+]
+
+HIGH_TRAVEL_PHRASES = [
+    "hohe reisebereitschaft",
+    "uneingeschraenkte reisebereitschaft",
+    "deutschlandweite reisebereitschaft",
+    "bundesweite reisebereitschaft",
+    "regelmaessige dienstreisen deutschlandweit",
+    "travel activity of 80%",
+    "80% travel",
+    "travel up to 80%",
+]
+
+MANDATORY_ADVANCED_DEGREE_PATTERNS = [
+    r"(?:masterabschluss|masterstudium)[^.]{0,50}(?:erforderlich|vorausgesetzt|required|must)",
+    r"(?:erforderlich|vorausgesetzt|required|must)[^.]{0,50}(?:masterabschluss|masterstudium)",
+    r"(?:promotion|doktorgrad|phd)[^.]{0,50}(?:erforderlich|vorausgesetzt|required|must)",
+    r"(?:erforderlich|vorausgesetzt|required|must)[^.]{0,50}(?:promotion|doktorgrad|phd)",
+]
+
+SALARY_TARGET = 48_000
+SALARY_MINIMUM = 45_000

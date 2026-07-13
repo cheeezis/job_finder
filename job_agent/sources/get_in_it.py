@@ -32,7 +32,8 @@ THEMATIC_PRIORITIES = {
 
 TERM_PRIORITY_RULES = [
     (["data", "analytics", "analyst", "bi"], [38, 39]),
-    (["devops", "infrastructure", "system"], [35]),
+    (["devops", "infrastructure", "system", "cloud", "security", "network"], [35]),
+    (["consultant", "berater"], [36, 38]),
     (["ai", "ki", "machine learning", "ml"], [36, 39, 44]),
     (["backend", "fullstack", "web"], [36, 5]),
     (["python", "developer", "softwareentwickler", "software"], [36, 5]),
@@ -119,9 +120,9 @@ def search_api(priority_id, location):
 
         if location.lower() == "remote":
             params["filter[homeOffice]"] = 1
-        elif location.lower() == "fulda":
-            # get-in-IT exposes state filters reliably; final Fulda/remote filtering
-            # still happens in scoring, where exact locations and remote text exist.
+        else:
+            # get-in-IT only exposes a reliable state filter. The exact local
+            # radius is enforced later from each job's actual location.
             params["filter[state]"] = HESSEN_STATE_ID
 
         url = f"{API_SEARCH_URL}?{urlencode(params)}"

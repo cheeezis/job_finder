@@ -19,7 +19,7 @@ def iter_search_queries(terms, locations):
 
 
 def append_unique(value, values, seen):
-    """Append value once and remember it in the provided seen set."""
+    """Append value once and return whether it was added."""
     if value in seen:
         return False
 

@@ -3,7 +3,7 @@
 from html.parser import HTMLParser
 
 
-class TextExtractor(HTMLParser):
+class _TextExtractor(HTMLParser):
     """Small HTML-to-text parser for schema.org description fragments."""
 
     def __init__(self):
@@ -34,6 +34,7 @@ def normalize_text(text):
 
 
 def html_to_text(html):
-    parser = TextExtractor()
+    """Convert an HTML fragment to compact plain text."""
+    parser = _TextExtractor()
     parser.feed(str(html or ""))
     return parser.text()

@@ -25,6 +25,7 @@ def write_review_files(results, scored_path=SCORED_FILE, review_path=REVIEW_FILE
 
 
 def render_review_markdown(results):
+    """Render scoring results as a compact manual-review document."""
     included = results["included"]
     excluded = results["excluded"]
     lines = [
@@ -105,7 +106,9 @@ def append_job_section(lines, title, jobs, include_description):
 def format_sources(job):
     sources = job.get("sources") or [job.get("source", "")]
     duplicate_count = len(job.get("duplicate_urls", []))
-    suffix = f" ({duplicate_count} Duplikat(e) zusammengefuehrt)" if duplicate_count else ""
+    suffix = ""
+    if duplicate_count:
+        suffix = f" ({duplicate_count} Duplikat(e) zusammengefuehrt)"
     return ", ".join(source for source in sources if source) + suffix
 
 

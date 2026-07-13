@@ -21,7 +21,7 @@ LEGAL_FORMS = [
 
 
 def deduplicate_jobs(jobs):
-    """Merge exact normalized title/company duplicates across sources."""
+    """Merge jobs with equal titles and compatible company names."""
     unique_jobs = []
     positions_by_title = defaultdict(list)
 
@@ -66,10 +66,13 @@ def find_duplicate_position(job, company_key, positions, unique_jobs):
 
 
 def companies_match(first, second):
+    """Return whether normalized names identify the same company."""
     if first == second:
         return True
     shorter, longer = sorted([first, second], key=len)
-    return len(shorter) >= 5 and (longer.startswith(shorter + " ") or shorter in longer.split())
+    return len(shorter) >= 5 and (
+        longer.startswith(shorter + " ") or shorter in longer.split()
+    )
 
 
 def normalize_company(company):
@@ -87,7 +90,11 @@ def normalize_title(title):
         " ",
         text,
     )
-    text = re.sub(r"\b(?:m/w/d|w/m/d|m/f/d|f/m/d|all genders|alle geschlechter|gn)\b", " ", text)
+    text = re.sub(
+        r"\b(?:m/w/d|w/m/d|m/f/d|f/m/d|all genders|alle geschlechter|gn)\b",
+        " ",
+        text,
+    )
     text = re.sub(r"[^a-z0-9+#.]+", " ", text)
     return " ".join(text.split())
 
@@ -99,7 +106,13 @@ def source_names(job):
 
 def merge_jobs(existing, duplicate):
     """Keep the richer posting and attach provenance from both sources."""
-    richer = duplicate if len(duplicate.get("description", "")) > len(existing.get("description", "")) else existing
+    existing_description = existing.get("description", "")
+    duplicate_description = duplicate.get("description", "")
+    richer = (
+        duplicate
+        if len(duplicate_description) > len(existing_description)
+        else existing
+    )
     merged = dict(richer)
     merged["sources"] = unique_values(source_names(existing) + source_names(duplicate))
 

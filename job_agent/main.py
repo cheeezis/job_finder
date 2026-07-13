@@ -1,19 +1,18 @@
+"""Score imported jobs without running the source searches again."""
+
 import json
 import sys
 from pathlib import Path
 
+from job_agent.console import configure_utf8_output
 from job_agent.deduplication import deduplicate_jobs
 from job_agent.reporting import write_review_files
 from job_agent.scoring import score_job
 
 
-# Keep console output stable for German job titles and company names.
-if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-
-
 def main():
+    """Score an existing import file and write review output."""
+    configure_utf8_output()
     jobs_file = sys.argv[1] if len(sys.argv) > 1 else "data/jobs_imported.json"
     jobs = load_jobs(jobs_file)
     results = score_jobs(jobs)
@@ -30,7 +29,7 @@ def score_jobs(jobs):
         result = score_job(job)
         results.append({**job, **result})
 
-    # Erlaubte und ausgeschlossene Jobs getrennt ausgeben, damit Filtergruende sichtbar bleiben.
+    # Separate buckets keep hard-filter reasons visible in the review.
     included = [job for job in results if job["status"] == "included"]
     excluded = [job for job in results if job["status"] == "excluded"]
 
@@ -44,6 +43,7 @@ def score_jobs(jobs):
 
 
 def print_results(results):
+    """Print included jobs and a short excluded-job preview."""
     included = results["included"]
     excluded = results["excluded"]
 
@@ -51,12 +51,13 @@ def print_results(results):
     print("=" * 60)
     for job in included:
         new_marker = "NEU | " if job.get("is_new") else ""
-        print(
-            new_marker +
+        summary = (
             f'{job["match_percent"]:>3}% | '
             f'{job["raw_score"]:>3} Punkte | '
-            f'{job["title"]} | {job["company"]} | {job["location"]} | Remote: {job["remote"]}'
+            f'{job["title"]} | {job["company"]} | '
+            f'{job["location"]} | Remote: {job["remote"]}'
         )
+        print(new_marker + summary)
         for reason in job["reasons"]:
             print(f"      - {reason}")
         print()
@@ -73,6 +74,7 @@ def print_results(results):
 
 
 def load_jobs(path):
+    """Load imported jobs from a UTF-8 JSON file."""
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 

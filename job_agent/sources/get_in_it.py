@@ -14,6 +14,7 @@ from job_agent.config import GET_IN_IT_SEARCH_LOCATIONS, GET_IN_IT_SEARCH_TERMS
 from job_agent.http import fetch_json, fetch_text
 from job_agent.remote import detect_remote
 from job_agent.search_plan import append_unique, iter_search_queries, unique_in_order
+from job_agent.structured_data import extract_json_ld_job_posting
 from job_agent.text import html_to_text
 
 SOURCE_NAME = "get_in_it"
@@ -41,6 +42,7 @@ TERM_PRIORITY_RULES = [
 
 
 def fetch_jobs():
+    """Search get in IT and return imported job details."""
     links = collect_links()
     if not links:
         print("Keine get-in-IT-Links gefunden")
@@ -58,6 +60,7 @@ def fetch_jobs():
 
 
 def collect_links():
+    """Collect unique detail links from all generated API searches."""
     links = []
     seen = set()
 
@@ -148,10 +151,10 @@ def search_api(priority_id, location):
         start += len(page_results)
 
 
-def extract_detail_links_from_api(data):
+def extract_detail_links_from_api(results):
     links = []
 
-    for job in data:
+    for job in results:
         path = job.get("url")
         if path:
             links.append(urljoin("https://www.get-in-it.de", path))
@@ -160,6 +163,7 @@ def extract_detail_links_from_api(data):
 
 
 def fetch_job(url):
+    """Import one get-in-IT detail page from its embedded job data."""
     html = fetch_text(url)
     posting = extract_job_posting(html)
     description = html_to_text(posting.get("description", ""))
@@ -191,21 +195,9 @@ def extract_next_data(html):
 
 def extract_job_posting(html):
     """Prefer JSON-LD, then fall back to get-in-IT's embedded state."""
-    scripts = re.findall(
-        r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
-        html,
-        re.DOTALL | re.IGNORECASE,
-    )
-
-    for script in scripts:
-        try:
-            data = json.loads(unescape(script.strip()))
-        except json.JSONDecodeError:
-            continue
-
-        posting = find_job_posting(data)
-        if posting:
-            return posting
+    posting = extract_json_ld_job_posting(html)
+    if posting:
+        return posting
 
     posting = extract_job_posting_from_next_data(html)
     if posting:
@@ -216,7 +208,13 @@ def extract_job_posting(html):
 
 def extract_job_posting_from_next_data(html):
     """Build a JobPosting-like dict from Next.js state when JSON-LD fails."""
-    job = extract_next_data(html).get("props", {}).get("initialState", {}).get("jobJob", {}).get("job")
+    next_data = extract_next_data(html)
+    job = (
+        next_data.get("props", {})
+        .get("initialState", {})
+        .get("jobJob", {})
+        .get("job")
+    )
     if not job:
         return None
 
@@ -253,25 +251,6 @@ def build_locations(locations):
         }
         for location in locations
     ]
-
-
-def find_job_posting(data):
-    if isinstance(data, dict):
-        if data.get("@type") == "JobPosting":
-            return data
-        for value in data.values():
-            posting = find_job_posting(value)
-            if posting:
-                return posting
-
-    if isinstance(data, list):
-        for item in data:
-            posting = find_job_posting(item)
-            if posting:
-                return posting
-
-    return None
-
 
 def clean_company(company):
     return re.sub(r"\s+", " ", company).strip()

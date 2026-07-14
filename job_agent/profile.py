@@ -545,16 +545,34 @@ ENTRY_LEVEL_WORDS = [
     "0 jahre erfahrung",
 ]
 
+# Body text needs stronger evidence than a generic mention of graduates or
+# entry-level colleagues in the employer description.
+BODY_ENTRY_LEVEL_PHRASES = [
+    "keine berufserfahrung erforderlich",
+    "ohne berufserfahrung",
+    "0 jahre erfahrung",
+    "berufseinsteiger willkommen",
+    "geeignet fuer berufseinsteiger",
+    "auch fuer berufseinsteiger",
+    "du willst welche sammeln",
+    "einstieg in die karriere",
+]
+
 FIRST_EXPERIENCE_PHRASES = [
     "erste erfahrung",
+    "erste erfahrungen",
     "erste berufserfahrung",
+    "erste berufliche erfahrungen",
     "erste praktische erfahrung",
+    "erste praktische erfahrungen",
     "erste projekterfahrung",
 ]
 
 OPTIONAL_EXPERIENCE_PHRASES = [
     "wuenschenswert",
     "von vorteil",
+    "idealerweise",
+    "ideally",
     "ein plus",
     "waere ideal",
     "waeren gut",
@@ -567,10 +585,21 @@ OPTIONAL_EXPERIENCE_PHRASES = [
 STRONG_EXPERIENCE_PHRASES = [
     "mehrjaehrige berufserfahrung",
     "mehrjaehrige erfahrung",
+    "mehrjaehrige praktische erfahrung",
+    "langjaehrige berufserfahrung",
+    "langjaehrige erfahrung",
+    "bereits berufserfahrung",
     "fundierte berufserfahrung",
     "fundierte erfahrung",
     "einschlaegige berufserfahrung",
     "einschlaegige erfahrung",
+    "several years of experience",
+    "multiple years of experience",
+    "deep previous experience",
+    "extensive experience",
+    "proven professional experience",
+    "demonstrated professional experience",
+    "worked in a similar",
 ]
 
 PROFILE_DOMAIN_KEYWORDS = [

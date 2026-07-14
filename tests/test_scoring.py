@@ -84,7 +84,7 @@ class ScoringTests(unittest.TestCase):
     def test_three_required_years_remain_with_low_experience_score(self):
         result = score_job(
             make_job(
-                title="Python Developer",
+                title="Junior Python Developer",
                 description="Python APIs. 3 Jahre Berufserfahrung erforderlich.",
             )
         )
@@ -112,6 +112,73 @@ class ScoringTests(unittest.TestCase):
         )
         self.assertEqual(result["status"], "included")
         self.assertEqual(result["experience_rank"], 1)
+
+    def test_non_junior_professional_experience_is_excluded(self):
+        german = score_job(
+            make_job(
+                title="Webentwickler IoT",
+                description="Du hast bereits Berufserfahrung im Data Engineering.",
+            )
+        )
+        english = score_job(
+            make_job(
+                title="Frontend Engineer",
+                description="Deep previous experience with React is required.",
+            )
+        )
+        self.assertEqual(german["status"], "excluded")
+        self.assertEqual(english["status"], "excluded")
+
+    def test_skill_experience_without_professional_signal_remains_reviewable(self):
+        result = score_job(
+            make_job(
+                title="Data Engineer",
+                description=(
+                    "Erfahrungen in der Analyse grosser Datenbestaende und Erfahrung "
+                    "in Python."
+                ),
+            )
+        )
+        self.assertEqual(result["status"], "included")
+
+    def test_company_entry_level_boilerplate_does_not_define_the_vacancy(self):
+        result = score_job(
+            make_job(
+                title="IT-Consultant / Business Analyst",
+                description=(
+                    "Unser Team umfasst Experten mit 25 Jahren Berufserfahrung, "
+                    "aber auch junge Berufseinsteiger. Idealerweise Erfahrung in "
+                    "der Softwareentwicklung."
+                ),
+            )
+        )
+        self.assertEqual(result["status"], "included")
+        self.assertNotEqual(result["experience_rank"], 0)
+
+    def test_abbreviated_minimum_years_are_detected(self):
+        result = score_job(
+            make_job(
+                title="Junior QA Automation Engineer",
+                description=(
+                    "Mit deiner mehrjaehrigen praktischen Erfahrung "
+                    "(mind. 3 Jahre) in QA."
+                ),
+            )
+        )
+        self.assertEqual(result["status"], "included")
+        self.assertEqual(result["experience_level"], "3 Jahr(e) gefordert")
+
+    def test_non_junior_one_to_three_years_are_excluded(self):
+        result = score_job(
+            make_job(
+                title="Automation Engineer",
+                description=(
+                    "1-2 Jahre Entwicklungserfahrung mit RPA und UiPath in einer "
+                    "kommerziellen Umgebung."
+                ),
+            )
+        )
+        self.assertEqual(result["status"], "excluded")
 
     def test_senior_is_excluded_but_mixed_junior_senior_is_reviewable(self):
         senior = score_job(make_job(title="Senior Python Developer"))
@@ -364,7 +431,7 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(result["status"], "excluded")
         self.assertIn("45.000 EUR", result["reasons"][0])
 
-    def test_entry_level_jobs_sort_before_required_experience(self):
+    def test_jobs_sort_by_score_before_experience_level(self):
         entry = make_job(
             title="Junior Java Software Developer",
             company="Entry GmbH",
@@ -372,13 +439,13 @@ class ScoringTests(unittest.TestCase):
             url="https://example.test/entry",
         )
         experienced = make_job(
-            title="Python Developer",
+            title="Junior Python Developer",
             company="Experienced GmbH",
             description="Python und AI. 1 Jahr Berufserfahrung erforderlich.",
             url="https://example.test/experienced",
         )
         results = score_jobs([experienced, entry])
-        self.assertEqual(results["included"][0]["company"], "Entry GmbH")
+        self.assertEqual(results["included"][0]["company"], "Experienced GmbH")
 
 
 class DeduplicationTests(unittest.TestCase):

@@ -63,6 +63,7 @@ data/jobs_imported.json     importierte Jobdetails
 data/seen_jobs.json         lokales Job-Gedaechtnis
 data/jobs_scored.json       generierte Scoring-Ergebnisse
 data/jobs_review.md         generierte Review-Datei
+data/job_feedback.json      gespeicherte manuelle Job-Bewertungen
 tests/                      automatisierte Scoring- und Filtertests
 run_agent.py                kompletter Agentenlauf
 ```

@@ -6,6 +6,7 @@ from job_agent.profile import (
     ADMIN_TITLE_WORDS,
     BLOCKED_FOCUS_KEYWORDS,
     BLOCKED_TITLE_WORDS,
+    BODY_ENTRY_LEVEL_PHRASES,
     ENTRY_LEVEL_WORDS,
     EXPLICIT_FOCUS_PHRASES,
     FIRST_EXPERIENCE_PHRASES,
@@ -30,6 +31,39 @@ from job_agent.text import normalize_text
 
 
 SAP_FOCUS_KEYWORDS = {"sap", "abap", "s/4hana", "s4hana"}
+
+EXPERIENCE_TERM = (
+    r"(?:berufserfahrung|arbeitserfahrung|entwicklungserfahrung|"
+    r"praktische erfahrung|praxiserfahrung|"
+    r"professional experience|practical experience|hands-on experience|"
+    r"erfahrung(?:en)?|experience)"
+)
+YEAR_UNIT = r"(?:jahre?n?|years?|yrs?)"
+MORE_THAN_QUALIFIERS = {
+    "mehr als",
+    "ueber",
+    "more than",
+    "over",
+}
+REQUIRED_EXPERIENCE_PATTERNS = [
+    r"\b(?:du|sie)\s+(?:hast|haben|bringst|bringen|verfuegst|verfuegen)"
+    r"[\s\S]{0,70}\berfahr(?:ung|ungen)\b",
+    r"\b(?:erfahrung|erfahrungen)\s+(?:im|in|als|mit)\b",
+    r"\b(?:hands-on|practical|previous|professional|relevant|solid)\s+experience\b",
+    r"\bexperience\s+(?:in|with|using|working|building|developing)\b",
+    r"\bexperienced\s+(?:in|with)\b",
+]
+PROFESSIONAL_EXPERIENCE_PATTERNS = [
+    r"\bberufserfahrung\b",
+    r"\barbeitserfahrung\b",
+    r"\bentwicklungserfahrung\b",
+    r"\b(?:professional|commercial|previous)\s+experience\b",
+    r"\bexperience[\s\S]{0,45}\bcommercial environment\b",
+    r"\bworked in (?:a )?similar\b",
+    r"\bmid-senior level\b",
+    r"\bstarke erfahrung\b",
+    r"\bstrong experience\b",
+]
 
 
 def score_job(job):
@@ -114,11 +148,15 @@ def passes_hard_filters(title, description, location, remote, full_text, role):
     if blocked_word:
         return False, f"Titel enthaelt Ausschlusswort: {blocked_word}"
 
-    if contains_any(title, ADMIN_TITLE_WORDS) and not is_entry_level(full_text):
+    if contains_any(title, ADMIN_TITLE_WORDS) and not is_entry_level(
+        title,
+        full_text,
+    ):
         return False, "Systemadministration ist keine Einstiegsrolle"
 
     if contains_any(title, MODERN_WORKPLACE_TITLE_WORDS) and not is_entry_level(
-        full_text
+        title,
+        full_text,
     ):
         return False, "Microsoft-Cloud/Modern-Workplace ist keine Einstiegsrolle"
 
@@ -138,8 +176,14 @@ def passes_hard_filters(title, description, location, remote, full_text, role):
         return False, f"Fachlicher Fokus passt nicht: {blocked_focus}"
 
     years = extract_required_years(full_text)
-    if years > 3 and not experience_is_optional(full_text):
+    if years > 3:
         return False, f"Mehr als 3 Jahre Erfahrung gefordert: {years} Jahre"
+
+    if has_required_professional_experience(full_text) and not is_entry_level(
+        title,
+        full_text,
+    ):
+        return False, "Berufs- oder Rollenerfahrung wird vorausgesetzt"
 
     if any(re.search(pattern, full_text) for pattern in MANDATORY_ADVANCED_DEGREE_PATTERNS):
         return False, "Verpflichtender Master- oder Promotionsabschluss"
@@ -165,7 +209,7 @@ def find_role(title, description):
         if not any(matches_pattern(title, pattern) for pattern in role["patterns"]):
             continue
 
-        if role.get("entry_only") and not is_entry_level(full_text):
+        if role.get("entry_only") and not is_entry_level(title, description):
             continue
 
         context_keywords = role.get("context_keywords", [])
@@ -231,9 +275,8 @@ def find_blocked_focus_keyword(title, description):
 
 def analyze_experience(title, full_text):
     years = extract_required_years(full_text)
-    optional = experience_is_optional(full_text)
 
-    if years and not optional:
+    if years:
         points = {1: 14, 2: 8, 3: 3}[years]
         return {
             "rank": years + 1,
@@ -241,21 +284,31 @@ def analyze_experience(title, full_text):
             "label": f"{years} Jahr(e) gefordert",
         }
 
-    if contains_any(full_text, STRONG_EXPERIENCE_PHRASES) and not optional:
+    if contains_any(full_text, BODY_ENTRY_LEVEL_PHRASES):
+        return {"rank": 0, "points": 25, "label": "klare Einstiegsstelle"}
+
+    if contains_any(full_text, STRONG_EXPERIENCE_PHRASES):
         return {
             "rank": 5,
             "points": 6,
             "label": "mehrjaehrige/fundierte Erfahrung ohne Jahreszahl",
         }
 
-    if is_entry_level(f"{title} {full_text}"):
+    if is_entry_level(title, full_text):
         return {"rank": 0, "points": 25, "label": "klare Einstiegsstelle"}
 
     if contains_any(full_text, FIRST_EXPERIENCE_PHRASES):
         return {"rank": 0, "points": 25, "label": "erste Erfahrung reicht aus"}
 
-    if optional:
+    if experience_is_optional(full_text):
         return {"rank": 1, "points": 18, "label": "Erfahrung nur wuenschenswert"}
+
+    if has_required_experience(full_text):
+        return {
+            "rank": 4,
+            "points": 8,
+            "label": "praktische Vorerfahrung mit Technologien vorausgesetzt",
+        }
 
     return {"rank": 1, "points": 20, "label": "keine klare Jahresanforderung"}
 
@@ -263,34 +316,121 @@ def analyze_experience(title, full_text):
 def extract_required_years(text):
     """Return the highest explicit experience requirement up to ten years."""
     range_patterns = [
-        r"(\d+)\s*(?:-|bis|to)\s*(\d+)\s*(?:jahr|jahre|years|year)[^.!\n]{0,50}(?:erfahrung|berufserfahrung|experience)",
-        r"(?:erfahrung|berufserfahrung|experience)[^.!\n]{0,50}(\d+)\s*(?:-|bis|to)\s*(\d+)\s*(?:jahr|jahre|years|year)",
+        rf"(\d+)\s*(?:-|bis|to)\s*(\d+)\s*{YEAR_UNIT}"
+        rf"[\s\S]{{0,80}}?{EXPERIENCE_TERM}",
+        rf"{EXPERIENCE_TERM}[\s\S]{{0,80}}?"
+        rf"(\d+)\s*(?:-|bis|to)\s*(\d+)\s*{YEAR_UNIT}",
     ]
     years = []
     for pattern in range_patterns:
-        for lower, upper in re.findall(pattern, text):
+        for match in re.finditer(pattern, text):
+            if match_is_optional(text, match):
+                continue
+            lower, upper = match.groups()[-2:]
             years.extend([int(lower), int(upper)])
 
     single_patterns = [
-        r"(\d+)\s*\+?\s*(?:jahr|jahre|years|year)[^.!\n]{0,50}(?:erfahrung|berufserfahrung|experience)",
-        r"(?:erfahrung|berufserfahrung|experience)[^.!\n]{0,50}(\d+)\s*\+?\s*(?:jahr|jahre|years|year)",
+        rf"(?:(mehr als|ueber|more than|over|mindestens|mind\.?|at least|"
+        rf"minimum of)\s*)?(\d+)\s*\+?\s*{YEAR_UNIT}"
+        rf"[\s\S]{{0,80}}?{EXPERIENCE_TERM}",
+        rf"{EXPERIENCE_TERM}[\s\S]{{0,80}}?"
+        rf"(?:(mehr als|ueber|more than|over|mindestens|mind\.?|at least|"
+        rf"minimum of)\s*)?(\d+)\s*\+?\s*{YEAR_UNIT}",
     ]
     for pattern in single_patterns:
-        years.extend(int(match) for match in re.findall(pattern, text))
+        for match in re.finditer(pattern, text):
+            if match_is_optional(text, match):
+                continue
+            qualifier, value = match.groups()[-2:]
+            year = int(value)
+            if qualifier and qualifier.strip() in MORE_THAN_QUALIFIERS:
+                year += 1
+            years.append(year)
 
     plausible = [year for year in years if 0 < year <= 10]
     return max(plausible, default=0)
 
 
 def experience_is_optional(text):
-    experience_pattern = r"(?:erfahrung|berufserfahrung|experience|\d+\s*(?:jahr|jahre|year|years))"
-    for sentence in re.split(r"[.!?\n]", text):
-        if re.search(experience_pattern, sentence) and contains_any(
-            sentence,
-            OPTIONAL_EXPERIENCE_PHRASES,
-        ):
+    experience_pattern = re.compile(EXPERIENCE_TERM)
+    for match in experience_pattern.finditer(text):
+        if match_is_optional(text, match):
             return True
     return False
+
+
+def has_required_experience(text):
+    """Return whether applicant experience is stated as a requirement."""
+    for pattern in REQUIRED_EXPERIENCE_PATTERNS:
+        for match in re.finditer(pattern, text):
+            if not match_is_optional(text, match):
+                return True
+    return False
+
+
+def has_required_professional_experience(text):
+    """Detect mandatory professional or prior-role experience."""
+    if extract_required_years(text):
+        return True
+
+    patterns = list(PROFESSIONAL_EXPERIENCE_PATTERNS)
+    patterns.extend(keyword_pattern(phrase) for phrase in STRONG_EXPERIENCE_PHRASES)
+    for pattern in patterns:
+        for match in re.finditer(pattern, text):
+            if match_is_optional(text, match):
+                continue
+            if match_is_first_experience(text, match):
+                continue
+            if match_is_employer_context(text, match):
+                continue
+            return True
+    return False
+
+
+def match_is_optional(text, match, context_size=55):
+    """Check whether optional wording belongs to a nearby requirement."""
+    start, end = match_context(text, match, context_size)
+    return contains_any(text[start:end], OPTIONAL_EXPERIENCE_PHRASES)
+
+
+def match_is_first_experience(text, match, context_size=45):
+    """Check whether a requirement explicitly asks only for first experience."""
+    start, end = match_context(text, match, context_size)
+    return contains_any(text[start:end], FIRST_EXPERIENCE_PHRASES)
+
+
+def match_is_employer_context(text, match, context_size=100):
+    """Ignore company history and team-composition experience statements."""
+    start = max(0, match.start() - context_size)
+    prefix = text[start : match.start()]
+    return contains_any(
+        prefix,
+        [
+            "unser team umfasst",
+            "unsere teammitglieder",
+            "unsere experten",
+            "expert:innen mit",
+            "experten mit",
+            "als unternehmen",
+        ],
+    )
+
+
+def match_context(text, match, context_size):
+    """Return a nearby clause without crossing clear punctuation boundaries."""
+    start = max(0, match.start() - context_size)
+    end = min(len(text), match.end() + context_size)
+
+    for separator in ".!?;\n":
+        left_boundary = text.rfind(separator, start, match.start())
+        if left_boundary >= 0:
+            start = max(start, left_boundary + 1)
+
+        right_boundary = text.find(separator, match.end(), end)
+        if right_boundary >= 0:
+            end = min(end, right_boundary)
+
+    return start, end
 
 
 def score_skills(text):
@@ -443,9 +583,12 @@ def contains_any(text, words):
     return any(contains_keyword(text, word) for word in words)
 
 
-def is_entry_level(text):
-    """Return whether a title or description explicitly welcomes beginners."""
-    return contains_any(text, ENTRY_LEVEL_WORDS)
+def is_entry_level(title, description=""):
+    """Return whether this specific vacancy explicitly welcomes beginners."""
+    return contains_any(title, ENTRY_LEVEL_WORDS) or contains_any(
+        description,
+        BODY_ENTRY_LEVEL_PHRASES,
+    )
 
 
 def contains_keyword(text, keyword):

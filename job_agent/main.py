@@ -33,8 +33,13 @@ def score_jobs(jobs):
     included = [job for job in results if job["status"] == "included"]
     excluded = [job for job in results if job["status"] == "excluded"]
 
-    # Einstiegsstellen stehen immer vor Jobs mit hoeherer Erfahrungsanforderung.
-    included.sort(key=lambda job: (job["experience_rank"], -job["match_percent"]))
+    included.sort(
+        key=lambda job: (
+            -job["match_percent"],
+            job["experience_rank"],
+            job.get("title", "").lower(),
+        )
+    )
 
     return {
         "included": included,

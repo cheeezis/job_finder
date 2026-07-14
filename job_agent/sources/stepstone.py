@@ -18,16 +18,24 @@ from job_agent.config import (
     STEPSTONE_SEARCH_TERMS,
 )
 from job_agent.http import fetch_text
-from job_agent.remote import detect_remote
+from job_agent.models import Job, JobSource
+from job_agent.remote import classify_remote, detect_remote
 from job_agent.search_plan import append_unique, iter_search_queries
+from job_agent.sources.common import (
+    extract_annual_salary_eur,
+    extract_schema_locations,
+    normalize_employment_type,
+    parse_published_date,
+    source_job_id,
+    utc_now,
+)
 from job_agent.structured_data import extract_json_ld_job_posting
 from job_agent.text import html_to_text
 
 SOURCE_NAME = "stepstone"
 SEARCH_BASE_URL = "https://www.stepstone.de/jobs"
 CACHE_FILE = "data/stepstone_cache.json"
-IMPORTED_JOBS_FILE = "data/jobs_imported.json"
-CACHE_VERSION = 1
+CACHE_VERSION = 2
 REQUEST_DELAY_SECONDS = 1.5
 BLOCKING_STATUS_CODES = {403, 429}
 
@@ -64,19 +72,11 @@ class StepStoneHttpClient:
 
 def fetch_jobs(
     cache_path=CACHE_FILE,
-    imported_jobs_path=IMPORTED_JOBS_FILE,
     client=None,
 ):
     """Search StepStone and return imported job details."""
     cache_file = Path(cache_path)
     cache = load_cache(cache_file)
-    imported_count = seed_cache_from_imported_jobs(
-        cache,
-        Path(imported_jobs_path),
-    )
-    if imported_count:
-        save_cache(cache_file, cache)
-        print(f"StepStone-Cache mit {imported_count} vorhandenem Job(s) gestartet")
     client = client or StepStoneHttpClient()
 
     try:
@@ -201,20 +201,38 @@ def fetch_job(url, client=None):
     posting = extract_json_ld_job_posting(html)
     if not posting:
         raise ValueError("JobPosting JSON-LD nicht gefunden")
-    description = html_to_text(posting.get("description", ""))
-    location = format_location(posting.get("jobLocation"))
+    raw_description = posting.get("description", "")
+    description = html_to_text(raw_description)
+    locations = extract_schema_locations(posting.get("jobLocation"))
+    location_text = ", ".join(locations)
     title = posting.get("title", "")
+    detected_remote = detect_remote(title, description, location_text)
+    work_mode, remote_percentage = classify_remote(detected_remote)
+    identifier = extract_source_id(url, posting)
+    salary_min_eur, salary_max_eur = extract_annual_salary_eur(posting)
 
-    return {
-        "title": title,
-        "company": clean_company(posting.get("hiringOrganization", {}).get("name", "")),
-        "location": location,
-        "remote": detect_remote(title, description, location),
-        "description": description,
-        "url": posting.get("url") or url,
-        "external_url": url,
-        "source": SOURCE_NAME,
-    }
+    return Job(
+        id=source_job_id(SOURCE_NAME, identifier, url),
+        title=title,
+        company=clean_company(posting.get("hiringOrganization", {}).get("name", "")),
+        locations=locations,
+        sources=[
+            JobSource(
+                source=SOURCE_NAME,
+                source_id=identifier,
+                url=url,
+            )
+        ],
+        description_raw=raw_description,
+        description_clean=description,
+        work_mode=work_mode,
+        remote_percentage=remote_percentage,
+        employment_type=normalize_employment_type(posting.get("employmentType")),
+        salary_min_eur=salary_min_eur,
+        salary_max_eur=salary_max_eur,
+        published_at=parse_published_date(posting.get("datePosted")),
+        fetched_at=utc_now(),
+    )
 
 
 def load_cache(path):
@@ -232,6 +250,10 @@ def load_cache(path):
         return empty_cache
     cache.setdefault("last_links", [])
     cache.setdefault("jobs", {})
+    cache["jobs"] = {
+        url: Job.from_dict(job_values)
+        for url, job_values in cache["jobs"].items()
+    }
     return cache
 
 
@@ -239,36 +261,19 @@ def save_cache(path, cache):
     """Persist cache updates atomically so interrupted runs keep valid JSON."""
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary_path = path.with_suffix(f"{path.suffix}.tmp")
+    serialized = {
+        "version": CACHE_VERSION,
+        "last_links": cache.get("last_links", []),
+        "jobs": {
+            url: job.to_dict()
+            for url, job in cache.get("jobs", {}).items()
+        },
+    }
     temporary_path.write_text(
-        json.dumps(cache, indent=2, ensure_ascii=False),
+        json.dumps(serialized, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
     temporary_path.replace(path)
-
-
-def seed_cache_from_imported_jobs(cache, path):
-    """Use StepStone jobs from an earlier full run as the initial cache."""
-    if not path.exists():
-        return 0
-
-    try:
-        imported_jobs = json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return 0
-
-    added = 0
-    for job in imported_jobs:
-        if job.get("source") != SOURCE_NAME:
-            continue
-        detail_url = job.get("external_url") or job.get("url")
-        if not detail_url:
-            continue
-        cache_key = normalize_detail_url(detail_url)
-        if cache_key in cache["jobs"]:
-            continue
-        cache["jobs"][cache_key] = job
-        added += 1
-    return added
 
 
 def cached_jobs(links, cache):
@@ -285,16 +290,13 @@ def clean_company(company):
     return re.sub(r"_20\d{2}-.+$", "", company).strip()
 
 
-def format_location(job_location):
-    locations = job_location if isinstance(job_location, list) else [job_location]
-    cities = []
+def extract_source_id(url, posting):
+    """Extract StepStone's numeric posting ID when available."""
+    match = re.search(r"--(\d+)-inline\.html$", urlsplit(url).path)
+    if match:
+        return match.group(1)
 
-    for location in locations:
-        if not location:
-            continue
-        address = location.get("address", {})
-        city = address.get("addressLocality")
-        if city and city not in cities:
-            cities.append(city)
-
-    return ", ".join(cities) or "unbekannt"
+    identifier = posting.get("identifier")
+    if isinstance(identifier, dict):
+        return identifier.get("value")
+    return identifier

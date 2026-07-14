@@ -2,7 +2,9 @@
 
 import re
 from collections import defaultdict
+from dataclasses import replace
 
+from job_agent.models import Job
 from job_agent.text import normalize_text
 
 
@@ -20,15 +22,15 @@ LEGAL_FORMS = [
 ]
 
 
-def deduplicate_jobs(jobs):
+def deduplicate_jobs(jobs: list[Job]) -> list[Job]:
     """Merge jobs with equal titles and compatible company names."""
     unique_jobs = []
     positions_by_title = defaultdict(list)
 
     for original in jobs:
-        job = dict(original)
-        title_key = normalize_title(job.get("title", ""))
-        company_key = normalize_company(job.get("company", ""))
+        job = clone_job(original)
+        title_key = normalize_title(job.title)
+        company_key = normalize_company(job.company)
         position = find_duplicate_position(
             job,
             company_key,
@@ -37,8 +39,6 @@ def deduplicate_jobs(jobs):
         )
 
         if position is None:
-            job["sources"] = source_names(job)
-            job["duplicate_urls"] = []
             if title_key and company_key:
                 positions_by_title[title_key].append(len(unique_jobs))
             unique_jobs.append(job)
@@ -57,9 +57,9 @@ def find_duplicate_position(job, company_key, positions, unique_jobs):
 
     for position in positions:
         existing = unique_jobs[position]
-        if job.get("source") in existing.get("sources", []):
+        if set(source_names(job)) & set(source_names(existing)):
             continue
-        existing_company = normalize_company(existing.get("company", ""))
+        existing_company = normalize_company(existing.company)
         if companies_match(company_key, existing_company):
             return position
     return None
@@ -100,37 +100,47 @@ def normalize_title(title):
 
 
 def source_names(job):
-    sources = job.get("sources") or [job.get("source", "")]
-    return [source for source in sources if source]
+    return list(dict.fromkeys(source.source for source in job.sources))
 
 
 def merge_jobs(existing, duplicate):
     """Keep the richer posting and attach provenance from both sources."""
-    existing_description = existing.get("description", "")
-    duplicate_description = duplicate.get("description", "")
+    existing_description = existing.description_clean
+    duplicate_description = duplicate.description_clean
     richer = (
         duplicate
         if len(duplicate_description) > len(existing_description)
         else existing
     )
-    merged = dict(richer)
-    merged["sources"] = unique_values(source_names(existing) + source_names(duplicate))
-
-    urls = existing.get("duplicate_urls", []) + duplicate.get("duplicate_urls", [])
-    for job in [existing, duplicate]:
-        url = job.get("url")
-        if url and url != merged.get("url"):
-            urls.append(url)
-    merged["duplicate_urls"] = unique_values(urls)
-    merged["is_new"] = bool(existing.get("is_new") or duplicate.get("is_new"))
-    return merged
+    sources = unique_sources(existing.sources + duplicate.sources)
+    locations = list(dict.fromkeys(existing.locations + duplicate.locations))
+    return replace(
+        richer,
+        id=existing.id,
+        locations=locations,
+        sources=sources,
+        is_new=existing.is_new or duplicate.is_new,
+    )
 
 
-def unique_values(values):
+def clone_job(job):
+    """Copy mutable model fields before merging jobs."""
+    return replace(
+        job,
+        locations=list(job.locations),
+        sources=list(job.sources),
+        score_reasons=list(job.score_reasons),
+    )
+
+
+def unique_sources(sources):
+    """Return portal listings once, preserving source order."""
     result = []
     seen = set()
-    for value in values:
-        if value and value not in seen:
-            seen.add(value)
-            result.append(value)
+    for source in sources:
+        key = (source.source, source.url)
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(source)
     return result

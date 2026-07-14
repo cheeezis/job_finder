@@ -5,6 +5,7 @@ from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
 from job_agent.console import configure_utf8_output
+from job_agent.deduplication import deduplicate_jobs
 from job_agent.main import print_results, score_jobs
 from job_agent.memory import load_memory, save_memory, update_memory
 from job_agent.reporting import write_review_files
@@ -28,16 +29,16 @@ def main():
     configure_utf8_output()
     print("1/3 Sammle Jobs aus Quellen")
     jobs = collect_jobs()
-    Path(JOBS_FILE).write_text(
-        json.dumps(jobs, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-    print(f"{len(jobs)} Job(s) gespeichert in {JOBS_FILE}")
 
     print("\n2/3 Aktualisiere Job-Gedaechtnis")
     memory = load_memory(MEMORY_FILE)
     memory_stats = update_memory(jobs, memory)
     save_memory(memory, MEMORY_FILE)
+    Path(JOBS_FILE).write_text(
+        json.dumps([job.to_dict() for job in jobs], indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    print(f"{len(jobs)} Job(s) gespeichert in {JOBS_FILE}")
     print(f'Neue Jobs: {memory_stats["new"]}')
     print(f'Bekannte Jobs: {memory_stats["known"]}')
     print(f"Gedaechtnis gespeichert in {MEMORY_FILE}")
@@ -49,7 +50,7 @@ def main():
 
 
 def collect_jobs():
-    """Collect jobs from all configured sources and deduplicate by URL."""
+    """Collect jobs from all configured sources and merge duplicates."""
     jobs = []
     seen_urls = set()
 
@@ -59,14 +60,14 @@ def collect_jobs():
         print(f"{len(source_jobs)} Job(s) aus {source.SOURCE_NAME}")
 
         for job in source_jobs:
-            url = job.get("url")
+            url = job.primary_url
             dedupe_key = canonical_url(url)
             if dedupe_key in seen_urls:
                 continue
             seen_urls.add(dedupe_key)
             jobs.append(job)
 
-    return jobs
+    return deduplicate_jobs(jobs)
 
 
 def canonical_url(url):

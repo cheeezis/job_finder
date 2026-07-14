@@ -105,17 +105,18 @@ def append_job_section(lines, title, jobs, include_description, feedback):
     for job in jobs:
         score = job.get("match_percent", 0)
         new_marker = "NEU - " if job.get("is_new") else ""
+        url = primary_url(job)
         lines.extend(
             [
                 f"### {new_marker}{score}% | {job.get('title', '')}",
                 "",
-                format_feedback_line(feedback.get(job.get("url", ""))),
+                format_feedback_line(feedback.get(url)),
                 f"- Firma: {job.get('company', '')}",
                 f"- Quelle: {format_sources(job)}",
-                f"- Ort: {job.get('location', '')}",
-                f"- Remote: {job.get('remote', '')}",
+                f"- Ort: {format_locations(job)}",
+                f"- Remote: {format_remote(job)}",
                 f"- Erfahrung: {job.get('experience_level', '')}",
-                f"- URL: {job.get('url', '')}",
+                f"- URL: {url}",
                 "- Gruende:",
             ]
         )
@@ -123,7 +124,7 @@ def append_job_section(lines, title, jobs, include_description, feedback):
             lines.append(f"  - {reason}")
 
         if include_description:
-            description = compact_description(job.get("description", ""))
+            description = compact_description(job.get("description_clean", ""))
             if description:
                 lines.extend(["", description])
 
@@ -131,12 +132,40 @@ def append_job_section(lines, title, jobs, include_description, feedback):
 
 
 def format_sources(job):
-    sources = job.get("sources") or [job.get("source", "")]
-    duplicate_count = len(job.get("duplicate_urls", []))
+    sources = job.get("sources", [])
+    names = list(
+        dict.fromkeys(
+            source.get("source", "")
+            for source in sources
+            if source.get("source")
+        )
+    )
+    duplicate_count = max(0, len(sources) - 1)
     suffix = ""
     if duplicate_count:
         suffix = f" ({duplicate_count} Duplikat(e) zusammengefuehrt)"
-    return ", ".join(source for source in sources if source) + suffix
+    return ", ".join(names) + suffix
+
+
+def primary_url(job):
+    """Return the preferred listing URL from serialized source data."""
+    sources = job.get("sources", [])
+    return sources[0].get("url", "") if sources else ""
+
+
+def format_locations(job):
+    """Return serialized job locations as display text."""
+    return ", ".join(job.get("locations", [])) or "unbekannt"
+
+
+def format_remote(job):
+    """Return structured remote fields as display text."""
+    percentage = job.get("remote_percentage")
+    if percentage is not None:
+        return f"{percentage}%"
+    if job.get("work_mode") == "hybrid":
+        return "homeoffice"
+    return "0%"
 
 
 def compact_description(description, max_length=700):

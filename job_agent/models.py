@@ -88,6 +88,7 @@ class Job:
     match_score: int | None = None
     filter_status: FilterStatus | None = None
     score_reasons: list[str] = field(default_factory=list)
+    is_new: bool = False
 
     def __post_init__(self):
         """Reject invalid percentages, scores, and salary ranges."""
@@ -103,6 +104,30 @@ class Job:
             and self.salary_min_eur > self.salary_max_eur
         ):
             raise ValueError("salary_min_eur cannot exceed salary_max_eur")
+
+    @property
+    def primary_source(self):
+        """Return the preferred source listing for links and display."""
+        return self.sources[0] if self.sources else None
+
+    @property
+    def primary_url(self):
+        """Return the preferred public listing URL."""
+        return self.primary_source.url if self.primary_source else ""
+
+    @property
+    def location_text(self):
+        """Return all advertised locations as display text."""
+        return ", ".join(self.locations) or "unbekannt"
+
+    @property
+    def remote_text(self):
+        """Return remote information in the format used by scoring."""
+        if self.remote_percentage is not None:
+            return f"{self.remote_percentage}%"
+        if self.work_mode is WorkMode.HYBRID:
+            return "homeoffice"
+        return "0%"
 
     def to_dict(self):
         """Return the complete job as JSON-compatible values."""

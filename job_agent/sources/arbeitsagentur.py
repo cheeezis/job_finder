@@ -15,7 +15,15 @@ from job_agent.config import (
     SEARCH_TERMS,
 )
 from job_agent.http import fetch_text
-from job_agent.remote import detect_remote
+from job_agent.models import Job, JobSource
+from job_agent.remote import classify_remote, detect_remote
+from job_agent.sources.common import (
+    normalize_employment_type,
+    parse_published_date,
+    source_job_id,
+    utc_now,
+)
+from job_agent.text import html_to_text
 
 SOURCE_NAME = "arbeitsagentur"
 SEARCH_BASE_URL = "https://www.arbeitsagentur.de/jobsuche/suche"
@@ -116,25 +124,47 @@ def fetch_job(url):
     html = fetch_text(url)
     detail = extract_jobdetail(html)
     title = detail.get("stellenangebotsTitel", "")
-    location = format_locations(detail)
-    description = detail.get("stellenangebotsBeschreibung", "")
+    locations = format_locations(detail)
+    location_text = ", ".join(locations)
+    raw_description = detail.get("stellenangebotsBeschreibung", "")
+    description = html_to_text(raw_description)
     structured_remote = format_remote(detail)
+    detected_remote = detect_remote(
+        title,
+        description,
+        location_text,
+        structured_remote=structured_remote,
+    )
+    work_mode, remote_percentage = classify_remote(detected_remote)
+    reference = url.rstrip("/").rsplit("/", 1)[-1]
 
-    return {
-        "title": title,
-        "company": detail.get("firma", ""),
-        "location": location,
-        "remote": detect_remote(
-            title,
-            description,
-            location,
-            structured_remote=structured_remote,
+    return Job(
+        id=source_job_id(SOURCE_NAME, reference, url),
+        title=title,
+        company=detail.get("firma", ""),
+        locations=locations,
+        sources=[
+            JobSource(
+                source=SOURCE_NAME,
+                source_id=reference,
+                url=url,
+                application_url=detail.get("externeURL") or None,
+            )
+        ],
+        description_raw=raw_description,
+        description_clean=description,
+        work_mode=work_mode,
+        remote_percentage=remote_percentage,
+        employment_type=normalize_employment_type(
+            detail.get("arbeitszeitmodelle")
+            or detail.get("arbeitszeitmodell")
         ),
-        "description": description,
-        "url": url,
-        "external_url": detail.get("externeURL", ""),
-        "source": SOURCE_NAME,
-    }
+        published_at=parse_published_date(
+            detail.get("aktuelleVeroeffentlichungsdatum"),
+            detail.get("veroeffentlichungsdatum"),
+        ),
+        fetched_at=utc_now(),
+    )
 
 
 def extract_ng_state(html):
@@ -164,7 +194,7 @@ def format_locations(detail):
         if city and city not in locations:
             locations.append(city)
 
-    return ", ".join(locations) or "unbekannt"
+    return locations or ["unbekannt"]
 
 
 def format_remote(detail):

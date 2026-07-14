@@ -8,6 +8,7 @@ from unittest.mock import ANY, Mock, patch
 from urllib.error import HTTPError
 
 from job_agent.config import STEPSTONE_SEARCH_LOCATIONS, STEPSTONE_SEARCH_TERMS
+from job_agent.models import Job, JobSource, WorkMode
 from job_agent.sources import stepstone
 from job_agent.sources.stepstone import build_search_url
 
@@ -52,7 +53,7 @@ class StepStoneCacheTests(unittest.TestCase):
                     {
                         "version": stepstone.CACHE_VERSION,
                         "last_links": [cached_url],
-                        "jobs": {cached_url: cached_job},
+                        "jobs": {cached_url: cached_job.to_dict()},
                     }
                 ),
                 encoding="utf-8",
@@ -68,7 +69,6 @@ class StepStoneCacheTests(unittest.TestCase):
             ):
                 jobs = stepstone.fetch_jobs(
                     cache_path=cache_path,
-                    imported_jobs_path=Path(directory) / "missing.json",
                     client=Mock(),
                 )
 
@@ -86,7 +86,7 @@ class StepStoneCacheTests(unittest.TestCase):
                     {
                         "version": stepstone.CACHE_VERSION,
                         "last_links": [url],
-                        "jobs": {url: job},
+                        "jobs": {url: job.to_dict()},
                     }
                 ),
                 encoding="utf-8",
@@ -99,29 +99,10 @@ class StepStoneCacheTests(unittest.TestCase):
             ):
                 jobs = stepstone.fetch_jobs(
                     cache_path=cache_path,
-                    imported_jobs_path=Path(directory) / "missing.json",
                     client=Mock(),
                 )
 
         self.assertEqual(jobs, [job])
-
-    def test_existing_imported_jobs_seed_an_empty_cache(self):
-        url = "https://www.stepstone.de/stellenangebote--existing.html?tracking=1"
-        job = self.make_job("Existing", url)
-
-        with tempfile.TemporaryDirectory() as directory:
-            imported_path = Path(directory) / "jobs_imported.json"
-            imported_path.write_text(json.dumps([job]), encoding="utf-8")
-            cache = {
-                "version": stepstone.CACHE_VERSION,
-                "last_links": [],
-                "jobs": {},
-            }
-
-            added = stepstone.seed_cache_from_imported_jobs(cache, imported_path)
-
-        self.assertEqual(added, 1)
-        self.assertIn(stepstone.normalize_detail_url(url), cache["jobs"])
 
     def test_detail_block_stops_new_requests_but_keeps_later_cached_jobs(self):
         blocked_url = "https://www.stepstone.de/stellenangebote--blocked.html"
@@ -136,7 +117,7 @@ class StepStoneCacheTests(unittest.TestCase):
                     {
                         "version": stepstone.CACHE_VERSION,
                         "last_links": [],
-                        "jobs": {cached_url: cached_job},
+                        "jobs": {cached_url: cached_job.to_dict()},
                     }
                 ),
                 encoding="utf-8",
@@ -153,7 +134,6 @@ class StepStoneCacheTests(unittest.TestCase):
             ):
                 jobs = stepstone.fetch_jobs(
                     cache_path=cache_path,
-                    imported_jobs_path=Path(directory) / "missing.json",
                     client=Mock(),
                 )
 
@@ -162,16 +142,17 @@ class StepStoneCacheTests(unittest.TestCase):
 
     @staticmethod
     def make_job(title, url):
-        return {
-            "title": title,
-            "company": "Example GmbH",
-            "location": "Remote",
-            "remote": "100%",
-            "description": "Python",
-            "url": url,
-            "external_url": url,
-            "source": "stepstone",
-        }
+        return Job(
+            id=f"stepstone:{title.lower()}",
+            title=title,
+            company="Example GmbH",
+            locations=["Remote"],
+            sources=[JobSource(source="stepstone", url=url)],
+            description_raw="Python",
+            description_clean="Python",
+            work_mode=WorkMode.REMOTE,
+            remote_percentage=100,
+        )
 
 
 class StepStoneHttpClientTests(unittest.TestCase):

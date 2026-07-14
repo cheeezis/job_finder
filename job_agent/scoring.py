@@ -2,6 +2,7 @@
 
 import re
 
+from job_agent.models import FilterStatus, Job
 from job_agent.profile import (
     ADMIN_TITLE_WORDS,
     BLOCKED_FOCUS_KEYWORDS,
@@ -66,13 +67,14 @@ PROFESSIONAL_EXPERIENCE_PATTERNS = [
 ]
 
 
-def score_job(job):
+def score_job(job: Job):
     """Return a fixed 0-100 match score and explain every decision."""
-    title = normalize_text(job.get("title", ""))
-    location = normalize_text(job.get("location", ""))
-    remote = normalize_text(job.get("remote", ""))
-    description = strip_platform_boilerplate(normalize_text(job.get("description", "")))
-    full_text = " ".join([title, location, remote, description])
+    title = normalize_text(job.title)
+    location = normalize_text(job.location_text)
+    remote = normalize_text(job.remote_text)
+    description = strip_platform_boilerplate(normalize_text(job.description_clean))
+    salary_text = structured_salary_text(job)
+    full_text = " ".join([title, location, remote, description, salary_text])
 
     role = find_role(title, description)
     allowed, filter_reason = passes_hard_filters(
@@ -110,7 +112,7 @@ def score_job(job):
 
     score = max(0, min(100, score))
     return {
-        "status": "included",
+        "filter_status": FilterStatus.INCLUDED.value,
         "raw_score": score,
         "match_percent": score,
         "experience_rank": experience["rank"],
@@ -122,13 +124,24 @@ def score_job(job):
 
 def excluded_result(reason):
     return {
-        "status": "excluded",
+        "filter_status": FilterStatus.EXCLUDED.value,
         "raw_score": 0,
         "match_percent": 0,
         "experience_rank": 99,
         "experience_level": "ausgeschlossen",
         "reasons": [reason],
     }
+
+
+def structured_salary_text(job):
+    """Expose structured annual salary data to the existing scoring rules."""
+    minimum = job.salary_min_eur
+    maximum = job.salary_max_eur
+    if minimum is not None and maximum is not None:
+        return f"jahresgehalt {minimum} - {maximum} EUR"
+    if maximum is not None:
+        return f"jahresgehalt {maximum} EUR"
+    return ""
 
 
 def strip_platform_boilerplate(description):

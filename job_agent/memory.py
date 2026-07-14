@@ -1,62 +1,73 @@
 """Local memory for tracking jobs across agent runs."""
 
 import json
-from datetime import date
+from datetime import datetime, timezone
 from pathlib import Path
 
+from job_agent.models import WorkflowStatus
 
 MEMORY_FILE = "data/seen_jobs.json"
+MEMORY_VERSION = 2
 
 
 def load_memory(path=MEMORY_FILE):
-    """Load the local URL-based job memory."""
+    """Load the current job memory format."""
     memory_path = Path(path)
     if not memory_path.exists():
         return {}
-    return json.loads(memory_path.read_text(encoding="utf-8"))
+    values = json.loads(memory_path.read_text(encoding="utf-8"))
+    if values.get("version") != MEMORY_VERSION:
+        raise ValueError(
+            "seen_jobs.json verwendet das alte Format; Datei vor dem "
+            "ersten neuen Lauf loeschen"
+        )
+    return values.get("jobs", {})
 
 
 def save_memory(memory, path=MEMORY_FILE):
     """Persist the local job memory as UTF-8 JSON."""
     Path(path).write_text(
-        json.dumps(memory, indent=2, ensure_ascii=False),
+        json.dumps(
+            {"version": MEMORY_VERSION, "jobs": memory},
+            indent=2,
+            ensure_ascii=False,
+        ),
         encoding="utf-8",
     )
 
 
 def update_memory(jobs, memory):
     """Mark jobs as new or known and refresh their last-seen metadata."""
-    today = date.today().isoformat()
+    now = datetime.now(timezone.utc)
     new_count = 0
     known_count = 0
 
     for job in jobs:
-        url = job.get("url")
-        if not url:
-            continue
-
-        if url in memory:
+        if job.id in memory:
             known_count += 1
-            job["is_new"] = False
-            memory[url]["last_seen"] = today
-            memory[url]["title"] = job.get(
-                "title",
-                memory[url].get("title", ""),
-            )
-            memory[url]["company"] = job.get(
-                "company",
-                memory[url].get("company", ""),
-            )
+            entry = memory[job.id]
+            job.is_new = False
+            job.first_seen_at = datetime.fromisoformat(entry["first_seen_at"])
+            job.last_seen_at = now
+            job.workflow_status = WorkflowStatus(entry["workflow_status"])
+            entry["last_seen_at"] = now.isoformat()
+            entry["title"] = job.title
+            entry["company"] = job.company
+            entry["source_urls"] = [source.url for source in job.sources]
             continue
 
         new_count += 1
-        job["is_new"] = True
-        memory[url] = {
-            "title": job.get("title", ""),
-            "company": job.get("company", ""),
-            "first_seen": today,
-            "last_seen": today,
-            "status": "new",
+        job.is_new = True
+        job.first_seen_at = now
+        job.last_seen_at = now
+        job.workflow_status = WorkflowStatus.NEW
+        memory[job.id] = {
+            "title": job.title,
+            "company": job.company,
+            "first_seen_at": now.isoformat(),
+            "last_seen_at": now.isoformat(),
+            "workflow_status": WorkflowStatus.NEW.value,
+            "source_urls": [source.url for source in job.sources],
         }
 
     return {

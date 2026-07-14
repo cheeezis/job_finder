@@ -2,6 +2,7 @@
 
 import re
 
+from job_agent.models import WorkMode
 from job_agent.text import normalize_text
 
 REMOTE_WORDS = [
@@ -83,6 +84,23 @@ def extract_remote_percent(text):
     if not matches:
         return 0
     return max(matches)
+
+
+def classify_remote(remote):
+    """Convert detected remote text into structured model fields."""
+    normalized = normalize_text(remote)
+    match = re.fullmatch(r"(100|[1-9]?\d)%", normalized)
+    if match:
+        percentage = int(match.group(1))
+        if percentage == 100:
+            return WorkMode.REMOTE, percentage
+        if percentage > 0:
+            return WorkMode.HYBRID, percentage
+        return WorkMode.ONSITE, 0
+
+    if normalized == "homeoffice":
+        return WorkMode.HYBRID, None
+    return WorkMode.UNKNOWN, None
 
 
 def contains_any(text, words):

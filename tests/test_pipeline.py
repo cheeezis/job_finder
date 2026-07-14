@@ -45,7 +45,6 @@ class PipelineTests(unittest.TestCase):
                 results,
                 scored_path=directory_path / "scored.json",
                 review_path=directory_path / "review.md",
-                feedback_path=directory_path / "feedback.json",
             )
             review = (directory_path / "review.md").read_text(encoding="utf-8")
 

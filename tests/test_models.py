@@ -1,6 +1,8 @@
 """Tests for the shared job domain model."""
 
+import json
 import unittest
+from datetime import date, datetime, timezone
 
 from job_agent.models import (
     FilterStatus,
@@ -64,6 +66,28 @@ class JobModelTests(unittest.TestCase):
     def test_rejects_invalid_salary_range(self):
         with self.assertRaises(ValueError):
             make_job(salary_min_eur=91_000, salary_max_eur=73_000)
+
+    def test_json_round_trip_preserves_complete_job(self):
+        job = make_job(
+            work_mode=WorkMode.HYBRID,
+            remote_percentage=80,
+            employment_type="full_time",
+            salary_min_eur=73_000,
+            salary_max_eur=91_000,
+            published_at=date(2026, 7, 10),
+            first_seen_at=datetime(2026, 7, 14, 9, 30, tzinfo=timezone.utc),
+            last_seen_at=datetime(2026, 7, 14, 10, 30, tzinfo=timezone.utc),
+            fetched_at=datetime(2026, 7, 14, 10, 31, tzinfo=timezone.utc),
+            workflow_status=WorkflowStatus.REVIEW,
+            filter_status=FilterStatus.INCLUDED,
+            match_score=82,
+            score_reasons=["Python gefunden"],
+        )
+
+        serialized = json.loads(json.dumps(job.to_dict()))
+        restored = Job.from_dict(serialized)
+
+        self.assertEqual(restored, job)
 
 
 if __name__ == "__main__":

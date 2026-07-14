@@ -44,6 +44,25 @@ class JobSource:
     source_id: str | None = None
     application_url: str | None = None
 
+    def to_dict(self):
+        """Return JSON-compatible source data."""
+        return {
+            "source": self.source,
+            "url": self.url,
+            "source_id": self.source_id,
+            "application_url": self.application_url,
+        }
+
+    @classmethod
+    def from_dict(cls, values):
+        """Restore a source from the current JSON representation."""
+        return cls(
+            source=values["source"],
+            url=values["url"],
+            source_id=values.get("source_id"),
+            application_url=values.get("application_url"),
+        )
+
 
 @dataclass(slots=True)
 class Job:
@@ -85,8 +104,79 @@ class Job:
         ):
             raise ValueError("salary_min_eur cannot exceed salary_max_eur")
 
+    def to_dict(self):
+        """Return the complete job as JSON-compatible values."""
+        return {
+            "id": self.id,
+            "title": self.title,
+            "company": self.company,
+            "locations": list(self.locations),
+            "sources": [source.to_dict() for source in self.sources],
+            "description_raw": self.description_raw,
+            "description_clean": self.description_clean,
+            "work_mode": self.work_mode.value,
+            "remote_percentage": self.remote_percentage,
+            "employment_type": self.employment_type,
+            "salary_min_eur": self.salary_min_eur,
+            "salary_max_eur": self.salary_max_eur,
+            "published_at": format_temporal(self.published_at),
+            "first_seen_at": format_temporal(self.first_seen_at),
+            "last_seen_at": format_temporal(self.last_seen_at),
+            "fetched_at": format_temporal(self.fetched_at),
+            "workflow_status": self.workflow_status.value,
+            "match_score": self.match_score,
+            "filter_status": (
+                self.filter_status.value if self.filter_status is not None else None
+            ),
+            "score_reasons": list(self.score_reasons),
+        }
+
+    @classmethod
+    def from_dict(cls, values):
+        """Restore a job from the current JSON representation."""
+        filter_status = values.get("filter_status")
+        return cls(
+            id=values["id"],
+            title=values["title"],
+            company=values["company"],
+            locations=list(values["locations"]),
+            sources=[JobSource.from_dict(item) for item in values["sources"]],
+            description_raw=values["description_raw"],
+            description_clean=values["description_clean"],
+            work_mode=WorkMode(values["work_mode"]),
+            remote_percentage=values.get("remote_percentage"),
+            employment_type=values.get("employment_type"),
+            salary_min_eur=values.get("salary_min_eur"),
+            salary_max_eur=values.get("salary_max_eur"),
+            published_at=parse_date(values.get("published_at")),
+            first_seen_at=parse_datetime(values.get("first_seen_at")),
+            last_seen_at=parse_datetime(values.get("last_seen_at")),
+            fetched_at=parse_datetime(values.get("fetched_at")),
+            workflow_status=WorkflowStatus(values["workflow_status"]),
+            match_score=values.get("match_score"),
+            filter_status=(
+                FilterStatus(filter_status) if filter_status is not None else None
+            ),
+            score_reasons=list(values.get("score_reasons", [])),
+        )
+
 
 def validate_percentage(name, value):
     """Validate an optional integer percentage on the fixed 0-100 scale."""
     if value is not None and not 0 <= value <= 100:
         raise ValueError(f"{name} must be between 0 and 100")
+
+
+def format_temporal(value):
+    """Format an optional date or datetime for JSON storage."""
+    return value.isoformat() if value is not None else None
+
+
+def parse_date(value):
+    """Parse an optional ISO date."""
+    return date.fromisoformat(value) if value else None
+
+
+def parse_datetime(value):
+    """Parse an optional ISO datetime."""
+    return datetime.fromisoformat(value) if value else None

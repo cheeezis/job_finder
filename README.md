@@ -9,6 +9,7 @@ Der Agent kann:
 
 - Arbeitsagentur-Suchergebnisse fuer definierte Suchbegriffe abrufen
 - StepStone-Suchergebnisse fuer definierte Suchbegriffe abrufen
+- StepStone-Detailseiten lokal cachen und Zugriffsgrenzen respektieren
 - get-in-IT-Suchergebnisse ueber die oeffentliche JSON-API abrufen
 - Jobdetail-Seiten importieren
 - Jobs nach deinen Regeln bewerten
@@ -64,6 +65,7 @@ data/seen_jobs.json         lokales Job-Gedaechtnis
 data/jobs_scored.json       generierte Scoring-Ergebnisse
 data/jobs_review.md         generierte Review-Datei
 data/job_feedback.json      gespeicherte manuelle Job-Bewertungen
+data/stepstone_cache.json   gecachte StepStone-Jobdetails und letzte Linkliste
 tests/                      automatisierte Scoring- und Filtertests
 run_agent.py                kompletter Agentenlauf
 ```

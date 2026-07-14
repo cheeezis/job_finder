@@ -43,10 +43,25 @@ SEARCH_TERMS = [
     "KI",
 ]
 
-# Standalone terms are useful for Arbeitsagentur, but too broad on StepStone.
-STEPSTONE_BROAD_TERMS = {"Python", "KI"}
+# StepStone's text search produces heavily overlapping result sets. These
+# broader role families cover the profile without requesting every synonym.
 STEPSTONE_SEARCH_TERMS = [
-    term for term in SEARCH_TERMS if term not in STEPSTONE_BROAD_TERMS
+    "Junior Software Developer",
+    "Python Developer",
+    "Data Engineer",
+    "Data Analyst",
+    "AI Engineer",
+    "Machine Learning Engineer",
+    "DevOps Engineer",
+    "Cloud Engineer",
+    "Security Engineer",
+    "Network Engineer",
+    "IT Consultant",
+    "Automation Engineer",
+    "Junior Requirements Engineer",
+    "Software Test Engineer",
+    "Junior SAP Consultant",
+    "Microsoft 365 Junior Consultant",
 ]
 
 LOCAL_SEARCH_LOCATION = "Exampletown"
@@ -63,5 +78,5 @@ STEPSTONE_SEARCH_LOCATIONS = [
 ]
 STEPSTONE_SEARCH_RADIUS_KM = LOCAL_SEARCH_RADIUS_KM
 
-GET_IN_IT_SEARCH_TERMS = STEPSTONE_SEARCH_TERMS
+GET_IN_IT_SEARCH_TERMS = SEARCH_TERMS
 GET_IN_IT_SEARCH_LOCATIONS = SEARCH_LOCATIONS

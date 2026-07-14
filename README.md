@@ -12,6 +12,8 @@ Der Agent kann:
 - StepStone-Detailseiten lokal cachen und Zugriffsgrenzen respektieren
 - get-in-IT-Suchergebnisse ueber die oeffentliche JSON-API abrufen
 - Jobdetail-Seiten importieren
+- alle Quellen in ein verbindliches Jobmodell ueberfuehren
+- Rohbeschreibung, Klartext sowie Veroeffentlichungs- und Abrufdaten speichern
 - Jobs nach deinen Regeln bewerten
 - feste, laufuebergreifend vergleichbare Match-Scores von 0 bis 100 erzeugen
 - quellenuebergreifende Duplikate fuer das Review zusammenfuehren
@@ -26,16 +28,15 @@ Kompletter Agentenlauf fuer alle angebundenen Quellen:
 python run_agent.py
 ```
 
+Der neue Modellstand ist absichtlich nicht mit alten Laufdaten kompatibel.
+Vor dem ersten Lauf nach dieser Umstellung werden die bisherigen generierten
+Job-, Memory-, Review- und Cache-Dateien unter `data/` entfernt. Es findet
+keine Altdatenmigration statt.
+
 Nur vorhandene importierte Jobs bewerten:
 
 ```powershell
 python -m job_agent.main
-```
-
-Sample-Daten bewerten:
-
-```powershell
-python -m job_agent.main data/jobs_sample.json
 ```
 
 Scoring-, Filter- und Deduplizierungsregeln testen:
@@ -51,6 +52,7 @@ job_agent/                  Code
 job_agent/config.py         Suchbegriffe und Suchorte
 job_agent/console.py        gemeinsame Konsolenkonfiguration
 job_agent/http.py           gemeinsame HTTP-Helfer
+job_agent/models.py         einheitliches Job- und Statusmodell
 job_agent/profile.py        Profil-, Skill- und Scoring-Regeln
 job_agent/deduplication.py  quellenuebergreifende Job-Deduplizierung
 job_agent/remote.py         gemeinsame Remote-Erkennung
@@ -59,7 +61,6 @@ job_agent/search_plan.py    gemeinsame Suchplan-Helfer
 job_agent/structured_data.py gemeinsame JSON-LD-Auswertung
 job_agent/text.py           gemeinsame Text-/HTML-Helfer
 job_agent/sources/          Quellenadapter
-data/jobs_sample.json       Testdaten
 data/jobs_imported.json     importierte Jobdetails
 data/seen_jobs.json         lokales Job-Gedaechtnis
 data/jobs_scored.json       generierte Scoring-Ergebnisse

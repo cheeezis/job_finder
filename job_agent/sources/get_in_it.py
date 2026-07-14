@@ -12,8 +12,17 @@ from urllib.parse import urlencode, urljoin
 
 from job_agent.config import GET_IN_IT_SEARCH_LOCATIONS, GET_IN_IT_SEARCH_TERMS
 from job_agent.http import fetch_json, fetch_text
-from job_agent.remote import detect_remote
+from job_agent.models import Job, JobSource
+from job_agent.remote import classify_remote, detect_remote
 from job_agent.search_plan import append_unique, iter_search_queries, unique_in_order
+from job_agent.sources.common import (
+    extract_annual_salary_eur,
+    extract_schema_locations,
+    normalize_employment_type,
+    parse_published_date,
+    source_job_id,
+    utc_now,
+)
 from job_agent.structured_data import extract_json_ld_job_posting
 from job_agent.text import html_to_text
 
@@ -84,7 +93,10 @@ def build_api_searches():
     """Map our shared search terms to get-in-IT's available category filters."""
     seen = set()
 
-    for query in iter_search_queries(GET_IN_IT_SEARCH_TERMS, GET_IN_IT_SEARCH_LOCATIONS):
+    for query in iter_search_queries(
+        GET_IN_IT_SEARCH_TERMS,
+        GET_IN_IT_SEARCH_LOCATIONS,
+    ):
         for priority_id in priority_ids_for_term(query.term):
             key = (priority_id, query.location)
             if key in seen:
@@ -166,20 +178,38 @@ def fetch_job(url):
     """Import one get-in-IT detail page from its embedded job data."""
     html = fetch_text(url)
     posting = extract_job_posting(html)
-    description = html_to_text(posting.get("description", ""))
-    location = format_location(posting.get("jobLocation"))
+    raw_description = posting.get("description", "")
+    description = html_to_text(raw_description)
+    locations = extract_schema_locations(posting.get("jobLocation"))
+    location_text = ", ".join(locations)
     title = posting.get("title", "")
+    detected_remote = detect_remote(title, html, description, location_text)
+    work_mode, remote_percentage = classify_remote(detected_remote)
+    identifier = extract_source_id(url, posting)
+    salary_min_eur, salary_max_eur = extract_annual_salary_eur(posting)
 
-    return {
-        "title": title,
-        "company": clean_company(posting.get("hiringOrganization", {}).get("name", "")),
-        "location": location,
-        "remote": detect_remote(title, html, description, location),
-        "description": description,
-        "url": url,
-        "external_url": posting.get("url", ""),
-        "source": SOURCE_NAME,
-    }
+    return Job(
+        id=source_job_id(SOURCE_NAME, identifier, url),
+        title=title,
+        company=clean_company(posting.get("hiringOrganization", {}).get("name", "")),
+        locations=locations,
+        sources=[
+            JobSource(
+                source=SOURCE_NAME,
+                source_id=identifier,
+                url=url,
+            )
+        ],
+        description_raw=raw_description,
+        description_clean=description,
+        work_mode=work_mode,
+        remote_percentage=remote_percentage,
+        employment_type=normalize_employment_type(posting.get("employmentType")),
+        salary_min_eur=salary_min_eur,
+        salary_max_eur=salary_max_eur,
+        published_at=parse_published_date(posting.get("datePosted")),
+        fetched_at=utc_now(),
+    )
 
 
 def extract_next_data(html):
@@ -256,21 +286,13 @@ def clean_company(company):
     return re.sub(r"\s+", " ", company).strip()
 
 
-def format_location(job_location):
-    locations = job_location if isinstance(job_location, list) else [job_location]
-    cities = []
+def extract_source_id(url, posting):
+    """Extract get-in-IT's numeric posting ID when available."""
+    match = re.search(r"/p(\d+)", url)
+    if match:
+        return match.group(1)
 
-    for location in locations:
-        if not location:
-            continue
-
-        addresses = location.get("address", [])
-        if isinstance(addresses, dict):
-            addresses = [addresses]
-
-        for address in addresses:
-            city = address.get("addressLocality")
-            if city and city not in cities:
-                cities.append(city)
-
-    return ", ".join(cities) or "unbekannt"
+    identifier = posting.get("identifier")
+    if isinstance(identifier, dict):
+        return identifier.get("value")
+    return identifier

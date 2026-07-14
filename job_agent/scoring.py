@@ -3,6 +3,7 @@
 import re
 
 from job_agent.profile import (
+    ADMIN_TITLE_WORDS,
     BLOCKED_FOCUS_KEYWORDS,
     BLOCKED_TITLE_WORDS,
     ENTRY_LEVEL_WORDS,
@@ -13,6 +14,7 @@ from job_agent.profile import (
     HIGH_TRAVEL_PHRASES,
     LOCAL_PLACES,
     MANDATORY_ADVANCED_DEGREE_PATTERNS,
+    MODERN_WORKPLACE_TITLE_WORDS,
     OPTIONAL_EXPERIENCE_PHRASES,
     PROFILE_DOMAIN_KEYWORDS,
     ROLE_GROUPS,
@@ -25,6 +27,9 @@ from job_agent.profile import (
     UNSUPPORTED_TITLE_TECHNOLOGIES,
 )
 from job_agent.text import normalize_text
+
+
+SAP_FOCUS_KEYWORDS = {"sap", "abap", "s/4hana", "s4hana"}
 
 
 def score_job(job):
@@ -109,15 +114,27 @@ def passes_hard_filters(title, description, location, remote, full_text, role):
     if blocked_word:
         return False, f"Titel enthaelt Ausschlusswort: {blocked_word}"
 
+    if contains_any(title, ADMIN_TITLE_WORDS) and not is_entry_level(full_text):
+        return False, "Systemadministration ist keine Einstiegsrolle"
+
+    if contains_any(title, MODERN_WORKPLACE_TITLE_WORDS) and not is_entry_level(
+        full_text
+    ):
+        return False, "Microsoft-Cloud/Modern-Workplace ist keine Einstiegsrolle"
+
     if not role:
         return False, "Titel passt zu keiner gesuchten Rollenfamilie"
 
     unsupported = find_unsupported_title_technology(title)
-    if unsupported:
+    junior_abap = role["id"] == "junior_sap" and unsupported == "abap"
+    if unsupported and not junior_abap:
         return False, f"Nicht passender Technologie-Schwerpunkt im Titel: {unsupported}"
 
     blocked_focus = find_blocked_focus_keyword(title, description)
-    if blocked_focus:
+    junior_sap_focus = (
+        role["id"] == "junior_sap" and blocked_focus in SAP_FOCUS_KEYWORDS
+    )
+    if blocked_focus and not junior_sap_focus:
         return False, f"Fachlicher Fokus passt nicht: {blocked_focus}"
 
     years = extract_required_years(full_text)
@@ -146,6 +163,17 @@ def find_role(title, description):
     full_text = f"{title} {description}"
     for role in ROLE_GROUPS:
         if not any(matches_pattern(title, pattern) for pattern in role["patterns"]):
+            continue
+
+        if role.get("entry_only") and not is_entry_level(full_text):
+            continue
+
+        context_keywords = role.get("context_keywords", [])
+        if context_keywords and not contains_any(full_text, context_keywords):
+            continue
+
+        excluded_context = role.get("excluded_context_keywords", [])
+        if excluded_context and contains_any(full_text, excluded_context):
             continue
 
         if role["id"] == "testing" and contains_any(title, ["qa", "quality assurance"]):
@@ -220,7 +248,7 @@ def analyze_experience(title, full_text):
             "label": "mehrjaehrige/fundierte Erfahrung ohne Jahreszahl",
         }
 
-    if contains_any(title, ENTRY_LEVEL_WORDS) or contains_any(full_text, ENTRY_LEVEL_WORDS):
+    if is_entry_level(f"{title} {full_text}"):
         return {"rank": 0, "points": 25, "label": "klare Einstiegsstelle"}
 
     if contains_any(full_text, FIRST_EXPERIENCE_PHRASES):
@@ -413,6 +441,11 @@ def text_is_mainly_english(text):
 
 def contains_any(text, words):
     return any(contains_keyword(text, word) for word in words)
+
+
+def is_entry_level(text):
+    """Return whether a title or description explicitly welcomes beginners."""
+    return contains_any(text, ENTRY_LEVEL_WORDS)
 
 
 def contains_keyword(text, keyword):

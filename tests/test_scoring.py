@@ -158,6 +158,154 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(sre["status"], "included")
         self.assertEqual(netops["status"], "included")
 
+    def test_ai_business_analyst_is_allowed(self):
+        result = score_job(
+            make_job(
+                title="KI Business Analyst",
+                description="Analyse und Umsetzung datengetriebener KI Use Cases.",
+            )
+        )
+        self.assertEqual(result["status"], "included")
+        self.assertEqual(result["role_group"], "ai_business_analysis")
+
+    def test_infrastructure_automation_is_allowed(self):
+        result = score_job(
+            make_job(
+                title="Automation Engineer",
+                location="Deutschland",
+                remote="100%",
+                description=(
+                    "Infrastructure as Code, Terraform und automatisierte Deployments."
+                ),
+            )
+        )
+        self.assertEqual(result["status"], "included")
+        self.assertEqual(result["role_group"], "infrastructure_automation")
+
+    def test_rpa_is_allowed_with_lower_role_score(self):
+        result = score_job(
+            make_job(
+                title="Junior Automation Engineer",
+                description="RPA-Loesungen mit UiPath und Power Automate.",
+            )
+        )
+        self.assertEqual(result["status"], "included")
+        self.assertEqual(result["role_group"], "rpa_automation")
+        self.assertTrue(any(reason.startswith("+14 Rolle") for reason in result["reasons"]))
+
+    def test_rpa_with_ci_cd_remains_process_automation(self):
+        result = score_job(
+            make_job(
+                title="Automationsentwickler",
+                description="UiPath RPA, REST APIs, CI/CD und Testautomatisierung.",
+            )
+        )
+        self.assertEqual(result["status"], "included")
+        self.assertEqual(result["role_group"], "rpa_automation")
+
+    def test_industrial_automation_without_it_context_is_not_allowed(self):
+        result = score_job(
+            make_job(
+                title="Automation Engineer",
+                description="Planung und Inbetriebnahme industrieller Produktionsanlagen.",
+            )
+        )
+        self.assertEqual(result["status"], "excluded")
+
+    def test_microsoft_365_requires_entry_level_and_technical_context(self):
+        junior = score_job(
+            make_job(
+                title="Microsoft 365 Junior Consultant",
+                location="Deutschland",
+                remote="100%",
+                description="Cloud, Copilot und Automatisierung mit PowerShell.",
+            )
+        )
+        experienced = score_job(
+            make_job(
+                title="Modern Workplace Engineer",
+                description="Microsoft 365, Cloud und PowerShell.",
+            )
+        )
+        self.assertEqual(junior["status"], "included")
+        self.assertEqual(experienced["status"], "excluded")
+
+        experienced_consultant = score_job(
+            make_job(
+                title="Technical Consultant Microsoft 365",
+                description="Microsoft 365, Cloud und PowerShell.",
+            )
+        )
+        self.assertEqual(experienced_consultant["status"], "excluded")
+
+    def test_only_entry_level_sap_roles_are_allowed(self):
+        junior = score_job(
+            make_job(
+                title="Junior SAP Consultant",
+                description="Einarbeitung in SAP und keine Berufserfahrung erforderlich.",
+            )
+        )
+        experienced = score_job(
+            make_job(
+                title="SAP IT Consultant",
+                description="Mehrjaehrige SAP-Erfahrung wird vorausgesetzt.",
+            )
+        )
+        self.assertEqual(junior["status"], "included")
+        self.assertEqual(junior["role_group"], "junior_sap")
+        self.assertEqual(experienced["status"], "excluded")
+
+    def test_junior_abap_role_is_reviewable(self):
+        result = score_job(
+            make_job(
+                title="Junior ABAP Entwickler",
+                description="Traineeprogramm mit umfassender Einarbeitung.",
+            )
+        )
+        self.assertEqual(result["status"], "included")
+        self.assertEqual(result["role_group"], "junior_sap")
+
+    def test_requirements_roles_are_entry_level_only(self):
+        junior = score_job(
+            make_job(
+                title="Junior Requirements Engineer",
+                description="Technische Anforderungen fuer ein Entwicklungsteam.",
+            )
+        )
+        experienced = score_job(
+            make_job(
+                title="Requirements Engineer",
+                description="Technische Anforderungen fuer ein Entwicklungsteam.",
+            )
+        )
+        self.assertEqual(junior["status"], "included")
+        self.assertEqual(experienced["status"], "excluded")
+
+    def test_specialist_applications_and_support_are_excluded(self):
+        payroll = score_job(make_job(title="Technical Consultant Lohnmigration"))
+        healthcare = score_job(make_job(title="ORBIS Anwendungsbetreuer"))
+        support = score_job(make_job(title="IT-Supportmitarbeiter 2nd Level"))
+        self.assertEqual(payroll["status"], "excluded")
+        self.assertEqual(healthcare["status"], "excluded")
+        self.assertEqual(support["status"], "excluded")
+
+    def test_system_administration_is_entry_level_only(self):
+        junior = score_job(
+            make_job(
+                title="Junior Systemadministrator / DevOps",
+                description="Cloud, Security und Automatisierung mit PowerShell.",
+            )
+        )
+        experienced = score_job(
+            make_job(
+                title="Systemadministrator / DevOps",
+                description="Cloud, Security und Automatisierung mit PowerShell.",
+            )
+        )
+        self.assertEqual(junior["status"], "included")
+        self.assertEqual(junior["role_group"], "junior_administration")
+        self.assertEqual(experienced["status"], "excluded")
+
     def test_unsupported_core_technology_is_excluded(self):
         result = score_job(
             make_job(title="Junior C# Software Developer", description="Reine C# Entwicklung.")

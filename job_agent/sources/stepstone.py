@@ -6,9 +6,13 @@ schema.org JobPosting JSON-LD, which is more stable than scraping visible text.
 
 import re
 from html import unescape
-from urllib.parse import quote, urljoin, urlsplit, urlunsplit
+from urllib.parse import quote, urlencode, urljoin, urlsplit, urlunsplit
 
-from job_agent.config import SEARCH_LOCATIONS, STEPSTONE_SEARCH_TERMS
+from job_agent.config import (
+    STEPSTONE_SEARCH_LOCATIONS,
+    STEPSTONE_SEARCH_RADIUS_KM,
+    STEPSTONE_SEARCH_TERMS,
+)
 from job_agent.http import fetch_text
 from job_agent.remote import detect_remote
 from job_agent.search_plan import append_unique, iter_search_queries
@@ -42,7 +46,10 @@ def search_links():
     links = []
     seen = set()
 
-    for query in iter_search_queries(STEPSTONE_SEARCH_TERMS, SEARCH_LOCATIONS):
+    for query in iter_search_queries(
+        STEPSTONE_SEARCH_TERMS,
+        STEPSTONE_SEARCH_LOCATIONS,
+    ):
         print(f"Suche StepStone: {query.term} / {query.location}")
         page = 1
         query_seen = set()
@@ -79,7 +86,10 @@ def search_links():
 
 def build_search_url(term, location, page=1):
     base_url = f"{SEARCH_BASE_URL}/{quote(term.replace(' ', '-'))}/in-{quote(location)}"
-    return f"{base_url}?page={page}"
+    query = {"page": page}
+    if location.lower() != "remote":
+        query["radius"] = STEPSTONE_SEARCH_RADIUS_KM
+    return f"{base_url}?{urlencode(query)}"
 
 
 def extract_detail_links(html):
@@ -123,6 +133,7 @@ def fetch_job(url):
         "external_url": url,
         "source": SOURCE_NAME,
     }
+
 
 def clean_company(company):
     return re.sub(r"_20\d{2}-.+$", "", company).strip()

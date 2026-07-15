@@ -5,3 +5,4 @@ data/seen_jobs.json
 data/jobs_scored.json
 data/jobs_review.md
 data/stepstone_cache.json
+evaluation/results/

@@ -48,6 +48,7 @@ class EvaluationCasesTests(unittest.TestCase):
                 self.assertTrue(case["company"])
                 self.assertTrue(case["description_clean"])
                 self.assertTrue(case["source_url"].startswith("https://"))
+                self.assertTrue(case["location_precheck"])
                 description_lengths.append(len(case["description_clean"]))
 
         # The review report is shortened to 700 characters; the fixture is not.

@@ -10,6 +10,7 @@ from jsonschema import ValidationError, validate
 
 from job_agent.llm_contract import (
     ANALYSIS_SCHEMA,
+    MODEL_RESPONSE_SCHEMA,
     RUBRIC,
     RUBRIC_VERSION,
     SCORE_BANDS,
@@ -19,18 +20,36 @@ from job_agent.llm_profile import load_llm_profile
 from job_agent.ollama import OllamaError
 
 
-PROMPT_VERSION = 1
+PROMPT_VERSION = 2
 TEST_INPUTS_PATH = Path("evaluation/llm_test_inputs.json")
 EXPECTED_RESULTS_PATH = Path("evaluation/llm_expected_results.yaml")
 RESULTS_DIR = Path("evaluation/results")
+LABEL_ORDER = [
+    "not_recommended",
+    "borderline",
+    "match",
+    "strong_match",
+]
 
 SYSTEM_PROMPT = """Du bewertest Stellenanzeigen fuer einen Berufseinsteiger.
 Nutze ausschliesslich belegte Fakten aus Profil und Stellenanzeige.
 Erfinde oder erhoehe keine Kenntnisse und zaehle Studium, Praktikum und Projekte
 nicht als regulaere Berufserfahrung. Bewerte die tatsaechlichen Aufgaben und
-Anforderungen, nicht nur den Titel. Der Gesamtwert muss exakt der Summe der
-fuenf Dimensionswerte entsprechen. Die Empfehlung muss zum Gesamtwert passen.
-Antworte ausschliesslich im vorgegebenen JSON-Schema."""
+Anforderungen, nicht nur den Titel.
+
+Verbindliche Auslegung:
+- Nutze location_precheck als geprueften Fakt und berechne keine Entfernung.
+- native erfuellt Sprachforderungen einschliesslich C1.
+- basic_knowledge ist nur Grundlage, nicht praktische Berufserfahrung.
+- Laufende Kurse und persoenliche Projekte sind keine Berufserfahrung.
+- Eine Forderung nach mehreren Technologien braucht mehrere getrennte Belege.
+- Leite persoenliche oder kommunikative Staerken nur aus passenden Belegen ab.
+- Fehlende Belege muessen als missing, unknown, gap oder uncertainty erscheinen.
+- Zentrale fehlende Pflichtanforderungen muessen die betroffenen Teilwerte senken.
+
+Vergib fuer jede Dimension einen eigenstaendigen Wert anhand der Rubrik. Python
+berechnet daraus anschliessend Gesamtwert und Empfehlung. Antworte
+ausschliesslich im vorgegebenen JSON-Schema."""
 
 
 class BenchmarkDataError(ValueError):
@@ -72,7 +91,7 @@ def build_messages(profile, job):
             for minimum, label in SCORE_BANDS
         ],
         "job": job,
-        "output_schema": ANALYSIS_SCHEMA,
+        "output_schema": MODEL_RESPONSE_SCHEMA,
     }
     return [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -103,6 +122,21 @@ def validate_analysis(analysis):
         )
 
 
+def finalize_analysis(model_response):
+    """Validate model judgments and derive total score and recommendation."""
+    try:
+        validate(instance=model_response, schema=MODEL_RESPONSE_SCHEMA)
+    except ValidationError as error:
+        raise AnalysisValidationError(error.message) from error
+
+    analysis = dict(model_response)
+    overall_score = sum(analysis["dimension_scores"].values())
+    analysis["overall_score"] = overall_score
+    analysis["recommendation"] = recommendation_for_score(overall_score)
+    validate_analysis(analysis)
+    return analysis
+
+
 def run_model_benchmark(model, client, limit=None):
     """Evaluate one model and return raw results plus aggregate metrics."""
     inputs, expected = load_benchmark_data()
@@ -122,12 +156,12 @@ def run_model_benchmark(model, client, limit=None):
             "expected_recommendation": labels[job["job_id"]],
         }
         try:
-            analysis, metadata = client.chat(
+            model_response, metadata = client.chat(
                 model=model,
                 messages=build_messages(profile, job),
-                output_schema=ANALYSIS_SCHEMA,
+                output_schema=MODEL_RESPONSE_SCHEMA,
             )
-            validate_analysis(analysis)
+            analysis = finalize_analysis(model_response)
             result.update(
                 {
                     "valid": True,
@@ -162,14 +196,36 @@ def summarize_results(results):
     ]
     total = len(results)
     elapsed = sum(result["elapsed_seconds"] for result in results)
+    distances = [label_distance(result) for result in valid]
+    within_one = sum(distance <= 1 for distance in distances)
+    dangerous_false_positives = sum(
+        result["expected_recommendation"]
+        in {"not_recommended", "borderline"}
+        and result["analysis"]["recommendation"] in {"match", "strong_match"}
+        for result in valid
+    )
     return {
         "jobs": total,
         "valid_responses": len(valid),
         "valid_response_rate": round(len(valid) / total, 3) if total else 0,
         "exact_matches": len(exact),
         "exact_match_rate": round(len(exact) / total, 3) if total else 0,
+        "within_one_band_rate": (
+            round(within_one / total, 3) if total else 0
+        ),
+        "mean_band_distance": (
+            round(sum(distances) / len(distances), 3) if distances else None
+        ),
+        "dangerous_false_positives": dangerous_false_positives,
         "average_seconds_per_job": round(elapsed / total, 3) if total else 0,
     }
+
+
+def label_distance(result):
+    """Return the absolute distance between predicted and human label."""
+    expected = LABEL_ORDER.index(result["expected_recommendation"])
+    predicted = LABEL_ORDER.index(result["analysis"]["recommendation"])
+    return abs(expected - predicted)
 
 
 def write_benchmark_result(result, output_dir=RESULTS_DIR):

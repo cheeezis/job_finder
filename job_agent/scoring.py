@@ -54,19 +54,6 @@ REQUIRED_EXPERIENCE_PATTERNS = [
     r"\bexperience\s+(?:in|with|using|working|building|developing)\b",
     r"\bexperienced\s+(?:in|with)\b",
 ]
-PROFESSIONAL_EXPERIENCE_PATTERNS = [
-    r"\bberufserfahrung\b",
-    r"\barbeitserfahrung\b",
-    r"\bentwicklungserfahrung\b",
-    r"\b(?:professional|commercial|previous)\s+experience\b",
-    r"\bexperience[\s\S]{0,45}\bcommercial environment\b",
-    r"\bworked in (?:a )?similar\b",
-    r"\bmid-senior level\b",
-    r"\bstarke erfahrung\b",
-    r"\bstrong experience\b",
-]
-
-
 def score_job(job: Job):
     """Return a fixed 0-100 match score and explain every decision."""
     title = normalize_text(job.title)
@@ -191,12 +178,6 @@ def passes_hard_filters(title, description, location, remote, full_text, role):
     years = extract_required_years(full_text)
     if years > 3:
         return False, f"Mehr als 3 Jahre Erfahrung gefordert: {years} Jahre"
-
-    if has_required_professional_experience(full_text) and not is_entry_level(
-        title,
-        full_text,
-    ):
-        return False, "Berufs- oder Rollenerfahrung wird vorausgesetzt"
 
     if any(re.search(pattern, full_text) for pattern in MANDATORY_ADVANCED_DEGREE_PATTERNS):
         return False, "Verpflichtender Master- oder Promotionsabschluss"
@@ -381,25 +362,6 @@ def has_required_experience(text):
     return False
 
 
-def has_required_professional_experience(text):
-    """Detect mandatory professional or prior-role experience."""
-    if extract_required_years(text):
-        return True
-
-    patterns = list(PROFESSIONAL_EXPERIENCE_PATTERNS)
-    patterns.extend(keyword_pattern(phrase) for phrase in STRONG_EXPERIENCE_PHRASES)
-    for pattern in patterns:
-        for match in re.finditer(pattern, text):
-            if match_is_optional(text, match):
-                continue
-            if match_is_first_experience(text, match):
-                continue
-            if match_is_employer_context(text, match):
-                continue
-            return True
-    return False
-
-
 def match_is_optional(text, match, context_size=55):
     """Check whether optional wording belongs to a nearby requirement."""
     start, end = match_context(text, match, context_size)
@@ -410,23 +372,6 @@ def match_is_first_experience(text, match, context_size=45):
     """Check whether a requirement explicitly asks only for first experience."""
     start, end = match_context(text, match, context_size)
     return contains_any(text[start:end], FIRST_EXPERIENCE_PHRASES)
-
-
-def match_is_employer_context(text, match, context_size=100):
-    """Ignore company history and team-composition experience statements."""
-    start = max(0, match.start() - context_size)
-    prefix = text[start : match.start()]
-    return contains_any(
-        prefix,
-        [
-            "unser team umfasst",
-            "unsere teammitglieder",
-            "unsere experten",
-            "expert:innen mit",
-            "experten mit",
-            "als unternehmen",
-        ],
-    )
 
 
 def match_context(text, match, context_size):

@@ -155,11 +155,10 @@ def fetch_job(url):
         description_clean=description,
         work_mode=work_mode,
         remote_percentage=remote_percentage,
-        employment_type=normalize_employment_type(
-            detail.get("arbeitszeitmodelle")
-            or detail.get("arbeitszeitmodell")
-        ),
+        employment_type=format_employment_type(detail),
         published_at=parse_published_date(
+            detail.get("datumErsteVeroeffentlichung"),
+            (detail.get("veroeffentlichungszeitraum") or {}).get("von"),
             detail.get("aktuelleVeroeffentlichungsdatum"),
             detail.get("veroeffentlichungsdatum"),
         ),
@@ -205,3 +204,21 @@ def format_remote(detail):
     if remote_type == "AUSSCHLIESSLICH":
         return "100%"
     return "homeoffice"
+
+
+def format_employment_type(detail):
+    """Return Arbeitsagentur's employment flags as compact model values."""
+    employment_types = []
+    if detail.get("arbeitszeitVollzeit"):
+        employment_types.append("FULL_TIME")
+    if any(
+        detail.get(field)
+        for field in [
+            "arbeitszeitTeilzeitAbend",
+            "arbeitszeitTeilzeitNachmittag",
+            "arbeitszeitTeilzeitVormittag",
+            "arbeitszeitTeilzeitFlexibel",
+        ]
+    ):
+        employment_types.append("PART_TIME")
+    return normalize_employment_type(employment_types)

@@ -33,8 +33,8 @@ class SourceJobModelTests(unittest.TestCase):
                     "homeofficemoeglich": True,
                     "homeofficetyp": "AUSSCHLIESSLICH",
                     "externeURL": "https://example.test/apply",
-                    "arbeitszeitmodelle": ["VOLLZEIT"],
-                    "aktuelleVeroeffentlichungsdatum": "2026-07-10",
+                    "arbeitszeitVollzeit": True,
+                    "datumErsteVeroeffentlichung": "2026-07-10",
                 }
             },
         )
@@ -45,6 +45,7 @@ class SourceJobModelTests(unittest.TestCase):
         self.assert_common_job(job, "arbeitsagentur:123-S")
         self.assertEqual(job.work_mode, WorkMode.REMOTE)
         self.assertEqual(job.remote_percentage, 100)
+        self.assertEqual(job.employment_type, "FULL_TIME")
 
     def test_stepstone_creates_job_model(self):
         url = (
@@ -69,6 +70,18 @@ class SourceJobModelTests(unittest.TestCase):
 
         self.assert_common_job(job, "get_in_it:309919")
         self.assertEqual(job.work_mode, WorkMode.HYBRID)
+
+    def test_get_in_it_ignores_portal_remote_boilerplate(self):
+        url = "https://www.get-in-it.de/jobsuche/p309920"
+        posting = self.posting()
+        posting["description"] = "<p>Python und APIs</p>"
+        html = "<div>Portalfilter: Homeoffice</div>" + json_ld_html(posting)
+
+        with patch.object(get_in_it, "fetch_text", return_value=html):
+            job = get_in_it.fetch_job(url)
+
+        self.assertEqual(job.work_mode, WorkMode.ONSITE)
+        self.assertEqual(job.remote_percentage, 0)
 
     def assert_common_job(self, job, expected_id):
         self.assertIsInstance(job, Job)

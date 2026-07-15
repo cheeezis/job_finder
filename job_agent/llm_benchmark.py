@@ -11,6 +11,7 @@ from jsonschema import ValidationError, validate
 from job_agent.llm_contract import (
     ANALYSIS_SCHEMA,
     MODEL_RESPONSE_SCHEMA,
+    RATING_POINTS,
     RUBRIC,
     RUBRIC_VERSION,
     SCORE_BANDS,
@@ -20,7 +21,7 @@ from job_agent.llm_profile import load_llm_profile
 from job_agent.ollama import OllamaError
 
 
-PROMPT_VERSION = 2
+PROMPT_VERSION = 4
 TEST_INPUTS_PATH = Path("evaluation/llm_test_inputs.json")
 EXPECTED_RESULTS_PATH = Path("evaluation/llm_expected_results.yaml")
 RESULTS_DIR = Path("evaluation/results")
@@ -42,13 +43,25 @@ Verbindliche Auslegung:
 - native erfuellt Sprachforderungen einschliesslich C1.
 - basic_knowledge ist nur Grundlage, nicht praktische Berufserfahrung.
 - Laufende Kurse und persoenliche Projekte sind keine Berufserfahrung.
+- Kurse, Studium, Praktikum und Projekte sind trotzdem Technikbelege auf dem
+  im Profil genannten Niveau und duerfen fuer technology_fit verwendet werden.
 - Eine Forderung nach mehreren Technologien braucht mehrere getrennte Belege.
 - Leite persoenliche oder kommunikative Staerken nur aus passenden Belegen ab.
 - Fehlende Belege muessen als missing, unknown, gap oder uncertainty erscheinen.
-- Zentrale fehlende Pflichtanforderungen muessen die betroffenen Teilwerte senken.
+- Bewerte jede Dimension isoliert; ein guter Standort gleicht keine fachliche
+  oder erfahrungsbezogene Luecke aus.
+- good ist nur zulaessig, wenn die zentralen Anforderungen weitgehend belegt sind.
+- Fehlt der zwingende Kern-Stack weitgehend, ist technology_fit weak oder conflict.
+- Eine ausdrueckliche Junior- oder Einstiegsrolle ohne Mindestjahre ergibt bei
+  passender Ausbildung experience_fit excellent.
+- Nur bevorzugte oder wuenschenswerte erste Erfahrung ergibt good oder partial.
+- Zwingend geforderte ein bis drei Jahre Berufserfahrung ergeben weak.
+- Seniorniveau oder mehr als drei geforderte Jahre ergeben experience_fit conflict.
+- task_fit bewertet die inhaltliche Richtung der Aufgaben und darf fehlende
+  Technologien nicht ein zweites Mal bestrafen.
 
-Vergib fuer jede Dimension einen eigenstaendigen Wert anhand der Rubrik. Python
-berechnet daraus anschliessend Gesamtwert und Empfehlung. Antworte
+Vergib fuer jede Dimension genau eine feste Qualitaetsstufe anhand der Rubrik.
+Python berechnet daraus Teilwerte, Gesamtwert und Empfehlung. Antworte
 ausschliesslich im vorgegebenen JSON-Schema."""
 
 
@@ -110,6 +123,14 @@ def validate_analysis(analysis):
         raise AnalysisValidationError(error.message) from error
 
     dimension_total = sum(analysis["dimension_scores"].values())
+    expected_scores = {
+        name: RATING_POINTS[rating]
+        for name, rating in analysis["dimension_ratings"].items()
+    }
+    if analysis["dimension_scores"] != expected_scores:
+        raise AnalysisValidationError(
+            "Dimensionswerte entsprechen nicht den festen Qualitaetsstufen"
+        )
     if analysis["overall_score"] != dimension_total:
         raise AnalysisValidationError(
             "overall_score entspricht nicht der Summe der Dimensionswerte"
@@ -130,6 +151,10 @@ def finalize_analysis(model_response):
         raise AnalysisValidationError(error.message) from error
 
     analysis = dict(model_response)
+    analysis["dimension_scores"] = {
+        name: RATING_POINTS[rating]
+        for name, rating in analysis["dimension_ratings"].items()
+    }
     overall_score = sum(analysis["dimension_scores"].values())
     analysis["overall_score"] = overall_score
     analysis["recommendation"] = recommendation_for_score(overall_score)
@@ -204,6 +229,12 @@ def summarize_results(results):
         and result["analysis"]["recommendation"] in {"match", "strong_match"}
         for result in valid
     )
+    missed_positive_jobs = sum(
+        result["expected_recommendation"] in {"match", "strong_match"}
+        and result["analysis"]["recommendation"]
+        in {"not_recommended", "borderline"}
+        for result in valid
+    )
     return {
         "jobs": total,
         "valid_responses": len(valid),
@@ -217,6 +248,7 @@ def summarize_results(results):
             round(sum(distances) / len(distances), 3) if distances else None
         ),
         "dangerous_false_positives": dangerous_false_positives,
+        "missed_positive_jobs": missed_positive_jobs,
         "average_seconds_per_job": round(elapsed / total, 3) if total else 0,
     }
 

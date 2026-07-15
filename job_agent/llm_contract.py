@@ -2,8 +2,16 @@
 
 from copy import deepcopy
 
-RUBRIC_VERSION = 2
-SCHEMA_VERSION = 2
+RUBRIC_VERSION = 4
+SCHEMA_VERSION = 3
+
+RATING_POINTS = {
+    "excellent": 20,
+    "good": 15,
+    "partial": 10,
+    "weak": 5,
+    "conflict": 0,
+}
 
 RUBRIC = {
     "role_fit": {
@@ -12,12 +20,13 @@ RUBRIC = {
             "Bewerte die tatsaechliche Rolle: primaere Zielrollen am hoechsten, "
             "danach sekundaere, explorative und niedrig priorisierte Rollen."
         ),
-        "anchors": [
-            "17-20: klare primaere Zielrolle",
-            "12-16: passende sekundaere Zielrolle",
-            "6-11: explorative oder niedrig priorisierte Rolle",
-            "0-5: fachlich kaum passende Rolle",
-        ],
+        "anchors": {
+            "excellent": "klare primaere Zielrolle",
+            "good": "passende sekundaere Zielrolle",
+            "partial": "explorative oder niedrig priorisierte Rolle",
+            "weak": "nur geringe fachliche Naehe",
+            "conflict": "unpassende Rolle oder klares Ausschlussprofil",
+        },
     },
     "technology_fit": {
         "max_points": 20,
@@ -27,12 +36,13 @@ RUBRIC = {
             "duerfen nicht als praktische oder fortgeschrittene Kenntnisse "
             "gelten. Mehrere geforderte Technologien brauchen mehrere Belege."
         ),
-        "anchors": [
-            "17-20: starke Ueberschneidung mit belegten Kernkenntnissen",
-            "12-16: mehrere passende und realistisch vertiefbare Technologien",
-            "6-11: teilweise Ueberschneidung mit deutlichem Lernbedarf",
-            "0-5: zentrale Technologien fehlen weitgehend",
-        ],
+        "anchors": {
+            "excellent": "belegte Kerntechnologien decken die Stelle weitgehend ab",
+            "good": "mehrere zentrale Technologien sind belegt; nur Nebenluecken",
+            "partial": "relevante Ueberschneidung mit deutlichem Lernbedarf",
+            "weak": "die meisten zentralen Technologien fehlen",
+            "conflict": "der zwingende Kern-Stack ist nicht belegt",
+        },
     },
     "experience_fit": {
         "max_points": 20,
@@ -42,12 +52,13 @@ RUBRIC = {
             "Berufserfahrung. Berufserfahrung darf nur anerkannt werden, wenn "
             "sie im Profil ausdruecklich belegt ist."
         ),
-        "anchors": [
-            "18-20: explizite Einstiegsrolle oder keine Erfahrung erforderlich",
-            "13-17: erste praktische Erfahrung reicht aus",
-            "6-12: ein bis drei Jahre oder fundierte Vorerfahrung gewuenscht",
-            "0-5: klares Seniorniveau oder mehr als drei Jahre erforderlich",
-        ],
+        "anchors": {
+            "excellent": "explizite Einstiegsrolle oder keine Erfahrung erforderlich",
+            "good": "erste praktische Erfahrung reicht; Projekte oder Praktikum passen",
+            "partial": "ein bis drei Jahre sind nur bevorzugt oder unklar formuliert",
+            "weak": "ein bis drei Jahre oder fundierte Berufserfahrung sind zwingend",
+            "conflict": "Seniorniveau oder mehr als drei Jahre erforderlich",
+        },
     },
     "location_fit": {
         "max_points": 20,
@@ -56,33 +67,36 @@ RUBRIC = {
             "Remote innerhalb Deutschlands ist bevorzugt, danach lokal mit "
             "Homeoffice und lokal vor Ort. Berechne keine Entfernungen selbst."
         ),
-        "anchors": [
-            "18-20: vollstaendig remote innerhalb Deutschlands",
-            "15-17: lokal mit passendem Homeoffice-Anteil",
-            "12-14: lokal vor Ort",
-            "8-11: zusaetzlicher Standort mit ausreichendem Remote-Anteil",
-            "0-7: unklarer oder widerspruechlicher Standort",
-        ],
+        "anchors": {
+            "excellent": "vollstaendig remote in Deutschland",
+            "good": "lokal mit Homeoffice oder sehr passender Hybridregelung",
+            "partial": "lokal vor Ort oder zulaessiger Zusatzstandort",
+            "weak": "Standort oder Remote-Anteil ist unklar",
+            "conflict": "gepruefter Standortkonflikt",
+        },
     },
     "task_fit": {
         "max_points": 20,
         "guidance": (
             "Bewerte konkrete Aufgaben statt nur den Titel. Entwicklung mit "
-            "Python, RAG, Agenten, Daten und Backend ist besonders interessant."
+            "Python, RAG, Agenten, Daten und Backend ist besonders interessant. "
+            "Bewerte hier die inhaltliche Richtung; Technologieluecken werden "
+            "bereits in technology_fit bewertet."
         ),
-        "anchors": [
-            "17-20: Schwerpunkt auf Python, RAG, Agenten oder angewandter KI",
-            "12-16: passende Software-, Backend- oder Datenaufgaben",
-            "6-11: interessante Teilaufgaben, aber anderer Schwerpunkt",
-            "0-5: Aufgaben passen kaum zur gewuenschten Entwicklung",
-        ],
+        "anchors": {
+            "excellent": "Schwerpunkt auf Python, RAG, Agenten oder angewandter KI",
+            "good": "passende Software-, Backend- oder Datenaufgaben",
+            "partial": "interessante Teilaufgaben, aber anderer Schwerpunkt",
+            "weak": "Aufgaben passen nur gering zur gewuenschten Entwicklung",
+            "conflict": "Aufgaben widersprechen der angestrebten Entwicklung",
+        },
     },
 }
 
 SCORE_BANDS = (
-    (85, "strong_match"),
-    (70, "match"),
-    (55, "borderline"),
+    (90, "strong_match"),
+    (75, "match"),
+    (60, "borderline"),
     (0, "not_recommended"),
 )
 
@@ -112,6 +126,7 @@ ANALYSIS_SCHEMA = {
         "confidence",
         "summary",
         "dimension_scores",
+        "dimension_ratings",
         "key_tasks",
         "key_requirements",
         "matching_evidence",
@@ -141,6 +156,15 @@ ANALYSIS_SCHEMA = {
             "properties": {
                 name: score_property(values["max_points"])
                 for name, values in RUBRIC.items()
+            },
+        },
+        "dimension_ratings": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": list(RUBRIC),
+            "properties": {
+                name: {"type": "string", "enum": list(RATING_POINTS)}
+                for name in RUBRIC
             },
         },
         "key_tasks": {
@@ -201,9 +225,9 @@ ANALYSIS_SCHEMA = {
     },
 }
 
-# Ollama only asks the model for judgments. Python derives arithmetic fields
-# afterwards so model quality is not confused with addition reliability.
+# Ollama only asks the model for categorical judgments. Python derives every
+# numeric field afterwards so model quality is not confused with calibration.
 MODEL_RESPONSE_SCHEMA = deepcopy(ANALYSIS_SCHEMA)
-for derived_field in ("overall_score", "recommendation"):
+for derived_field in ("overall_score", "recommendation", "dimension_scores"):
     MODEL_RESPONSE_SCHEMA["required"].remove(derived_field)
     del MODEL_RESPONSE_SCHEMA["properties"][derived_field]

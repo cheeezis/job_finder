@@ -183,7 +183,12 @@ def fetch_job(url):
     locations = extract_schema_locations(posting.get("jobLocation"))
     location_text = ", ".join(locations)
     title = posting.get("title", "")
-    detected_remote = detect_remote(title, html, description, location_text)
+    detected_remote = detect_remote(
+        title,
+        description,
+        location_text,
+        structured_remote=format_schema_remote(posting),
+    )
     work_mode, remote_percentage = classify_remote(detected_remote)
     identifier = extract_source_id(url, posting)
     salary_min_eur, salary_max_eur = extract_annual_salary_eur(posting)
@@ -296,3 +301,11 @@ def extract_source_id(url, posting):
     if isinstance(identifier, dict):
         return identifier.get("value")
     return identifier
+
+
+def format_schema_remote(posting):
+    """Return a conservative remote hint from schema.org JobPosting data."""
+    location_type = str(posting.get("jobLocationType", "")).lower()
+    if "telecommute" in location_type or "remote" in location_type:
+        return "homeoffice"
+    return ""

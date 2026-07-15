@@ -28,7 +28,6 @@ ROLE_GROUPS = [
             ["ai", "entwickler"],
             ["ki", "engineer"],
             ["ki", "entwickler"],
-            ["ki", "experte"],
             ["machine learning", "engineer"],
             ["ml", "engineer"],
             ["prompt", "engineer"],
@@ -396,6 +395,8 @@ SKILL_GROUPS = [
 # Roles and employment types that are incompatible with an entry-level search.
 BLOCKED_TITLE_WORDS = [
     "senior",
+    "experte",
+    "expert",
     "lead",
     "principal",
     "head",

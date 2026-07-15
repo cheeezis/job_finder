@@ -208,6 +208,13 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(senior["filter_status"], "excluded")
         self.assertEqual(mixed["filter_status"], "included")
 
+    def test_expert_titles_are_excluded_as_experienced_roles(self):
+        german = score_job(make_job(title="Digitalisierungs- und KI-Experte"))
+        english = score_job(make_job(title="AI Platform Expert"))
+
+        self.assertEqual(german["filter_status"], "excluded")
+        self.assertEqual(english["filter_status"], "excluded")
+
     def test_incidental_sap_mention_is_not_a_hard_blocker(self):
         result = score_job(
             make_job(description="Python APIs verbinden bei Bedarf auch ein SAP-Nebensystem.")

@@ -1,0 +1,50 @@
+"""Tests for the versioned LLM scoring and output contract."""
+
+import json
+import unittest
+
+from job_agent.llm_contract import (
+    ANALYSIS_SCHEMA,
+    RUBRIC,
+    RUBRIC_VERSION,
+    SCHEMA_VERSION,
+    recommendation_for_score,
+)
+
+
+class LlmContractTests(unittest.TestCase):
+    def test_rubric_has_fixed_one_hundred_point_scale(self):
+        maximum = sum(item["max_points"] for item in RUBRIC.values())
+
+        self.assertEqual(maximum, 100)
+        self.assertEqual(len(RUBRIC), 5)
+        self.assertTrue(all(item["max_points"] == 20 for item in RUBRIC.values()))
+        self.assertEqual(RUBRIC_VERSION, 1)
+        self.assertTrue(all(item["anchors"] for item in RUBRIC.values()))
+
+    def test_schema_uses_exactly_the_rubric_dimensions(self):
+        dimensions = ANALYSIS_SCHEMA["properties"]["dimension_scores"]
+
+        self.assertEqual(set(dimensions["required"]), set(RUBRIC))
+        self.assertEqual(set(dimensions["properties"]), set(RUBRIC))
+        self.assertEqual(SCHEMA_VERSION, 1)
+        json.dumps(ANALYSIS_SCHEMA)
+
+    def test_score_bands_have_stable_boundaries(self):
+        self.assertEqual(recommendation_for_score(100), "strong_match")
+        self.assertEqual(recommendation_for_score(85), "strong_match")
+        self.assertEqual(recommendation_for_score(84), "match")
+        self.assertEqual(recommendation_for_score(70), "match")
+        self.assertEqual(recommendation_for_score(69), "borderline")
+        self.assertEqual(recommendation_for_score(55), "borderline")
+        self.assertEqual(recommendation_for_score(54), "not_recommended")
+        self.assertEqual(recommendation_for_score(0), "not_recommended")
+
+    def test_invalid_scores_are_rejected(self):
+        for value in (-1, 101, 50.0, True):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                recommendation_for_score(value)
+
+
+if __name__ == "__main__":
+    unittest.main()

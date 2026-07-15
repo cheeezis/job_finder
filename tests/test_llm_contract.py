@@ -5,6 +5,7 @@ import unittest
 
 from job_agent.llm_contract import (
     ANALYSIS_SCHEMA,
+    MODEL_RESPONSE_SCHEMA,
     RUBRIC,
     RUBRIC_VERSION,
     SCHEMA_VERSION,
@@ -19,7 +20,7 @@ class LlmContractTests(unittest.TestCase):
         self.assertEqual(maximum, 100)
         self.assertEqual(len(RUBRIC), 5)
         self.assertTrue(all(item["max_points"] == 20 for item in RUBRIC.values()))
-        self.assertEqual(RUBRIC_VERSION, 1)
+        self.assertEqual(RUBRIC_VERSION, 2)
         self.assertTrue(all(item["anchors"] for item in RUBRIC.values()))
 
     def test_schema_uses_exactly_the_rubric_dimensions(self):
@@ -27,8 +28,14 @@ class LlmContractTests(unittest.TestCase):
 
         self.assertEqual(set(dimensions["required"]), set(RUBRIC))
         self.assertEqual(set(dimensions["properties"]), set(RUBRIC))
-        self.assertEqual(SCHEMA_VERSION, 1)
+        self.assertEqual(SCHEMA_VERSION, 2)
         json.dumps(ANALYSIS_SCHEMA)
+
+    def test_model_schema_leaves_arithmetic_fields_to_python(self):
+        self.assertNotIn("overall_score", MODEL_RESPONSE_SCHEMA["properties"])
+        self.assertNotIn("recommendation", MODEL_RESPONSE_SCHEMA["properties"])
+        self.assertIn("dimension_scores", MODEL_RESPONSE_SCHEMA["properties"])
+        json.dumps(MODEL_RESPONSE_SCHEMA)
 
     def test_score_bands_have_stable_boundaries(self):
         self.assertEqual(recommendation_for_score(100), "strong_match")

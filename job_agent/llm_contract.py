@@ -1,7 +1,9 @@
 """Versioned scoring rubric and structured output contract for LLM reviews."""
 
-RUBRIC_VERSION = 1
-SCHEMA_VERSION = 1
+from copy import deepcopy
+
+RUBRIC_VERSION = 2
+SCHEMA_VERSION = 2
 
 RUBRIC = {
     "role_fit": {
@@ -22,7 +24,8 @@ RUBRIC = {
         "guidance": (
             "Vergleiche geforderte Technologien mit belegten Kenntnissen. "
             "Python, RAG und agentische KI sind besonders relevant; Grundlagen "
-            "duerfen nicht als fortgeschrittene Kenntnisse gelten."
+            "duerfen nicht als praktische oder fortgeschrittene Kenntnisse "
+            "gelten. Mehrere geforderte Technologien brauchen mehrere Belege."
         ),
         "anchors": [
             "17-20: starke Ueberschneidung mit belegten Kernkenntnissen",
@@ -36,7 +39,8 @@ RUBRIC = {
         "guidance": (
             "Bevorzuge echte Einstiegsrollen ohne Berufserfahrung. Praktikum, "
             "Studium und Projekte sind Belege, aber keine regulaere "
-            "Berufserfahrung."
+            "Berufserfahrung. Berufserfahrung darf nur anerkannt werden, wenn "
+            "sie im Profil ausdruecklich belegt ist."
         ),
         "anchors": [
             "18-20: explizite Einstiegsrolle oder keine Erfahrung erforderlich",
@@ -48,9 +52,9 @@ RUBRIC = {
     "location_fit": {
         "max_points": 20,
         "guidance": (
-            "Remote innerhalb Deutschlands ist bevorzugt. Lokale Stellen im "
-            "definierten Radius sind geeignet; der zusaetzliche Standort ist "
-            "nur mit dem hinterlegten hohen Remote-Anteil geeignet."
+            "Nutze den bereits deterministisch ermittelten location_precheck. "
+            "Remote innerhalb Deutschlands ist bevorzugt, danach lokal mit "
+            "Homeoffice und lokal vor Ort. Berechne keine Entfernungen selbst."
         ),
         "anchors": [
             "18-20: vollstaendig remote innerhalb Deutschlands",
@@ -141,12 +145,12 @@ ANALYSIS_SCHEMA = {
         },
         "key_tasks": {
             "type": "array",
-            "maxItems": 5,
+            "maxItems": 3,
             "items": {"type": "string", "maxLength": 300},
         },
         "key_requirements": {
             "type": "array",
-            "maxItems": 8,
+            "maxItems": 5,
             "items": {
                 "type": "object",
                 "additionalProperties": False,
@@ -163,7 +167,7 @@ ANALYSIS_SCHEMA = {
                     },
                     "evidence": {
                         "type": "array",
-                        "maxItems": 3,
+                        "maxItems": 2,
                         "items": {"type": "string", "maxLength": 300},
                     },
                 },
@@ -171,28 +175,35 @@ ANALYSIS_SCHEMA = {
         },
         "matching_evidence": {
             "type": "array",
-            "maxItems": 6,
+            "maxItems": 4,
             "items": {"type": "string", "maxLength": 300},
         },
         "gaps": {
             "type": "array",
-            "maxItems": 6,
+            "maxItems": 4,
             "items": {"type": "string", "maxLength": 300},
         },
         "risks": {
             "type": "array",
-            "maxItems": 5,
+            "maxItems": 3,
             "items": {"type": "string", "maxLength": 300},
         },
         "uncertainties": {
             "type": "array",
-            "maxItems": 5,
+            "maxItems": 3,
             "items": {"type": "string", "maxLength": 300},
         },
         "hard_conflicts": {
             "type": "array",
-            "maxItems": 5,
+            "maxItems": 3,
             "items": {"type": "string", "maxLength": 300},
         },
     },
 }
+
+# Ollama only asks the model for judgments. Python derives arithmetic fields
+# afterwards so model quality is not confused with addition reliability.
+MODEL_RESPONSE_SCHEMA = deepcopy(ANALYSIS_SCHEMA)
+for derived_field in ("overall_score", "recommendation"):
+    MODEL_RESPONSE_SCHEMA["required"].remove(derived_field)
+    del MODEL_RESPONSE_SCHEMA["properties"][derived_field]

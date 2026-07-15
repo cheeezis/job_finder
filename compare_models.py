@@ -45,6 +45,8 @@ def main():
         summary = result["summary"]
         print(
             f"{model}: {summary['exact_matches']}/{summary['jobs']} exakt, "
+            f"{summary['within_one_band_rate']:.0%} max. eine Stufe entfernt, "
+            f"{summary['dangerous_false_positives']} Fehlalarm(e), "
             f"{summary['valid_responses']}/{summary['jobs']} gueltig, "
             f"{summary['average_seconds_per_job']} s/Job"
         )

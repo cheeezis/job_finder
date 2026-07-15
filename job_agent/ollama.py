@@ -6,6 +6,7 @@ from urllib.request import Request, urlopen
 
 
 DEFAULT_BASE_URL = "http://127.0.0.1:11434"
+DEFAULT_MODEL = "gemma3:12b"
 
 
 class OllamaError(RuntimeError):

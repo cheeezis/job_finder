@@ -3,7 +3,7 @@
 import json
 import unittest
 
-from job_agent.ollama import OllamaClient, OllamaError
+from job_agent.ollama import DEFAULT_MODEL, OllamaClient, OllamaError
 
 
 class FakeResponse:
@@ -21,6 +21,9 @@ class FakeResponse:
 
 
 class OllamaClientTests(unittest.TestCase):
+    def test_default_model_is_selected_benchmark_winner(self):
+        self.assertEqual(DEFAULT_MODEL, "gemma3:12b")
+
     def test_chat_sends_schema_and_deterministic_options(self):
         requests = []
         schema = {"type": "object"}

@@ -4,12 +4,17 @@ import argparse
 
 from job_agent.console import configure_utf8_output
 from job_agent.llm_benchmark import run_model_benchmark, write_benchmark_result
-from job_agent.ollama import OllamaClient, OllamaError
+from job_agent.ollama import DEFAULT_MODEL, OllamaClient, OllamaError
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("models", nargs="+", help="Ollama model names")
+    parser.add_argument(
+        "models",
+        nargs="*",
+        default=[DEFAULT_MODEL],
+        help=f"Ollama model names (default: {DEFAULT_MODEL})",
+    )
     parser.add_argument(
         "--limit",
         type=int,
@@ -47,6 +52,7 @@ def main():
             f"{model}: {summary['exact_matches']}/{summary['jobs']} exakt, "
             f"{summary['within_one_band_rate']:.0%} max. eine Stufe entfernt, "
             f"{summary['dangerous_false_positives']} Fehlalarm(e), "
+            f"{summary['missed_positive_jobs']} verpasste Treffer, "
             f"{summary['valid_responses']}/{summary['jobs']} gueltig, "
             f"{summary['average_seconds_per_job']} s/Job"
         )

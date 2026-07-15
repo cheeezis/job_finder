@@ -135,7 +135,7 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(result["filter_status"], "included")
         self.assertEqual(result["experience_rank"], 1)
 
-    def test_non_junior_professional_experience_is_excluded(self):
+    def test_non_junior_professional_experience_remains_reviewable(self):
         german = score_job(
             make_job(
                 title="Webentwickler IoT",
@@ -148,8 +148,10 @@ class ScoringTests(unittest.TestCase):
                 description="Deep previous experience with React is required.",
             )
         )
-        self.assertEqual(german["filter_status"], "excluded")
-        self.assertEqual(english["filter_status"], "excluded")
+        self.assertEqual(german["filter_status"], "included")
+        self.assertEqual(english["filter_status"], "included")
+        self.assertEqual(german["experience_rank"], 5)
+        self.assertEqual(english["experience_rank"], 5)
 
     def test_skill_experience_without_professional_signal_remains_reviewable(self):
         result = score_job(
@@ -190,7 +192,7 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(result["filter_status"], "included")
         self.assertEqual(result["experience_level"], "3 Jahr(e) gefordert")
 
-    def test_non_junior_one_to_three_years_are_excluded(self):
+    def test_non_junior_one_to_three_years_receive_a_strong_penalty(self):
         result = score_job(
             make_job(
                 title="Automation Engineer",
@@ -200,7 +202,11 @@ class ScoringTests(unittest.TestCase):
                 ),
             )
         )
-        self.assertEqual(result["filter_status"], "excluded")
+        self.assertEqual(result["filter_status"], "included")
+        self.assertEqual(result["experience_level"], "2 Jahr(e) gefordert")
+        self.assertTrue(
+            any(reason.startswith("+8 Erfahrung") for reason in result["reasons"])
+        )
 
     def test_senior_is_excluded_but_mixed_junior_senior_is_reviewable(self):
         senior = score_job(make_job(title="Senior Python Developer"))

@@ -22,6 +22,12 @@ Der Agent kann:
 
 ## Nutzung
 
+Abhaengigkeiten installieren:
+
+```powershell
+python -m pip install -r requirements.txt
+```
+
 Kompletter Agentenlauf fuer alle angebundenen Quellen:
 
 ```powershell
@@ -52,6 +58,7 @@ job_agent/                  Code
 job_agent/config.py         Suchbegriffe und Suchorte
 job_agent/console.py        gemeinsame Konsolenkonfiguration
 job_agent/http.py           gemeinsame HTTP-Helfer
+job_agent/llm_profile.py    Laden und Validieren des LLM-Profils
 job_agent/models.py         einheitliches Job- und Statusmodell
 job_agent/profile.py        Profil-, Skill- und Scoring-Regeln
 job_agent/deduplication.py  quellenuebergreifende Job-Deduplizierung
@@ -66,6 +73,8 @@ data/seen_jobs.json         lokales Job-Gedaechtnis
 data/jobs_scored.json       generierte Scoring-Ergebnisse
 data/jobs_review.md         generierte Review-Datei
 data/stepstone_cache.json   gecachte StepStone-Jobdetails und letzte Linkliste
+profile.yaml                persoenliche Faktenbasis fuer das LLM
+requirements.txt            Python-Abhaengigkeiten
 tests/                      automatisierte Scoring- und Filtertests
 run_agent.py                kompletter Agentenlauf
 ```

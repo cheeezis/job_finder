@@ -4,7 +4,13 @@ import argparse
 
 from job_agent.console import configure_utf8_output
 from job_agent.llm.ollama import DEFAULT_MODEL, OllamaClient, OllamaError
-from llm_evaluation.benchmark import run_model_benchmark, write_benchmark_result
+from llm_evaluation.benchmark import (
+    JOB_ANALYSIS_SPLITS,
+    run_job_analysis_evaluation,
+    run_model_benchmark,
+    write_benchmark_result,
+    write_job_analysis_result,
+)
 
 
 def parse_args():
@@ -26,6 +32,17 @@ def parse_args():
         default=300,
         help="Maximum seconds per Ollama request",
     )
+    parser.add_argument(
+        "--job-analysis-only",
+        action="store_true",
+        help="Extract job facts without profile matching or recommendations",
+    )
+    parser.add_argument(
+        "--split",
+        choices=JOB_ANALYSIS_SPLITS,
+        default="development",
+        help="Job-analysis split to evaluate (default: development)",
+    )
     return parser.parse_args()
 
 
@@ -45,6 +62,22 @@ def main():
         raise SystemExit(f"Nicht lokal installiert: {names}")
 
     for model in args.models:
+        if args.job_analysis_only:
+            result = run_job_analysis_evaluation(
+                model,
+                client,
+                limit=args.limit,
+                split=args.split,
+            )
+            path = write_job_analysis_result(result)
+            summary = result["summary"]
+            print(
+                f"{model}: {summary['valid_responses']}/{summary['jobs']} gueltig, "
+                f"{summary['average_seconds_per_job']} s/Job"
+            )
+            print(f"Gespeichert: {path}")
+            continue
+
         result = run_model_benchmark(model, client, limit=args.limit)
         path = write_benchmark_result(result)
         summary = result["summary"]

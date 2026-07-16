@@ -4,6 +4,8 @@ import json
 
 from jsonschema import ValidationError, validate
 
+from job_agent.llm.validation import build_validation_retry_messages
+
 
 JOB_ANALYSIS_SCHEMA_VERSION = 2
 JOB_ANALYSIS_PROMPT_VERSION = 3
@@ -346,18 +348,26 @@ def normalize_whitespace(text):
     return " ".join(str(text).split()).casefold()
 
 
-def analyze_job(job, model, client):
+def analyze_job(job, model, client, validation_retries=1):
     """Extract validated job facts through an injected LLM client."""
-    analysis, metadata = client.chat(
-        model=model,
-        messages=build_job_analysis_messages(job),
-        output_schema=JOB_ANALYSIS_SCHEMA,
-    )
+    messages = build_job_analysis_messages(job)
     source_text = "\n".join(
         str(job.get(field) or "") for field in ("title", "description_clean")
     )
-    try:
-        return validate_job_analysis(analysis, source_text), metadata
-    except JobAnalysisValidationError as error:
-        error.raw_analysis = analysis
-        raise
+
+    for attempt in range(validation_retries + 1):
+        analysis, metadata = client.chat(
+            model=model,
+            messages=messages,
+            output_schema=JOB_ANALYSIS_SCHEMA,
+        )
+        try:
+            validated = validate_job_analysis(analysis, source_text)
+            metadata = dict(metadata)
+            metadata["validation_retries"] = attempt
+            return validated, metadata
+        except JobAnalysisValidationError as error:
+            if attempt == validation_retries:
+                error.raw_analysis = analysis
+                raise
+            messages = build_validation_retry_messages(messages, analysis, error)

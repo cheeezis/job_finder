@@ -13,9 +13,11 @@ from llm_evaluation.benchmark import (
     load_job_analysis_split,
     run_job_analysis_evaluation,
     run_model_benchmark,
+    run_two_stage_evaluation,
     summarize_results,
     validate_analysis,
     write_job_analysis_result,
+    write_two_stage_result,
 )
 from job_agent.llm.profile_loader import load_llm_profile
 
@@ -106,6 +108,37 @@ class LlmBenchmarkTests(unittest.TestCase):
             self.assertEqual(
                 path,
                 Path(directory) / "gemma3-12b-job-analysis-holdout.json",
+            )
+
+    def test_two_stage_defaults_to_development_split(self):
+        class FakeClient:
+            def chat(self, **_kwargs):
+                raise RuntimeError("Client darf fuer limit=0 nicht laufen")
+
+        result = run_two_stage_evaluation(
+            "test-model",
+            FakeClient(),
+            limit=0,
+        )
+
+        self.assertEqual(result["mode"], "two_stage")
+        self.assertEqual(result["split"], "development")
+        self.assertEqual(result["profile_version"], 1)
+        self.assertEqual(result["summary"]["jobs"], 0)
+
+    def test_two_stage_result_filename_contains_split(self):
+        result = {
+            "model": "gemma3:12b",
+            "split": "reserve",
+            "results": [],
+        }
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = write_two_stage_result(result, directory)
+
+            self.assertEqual(
+                path,
+                Path(directory) / "gemma3-12b-two-stage-reserve.json",
             )
 
     def test_existing_fit_benchmark_still_returns_results(self):

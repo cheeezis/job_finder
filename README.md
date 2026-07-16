@@ -65,6 +65,12 @@ python -m llm_evaluation.compare_models gemma3:12b --job-analysis-only --split d
 
 Holdout und Reserve bleiben bis zur gezielten Modellevaluation unangetastet.
 
+Beide LLM-Stufen ohne numerisches Scoring ausfuehren:
+
+```powershell
+python -m llm_evaluation.compare_models gemma3:12b --two-stage --split development
+```
+
 ## Struktur
 
 ```text

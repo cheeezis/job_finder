@@ -3,8 +3,8 @@
 import argparse
 
 from job_agent.console import configure_utf8_output
-from job_agent.llm_benchmark import run_model_benchmark, write_benchmark_result
-from job_agent.ollama import DEFAULT_MODEL, OllamaClient, OllamaError
+from job_agent.llm.ollama import DEFAULT_MODEL, OllamaClient, OllamaError
+from llm_evaluation.benchmark import run_model_benchmark, write_benchmark_result
 
 
 def parse_args():

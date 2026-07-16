@@ -1,16 +1,12 @@
-"""Tests for the blind, hand-labelled model comparison fixture."""
+"""Tests for the blind, hand-labelled LLM evaluation fixture."""
 
 import json
 import unittest
-from pathlib import Path
 
 import yaml
 
-from job_agent.llm_contract import RUBRIC_VERSION
-
-
-TEST_INPUTS_PATH = Path("evaluation/llm_test_inputs.json")
-EXPECTED_RESULTS_PATH = Path("evaluation/llm_expected_results.yaml")
+from job_agent.llm.contract import RUBRIC_VERSION
+from llm_evaluation.benchmark import EXPECTED_RESULTS_PATH, TEST_INPUTS_PATH
 
 
 class EvaluationCasesTests(unittest.TestCase):

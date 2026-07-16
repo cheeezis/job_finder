@@ -8,7 +8,7 @@ from time import perf_counter
 import yaml
 from jsonschema import ValidationError, validate
 
-from job_agent.llm_contract import (
+from job_agent.llm.contract import (
     ANALYSIS_SCHEMA,
     MODEL_RESPONSE_SCHEMA,
     RATING_POINTS,
@@ -17,14 +17,15 @@ from job_agent.llm_contract import (
     SCORE_BANDS,
     recommendation_for_score,
 )
-from job_agent.llm_profile import load_llm_profile
-from job_agent.ollama import OllamaError
+from job_agent.llm.ollama import OllamaError
+from job_agent.llm.profile_loader import load_llm_profile
 
 
 PROMPT_VERSION = 4
-TEST_INPUTS_PATH = Path("evaluation/llm_test_inputs.json")
-EXPECTED_RESULTS_PATH = Path("evaluation/llm_expected_results.yaml")
-RESULTS_DIR = Path("evaluation/results")
+EVALUATION_ROOT = Path(__file__).resolve().parent
+TEST_INPUTS_PATH = EVALUATION_ROOT / "fixtures" / "test_inputs.json"
+EXPECTED_RESULTS_PATH = EVALUATION_ROOT / "fixtures" / "expected_results.yaml"
+RESULTS_DIR = EVALUATION_ROOT / "results"
 LABEL_ORDER = [
     "not_recommended",
     "borderline",

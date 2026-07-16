@@ -3,7 +3,7 @@
 import json
 import unittest
 
-from job_agent.llm_contract import (
+from job_agent.llm.contract import (
     ANALYSIS_SCHEMA,
     MODEL_RESPONSE_SCHEMA,
     RATING_POINTS,

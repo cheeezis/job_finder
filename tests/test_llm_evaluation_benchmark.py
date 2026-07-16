@@ -1,9 +1,9 @@
-"""Tests for the blind local-LLM benchmark."""
+"""Tests for the blind local-LLM evaluation benchmark."""
 
 import json
 import unittest
 
-from job_agent.llm_benchmark import (
+from llm_evaluation.benchmark import (
     AnalysisValidationError,
     build_messages,
     finalize_analysis,
@@ -11,7 +11,7 @@ from job_agent.llm_benchmark import (
     summarize_results,
     validate_analysis,
 )
-from job_agent.llm_profile import load_llm_profile
+from job_agent.llm.profile_loader import load_llm_profile
 
 
 def make_analysis(score=75, recommendation="match"):

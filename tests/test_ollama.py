@@ -3,7 +3,7 @@
 import json
 import unittest
 
-from job_agent.ollama import DEFAULT_MODEL, OllamaClient, OllamaError
+from job_agent.llm.ollama import DEFAULT_MODEL, OllamaClient, OllamaError
 
 
 class FakeResponse:

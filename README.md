@@ -34,6 +34,15 @@ Kompletter Agentenlauf mit Vorfilter und KI-Bewertung:
 python run_agent.py
 ```
 
+Empfehlungen lokal im Browser durchsehen und ihren Status speichern:
+
+```text
+review_jobs.bat doppelklicken
+```
+
+Die Review-Oberflaeche laeuft nur auf dem eigenen Computer und verwendet das
+bestehende Job-Gedaechtnis unter `data/internal/seen_jobs.json`.
+
 Ein kostenbegrenzter Testlauf analysiert hoechstens einen neuen passenden Job:
 
 ```powershell
@@ -84,6 +93,8 @@ job_agent/profile.py        Profil-, Skill- und Scoring-Regeln
 job_agent/deduplication.py  quellenuebergreifende Job-Deduplizierung
 job_agent/remote.py         gemeinsame Remote-Erkennung
 job_agent/reporting.py      JSON- und Markdown-Ausgaben
+job_agent/review.py         lokaler Webserver fuer den Review-Workflow
+job_agent/review.html       lokale Browseroberflaeche fuer Entscheidungen
 job_agent/search_plan.py    gemeinsame Suchplan-Helfer
 job_agent/structured_data.py gemeinsame JSON-LD-Auswertung
 job_agent/text.py           gemeinsame Text-/HTML-Helfer
@@ -101,4 +112,5 @@ llm_evaluation/results/     lokale, nicht versionierte Modellergebnisse
 requirements.txt            Python-Abhaengigkeiten
 tests/                      automatisierte Scoring- und Filtertests
 run_agent.py                kompletter Agentenlauf
+review_jobs.bat             anklickbarer Start der Review-Oberflaeche
 ```

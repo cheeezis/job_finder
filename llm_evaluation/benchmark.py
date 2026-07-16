@@ -25,6 +25,12 @@ from job_agent.llm.job_analysis import (
 )
 from job_agent.llm.ollama import OllamaError
 from job_agent.llm.profile_loader import load_llm_profile
+from job_agent.llm.profile_match import (
+    PROFILE_MATCH_PROMPT_VERSION,
+    PROFILE_MATCH_SCHEMA_VERSION,
+    ProfileMatchValidationError,
+    match_job_to_profile,
+)
 
 
 PROMPT_VERSION = 4
@@ -317,6 +323,92 @@ def run_job_analysis_evaluation(
     }
 
 
+def run_two_stage_evaluation(
+    model,
+    client,
+    limit=None,
+    split="development",
+):
+    """Run objective extraction followed by evidence-based profile matching."""
+    inputs, _ = load_benchmark_data()
+    split_data = load_job_analysis_split()
+    if split not in JOB_ANALYSIS_SPLITS:
+        raise BenchmarkDataError(f"Unbekannter Job-Analyse-Split: {split}")
+
+    profile = load_llm_profile()
+    jobs_by_id = {job["job_id"]: job for job in inputs["cases"]}
+    jobs = [jobs_by_id[job_id] for job_id in split_data["splits"][split]]
+    jobs = jobs[:limit]
+    results = []
+
+    for index, job in enumerate(jobs, start=1):
+        print(f"[{index}/{len(jobs)}] {model}: {job['title']}")
+        started = perf_counter()
+        result = {"job_id": job["job_id"], "title": job["title"]}
+        current_stage = "job_analysis"
+        try:
+            job_analysis, analysis_metadata = analyze_job(job, model, client)
+            result["job_analysis"] = job_analysis
+            current_stage = "profile_match"
+            profile_match, match_metadata = match_job_to_profile(
+                job_analysis,
+                profile,
+                model,
+                client,
+            )
+            result.update(
+                {
+                    "valid": True,
+                    "profile_match": profile_match["match"],
+                    "metadata": {
+                        "job_analysis": analysis_metadata,
+                        "profile_match": match_metadata,
+                    },
+                }
+            )
+        except (
+            OllamaError,
+            JobAnalysisValidationError,
+            ProfileMatchValidationError,
+        ) as error:
+            result.update(
+                {
+                    "valid": False,
+                    "failed_stage": current_stage,
+                    "error": str(error),
+                }
+            )
+            raw_output = getattr(error, "raw_analysis", None)
+            if raw_output is None:
+                raw_output = getattr(error, "raw_match", None)
+            if raw_output is not None:
+                result["raw_output"] = raw_output
+        result["elapsed_seconds"] = round(perf_counter() - started, 3)
+        results.append(result)
+
+    valid = sum(result["valid"] for result in results)
+    elapsed = sum(result["elapsed_seconds"] for result in results)
+    return {
+        "model": model,
+        "mode": "two_stage",
+        "split": split,
+        "profile_version": profile.version,
+        "job_analysis_prompt_version": JOB_ANALYSIS_PROMPT_VERSION,
+        "job_analysis_schema_version": JOB_ANALYSIS_SCHEMA_VERSION,
+        "profile_match_prompt_version": PROFILE_MATCH_PROMPT_VERSION,
+        "profile_match_schema_version": PROFILE_MATCH_SCHEMA_VERSION,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "summary": {
+            "jobs": len(results),
+            "valid_responses": valid,
+            "average_seconds_per_job": (
+                round(elapsed / len(results), 3) if results else 0
+            ),
+        },
+        "results": results,
+    }
+
+
 def summarize_results(results):
     """Calculate comparable quality, reliability, and runtime metrics."""
     valid = [result for result in results if result["valid"]]
@@ -387,6 +479,20 @@ def write_job_analysis_result(result, output_dir=RESULTS_DIR):
     safe_model = result["model"].replace(":", "-").replace("/", "-")
     split = result["split"]
     path = directory / f"{safe_model}-job-analysis-{split}.json"
+    path.write_text(
+        json.dumps(result, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def write_two_stage_result(result, output_dir=RESULTS_DIR):
+    """Persist combined extraction and profile-matching evaluation results."""
+    directory = Path(output_dir)
+    directory.mkdir(parents=True, exist_ok=True)
+    safe_model = result["model"].replace(":", "-").replace("/", "-")
+    split = result["split"]
+    path = directory / f"{safe_model}-two-stage-{split}.json"
     path.write_text(
         json.dumps(result, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",

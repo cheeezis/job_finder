@@ -8,8 +8,10 @@ from llm_evaluation.benchmark import (
     JOB_ANALYSIS_SPLITS,
     run_job_analysis_evaluation,
     run_model_benchmark,
+    run_two_stage_evaluation,
     write_benchmark_result,
     write_job_analysis_result,
+    write_two_stage_result,
 )
 
 
@@ -32,10 +34,16 @@ def parse_args():
         default=300,
         help="Maximum seconds per Ollama request",
     )
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--job-analysis-only",
         action="store_true",
         help="Extract job facts without profile matching or recommendations",
+    )
+    mode.add_argument(
+        "--two-stage",
+        action="store_true",
+        help="Extract job facts and match them to the profile without scoring",
     )
     parser.add_argument(
         "--split",
@@ -62,6 +70,22 @@ def main():
         raise SystemExit(f"Nicht lokal installiert: {names}")
 
     for model in args.models:
+        if args.two_stage:
+            result = run_two_stage_evaluation(
+                model,
+                client,
+                limit=args.limit,
+                split=args.split,
+            )
+            path = write_two_stage_result(result)
+            summary = result["summary"]
+            print(
+                f"{model}: {summary['valid_responses']}/{summary['jobs']} gueltig, "
+                f"{summary['average_seconds_per_job']} s/Job"
+            )
+            print(f"Gespeichert: {path}")
+            continue
+
         if args.job_analysis_only:
             result = run_job_analysis_evaluation(
                 model,

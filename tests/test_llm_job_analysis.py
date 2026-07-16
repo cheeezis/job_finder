@@ -164,6 +164,28 @@ class LlmJobAnalysisTests(unittest.TestCase):
             "Erfundenes Zitat",
         )
 
+    def test_invalid_response_is_retried_with_validation_feedback(self):
+        class RepairingClient:
+            def __init__(self):
+                self.calls = []
+
+            def chat(self, **kwargs):
+                self.calls.append(kwargs)
+                analysis = make_job_analysis()
+                if len(self.calls) == 1:
+                    analysis["seniority_evidence_quote"] = "Erfundenes Zitat"
+                return analysis, {}
+
+        client = RepairingClient()
+
+        analysis, metadata = analyze_job(source_job(), "test-model", client)
+
+        self.assertEqual(analysis["seniority"], "junior_entry")
+        self.assertEqual(metadata["validation_retries"], 1)
+        self.assertEqual(len(client.calls), 2)
+        retry_message = client.calls[1]["messages"][-1]["content"]
+        self.assertIn("Beleg kommt nicht wortgetreu", retry_message)
+
 
 if __name__ == "__main__":
     unittest.main()

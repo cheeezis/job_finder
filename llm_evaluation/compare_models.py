@@ -3,6 +3,7 @@
 import argparse
 
 from job_agent.console import configure_utf8_output
+from job_agent.llm.errors import LLMError
 from job_agent.llm.ollama import DEFAULT_MODEL, OllamaClient, OllamaError
 from llm_evaluation.benchmark import (
     JOB_ANALYSIS_SPLITS,
@@ -24,8 +25,13 @@ def parse_args():
     parser.add_argument(
         "models",
         nargs="*",
-        default=[DEFAULT_MODEL],
-        help=f"Ollama model names (default: {DEFAULT_MODEL})",
+        help="Model names (provider-specific default when omitted)",
+    )
+    parser.add_argument(
+        "--provider",
+        choices=("ollama", "openai"),
+        default="ollama",
+        help="LLM provider (default: ollama)",
     )
     parser.add_argument(
         "--limit",
@@ -68,22 +74,47 @@ def parse_args():
     return parser.parse_args()
 
 
+def print_quality_summary(model, summary):
+    """Print the comparable recommendation metrics shared by fit modes."""
+    print(
+        f"{model}: {summary['exact_matches']}/{summary['jobs']} exakt, "
+        f"{summary['within_one_band_rate']:.0%} max. eine Stufe entfernt, "
+        f"{summary['dangerous_false_positives']} Fehlalarm(e), "
+        f"{summary['missed_positive_jobs']} verpasste Treffer, "
+        f"{summary['valid_responses']}/{summary['jobs']} gueltig, "
+        f"{summary['average_seconds_per_job']} s/Job"
+    )
+
+
 def main():
     configure_utf8_output()
     args = parse_args()
-    client = OllamaClient(timeout=args.timeout)
 
-    try:
-        installed = set(client.list_models())
-    except OllamaError as error:
-        raise SystemExit(f"Ollama nicht erreichbar: {error}") from error
+    if args.provider == "openai":
+        from job_agent.llm.openai import (
+            DEFAULT_MODEL as default_openai_model,
+            OpenAIClient,
+        )
 
-    missing = [model for model in args.models if model not in installed]
-    if missing:
-        names = ", ".join(missing)
-        raise SystemExit(f"Nicht lokal installiert: {names}")
+        models = args.models or [default_openai_model]
+        try:
+            client = OpenAIClient(timeout=args.timeout)
+        except LLMError as error:
+            raise SystemExit(str(error)) from error
+    else:
+        models = args.models or [DEFAULT_MODEL]
+        client = OllamaClient(timeout=args.timeout)
+        try:
+            installed = set(client.list_models())
+        except OllamaError as error:
+            raise SystemExit(f"Ollama nicht erreichbar: {error}") from error
 
-    for model in args.models:
+        missing = [model for model in models if model not in installed]
+        if missing:
+            names = ", ".join(missing)
+            raise SystemExit(f"Nicht lokal installiert: {names}")
+
+    for model in models:
         if args.profile_match_only:
             result = run_profile_match_evaluation(
                 args.analysis_model,
@@ -93,11 +124,7 @@ def main():
                 split=args.split,
             )
             path = write_profile_match_result(result)
-            summary = result["summary"]
-            print(
-                f"{model}: {summary['valid_responses']}/{summary['jobs']} gueltig, "
-                f"{summary['average_seconds_per_job']} s/Job"
-            )
+            print_quality_summary(model, result["summary"])
             print(f"Gespeichert: {path}")
             continue
 
@@ -109,11 +136,7 @@ def main():
                 split=args.split,
             )
             path = write_two_stage_result(result)
-            summary = result["summary"]
-            print(
-                f"{model}: {summary['valid_responses']}/{summary['jobs']} gueltig, "
-                f"{summary['average_seconds_per_job']} s/Job"
-            )
+            print_quality_summary(model, result["summary"])
             print(f"Gespeichert: {path}")
             continue
 
@@ -135,15 +158,7 @@ def main():
 
         result = run_model_benchmark(model, client, limit=args.limit)
         path = write_benchmark_result(result)
-        summary = result["summary"]
-        print(
-            f"{model}: {summary['exact_matches']}/{summary['jobs']} exakt, "
-            f"{summary['within_one_band_rate']:.0%} max. eine Stufe entfernt, "
-            f"{summary['dangerous_false_positives']} Fehlalarm(e), "
-            f"{summary['missed_positive_jobs']} verpasste Treffer, "
-            f"{summary['valid_responses']}/{summary['jobs']} gueltig, "
-            f"{summary['average_seconds_per_job']} s/Job"
-        )
+        print_quality_summary(model, result["summary"])
         print(f"Gespeichert: {path}")
 
 

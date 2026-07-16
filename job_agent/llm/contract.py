@@ -2,7 +2,7 @@
 
 from copy import deepcopy
 
-RUBRIC_VERSION = 4
+RUBRIC_VERSION = 5
 SCHEMA_VERSION = 3
 
 RATING_POINTS = {
@@ -69,8 +69,8 @@ RUBRIC = {
         ),
         "anchors": {
             "excellent": "vollstaendig remote in Deutschland",
-            "good": "lokal mit Homeoffice oder sehr passender Hybridregelung",
-            "partial": "lokal vor Ort oder zulaessiger Zusatzstandort",
+            "good": "lokal vor Ort oder mit passender Hybridregelung",
+            "partial": "zulaessiger Zusatzstandort mit erfuellter Remote-Regel",
             "weak": "Standort oder Remote-Anteil ist unklar",
             "conflict": "gepruefter Standortkonflikt",
         },
@@ -106,6 +106,13 @@ def recommendation_for_score(score):
     if not isinstance(score, int) or isinstance(score, bool) or not 0 <= score <= 100:
         raise ValueError("score must be an integer between 0 and 100")
     return next(label for minimum, label in SCORE_BANDS if score >= minimum)
+
+
+def recommendation_for_analysis(score, hard_conflicts=None):
+    """Return the score band unless a verified hard conflict blocks the job."""
+    if hard_conflicts:
+        return "not_recommended"
+    return recommendation_for_score(score)
 
 
 def score_property(maximum):
@@ -225,7 +232,7 @@ ANALYSIS_SCHEMA = {
     },
 }
 
-# Ollama only asks the model for categorical judgments. Python derives every
+# The LLM only returns categorical judgments. Python derives every
 # numeric field afterwards so model quality is not confused with calibration.
 MODEL_RESPONSE_SCHEMA = deepcopy(ANALYSIS_SCHEMA)
 for derived_field in ("overall_score", "recommendation", "dimension_scores"):

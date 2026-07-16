@@ -5,13 +5,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from time import perf_counter
 
+from job_agent.llm.contract import RUBRIC_VERSION
 from job_agent.llm.job_analysis import (
     JOB_ANALYSIS_PROMPT_VERSION,
     JOB_ANALYSIS_SCHEMA_VERSION,
     JobAnalysisValidationError,
     validate_job_analysis,
 )
-from job_agent.llm.ollama import OllamaError
+from job_agent.llm.errors import LLMError
+from job_agent.llm.fit_score import FIT_SCORE_VERSION, score_two_stage_result
 from job_agent.llm.profile_loader import load_llm_profile
 from job_agent.llm.profile_match import (
     PROFILE_MATCH_PROMPT_VERSION,
@@ -25,6 +27,7 @@ from llm_evaluation.benchmark import (
     RESULTS_DIR,
     load_benchmark_data,
     load_job_analysis_split,
+    summarize_results,
 )
 
 
@@ -116,12 +119,21 @@ def run_profile_match_evaluation(
         results_dir=results_dir,
     )
     profile = load_llm_profile()
+    _, expected = load_benchmark_data()
+    labels = {
+        case["job_id"]: case["expected_recommendation"]
+        for case in expected["cases"]
+    }
     results = []
 
     for index, (job, job_analysis) in enumerate(prepared, start=1):
         print(f"[{index}/{len(prepared)}] {match_model}: {job['title']}")
         started = perf_counter()
-        result = {"job_id": job["job_id"], "title": job["title"]}
+        result = {
+            "job_id": job["job_id"],
+            "title": job["title"],
+            "expected_recommendation": labels[job["job_id"]],
+        }
         try:
             profile_match, metadata = match_job_to_profile(
                 job_analysis,
@@ -129,14 +141,20 @@ def run_profile_match_evaluation(
                 match_model,
                 client,
             )
+            analysis = score_two_stage_result(
+                job,
+                job_analysis,
+                profile_match["match"],
+            )
             result.update(
                 {
                     "valid": True,
                     "profile_match": profile_match["match"],
+                    "analysis": analysis,
                     "metadata": metadata,
                 }
             )
-        except (OllamaError, ProfileMatchValidationError) as error:
+        except (LLMError, ProfileMatchValidationError) as error:
             result.update({"valid": False, "error": str(error)})
             raw_match = getattr(error, "raw_match", None)
             if raw_match is not None:
@@ -144,8 +162,6 @@ def run_profile_match_evaluation(
         result["elapsed_seconds"] = round(perf_counter() - started, 3)
         results.append(result)
 
-    valid = sum(result["valid"] for result in results)
-    elapsed = sum(result["elapsed_seconds"] for result in results)
     return {
         "model": match_model,
         "analysis_model": analysis_model,
@@ -156,14 +172,10 @@ def run_profile_match_evaluation(
         "job_analysis_schema_version": JOB_ANALYSIS_SCHEMA_VERSION,
         "profile_match_prompt_version": PROFILE_MATCH_PROMPT_VERSION,
         "profile_match_schema_version": PROFILE_MATCH_SCHEMA_VERSION,
+        "fit_score_version": FIT_SCORE_VERSION,
+        "rubric_version": RUBRIC_VERSION,
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "summary": {
-            "jobs": len(results),
-            "valid_responses": valid,
-            "average_seconds_per_job": (
-                round(elapsed / len(results), 3) if results else 0
-            ),
-        },
+        "summary": summarize_results(results),
         "results": results,
     }
 

@@ -13,6 +13,24 @@ SCORE_LIMITS = {
     "profile": 5,
 }
 
+# The LLM extracts these language-independent role families from job tasks.
+# Python uses the personal priority here only for the final fit dimensions.
+ROLE_FAMILY_FIT_RATINGS = {
+    "ai_ml": "excellent",
+    "data": "good",
+    "backend": "good",
+    "frontend": "good",
+    "fullstack": "good",
+    "software_development": "good",
+    "consulting_business_analysis": "good",
+    "devops_cloud": "partial",
+    "security_network": "partial",
+    "qa_testing": "partial",
+    "sap_erp": "weak",
+    "system_administration_support": "weak",
+    "other": "conflict",
+}
+
 ROLE_GROUPS = [
     {
         "id": "python_ai_data",

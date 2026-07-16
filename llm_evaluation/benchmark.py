@@ -15,15 +15,17 @@ from job_agent.llm.contract import (
     RUBRIC,
     RUBRIC_VERSION,
     SCORE_BANDS,
+    recommendation_for_analysis,
     recommendation_for_score,
 )
+from job_agent.llm.fit_score import FIT_SCORE_VERSION, score_two_stage_result
 from job_agent.llm.job_analysis import (
     JOB_ANALYSIS_PROMPT_VERSION,
     JOB_ANALYSIS_SCHEMA_VERSION,
     JobAnalysisValidationError,
     analyze_job,
 )
-from job_agent.llm.ollama import OllamaError
+from job_agent.llm.errors import LLMError
 from job_agent.llm.profile_loader import load_llm_profile
 from job_agent.llm.profile_match import (
     PROFILE_MATCH_PROMPT_VERSION,
@@ -33,7 +35,7 @@ from job_agent.llm.profile_match import (
 )
 
 
-PROMPT_VERSION = 4
+PROMPT_VERSION = 5
 EVALUATION_ROOT = Path(__file__).resolve().parent
 TEST_INPUTS_PATH = EVALUATION_ROOT / "fixtures" / "test_inputs.json"
 EXPECTED_RESULTS_PATH = EVALUATION_ROOT / "fixtures" / "expected_results.yaml"
@@ -191,7 +193,10 @@ def validate_analysis(analysis):
             "overall_score entspricht nicht der Summe der Dimensionswerte"
         )
 
-    expected_label = recommendation_for_score(analysis["overall_score"])
+    expected_label = recommendation_for_analysis(
+        analysis["overall_score"],
+        analysis["hard_conflicts"],
+    )
     if analysis["recommendation"] != expected_label:
         raise AnalysisValidationError(
             "recommendation entspricht nicht dem festen Scoreband"
@@ -212,7 +217,10 @@ def finalize_analysis(model_response):
     }
     overall_score = sum(analysis["dimension_scores"].values())
     analysis["overall_score"] = overall_score
-    analysis["recommendation"] = recommendation_for_score(overall_score)
+    analysis["recommendation"] = recommendation_for_analysis(
+        overall_score,
+        analysis["hard_conflicts"],
+    )
     validate_analysis(analysis)
     return analysis
 
@@ -249,7 +257,7 @@ def run_model_benchmark(model, client, limit=None):
                     "metadata": metadata,
                 }
             )
-        except (OllamaError, AnalysisValidationError) as error:
+        except (LLMError, AnalysisValidationError) as error:
             result.update({"valid": False, "error": str(error)})
         result["elapsed_seconds"] = round(perf_counter() - started, 3)
         results.append(result)
@@ -295,7 +303,7 @@ def run_job_analysis_evaluation(
                     "metadata": metadata,
                 }
             )
-        except (OllamaError, JobAnalysisValidationError) as error:
+        except (LLMError, JobAnalysisValidationError) as error:
             result.update({"valid": False, "error": str(error)})
             raw_analysis = getattr(error, "raw_analysis", None)
             if raw_analysis is not None:
@@ -330,7 +338,7 @@ def run_two_stage_evaluation(
     split="development",
 ):
     """Run objective extraction followed by evidence-based profile matching."""
-    inputs, _ = load_benchmark_data()
+    inputs, expected = load_benchmark_data()
     split_data = load_job_analysis_split()
     if split not in JOB_ANALYSIS_SPLITS:
         raise BenchmarkDataError(f"Unbekannter Job-Analyse-Split: {split}")
@@ -339,12 +347,20 @@ def run_two_stage_evaluation(
     jobs_by_id = {job["job_id"]: job for job in inputs["cases"]}
     jobs = [jobs_by_id[job_id] for job_id in split_data["splits"][split]]
     jobs = jobs[:limit]
+    labels = {
+        case["job_id"]: case["expected_recommendation"]
+        for case in expected["cases"]
+    }
     results = []
 
     for index, job in enumerate(jobs, start=1):
         print(f"[{index}/{len(jobs)}] {model}: {job['title']}")
         started = perf_counter()
-        result = {"job_id": job["job_id"], "title": job["title"]}
+        result = {
+            "job_id": job["job_id"],
+            "title": job["title"],
+            "expected_recommendation": labels[job["job_id"]],
+        }
         current_stage = "job_analysis"
         try:
             job_analysis, analysis_metadata = analyze_job(job, model, client)
@@ -356,10 +372,16 @@ def run_two_stage_evaluation(
                 model,
                 client,
             )
+            analysis = score_two_stage_result(
+                job,
+                job_analysis,
+                profile_match["match"],
+            )
             result.update(
                 {
                     "valid": True,
                     "profile_match": profile_match["match"],
+                    "analysis": analysis,
                     "metadata": {
                         "job_analysis": analysis_metadata,
                         "profile_match": match_metadata,
@@ -367,7 +389,7 @@ def run_two_stage_evaluation(
                 }
             )
         except (
-            OllamaError,
+            LLMError,
             JobAnalysisValidationError,
             ProfileMatchValidationError,
         ) as error:
@@ -386,8 +408,6 @@ def run_two_stage_evaluation(
         result["elapsed_seconds"] = round(perf_counter() - started, 3)
         results.append(result)
 
-    valid = sum(result["valid"] for result in results)
-    elapsed = sum(result["elapsed_seconds"] for result in results)
     return {
         "model": model,
         "mode": "two_stage",
@@ -397,14 +417,10 @@ def run_two_stage_evaluation(
         "job_analysis_schema_version": JOB_ANALYSIS_SCHEMA_VERSION,
         "profile_match_prompt_version": PROFILE_MATCH_PROMPT_VERSION,
         "profile_match_schema_version": PROFILE_MATCH_SCHEMA_VERSION,
+        "fit_score_version": FIT_SCORE_VERSION,
+        "rubric_version": RUBRIC_VERSION,
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "summary": {
-            "jobs": len(results),
-            "valid_responses": valid,
-            "average_seconds_per_job": (
-                round(elapsed / len(results), 3) if results else 0
-            ),
-        },
+        "summary": summarize_results(results),
         "results": results,
     }
 

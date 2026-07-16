@@ -51,14 +51,23 @@ Scoring-, Filter- und Deduplizierungsregeln testen:
 python -m unittest discover -s tests -v
 ```
 
+Lokale LLMs gegen den getrennten Blindtestsatz vergleichen:
+
+```powershell
+python -m llm_evaluation.compare_models gemma3:12b
+```
+
 ## Struktur
 
 ```text
-job_agent/                  Code
+job_agent/                  produktiver Agentencode
 job_agent/config.py         Suchbegriffe und Suchorte
 job_agent/console.py        gemeinsame Konsolenkonfiguration
 job_agent/http.py           gemeinsame HTTP-Helfer
-job_agent/llm_profile.py    Laden und Validieren des LLM-Profils
+job_agent/llm/              wiederverwendbare lokale LLM-Komponenten
+job_agent/llm/contract.py   Rubrik und strukturierter Antwortvertrag
+job_agent/llm/profile_loader.py Laden und Validieren des LLM-Profils
+job_agent/llm/ollama.py     Client fuer die lokale Ollama-API
 job_agent/models.py         einheitliches Job- und Statusmodell
 job_agent/profile.py        Profil-, Skill- und Scoring-Regeln
 job_agent/deduplication.py  quellenuebergreifende Job-Deduplizierung
@@ -74,6 +83,9 @@ data/jobs_scored.json       generierte Scoring-Ergebnisse
 data/jobs_review.md         generierte Review-Datei
 data/stepstone_cache.json   gecachte StepStone-Jobdetails und letzte Linkliste
 profile.yaml                persoenliche Faktenbasis fuer das LLM
+llm_evaluation/             getrenntes Labor fuer lokale LLM-Vergleiche
+llm_evaluation/fixtures/    blinde Testeingaben und menschliche Bewertungen
+llm_evaluation/results/     lokale, nicht versionierte Modellergebnisse
 requirements.txt            Python-Abhaengigkeiten
 tests/                      automatisierte Scoring- und Filtertests
 run_agent.py                kompletter Agentenlauf

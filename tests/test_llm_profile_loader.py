@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from job_agent.llm_profile import (
+from job_agent.llm.profile_loader import (
     ProfileValidationError,
     load_llm_profile,
 )

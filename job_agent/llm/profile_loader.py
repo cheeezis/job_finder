@@ -7,7 +7,7 @@ from pathlib import Path
 import yaml
 
 
-PROFILE_PATH = Path(__file__).resolve().parent.parent / "profile.yaml"
+PROFILE_PATH = Path(__file__).resolve().parents[2] / "profile.yaml"
 
 
 class ProfileValidationError(ValueError):

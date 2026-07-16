@@ -34,6 +34,7 @@ def make_record(cache_key):
         "score": 90,
         "analysis": {
             "job": {
+                "role_summary": "Technische Python-Einstiegsrolle.",
                 "tasks": ["Python entwickeln"],
                 "experience_requirement": {
                     "expectation": "none_stated",
@@ -88,7 +89,8 @@ class LlmServiceTests(unittest.TestCase):
         self.assertEqual(results["included"][0]["llm_status"], "analyzed")
         self.assertNotIn("llm_analysis", results["included"][0])
         self.assertNotIn("llm_metadata", results["included"][0])
-        self.assertEqual(len(cache), 1)
+        self.assertEqual(len(cache["analyses"]), 1)
+        self.assertEqual(cache["pending"], {})
         analyze.assert_called_once()
 
     def test_cached_known_job_is_attached_without_api_call(self):
@@ -141,6 +143,7 @@ class LlmServiceTests(unittest.TestCase):
                 side_effect=LLMError("API nicht erreichbar"),
             ):
                 stats = analyze_results(results, settings)
+            cache = load_cache(settings.cache_path)
 
         self.assertEqual(stats["failed"], 1)
         self.assertEqual(results["included"][0]["llm_status"], "failed")
@@ -148,6 +151,36 @@ class LlmServiceTests(unittest.TestCase):
             results["included"][0]["llm_error"],
             "API nicht erreichbar",
         )
+        self.assertEqual(len(cache["pending"]), 1)
+
+    def test_pending_known_job_is_retried(self):
+        results = {"included": [make_job()], "excluded": []}
+
+        with tempfile.TemporaryDirectory() as directory:
+            settings = self.settings(directory)
+            with patch(
+                "job_agent.llm.service.OpenAIClient",
+                side_effect=LLMError("API nicht erreichbar"),
+            ):
+                analyze_results(results, settings)
+
+            known_results = {
+                "included": [make_job(is_new=False)],
+                "excluded": [],
+            }
+
+            def fake_analysis(_job, _profile, _settings, _client, cache_key):
+                return make_record(cache_key)
+
+            with patch(
+                "job_agent.llm.service.analyze_job_record",
+                side_effect=fake_analysis,
+            ):
+                stats = analyze_results(known_results, settings, client=object())
+            cache = load_cache(settings.cache_path)
+
+        self.assertEqual(stats["analyzed"], 1)
+        self.assertEqual(cache["pending"], {})
 
     def test_stale_cached_score_is_recomputed_without_llm_call(self):
         job = make_job(is_new=False)

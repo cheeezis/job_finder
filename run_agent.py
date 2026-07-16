@@ -9,8 +9,9 @@ from job_agent.console import configure_utf8_output
 from job_agent.deduplication import deduplicate_jobs
 from job_agent.main import print_results, score_jobs
 from job_agent.llm.service import analyze_results
-from job_agent.memory import MEMORY_FILE, load_memory, save_memory, update_memory
-from job_agent.reporting import write_review_files
+from job_agent.memory import load_memory, save_memory, update_memory
+from job_agent.paths import JOBS_FILE, MEMORY_FILE
+from job_agent.reporting import write_recommendations
 from job_agent.sources import arbeitsagentur
 from job_agent.sources import get_in_it
 from job_agent.sources import stepstone
@@ -22,17 +23,9 @@ SOURCES = [
     get_in_it,
 ]
 
-JOBS_FILE = "data/jobs_imported.json"
-
-
 def parse_args():
-    """Parse explicit options for potentially billable LLM analysis."""
+    """Parse the optional cost limit for the productive LLM analysis."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--llm",
-        action="store_true",
-        help="Analyze new included jobs with the configured OpenAI model",
-    )
     parser.add_argument(
         "--llm-limit",
         type=int,
@@ -52,7 +45,8 @@ def main():
     memory = load_memory(MEMORY_FILE)
     memory_stats = update_memory(jobs, memory)
     save_memory(memory, MEMORY_FILE)
-    Path(JOBS_FILE).write_text(
+    JOBS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    JOBS_FILE.write_text(
         json.dumps([job.to_dict() for job in jobs], indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
@@ -63,18 +57,14 @@ def main():
 
     print("\n3/3 Bewerte Jobs")
     results = score_jobs(jobs)
-    if args.llm:
-        print("\nKI-Bewertung")
-        llm_stats = analyze_results(
-            results,
-            limit=args.llm_limit,
-        )
-        print(
-            f"KI: {llm_stats['analyzed']} neu analysiert, "
-            f"{llm_stats['cached']} aus Cache, "
-            f"{llm_stats['failed']} fehlgeschlagen"
-        )
-    write_review_files(results)
+    print("\nKI-Bewertung")
+    llm_stats = analyze_results(results, limit=args.llm_limit)
+    print(
+        f"KI: {llm_stats['analyzed']} neu analysiert, "
+        f"{llm_stats['cached']} aus Cache, "
+        f"{llm_stats['failed']} fehlgeschlagen"
+    )
+    write_recommendations(results)
     print_results(results)
 
 

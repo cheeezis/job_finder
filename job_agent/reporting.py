@@ -1,174 +1,109 @@
-"""Machine-readable and compact human-readable scoring reports."""
+"""Compact machine- and human-readable recommendation output."""
 
 import json
-from collections import Counter, defaultdict
 from pathlib import Path
 
-
-SCORED_FILE = "data/jobs_scored.json"
-REVIEW_FILE = "data/jobs_review.md"
-EXCLUDED_EXAMPLES_PER_REASON = 12
-SCORED_OMITTED_FIELDS = {"description_raw", "description_clean", "score_reasons"}
+from job_agent.paths import RECOMMENDATIONS_JSON, RECOMMENDATIONS_MARKDOWN
 
 
-def write_review_files(
+RECOMMENDATION_LABELS = {
+    "strong_match": "sehr passend",
+    "match": "passend",
+    "borderline": "vielleicht passend",
+    "not_recommended": "nicht empfohlen",
+}
+CONFIDENCE_LABELS = {
+    "high": "hoch",
+    "medium": "mittel",
+    "low": "niedrig",
+}
+
+
+def write_recommendations(
     results,
-    scored_path=SCORED_FILE,
-    review_path=REVIEW_FILE,
+    json_path=RECOMMENDATIONS_JSON,
+    markdown_path=RECOMMENDATIONS_MARKDOWN,
 ):
-    """Write every result as JSON and a compact Markdown review."""
-    scored_file = Path(scored_path)
-    review_file = Path(review_path)
-
-    scored_file.write_text(
-        json.dumps(compact_scored_results(results), indent=2, ensure_ascii=False),
+    """Write only jobs that have a final LLM recommendation."""
+    recommendations = [
+        recommendation_for_job(job)
+        for job in results["included"]
+        if job.get("llm_result")
+    ]
+    json_file = Path(json_path)
+    markdown_file = Path(markdown_path)
+    json_file.parent.mkdir(parents=True, exist_ok=True)
+    markdown_file.parent.mkdir(parents=True, exist_ok=True)
+    json_file.write_text(
+        json.dumps(
+            {"recommendations": recommendations},
+            indent=2,
+            ensure_ascii=False,
+        ),
         encoding="utf-8",
     )
-    review_file.write_text(render_review_markdown(results), encoding="utf-8")
+    markdown_file.write_text(
+        render_recommendations(recommendations),
+        encoding="utf-8",
+    )
+    print(f"KI-Empfehlungen gespeichert in {json_file}")
+    print(f"Lesbare Empfehlungen gespeichert in {markdown_file}")
 
-    print(f"Bewertete Jobs gespeichert in {scored_file}")
-    print(f"Review-Datei gespeichert in {review_file}")
 
-
-def compact_scored_results(results):
-    """Remove fields already persisted in the complete import file."""
+def recommendation_for_job(job):
+    """Reduce one analyzed job to fields needed for a decision."""
+    llm_result = job["llm_result"]
     return {
-        bucket: [
-            {
-                key: value
-                for key, value in job.items()
-                if key not in SCORED_OMITTED_FIELDS
-            }
-            for job in results[bucket]
-        ]
-        for bucket in ("included", "excluded")
+        "id": job["id"],
+        "title": job["title"],
+        "company": job["company"],
+        "locations": job.get("locations", []),
+        "work_mode": job.get("work_mode"),
+        "remote_percentage": job.get("remote_percentage"),
+        "published_at": job.get("published_at"),
+        "url": primary_url(job),
+        "llm_score": job["llm_score"],
+        **llm_result,
     }
 
 
-def render_review_markdown(results):
-    """Render scoring results as a compact manual-review document."""
-    included = results["included"]
-    excluded = results["excluded"]
-    lines = [
-        "# Job Review",
-        "",
-        f"- Passend: {len(included)}",
-        f"- Ausgeschlossen: {len(excluded)}",
-        "- Prozentwerte stammen aus einer festen 0-100-Rubrik.",
-        "",
-    ]
+def render_recommendations(recommendations):
+    """Render final recommendations without prefilter diagnostics."""
+    lines = ["# Job-Empfehlungen", ""]
+    if not recommendations:
+        return "\n".join(lines + ["Keine KI-Empfehlungen in diesem Lauf.", ""])
 
-    append_job_section(
-        lines,
-        "Passende Jobs",
-        included,
-        include_description=True,
-    )
-    append_exclusion_summary(lines, excluded)
-    append_job_section(
-        lines,
-        "Ausgeschlossene Beispiele zum Gegenpruefen",
-        select_excluded_examples(excluded),
-        include_description=False,
-    )
-    return "\n".join(lines) + "\n"
-
-
-def append_exclusion_summary(lines, excluded):
-    lines.extend(["## Ausschluss-Uebersicht", ""])
-    counts = Counter(job.get("reasons", ["Unbekannt"])[0] for job in excluded)
-    for reason, count in counts.most_common():
-        lines.append(f"- {count} x {reason}")
-    lines.append("")
-
-
-def select_excluded_examples(excluded):
-    grouped = defaultdict(list)
-    for job in excluded:
-        reason = job.get("reasons", ["Unbekannt"])[0]
-        if len(grouped[reason]) < EXCLUDED_EXAMPLES_PER_REASON:
-            grouped[reason].append(job)
-
-    examples = []
-    for reason in sorted(grouped):
-        examples.extend(grouped[reason])
-    return examples
-
-
-def append_job_section(lines, title, jobs, include_description):
-    lines.extend([f"## {title}", ""])
-    if not jobs:
-        lines.extend(["Keine Jobs in dieser Gruppe.", ""])
-        return
-
-    for job in jobs:
-        rule_score = job.get("rule_score", job.get("match_percent", 0))
-        llm_score = job.get("llm_score")
-        score = llm_score if llm_score is not None else rule_score
-        new_marker = "NEU - " if job.get("is_new") else ""
-        url = primary_url(job)
+    for job in recommendations:
         lines.extend(
             [
-                f"### {new_marker}{score}% | {job.get('title', '')}",
+                f"## {job['llm_score']}% | {job['title']}",
                 "",
-                f"- Firma: {job.get('company', '')}",
-                f"- Quelle: {format_sources(job)}",
+                f"- Firma: {job['company']}",
                 f"- Ort: {format_locations(job)}",
                 f"- Remote: {format_remote(job)}",
-                f"- Erfahrung: {job.get('experience_level', '')}",
-                f"- Regel-Score: {rule_score}%",
-                f"- URL: {url}",
-                "- Gruende:",
+                f"- Empfehlung: {RECOMMENDATION_LABELS[job['recommendation']]}",
+                f"- Sicherheit: {CONFIDENCE_LABELS[job['confidence']]}",
+                f"- URL: {job['url']}",
+                "",
+                job["summary"],
+                "",
             ]
         )
-        for reason in job.get("reasons", []):
-            lines.append(f"  - {reason}")
-
-        append_llm_review(lines, job)
-
-        if include_description and not job.get("llm_result"):
-            description = compact_description(job.get("description_clean", ""))
-            if description:
-                lines.extend(["", description])
-
-        lines.append("")
+        append_list(lines, "Wichtigste Aufgaben", job.get("tasks", []))
+        append_list(lines, "Wichtigste Anforderungen", job.get("requirements", []))
+        append_list(lines, "Passende Erfahrungen", job.get("matching_evidence", []))
+        append_list(lines, "Luecken", job.get("gaps", []))
+        append_list(lines, "Risiken", job.get("risks", []))
+    return "\n".join(lines)
 
 
-def append_llm_review(lines, job):
-    """Append the compact, human-facing part of a cached LLM analysis."""
-    llm_result = job.get("llm_result")
-    if not llm_result:
+def append_list(lines, heading, values):
+    """Append one non-empty recommendation section."""
+    if not values:
         return
-
-    lines.extend(
-        [
-            f"- KI-Score: {job.get('llm_score')}%",
-            f"- KI-Empfehlung: {llm_result['recommendation']}",
-            f"- KI-Zusammenfassung: {llm_result['summary']}",
-        ]
-    )
-    if llm_result.get("tasks"):
-        lines.append("- Wichtigste Aufgaben:")
-        lines.extend(f"  - {task}" for task in llm_result["tasks"])
-    if llm_result.get("gaps"):
-        lines.append("- Fehlende oder unsichere Anforderungen:")
-        lines.extend(f"  - {gap}" for gap in llm_result["gaps"])
-
-
-def format_sources(job):
-    sources = job.get("sources", [])
-    names = list(
-        dict.fromkeys(
-            source.get("source", "")
-            for source in sources
-            if source.get("source")
-        )
-    )
-    duplicate_count = max(0, len(sources) - 1)
-    suffix = ""
-    if duplicate_count:
-        suffix = f" ({duplicate_count} Duplikat(e) zusammengefuehrt)"
-    return ", ".join(names) + suffix
+    lines.extend([f"### {heading}", ""])
+    lines.extend(f"- {value}" for value in values)
+    lines.append("")
 
 
 def primary_url(job):
@@ -190,12 +125,3 @@ def format_remote(job):
     if job.get("work_mode") == "hybrid":
         return "homeoffice"
     return "0%"
-
-
-def compact_description(description, max_length=700):
-    text = " ".join(str(description or "").split())
-    if not text:
-        return ""
-    if len(text) <= max_length:
-        return f"> {text}"
-    return f"> {text[:max_length].rstrip()}..."

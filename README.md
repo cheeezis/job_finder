@@ -14,11 +14,11 @@ Der Agent kann:
 - Jobdetail-Seiten importieren
 - alle Quellen in ein verbindliches Jobmodell ueberfuehren
 - Rohbeschreibung, Klartext sowie Veroeffentlichungs- und Abrufdaten speichern
-- Jobs nach deinen Regeln bewerten
+- Jobs kostenlos vorfiltern und passende neue Jobs per OpenAI bewerten
 - feste, laufuebergreifend vergleichbare Match-Scores von 0 bis 100 erzeugen
-- quellenuebergreifende Duplikate fuer das Review zusammenfuehren
-- bereits gesehene Jobs in `data/seen_jobs.json` merken
-- kompakte Review-Dateien fuer manuelles Feintuning erzeugen
+- quellenuebergreifende Duplikate zusammenfuehren
+- bereits gesehene Jobs intern merken
+- kompakte KI-Empfehlungen als JSON und Markdown ausgeben
 
 ## Nutzung
 
@@ -28,30 +28,19 @@ Abhaengigkeiten installieren:
 python -m pip install -r requirements.txt
 ```
 
-Kompletter Agentenlauf fuer alle angebundenen Quellen:
+Kompletter Agentenlauf mit Vorfilter und KI-Bewertung:
 
 ```powershell
 python run_agent.py
 ```
 
-Neue regelbasiert eingeschlossene Jobs zusaetzlich per OpenAI analysieren:
-
-```powershell
-python run_agent.py --llm
-```
-
 Ein kostenbegrenzter Testlauf analysiert hoechstens einen neuen passenden Job:
 
 ```powershell
-python run_agent.py --llm --llm-limit 1
+python run_agent.py --llm-limit 1
 ```
 
-Der neue Modellstand ist absichtlich nicht mit alten Laufdaten kompatibel.
-Vor dem ersten Lauf nach dieser Umstellung werden die bisherigen generierten
-Job-, Memory-, Review- und Cache-Dateien unter `data/` entfernt. Es findet
-keine Altdatenmigration statt.
-
-Nur vorhandene importierte Jobs bewerten:
+Nur vorhandene interne Jobs regelbasiert pruefen, ohne Dateien zu erzeugen:
 
 ```powershell
 python -m job_agent.main
@@ -88,7 +77,9 @@ job_agent/llm/contract.py   Rubrik und strukturierter Antwortvertrag
 job_agent/llm/fit_score.py  Scoring fuer validierte Zwei-Stufen-Ergebnisse
 job_agent/llm/profile_loader.py Laden und Validieren des LLM-Profils
 job_agent/llm/openai.py     Client fuer strukturierte OpenAI-Antworten
+job_agent/llm/service.py    produktive Zwei-Stufen-Analyse und LLM-Cache
 job_agent/models.py         einheitliches Job- und Statusmodell
+job_agent/paths.py          gemeinsame interne und externe Datenpfade
 job_agent/profile.py        Profil-, Skill- und Scoring-Regeln
 job_agent/deduplication.py  quellenuebergreifende Job-Deduplizierung
 job_agent/remote.py         gemeinsame Remote-Erkennung
@@ -97,11 +88,12 @@ job_agent/search_plan.py    gemeinsame Suchplan-Helfer
 job_agent/structured_data.py gemeinsame JSON-LD-Auswertung
 job_agent/text.py           gemeinsame Text-/HTML-Helfer
 job_agent/sources/          Quellenadapter
-data/jobs_imported.json     importierte Jobdetails
-data/seen_jobs.json         lokales Job-Gedaechtnis
-data/jobs_scored.json       generierte Scoring-Ergebnisse
-data/jobs_review.md         generierte Review-Datei
-data/stepstone_cache.json   gecachte StepStone-Jobdetails und letzte Linkliste
+data/internal/jobs.json     vollstaendige kanonische Jobdaten
+data/internal/seen_jobs.json lokales Job-Gedaechtnis
+data/internal/stepstone_cache.json technischer StepStone-Cache
+data/internal/llm_cache.json LLM-Ergebnisse und ausstehende Analysen
+data/output/recommendations.json kompakte finale KI-Ergebnisse
+data/output/recommendations.md lesbare KI-Empfehlungen
 profile.yaml                persoenliche Faktenbasis fuer das LLM
 llm_evaluation/             getrenntes Labor fuer LLM-Vergleiche
 llm_evaluation/fixtures/    blinde Testeingaben und menschliche Bewertungen

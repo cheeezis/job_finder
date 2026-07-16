@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from job_agent.llm.job_analysis import JOB_ANALYSIS_PROMPT_VERSION
 from llm_evaluation.benchmark import BenchmarkDataError, load_benchmark_data
 from llm_evaluation.profile_matching import (
     job_analysis_cache_path,
@@ -46,7 +47,7 @@ def write_cache(directory, **overrides):
         "model": ANALYSIS_MODEL,
         "mode": "job_analysis",
         "split": "development",
-        "prompt_version": 3,
+        "prompt_version": JOB_ANALYSIS_PROMPT_VERSION,
         "schema_version": 2,
         "results": [
             {

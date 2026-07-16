@@ -4,17 +4,21 @@ import json
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from job_agent.llm.errors import LLMError
+
 
 DEFAULT_BASE_URL = "http://127.0.0.1:11434"
-DEFAULT_MODEL = "gemma3:12b"
+DEFAULT_MODEL = "qwen3.5:9b"
 
 
-class OllamaError(RuntimeError):
+class OllamaError(LLMError):
     """Raised when the local Ollama API cannot return a usable response."""
 
 
 class OllamaClient:
     """Call a local Ollama server without an additional SDK dependency."""
+
+    provider = "ollama"
 
     def __init__(self, base_url=DEFAULT_BASE_URL, timeout=300, opener=urlopen):
         self.base_url = base_url.rstrip("/")

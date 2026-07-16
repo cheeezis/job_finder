@@ -10,6 +10,7 @@ from job_agent.llm.contract import (
     RUBRIC,
     RUBRIC_VERSION,
     SCHEMA_VERSION,
+    recommendation_for_analysis,
     recommendation_for_score,
 )
 
@@ -21,7 +22,7 @@ class LlmContractTests(unittest.TestCase):
         self.assertEqual(maximum, 100)
         self.assertEqual(len(RUBRIC), 5)
         self.assertTrue(all(item["max_points"] == 20 for item in RUBRIC.values()))
-        self.assertEqual(RUBRIC_VERSION, 4)
+        self.assertEqual(RUBRIC_VERSION, 5)
         self.assertTrue(all(item["anchors"] for item in RUBRIC.values()))
 
     def test_schema_uses_exactly_the_rubric_dimensions(self):
@@ -49,6 +50,12 @@ class LlmContractTests(unittest.TestCase):
         self.assertEqual(recommendation_for_score(60), "borderline")
         self.assertEqual(recommendation_for_score(59), "not_recommended")
         self.assertEqual(recommendation_for_score(0), "not_recommended")
+
+    def test_hard_conflict_overrides_score_band(self):
+        self.assertEqual(
+            recommendation_for_analysis(95, ["Seniorniveau"]),
+            "not_recommended",
+        )
 
     def test_invalid_scores_are_rejected(self):
         for value in (-1, 101, 50.0, True):

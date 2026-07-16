@@ -1,6 +1,7 @@
 """Profile-independent extraction of facts from one job advertisement."""
 
 import json
+from copy import deepcopy
 
 from jsonschema import ValidationError, validate
 
@@ -8,7 +9,7 @@ from job_agent.llm.validation import build_validation_retry_messages
 
 
 JOB_ANALYSIS_SCHEMA_VERSION = 2
-JOB_ANALYSIS_PROMPT_VERSION = 3
+JOB_ANALYSIS_PROMPT_VERSION = 4
 
 ROLE_FAMILIES = [
     "ai_ml",
@@ -27,6 +28,13 @@ ROLE_FAMILIES = [
 ]
 
 REQUIREMENT_PRIORITIES = ["explicit_requirement", "preferred", "unclear"]
+HYPHEN_TRANSLATION = str.maketrans(
+    {
+        character: "-"
+        for character in "\u2010\u2011\u2012\u2013\u2014\u2212\ufe58\ufe63\uff0d"
+    }
+    | {"\u00ad": None}
+)
 
 JOB_ANALYSIS_SCHEMA = {
     "type": "object",
@@ -215,6 +223,9 @@ Verbindliche Regeln:
 - Erfasse jede fachlich relevante Aussage aus Abschnitten wie Profil,
   Qualifikation oder Das bringst du mit genau einmal als Erfahrung,
   Technologiegruppe oder weitere Anforderung.
+- Fasse alternativ formulierte Qualifikationen wie Studium oder Ausbildung als
+  eine gemeinsame weitere Anforderung zusammen. Zerlege Alternativen nicht in
+  mehrere Eintraege, die spaeter faelschlich gleichzeitig verlangt wuerden.
 - Uebernimm Erfahrungsjahre nur, wenn sie ausdruecklich genannt werden.
 - Ein Junior-Titel ist ein Senioritaetssignal, aber kein Beleg dafuer, dass keine
   Erfahrung erwartet wird.
@@ -344,8 +355,24 @@ def validate_evidence_quotes(analysis, source_text):
 
 
 def normalize_whitespace(text):
-    """Normalize whitespace and case without changing wording."""
-    return " ".join(str(text).split()).casefold()
+    """Normalize whitespace, case, and typographic hyphen variants."""
+    compact = " ".join(str(text).split()).casefold()
+    return compact.translate(HYPHEN_TRANSLATION)
+
+
+def normalize_job_analysis(analysis):
+    """Derive mechanical fields without changing extracted job semantics."""
+    normalized = deepcopy(analysis)
+    for group in normalized.get("technology_requirements", []):
+        technology_count = len(group.get("technologies", []))
+        expected_count = {
+            "single": 1,
+            "all_of": technology_count,
+            "any_of": 1,
+        }.get(group.get("selection"))
+        if expected_count:
+            group["minimum_count"] = expected_count
+    return normalized
 
 
 def analyze_job(job, model, client, validation_retries=1):
@@ -356,11 +383,12 @@ def analyze_job(job, model, client, validation_retries=1):
     )
 
     for attempt in range(validation_retries + 1):
-        analysis, metadata = client.chat(
+        raw_analysis, metadata = client.chat(
             model=model,
             messages=messages,
             output_schema=JOB_ANALYSIS_SCHEMA,
         )
+        analysis = normalize_job_analysis(raw_analysis)
         try:
             validated = validate_job_analysis(analysis, source_text)
             metadata = dict(metadata)

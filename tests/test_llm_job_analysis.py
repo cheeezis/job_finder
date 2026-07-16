@@ -5,6 +5,7 @@ import unittest
 
 from job_agent.llm.job_analysis import (
     JOB_ANALYSIS_SCHEMA,
+    SYSTEM_PROMPT,
     JobAnalysisValidationError,
     analyze_job,
     build_job_analysis_messages,
@@ -62,6 +63,9 @@ def source_job():
 
 
 class LlmJobAnalysisTests(unittest.TestCase):
+    def test_prompt_keeps_alternative_qualifications_together(self):
+        self.assertIn("Zerlege Alternativen nicht", SYSTEM_PROMPT)
+
     def test_prompt_contains_job_but_no_profile_or_score(self):
         job = {
             "title": "Junior AI Engineer",
@@ -128,6 +132,29 @@ class LlmJobAnalysisTests(unittest.TestCase):
         with self.assertRaises(JobAnalysisValidationError):
             validate_job_analysis(analysis, source_job()["description_clean"])
 
+    def test_typographic_hyphen_in_evidence_matches_ascii_hyphen(self):
+        analysis = make_job_analysis()
+        job = source_job()
+        description = job["description_clean"].replace(
+            "Python-Grundkenntnisse",
+            "Python\u2011Grundkenntnisse",
+        )
+        source_text = f"{job['title']}\n{description}"
+
+        validate_job_analysis(analysis, source_text)
+
+    def test_soft_hyphens_do_not_break_evidence_matching(self):
+        analysis = make_job_analysis()
+        job = source_job()
+        analysis["technology_requirements"][0]["evidence_quote"] = (
+            "Python\u00ad-Grundkenntnisse"
+        )
+
+        validate_job_analysis(
+            analysis,
+            f"{job['title']}\n{job['description_clean']}",
+        )
+
     def test_analyze_job_uses_profile_free_schema(self):
         class FakeClient:
             def __init__(self):
@@ -148,6 +175,25 @@ class LlmJobAnalysisTests(unittest.TestCase):
         self.assertEqual(client.call["output_schema"], JOB_ANALYSIS_SCHEMA)
         prompt = json.loads(client.call["messages"][1]["content"])
         self.assertNotIn("profile", prompt)
+
+    def test_analyze_job_normalizes_mechanical_all_of_count(self):
+        class InconsistentClient:
+            def chat(self, **_kwargs):
+                analysis = make_job_analysis()
+                group = analysis["technology_requirements"][0]
+                group["selection"] = "all_of"
+                group["technologies"].append(
+                    {"name": "REST", "expected_level": "basic"}
+                )
+                return analysis, {}
+
+        analysis, _metadata = analyze_job(
+            source_job(),
+            "test-model",
+            InconsistentClient(),
+        )
+
+        self.assertEqual(analysis["technology_requirements"][0]["minimum_count"], 2)
 
     def test_invalid_model_response_is_attached_to_validation_error(self):
         class FakeClient:

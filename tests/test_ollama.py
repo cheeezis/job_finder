@@ -22,7 +22,7 @@ class FakeResponse:
 
 class OllamaClientTests(unittest.TestCase):
     def test_default_model_is_selected_benchmark_winner(self):
-        self.assertEqual(DEFAULT_MODEL, "gemma3:12b")
+        self.assertEqual(DEFAULT_MODEL, "qwen3.5:9b")
 
     def test_chat_sends_schema_and_deterministic_options(self):
         requests = []

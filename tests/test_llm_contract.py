@@ -5,8 +5,6 @@ import unittest
 
 from job_agent.llm.contract import (
     ANALYSIS_SCHEMA,
-    MODEL_RESPONSE_SCHEMA,
-    RATING_POINTS,
     RUBRIC,
     RUBRIC_VERSION,
     SCHEMA_VERSION,
@@ -32,14 +30,6 @@ class LlmContractTests(unittest.TestCase):
         self.assertEqual(set(dimensions["properties"]), set(RUBRIC))
         self.assertEqual(SCHEMA_VERSION, 3)
         json.dumps(ANALYSIS_SCHEMA)
-
-    def test_model_schema_leaves_arithmetic_fields_to_python(self):
-        self.assertNotIn("overall_score", MODEL_RESPONSE_SCHEMA["properties"])
-        self.assertNotIn("recommendation", MODEL_RESPONSE_SCHEMA["properties"])
-        self.assertNotIn("dimension_scores", MODEL_RESPONSE_SCHEMA["properties"])
-        self.assertIn("dimension_ratings", MODEL_RESPONSE_SCHEMA["properties"])
-        self.assertEqual(set(RATING_POINTS.values()), {0, 5, 10, 15, 20})
-        json.dumps(MODEL_RESPONSE_SCHEMA)
 
     def test_score_bands_have_stable_boundaries(self):
         self.assertEqual(recommendation_for_score(100), "strong_match")

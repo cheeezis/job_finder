@@ -1,16 +1,14 @@
-"""Run the blind local-LLM comparison against the fixed job test set."""
+"""Run OpenAI models against the fixed two-stage job test set."""
 
 import argparse
 
 from job_agent.console import configure_utf8_output
 from job_agent.llm.errors import LLMError
-from job_agent.llm.ollama import DEFAULT_MODEL, OllamaClient, OllamaError
+from job_agent.llm.openai import DEFAULT_MODEL, OpenAIClient
 from llm_evaluation.benchmark import (
     JOB_ANALYSIS_SPLITS,
     run_job_analysis_evaluation,
-    run_model_benchmark,
     run_two_stage_evaluation,
-    write_benchmark_result,
     write_job_analysis_result,
     write_two_stage_result,
 )
@@ -25,13 +23,7 @@ def parse_args():
     parser.add_argument(
         "models",
         nargs="*",
-        help="Model names (provider-specific default when omitted)",
-    )
-    parser.add_argument(
-        "--provider",
-        choices=("ollama", "openai"),
-        default="ollama",
-        help="LLM provider (default: ollama)",
+        help=f"OpenAI model names (default: {DEFAULT_MODEL})",
     )
     parser.add_argument(
         "--limit",
@@ -42,18 +34,13 @@ def parse_args():
         "--timeout",
         type=int,
         default=300,
-        help="Maximum seconds per Ollama request",
+        help="Maximum seconds per OpenAI request",
     )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
         "--job-analysis-only",
         action="store_true",
         help="Extract job facts without profile matching or recommendations",
-    )
-    mode.add_argument(
-        "--two-stage",
-        action="store_true",
-        help="Extract job facts and match them to the profile without scoring",
     )
     mode.add_argument(
         "--profile-match-only",
@@ -89,30 +76,11 @@ def print_quality_summary(model, summary):
 def main():
     configure_utf8_output()
     args = parse_args()
-
-    if args.provider == "openai":
-        from job_agent.llm.openai import (
-            DEFAULT_MODEL as default_openai_model,
-            OpenAIClient,
-        )
-
-        models = args.models or [default_openai_model]
-        try:
-            client = OpenAIClient(timeout=args.timeout)
-        except LLMError as error:
-            raise SystemExit(str(error)) from error
-    else:
-        models = args.models or [DEFAULT_MODEL]
-        client = OllamaClient(timeout=args.timeout)
-        try:
-            installed = set(client.list_models())
-        except OllamaError as error:
-            raise SystemExit(f"Ollama nicht erreichbar: {error}") from error
-
-        missing = [model for model in models if model not in installed]
-        if missing:
-            names = ", ".join(missing)
-            raise SystemExit(f"Nicht lokal installiert: {names}")
+    models = args.models or [DEFAULT_MODEL]
+    try:
+        client = OpenAIClient(timeout=args.timeout)
+    except LLMError as error:
+        raise SystemExit(str(error)) from error
 
     for model in models:
         if args.profile_match_only:
@@ -124,18 +92,6 @@ def main():
                 split=args.split,
             )
             path = write_profile_match_result(result)
-            print_quality_summary(model, result["summary"])
-            print(f"Gespeichert: {path}")
-            continue
-
-        if args.two_stage:
-            result = run_two_stage_evaluation(
-                model,
-                client,
-                limit=args.limit,
-                split=args.split,
-            )
-            path = write_two_stage_result(result)
             print_quality_summary(model, result["summary"])
             print(f"Gespeichert: {path}")
             continue
@@ -156,8 +112,13 @@ def main():
             print(f"Gespeichert: {path}")
             continue
 
-        result = run_model_benchmark(model, client, limit=args.limit)
-        path = write_benchmark_result(result)
+        result = run_two_stage_evaluation(
+            model,
+            client,
+            limit=args.limit,
+            split=args.split,
+        )
+        path = write_two_stage_result(result)
         print_quality_summary(model, result["summary"])
         print(f"Gespeichert: {path}")
 

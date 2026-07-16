@@ -142,8 +142,8 @@ class ProfileMatchingEvaluationTests(unittest.TestCase):
 
     def test_profile_match_result_filename_contains_both_models(self):
         result = {
-            "analysis_model": "gemma3:12b",
-            "model": "qwen3:14b",
+            "analysis_model": "analysis-model",
+            "model": "match-model",
             "split": "development",
         }
 
@@ -153,7 +153,7 @@ class ProfileMatchingEvaluationTests(unittest.TestCase):
             self.assertEqual(
                 path,
                 Path(directory)
-                / "gemma3-12b-analysis__qwen3-14b-match-development.json",
+                / "analysis-model-analysis__match-model-match-development.json",
             )
 
 

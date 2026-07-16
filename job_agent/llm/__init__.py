@@ -1,1 +1,1 @@
-"""Reusable local-LLM components for job analysis."""
+"""Reusable LLM components for structured job analysis."""

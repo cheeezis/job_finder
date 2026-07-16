@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+from job_agent.paths import LLM_CACHE_FILE
+
 
 @dataclass(frozen=True)
 class LlmSettings:
@@ -12,7 +14,7 @@ class LlmSettings:
     timeout_seconds: int = 300
     reasoning_effort: str = "low"
     max_output_tokens: int = 8192
-    cache_path: Path = Path("data/llm_analysis_cache.json")
+    cache_path: Path = LLM_CACHE_FILE
 
 
 DEFAULT_LLM_SETTINGS = LlmSettings()

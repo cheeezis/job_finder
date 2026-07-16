@@ -7,17 +7,17 @@ from pathlib import Path
 from job_agent.console import configure_utf8_output
 from job_agent.deduplication import deduplicate_jobs
 from job_agent.models import FilterStatus, Job
-from job_agent.reporting import format_locations, format_remote, write_review_files
+from job_agent.paths import JOBS_FILE
+from job_agent.reporting import format_locations, format_remote
 from job_agent.scoring import score_job
 
 
 def main():
     """Score an existing import file and write review output."""
     configure_utf8_output()
-    jobs_file = sys.argv[1] if len(sys.argv) > 1 else "data/jobs_imported.json"
+    jobs_file = sys.argv[1] if len(sys.argv) > 1 else JOBS_FILE
     jobs = load_jobs(jobs_file)
     results = score_jobs(jobs)
-    write_review_files(results)
     print_results(results)
 
 
@@ -87,7 +87,7 @@ def print_results(results):
         print()
 
     if len(excluded) > 30:
-        print(f"... {len(excluded) - 30} weitere in data/jobs_scored.json")
+        print(f"... {len(excluded) - 30} weitere ausgeschlossen")
 
 
 def load_jobs(path):

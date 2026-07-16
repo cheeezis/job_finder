@@ -35,7 +35,9 @@ def analyze_results(
 ):
     """Analyze eligible result rows and attach cached or fresh LLM output."""
     profile = load_llm_profile()
-    cache = load_cache(settings.cache_path)
+    cache_state = load_cache(settings.cache_path)
+    analyses = cache_state["analyses"]
+    pending = cache_state["pending"]
     jobs_with_keys = [
         (job, analysis_cache_key(job, profile.version, settings))
         for job in results["included"]
@@ -44,13 +46,18 @@ def analyze_results(
     cached_count = 0
     cache_changed = False
     for job, key in jobs_with_keys:
-        cached = cache.get(key)
+        cached = analyses.get(key)
         if cached is not None:
             cache_changed |= attach_result(job, cached, "cached")
+            cache_changed |= pending.pop(key, None) is not None
             cached_count += 1
-        elif job.get("is_new"):
+        elif job.get("is_new") or key in pending:
             eligible.append((job, key))
 
+    for job, key in eligible:
+        if key not in pending:
+            pending[key] = pending_record(job, "pending")
+            cache_changed = True
     if limit is not None:
         eligible = eligible[:limit]
     stats = {
@@ -68,10 +75,12 @@ def analyze_results(
                 max_output_tokens=settings.max_output_tokens,
             )
         except LLMError as error:
-            for job, _key in eligible:
+            for job, key in eligible:
                 job["llm_status"] = "failed"
                 job["llm_error"] = str(error)
+                pending[key] = pending_record(job, "failed", error)
             stats["failed"] = len(eligible)
+            save_cache(cache_state, settings.cache_path)
             sort_included_results(results["included"])
             return stats
 
@@ -86,15 +95,19 @@ def analyze_results(
         ) as error:
             job["llm_status"] = "failed"
             job["llm_error"] = str(error)
+            pending[key] = pending_record(job, "failed", error)
+            cache_changed = True
             stats["failed"] += 1
             continue
 
-        cache[key] = record
+        analyses[key] = record
+        pending.pop(key, None)
         attach_result(job, record, "analyzed")
+        cache_changed = True
         stats["analyzed"] += 1
 
-    if stats["analyzed"] or cache_changed:
-        save_cache(cache, settings.cache_path)
+    if cache_changed:
+        save_cache(cache_state, settings.cache_path)
     sort_included_results(results["included"])
     return stats
 
@@ -199,12 +212,12 @@ def compact_result(record):
     return {
         "recommendation": fit["recommendation"],
         "confidence": fit["confidence"],
-        "summary": fit["summary"],
+        "summary": job_analysis["role_summary"],
         "tasks": job_analysis["tasks"][:3],
         "requirements": compact_requirements(job_analysis),
-        "matching_evidence": fit["matching_evidence"],
+        "matching_evidence": fit["matching_evidence"][:3],
         "gaps": fit["gaps"],
-        "risks": fit["risks"],
+        "risks": [risk for risk in fit["risks"] if risk not in fit["gaps"]],
     }
 
 
@@ -212,15 +225,35 @@ def compact_requirements(job_analysis, limit=5):
     """Collect the most relevant extracted requirements without evidence data."""
     requirements = []
     experience = job_analysis["experience_requirement"]
-    if experience["expectation"] != "none_stated":
-        requirements.append(experience["evidence_quote"])
+    technology_names = []
     for group in job_analysis["technology_requirements"]:
         names = ", ".join(item["name"] for item in group["technologies"])
+        technology_names.extend(item["name"] for item in group["technologies"])
         requirements.append(names)
+    experience_text = experience["evidence_quote"]
+    if (
+        experience["expectation"] != "none_stated"
+        and not any(
+            name.casefold() in experience_text.casefold()
+            for name in technology_names
+        )
+    ):
+        requirements.insert(0, experience_text)
     requirements.extend(
         item["requirement"] for item in job_analysis["other_requirements"]
     )
     return list(dict.fromkeys(text for text in requirements if text))[:limit]
+
+
+def pending_record(job, status, error=None):
+    """Return compact retry state for an unfinished analysis."""
+    return {
+        "job_id": job["id"],
+        "title": job["title"],
+        "status": status,
+        "error": str(error) if error else None,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 def sort_included_results(jobs):
@@ -236,24 +269,27 @@ def sort_included_results(jobs):
 
 
 def load_cache(path):
-    """Load the current successful-analysis cache."""
+    """Load successful analyses and pending retries."""
     cache_path = Path(path)
     if not cache_path.exists():
-        return {}
+        return {"analyses": {}, "pending": {}}
     document = json.loads(cache_path.read_text(encoding="utf-8"))
     if document.get("version") != CACHE_VERSION:
         raise ValueError("LLM-Cache verwendet eine unbekannte Version")
-    return document.get("analyses", {})
+    return {
+        "analyses": document.get("analyses", {}),
+        "pending": document.get("pending", {}),
+    }
 
 
-def save_cache(cache, path):
-    """Persist successful analyses via a temporary replacement file."""
+def save_cache(cache_state, path):
+    """Persist analyses and retry state via a temporary replacement file."""
     cache_path = Path(path)
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     temporary_path = cache_path.with_suffix(cache_path.suffix + ".tmp")
     temporary_path.write_text(
         json.dumps(
-            {"version": CACHE_VERSION, "analyses": cache},
+            {"version": CACHE_VERSION, **cache_state},
             ensure_ascii=False,
             separators=(",", ":"),
         )

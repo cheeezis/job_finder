@@ -5,8 +5,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from job_agent.models import WorkflowStatus
+from job_agent.paths import MEMORY_FILE
 
-MEMORY_FILE = "data/seen_jobs.json"
 MEMORY_VERSION = 2
 
 
@@ -26,7 +26,9 @@ def load_memory(path=MEMORY_FILE):
 
 def save_memory(memory, path=MEMORY_FILE):
     """Persist the local job memory as UTF-8 JSON."""
-    Path(path).write_text(
+    memory_path = Path(path)
+    memory_path.parent.mkdir(parents=True, exist_ok=True)
+    memory_path.write_text(
         json.dumps(
             {"version": MEMORY_VERSION, "jobs": memory},
             indent=2,

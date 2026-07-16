@@ -19,6 +19,7 @@ from job_agent.config import (
 )
 from job_agent.http import fetch_text
 from job_agent.models import Job, JobSource
+from job_agent.paths import STEPSTONE_CACHE_FILE
 from job_agent.remote import classify_remote, detect_remote
 from job_agent.search_plan import append_unique, iter_search_queries
 from job_agent.sources.common import (
@@ -34,7 +35,7 @@ from job_agent.text import html_to_text
 
 SOURCE_NAME = "stepstone"
 SEARCH_BASE_URL = "https://www.stepstone.de/jobs"
-CACHE_FILE = "data/stepstone_cache.json"
+CACHE_FILE = STEPSTONE_CACHE_FILE
 CACHE_VERSION = 2
 REQUEST_DELAY_SECONDS = 1.5
 BLOCKING_STATUS_CODES = {403, 429}

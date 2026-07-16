@@ -8,7 +8,7 @@ from pathlib import Path
 from job_agent.main import load_jobs, score_jobs
 from job_agent.memory import update_memory
 from job_agent.models import Job, JobSource, WorkMode
-from job_agent.reporting import write_review_files
+from job_agent.reporting import write_recommendations
 
 
 class PipelineTests(unittest.TestCase):
@@ -41,12 +41,25 @@ class PipelineTests(unittest.TestCase):
 
             restored_jobs = load_jobs(jobs_path)
             results = score_jobs(restored_jobs)
-            write_review_files(
+            results["included"][0]["llm_score"] = 90
+            results["included"][0]["llm_result"] = {
+                "recommendation": "strong_match",
+                "confidence": "high",
+                "summary": "Passende Einstiegsstelle.",
+                "tasks": [],
+                "requirements": [],
+                "matching_evidence": [],
+                "gaps": [],
+                "risks": [],
+            }
+            write_recommendations(
                 results,
-                scored_path=directory_path / "scored.json",
-                review_path=directory_path / "review.md",
+                json_path=directory_path / "recommendations.json",
+                markdown_path=directory_path / "recommendations.md",
             )
-            review = (directory_path / "review.md").read_text(encoding="utf-8")
+            review = (directory_path / "recommendations.md").read_text(
+                encoding="utf-8"
+            )
 
         self.assertEqual(len(results["included"]), 1)
         self.assertIn("Junior Python Developer", review)

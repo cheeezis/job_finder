@@ -57,6 +57,14 @@ Lokale LLMs gegen den getrennten Blindtestsatz vergleichen:
 python -m llm_evaluation.compare_models gemma3:12b
 ```
 
+Die profilfreie Extraktion nutzt standardmaessig nur den Development-Split:
+
+```powershell
+python -m llm_evaluation.compare_models gemma3:12b --job-analysis-only --split development
+```
+
+Holdout und Reserve bleiben bis zur gezielten Modellevaluation unangetastet.
+
 ## Struktur
 
 ```text

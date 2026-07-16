@@ -1,0 +1,363 @@
+"""Profile-independent extraction of facts from one job advertisement."""
+
+import json
+
+from jsonschema import ValidationError, validate
+
+
+JOB_ANALYSIS_SCHEMA_VERSION = 2
+JOB_ANALYSIS_PROMPT_VERSION = 3
+
+ROLE_FAMILIES = [
+    "ai_ml",
+    "data",
+    "backend",
+    "frontend",
+    "fullstack",
+    "software_development",
+    "devops_cloud",
+    "security_network",
+    "consulting_business_analysis",
+    "qa_testing",
+    "sap_erp",
+    "system_administration_support",
+    "other",
+]
+
+REQUIREMENT_PRIORITIES = ["explicit_requirement", "preferred", "unclear"]
+
+JOB_ANALYSIS_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": [
+        "role_summary",
+        "primary_role_family",
+        "secondary_role_families",
+        "seniority",
+        "seniority_evidence_quote",
+        "experience_requirement",
+        "tasks",
+        "technology_requirements",
+        "other_requirements",
+        "uncertainties",
+    ],
+    "properties": {
+        "role_summary": {"type": "string", "maxLength": 300},
+        "primary_role_family": {"type": "string", "enum": ROLE_FAMILIES},
+        "secondary_role_families": {
+            "type": "array",
+            "maxItems": 3,
+            "uniqueItems": True,
+            "items": {"type": "string", "enum": ROLE_FAMILIES},
+        },
+        "seniority": {
+            "type": "string",
+            "enum": ["junior_entry", "mixed", "mid", "senior", "unspecified"],
+        },
+        "seniority_evidence_quote": {"type": "string", "maxLength": 500},
+        "experience_requirement": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": [
+                "expectation",
+                "priority",
+                "minimum_years",
+                "evidence_quote",
+            ],
+            "properties": {
+                "expectation": {
+                    "type": "string",
+                    "enum": [
+                        "none_stated",
+                        "first_exposure",
+                        "practical_experience",
+                        "professional_experience",
+                        "several_years",
+                        "senior_expertise",
+                        "unclear",
+                    ],
+                },
+                "priority": {
+                    "type": "string",
+                    "enum": REQUIREMENT_PRIORITIES + ["not_stated"],
+                },
+                "minimum_years": {
+                    "type": ["integer", "null"],
+                    "minimum": 0,
+                    "maximum": 50,
+                },
+                "evidence_quote": {"type": "string", "maxLength": 500},
+            },
+        },
+        "tasks": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {"type": "string", "maxLength": 300},
+        },
+        "technology_requirements": {
+            "type": "array",
+            "maxItems": 15,
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": [
+                    "priority",
+                    "selection",
+                    "minimum_count",
+                    "technologies",
+                    "evidence_quote",
+                ],
+                "properties": {
+                    "priority": {
+                        "type": "string",
+                        "enum": REQUIREMENT_PRIORITIES,
+                    },
+                    "selection": {
+                        "type": "string",
+                        "enum": ["single", "all_of", "any_of", "minimum_count"],
+                    },
+                    "minimum_count": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 25,
+                    },
+                    "technologies": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 25,
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "required": ["name", "expected_level"],
+                            "properties": {
+                                "name": {"type": "string", "maxLength": 100},
+                                "expected_level": {
+                                    "type": "string",
+                                    "enum": [
+                                        "basic",
+                                        "practical",
+                                        "advanced",
+                                        "expert",
+                                        "unclear",
+                                    ],
+                                },
+                            },
+                        },
+                    },
+                    "evidence_quote": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500,
+                    },
+                },
+            },
+        },
+        "other_requirements": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": [
+                    "category",
+                    "priority",
+                    "requirement",
+                    "evidence_quote",
+                ],
+                "properties": {
+                    "category": {
+                        "type": "string",
+                        "enum": [
+                            "education",
+                            "language",
+                            "domain_knowledge",
+                            "soft_skill",
+                            "travel",
+                            "on_call",
+                            "employment",
+                            "other",
+                        ],
+                    },
+                    "priority": {
+                        "type": "string",
+                        "enum": REQUIREMENT_PRIORITIES,
+                    },
+                    "requirement": {"type": "string", "maxLength": 300},
+                    "evidence_quote": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500,
+                    },
+                },
+            },
+        },
+        "uncertainties": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {"type": "string", "maxLength": 300},
+        },
+    },
+}
+
+SYSTEM_PROMPT = """Analysiere eine Stellenanzeige objektiv und ohne Bewerberprofil.
+Extrahiere nur Informationen, die in den gelieferten Jobdaten belegt sind.
+
+Verbindliche Regeln:
+- Bewerte keine Eignung und erzeuge weder Match-Score noch Empfehlung.
+- explicit_requirement bedeutet: Die Anforderung ist ohne abschwaechende
+  Formulierung aufgefuehrt. Das bedeutet nicht automatisch Ausschlusskriterium.
+- preferred ist nur bei ausdruecklichen Signalen wie wuenschenswert,
+  idealerweise, von Vorteil, Bonus oder vergleichbaren Formulierungen erlaubt.
+- Ein niedriges erwartetes Niveau wie Grundkenntnisse macht eine aufgefuehrte
+  Anforderung nicht preferred. Niveau und Verbindlichkeit sind unabhaengig.
+- Erfasse jede fachlich relevante Aussage aus Abschnitten wie Profil,
+  Qualifikation oder Das bringst du mit genau einmal als Erfahrung,
+  Technologiegruppe oder weitere Anforderung.
+- Uebernimm Erfahrungsjahre nur, wenn sie ausdruecklich genannt werden.
+- Ein Junior-Titel ist ein Senioritaetssignal, aber kein Beleg dafuer, dass keine
+  Erfahrung erwartet wird.
+- Trenne erste Beruehrung, praktische Erfahrung, Berufserfahrung, mehrjaehrige
+  Erfahrung und Senior-Expertise.
+- Erfasse Technologien als gemeinsame Gruppe, wenn die Anzeige all_of, any_of
+  oder eine Mindestanzahl aus einer Liste verlangt.
+- Nutze single nur fuer eine einzeln formulierte Technologieanforderung.
+- Nutze all_of, wenn alle genannten Technologien verlangt werden; minimum_count
+  muss dann ihrer Anzahl entsprechen.
+- Nutze any_of nur, wenn mindestens eine Alternative reicht; minimum_count ist 1.
+- Nutze minimum_count bei ausdruecklichen Angaben wie mindestens zwei;
+  minimum_count enthaelt genau diese Zahl.
+- Die primaere Rollenfamilie folgt dem Schwerpunkt der Aufgaben. Erfasse bis zu
+  drei weitere deutliche Rollenanteile als sekundaere Rollenfamilien.
+- Behandle allgemeine Unternehmenswerbung nicht als Stellenanforderung.
+- evidence_quote muss wortgetreu aus Titel oder Beschreibung kopiert werden.
+  Paraphrasiere, ergaenze oder korrigiere den Beleg nicht.
+- Wenn seniority unspecified ist, muss seniority_evidence_quote leer sein.
+- Wenn keine Erfahrung genannt ist, muss der Erfahrungsbeleg leer sein.
+- Markiere widerspruechliche oder fehlende Angaben als Unsicherheit.
+
+Antworte ausschliesslich im vorgegebenen JSON-Schema."""
+
+
+class JobAnalysisValidationError(ValueError):
+    """Raised when an extracted job analysis violates its contract."""
+
+
+def build_job_analysis_messages(job):
+    """Build a profile-free prompt for objective requirement extraction."""
+    prompt_data = {
+        "job": job,
+        "output_schema": JOB_ANALYSIS_SCHEMA,
+    }
+    return [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {
+            "role": "user",
+            "content": json.dumps(prompt_data, ensure_ascii=False),
+        },
+    ]
+
+
+def validate_job_analysis(analysis, source_text=None):
+    """Validate extracted job facts and their internal consistency."""
+    try:
+        validate(instance=analysis, schema=JOB_ANALYSIS_SCHEMA)
+    except ValidationError as error:
+        raise JobAnalysisValidationError(error.message) from error
+
+    primary_role = analysis["primary_role_family"]
+    if primary_role in analysis["secondary_role_families"]:
+        raise JobAnalysisValidationError(
+            "Primaere Rollenfamilie darf nicht zugleich sekundaer sein"
+        )
+
+    seniority_quote = analysis["seniority_evidence_quote"]
+    if analysis["seniority"] == "unspecified" and seniority_quote:
+        raise JobAnalysisValidationError(
+            "Unbekannte Senioritaet darf keinen Beleg vortaeuschen"
+        )
+
+    experience = analysis["experience_requirement"]
+    experience_is_stated = experience["expectation"] != "none_stated"
+    if experience_is_stated and not experience["evidence_quote"]:
+        raise JobAnalysisValidationError(
+            "Genannte Erfahrung benoetigt einen wortgetreuen Beleg"
+        )
+    if not experience_is_stated and (
+        experience["priority"] != "not_stated" or experience["evidence_quote"]
+    ):
+        raise JobAnalysisValidationError(
+            "Nicht genannte Erfahrung braucht not_stated und einen leeren Beleg"
+        )
+
+    for group in analysis["technology_requirements"]:
+        validate_technology_group(group)
+
+    if source_text is not None:
+        validate_evidence_quotes(analysis, source_text)
+
+    return analysis
+
+
+def validate_technology_group(group):
+    """Ensure selection mode and required technology count agree."""
+    technology_count = len(group["technologies"])
+    selection = group["selection"]
+    minimum_count = group["minimum_count"]
+
+    expected_count = {
+        "single": 1,
+        "all_of": technology_count,
+        "any_of": 1,
+    }.get(selection)
+    if expected_count is not None and minimum_count != expected_count:
+        raise JobAnalysisValidationError(
+            f"{selection} erfordert minimum_count={expected_count}"
+        )
+    if selection == "single" and technology_count != 1:
+        raise JobAnalysisValidationError("single darf nur eine Technologie enthalten")
+    if minimum_count > technology_count:
+        raise JobAnalysisValidationError(
+            "minimum_count darf die Anzahl der Technologien nicht uebersteigen"
+        )
+
+
+def validate_evidence_quotes(analysis, source_text):
+    """Reject evidence that does not occur in the supplied advertisement."""
+    normalized_source = normalize_whitespace(source_text)
+    quotes = [analysis["seniority_evidence_quote"]]
+    quotes.append(analysis["experience_requirement"]["evidence_quote"])
+    quotes.extend(
+        group["evidence_quote"] for group in analysis["technology_requirements"]
+    )
+    quotes.extend(
+        requirement["evidence_quote"]
+        for requirement in analysis["other_requirements"]
+    )
+
+    for quote in quotes:
+        if quote and normalize_whitespace(quote) not in normalized_source:
+            raise JobAnalysisValidationError(
+                f"Beleg kommt nicht wortgetreu in der Stellenanzeige vor: {quote}"
+            )
+
+
+def normalize_whitespace(text):
+    """Normalize whitespace and case without changing wording."""
+    return " ".join(str(text).split()).casefold()
+
+
+def analyze_job(job, model, client):
+    """Extract validated job facts through an injected LLM client."""
+    analysis, metadata = client.chat(
+        model=model,
+        messages=build_job_analysis_messages(job),
+        output_schema=JOB_ANALYSIS_SCHEMA,
+    )
+    source_text = "\n".join(
+        str(job.get(field) or "") for field in ("title", "description_clean")
+    )
+    try:
+        return validate_job_analysis(analysis, source_text), metadata
+    except JobAnalysisValidationError as error:
+        error.raw_analysis = analysis
+        raise

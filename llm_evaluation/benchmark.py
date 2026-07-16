@@ -17,6 +17,12 @@ from job_agent.llm.contract import (
     SCORE_BANDS,
     recommendation_for_score,
 )
+from job_agent.llm.job_analysis import (
+    JOB_ANALYSIS_PROMPT_VERSION,
+    JOB_ANALYSIS_SCHEMA_VERSION,
+    JobAnalysisValidationError,
+    analyze_job,
+)
 from job_agent.llm.ollama import OllamaError
 from job_agent.llm.profile_loader import load_llm_profile
 
@@ -25,7 +31,11 @@ PROMPT_VERSION = 4
 EVALUATION_ROOT = Path(__file__).resolve().parent
 TEST_INPUTS_PATH = EVALUATION_ROOT / "fixtures" / "test_inputs.json"
 EXPECTED_RESULTS_PATH = EVALUATION_ROOT / "fixtures" / "expected_results.yaml"
+JOB_ANALYSIS_SPLIT_PATH = (
+    EVALUATION_ROOT / "fixtures" / "job_analysis_split.yaml"
+)
 RESULTS_DIR = EVALUATION_ROOT / "results"
+JOB_ANALYSIS_SPLITS = ("development", "holdout", "reserve")
 LABEL_ORDER = [
     "not_recommended",
     "borderline",
@@ -93,6 +103,44 @@ def load_benchmark_data(
         raise BenchmarkDataError("Inputs und Erwartungen enthalten andere Jobs")
 
     return inputs, expected
+
+
+def load_job_analysis_split(
+    split_path=JOB_ANALYSIS_SPLIT_PATH,
+    inputs_path=TEST_INPUTS_PATH,
+):
+    """Load and validate the external development/holdout/reserve split."""
+    split_data = yaml.safe_load(Path(split_path).read_text(encoding="utf-8"))
+    inputs = json.loads(Path(inputs_path).read_text(encoding="utf-8"))
+
+    if split_data.get("version") != 1:
+        raise BenchmarkDataError("Unbekannte Split-Dateiversion")
+    if (
+        split_data.get("job_analysis_schema_version")
+        != JOB_ANALYSIS_SCHEMA_VERSION
+    ):
+        raise BenchmarkDataError("Split verwendet eine andere Schemaversion")
+    if split_data.get("frozen_prompt_version") != JOB_ANALYSIS_PROMPT_VERSION:
+        raise BenchmarkDataError("Split verwendet eine andere Promptversion")
+
+    splits = split_data.get("splits", {})
+    if tuple(splits) != JOB_ANALYSIS_SPLITS:
+        raise BenchmarkDataError(
+            "Split muss development, holdout und reserve enthalten"
+        )
+
+    input_ids = [case["job_id"] for case in inputs.get("cases", [])]
+    split_ids = [
+        job_id
+        for name in JOB_ANALYSIS_SPLITS
+        for job_id in splits[name]
+    ]
+    if len(split_ids) != len(set(split_ids)):
+        raise BenchmarkDataError("Ein Job kommt in mehreren Splits vor")
+    if set(split_ids) != set(input_ids):
+        raise BenchmarkDataError("Split und Testeingaben enthalten andere Jobs")
+
+    return split_data
 
 
 def build_messages(profile, job):
@@ -211,6 +259,64 @@ def run_model_benchmark(model, client, limit=None):
     }
 
 
+def run_job_analysis_evaluation(
+    model,
+    client,
+    limit=None,
+    split="development",
+):
+    """Extract profile-free job facts for manual inspection."""
+    inputs, _ = load_benchmark_data()
+    split_data = load_job_analysis_split()
+    if split not in JOB_ANALYSIS_SPLITS:
+        raise BenchmarkDataError(f"Unbekannter Job-Analyse-Split: {split}")
+
+    jobs_by_id = {job["job_id"]: job for job in inputs["cases"]}
+    jobs = [jobs_by_id[job_id] for job_id in split_data["splits"][split]]
+    jobs = jobs[:limit]
+    results = []
+
+    for index, job in enumerate(jobs, start=1):
+        print(f"[{index}/{len(jobs)}] {model}: {job['title']}")
+        started = perf_counter()
+        result = {"job_id": job["job_id"], "title": job["title"]}
+        try:
+            analysis, metadata = analyze_job(job, model, client)
+            result.update(
+                {
+                    "valid": True,
+                    "analysis": analysis,
+                    "metadata": metadata,
+                }
+            )
+        except (OllamaError, JobAnalysisValidationError) as error:
+            result.update({"valid": False, "error": str(error)})
+            raw_analysis = getattr(error, "raw_analysis", None)
+            if raw_analysis is not None:
+                result["raw_analysis"] = raw_analysis
+        result["elapsed_seconds"] = round(perf_counter() - started, 3)
+        results.append(result)
+
+    valid = sum(result["valid"] for result in results)
+    elapsed = sum(result["elapsed_seconds"] for result in results)
+    return {
+        "model": model,
+        "mode": "job_analysis",
+        "split": split,
+        "prompt_version": JOB_ANALYSIS_PROMPT_VERSION,
+        "schema_version": JOB_ANALYSIS_SCHEMA_VERSION,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "summary": {
+            "jobs": len(results),
+            "valid_responses": valid,
+            "average_seconds_per_job": (
+                round(elapsed / len(results), 3) if results else 0
+            ),
+        },
+        "results": results,
+    }
+
+
 def summarize_results(results):
     """Calculate comparable quality, reliability, and runtime metrics."""
     valid = [result for result in results if result["valid"]]
@@ -267,6 +373,20 @@ def write_benchmark_result(result, output_dir=RESULTS_DIR):
     directory.mkdir(parents=True, exist_ok=True)
     safe_model = result["model"].replace(":", "-").replace("/", "-")
     path = directory / f"{safe_model}.json"
+    path.write_text(
+        json.dumps(result, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def write_job_analysis_result(result, output_dir=RESULTS_DIR):
+    """Persist profile-free extraction results separately from fit benchmarks."""
+    directory = Path(output_dir)
+    directory.mkdir(parents=True, exist_ok=True)
+    safe_model = result["model"].replace(":", "-").replace("/", "-")
+    split = result["split"]
+    path = directory / f"{safe_model}-job-analysis-{split}.json"
     path.write_text(
         json.dumps(result, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",

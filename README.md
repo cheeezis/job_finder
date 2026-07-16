@@ -52,25 +52,16 @@ python -m unittest discover -s tests -v
 ```
 
 `gpt-5.4-mini` ist nach Development-, Holdout- und Reserve-Vergleich das
-Standardmodell fuer die spaetere Integration. `qwen3.5:9b` bleibt als lokaler,
-kostenloser Fallback vorgesehen.
-
-Ollama-Modelle gegen den getrennten Blindtestsatz vergleichen:
+Standardmodell. Die OpenAI-Anbindung verwendet `OPENAI_API_KEY`:
 
 ```powershell
-python -m llm_evaluation.compare_models qwen3.5:9b
-```
-
-OpenAI verwendet `OPENAI_API_KEY` und wird explizit als Provider gewaehlt:
-
-```powershell
-python -m llm_evaluation.compare_models gpt-5.4-mini --provider openai --two-stage --limit 1
+python -m llm_evaluation.compare_models --limit 1
 ```
 
 Die profilfreie Extraktion nutzt standardmaessig nur den Development-Split:
 
 ```powershell
-python -m llm_evaluation.compare_models qwen3.5:9b --job-analysis-only --split development
+python -m llm_evaluation.compare_models --job-analysis-only --split development
 ```
 
 Holdout und Reserve wurden erst nach Abschluss der Promptentwicklung fuer die
@@ -79,13 +70,13 @@ finale Modellevaluation verwendet.
 Beide LLM-Stufen mit anschliessendem deterministischem Scoring ausfuehren:
 
 ```powershell
-python -m llm_evaluation.compare_models gpt-5.4-mini --provider openai --two-stage --split development
+python -m llm_evaluation.compare_models --split development
 ```
 
 Stufe 2 mit mehreren Modellen gegen denselben Stufe-1-Cache vergleichen:
 
 ```powershell
-python -m llm_evaluation.compare_models qwen3.5:9b --profile-match-only --analysis-model gpt-5.4-mini
+python -m llm_evaluation.compare_models --profile-match-only --analysis-model gpt-5.4-mini
 ```
 
 ## Struktur
@@ -99,7 +90,6 @@ job_agent/llm/              wiederverwendbare LLM-Komponenten
 job_agent/llm/contract.py   Rubrik und strukturierter Antwortvertrag
 job_agent/llm/fit_score.py  Scoring fuer validierte Zwei-Stufen-Ergebnisse
 job_agent/llm/profile_loader.py Laden und Validieren des LLM-Profils
-job_agent/llm/ollama.py     Client fuer die lokale Ollama-API
 job_agent/llm/openai.py     Client fuer strukturierte OpenAI-Antworten
 job_agent/models.py         einheitliches Job- und Statusmodell
 job_agent/profile.py        Profil-, Skill- und Scoring-Regeln

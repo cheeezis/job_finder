@@ -1,7 +1,5 @@
 """Versioned scoring rubric and structured output contract for LLM reviews."""
 
-from copy import deepcopy
-
 RUBRIC_VERSION = 5
 SCHEMA_VERSION = 3
 
@@ -231,10 +229,3 @@ ANALYSIS_SCHEMA = {
         },
     },
 }
-
-# The LLM only returns categorical judgments. Python derives every
-# numeric field afterwards so model quality is not confused with calibration.
-MODEL_RESPONSE_SCHEMA = deepcopy(ANALYSIS_SCHEMA)
-for derived_field in ("overall_score", "recommendation", "dimension_scores"):
-    MODEL_RESPONSE_SCHEMA["required"].remove(derived_field)
-    del MODEL_RESPONSE_SCHEMA["properties"][derived_field]

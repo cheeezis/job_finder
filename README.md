@@ -71,6 +71,12 @@ Beide LLM-Stufen ohne numerisches Scoring ausfuehren:
 python -m llm_evaluation.compare_models gemma3:12b --two-stage --split development
 ```
 
+Stufe 2 mit mehreren Modellen gegen denselben Stufe-1-Cache vergleichen:
+
+```powershell
+python -m llm_evaluation.compare_models gemma3:12b qwen3:14b --profile-match-only --analysis-model gemma3:12b
+```
+
 ## Struktur
 
 ```text

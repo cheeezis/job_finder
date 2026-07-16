@@ -13,6 +13,10 @@ from llm_evaluation.benchmark import (
     write_job_analysis_result,
     write_two_stage_result,
 )
+from llm_evaluation.profile_matching import (
+    run_profile_match_evaluation,
+    write_profile_match_result,
+)
 
 
 def parse_args():
@@ -45,6 +49,16 @@ def parse_args():
         action="store_true",
         help="Extract job facts and match them to the profile without scoring",
     )
+    mode.add_argument(
+        "--profile-match-only",
+        action="store_true",
+        help="Match cached job analyses to the profile without rerunning stage 1",
+    )
+    parser.add_argument(
+        "--analysis-model",
+        default=DEFAULT_MODEL,
+        help=f"Model used to create the stage-1 cache (default: {DEFAULT_MODEL})",
+    )
     parser.add_argument(
         "--split",
         choices=JOB_ANALYSIS_SPLITS,
@@ -70,6 +84,23 @@ def main():
         raise SystemExit(f"Nicht lokal installiert: {names}")
 
     for model in args.models:
+        if args.profile_match_only:
+            result = run_profile_match_evaluation(
+                args.analysis_model,
+                model,
+                client,
+                limit=args.limit,
+                split=args.split,
+            )
+            path = write_profile_match_result(result)
+            summary = result["summary"]
+            print(
+                f"{model}: {summary['valid_responses']}/{summary['jobs']} gueltig, "
+                f"{summary['average_seconds_per_job']} s/Job"
+            )
+            print(f"Gespeichert: {path}")
+            continue
+
         if args.two_stage:
             result = run_two_stage_evaluation(
                 model,

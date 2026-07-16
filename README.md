@@ -34,6 +34,18 @@ Kompletter Agentenlauf fuer alle angebundenen Quellen:
 python run_agent.py
 ```
 
+Neue regelbasiert eingeschlossene Jobs zusaetzlich per OpenAI analysieren:
+
+```powershell
+python run_agent.py --llm
+```
+
+Ein kostenbegrenzter Testlauf analysiert hoechstens einen neuen passenden Job:
+
+```powershell
+python run_agent.py --llm --llm-limit 1
+```
+
 Der neue Modellstand ist absichtlich nicht mit alten Laufdaten kompatibel.
 Vor dem ersten Lauf nach dieser Umstellung werden die bisherigen generierten
 Job-, Memory-, Review- und Cache-Dateien unter `data/` entfernt. Es findet
@@ -58,25 +70,10 @@ Standardmodell. Die OpenAI-Anbindung verwendet `OPENAI_API_KEY`:
 python -m llm_evaluation.compare_models --limit 1
 ```
 
-Die profilfreie Extraktion nutzt standardmaessig nur den Development-Split:
-
-```powershell
-python -m llm_evaluation.compare_models --job-analysis-only --split development
-```
-
-Holdout und Reserve wurden erst nach Abschluss der Promptentwicklung fuer die
-finale Modellevaluation verwendet.
-
-Beide LLM-Stufen mit anschliessendem deterministischem Scoring ausfuehren:
+Die vollstaendige Zwei-Stufen-Pipeline gegen den Development-Split testen:
 
 ```powershell
 python -m llm_evaluation.compare_models --split development
-```
-
-Stufe 2 mit mehreren Modellen gegen denselben Stufe-1-Cache vergleichen:
-
-```powershell
-python -m llm_evaluation.compare_models --profile-match-only --analysis-model gpt-5.4-mini
 ```
 
 ## Struktur

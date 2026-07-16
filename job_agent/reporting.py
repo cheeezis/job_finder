@@ -8,6 +8,7 @@ from pathlib import Path
 SCORED_FILE = "data/jobs_scored.json"
 REVIEW_FILE = "data/jobs_review.md"
 EXCLUDED_EXAMPLES_PER_REASON = 12
+SCORED_OMITTED_FIELDS = {"description_raw", "description_clean", "score_reasons"}
 
 
 def write_review_files(
@@ -20,13 +21,28 @@ def write_review_files(
     review_file = Path(review_path)
 
     scored_file.write_text(
-        json.dumps(results, indent=2, ensure_ascii=False),
+        json.dumps(compact_scored_results(results), indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
     review_file.write_text(render_review_markdown(results), encoding="utf-8")
 
     print(f"Bewertete Jobs gespeichert in {scored_file}")
     print(f"Review-Datei gespeichert in {review_file}")
+
+
+def compact_scored_results(results):
+    """Remove fields already persisted in the complete import file."""
+    return {
+        bucket: [
+            {
+                key: value
+                for key, value in job.items()
+                if key not in SCORED_OMITTED_FIELDS
+            }
+            for job in results[bucket]
+        ]
+        for bucket in ("included", "excluded")
+    }
 
 
 def render_review_markdown(results):
@@ -86,7 +102,9 @@ def append_job_section(lines, title, jobs, include_description):
         return
 
     for job in jobs:
-        score = job.get("match_percent", 0)
+        rule_score = job.get("rule_score", job.get("match_percent", 0))
+        llm_score = job.get("llm_score")
+        score = llm_score if llm_score is not None else rule_score
         new_marker = "NEU - " if job.get("is_new") else ""
         url = primary_url(job)
         lines.extend(
@@ -98,6 +116,7 @@ def append_job_section(lines, title, jobs, include_description):
                 f"- Ort: {format_locations(job)}",
                 f"- Remote: {format_remote(job)}",
                 f"- Erfahrung: {job.get('experience_level', '')}",
+                f"- Regel-Score: {rule_score}%",
                 f"- URL: {url}",
                 "- Gruende:",
             ]
@@ -105,12 +124,35 @@ def append_job_section(lines, title, jobs, include_description):
         for reason in job.get("reasons", []):
             lines.append(f"  - {reason}")
 
-        if include_description:
+        append_llm_review(lines, job)
+
+        if include_description and not job.get("llm_result"):
             description = compact_description(job.get("description_clean", ""))
             if description:
                 lines.extend(["", description])
 
         lines.append("")
+
+
+def append_llm_review(lines, job):
+    """Append the compact, human-facing part of a cached LLM analysis."""
+    llm_result = job.get("llm_result")
+    if not llm_result:
+        return
+
+    lines.extend(
+        [
+            f"- KI-Score: {job.get('llm_score')}%",
+            f"- KI-Empfehlung: {llm_result['recommendation']}",
+            f"- KI-Zusammenfassung: {llm_result['summary']}",
+        ]
+    )
+    if llm_result.get("tasks"):
+        lines.append("- Wichtigste Aufgaben:")
+        lines.extend(f"  - {task}" for task in llm_result["tasks"])
+    if llm_result.get("gaps"):
+        lines.append("- Fehlende oder unsichere Anforderungen:")
+        lines.extend(f"  - {gap}" for gap in llm_result["gaps"])
 
 
 def format_sources(job):

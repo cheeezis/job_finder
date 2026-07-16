@@ -40,8 +40,14 @@ LABEL_ORDER = [
     "strong_match",
 ]
 
+
 class BenchmarkDataError(ValueError):
     """Raised when benchmark fixtures are incomplete or inconsistent."""
+
+
+def safe_model_name(model):
+    """Return a model name suitable for local result filenames."""
+    return model.replace(":", "-").replace("/", "-")
 
 
 def load_benchmark_data(
@@ -101,64 +107,6 @@ def load_job_analysis_split(
         raise BenchmarkDataError("Split und Testeingaben enthalten andere Jobs")
 
     return split_data
-
-
-def run_job_analysis_evaluation(
-    model,
-    client,
-    limit=None,
-    split="development",
-):
-    """Extract profile-free job facts for manual inspection."""
-    inputs, _ = load_benchmark_data()
-    split_data = load_job_analysis_split()
-    if split not in JOB_ANALYSIS_SPLITS:
-        raise BenchmarkDataError(f"Unbekannter Job-Analyse-Split: {split}")
-
-    jobs_by_id = {job["job_id"]: job for job in inputs["cases"]}
-    jobs = [jobs_by_id[job_id] for job_id in split_data["splits"][split]]
-    jobs = jobs[:limit]
-    results = []
-
-    for index, job in enumerate(jobs, start=1):
-        print(f"[{index}/{len(jobs)}] {model}: {job['title']}")
-        started = perf_counter()
-        result = {"job_id": job["job_id"], "title": job["title"]}
-        try:
-            analysis, metadata = analyze_job(job, model, client)
-            result.update(
-                {
-                    "valid": True,
-                    "analysis": analysis,
-                    "metadata": metadata,
-                }
-            )
-        except (LLMError, JobAnalysisValidationError) as error:
-            result.update({"valid": False, "error": str(error)})
-            raw_analysis = getattr(error, "raw_analysis", None)
-            if raw_analysis is not None:
-                result["raw_analysis"] = raw_analysis
-        result["elapsed_seconds"] = round(perf_counter() - started, 3)
-        results.append(result)
-
-    valid = sum(result["valid"] for result in results)
-    elapsed = sum(result["elapsed_seconds"] for result in results)
-    return {
-        "model": model,
-        "mode": "job_analysis",
-        "split": split,
-        "prompt_version": JOB_ANALYSIS_PROMPT_VERSION,
-        "schema_version": JOB_ANALYSIS_SCHEMA_VERSION,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "summary": {
-            "jobs": len(results),
-            "valid_responses": valid,
-            "average_seconds_per_job": (
-                round(elapsed / len(results), 3) if results else 0
-            ),
-        },
-        "results": results,
-    }
 
 
 def run_two_stage_evaluation(
@@ -305,25 +253,11 @@ def label_distance(result):
     return abs(expected - predicted)
 
 
-def write_job_analysis_result(result, output_dir=RESULTS_DIR):
-    """Persist profile-free extraction results separately from fit benchmarks."""
-    directory = Path(output_dir)
-    directory.mkdir(parents=True, exist_ok=True)
-    safe_model = result["model"].replace(":", "-").replace("/", "-")
-    split = result["split"]
-    path = directory / f"{safe_model}-job-analysis-{split}.json"
-    path.write_text(
-        json.dumps(result, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
-    return path
-
-
 def write_two_stage_result(result, output_dir=RESULTS_DIR):
     """Persist combined extraction and profile-matching evaluation results."""
     directory = Path(output_dir)
     directory.mkdir(parents=True, exist_ok=True)
-    safe_model = result["model"].replace(":", "-").replace("/", "-")
+    safe_model = safe_model_name(result["model"])
     split = result["split"]
     path = directory / f"{safe_model}-two-stage-{split}.json"
     path.write_text(

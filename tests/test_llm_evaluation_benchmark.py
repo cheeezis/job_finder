@@ -7,10 +7,8 @@ from pathlib import Path
 from llm_evaluation.benchmark import (
     load_benchmark_data,
     load_job_analysis_split,
-    run_job_analysis_evaluation,
     run_two_stage_evaluation,
     summarize_results,
-    write_job_analysis_result,
     write_two_stage_result,
 )
 
@@ -65,35 +63,6 @@ class LlmBenchmarkTests(unittest.TestCase):
         self.assertEqual(len(all_split_ids), len(set(all_split_ids)))
         self.assertEqual(set(all_split_ids), set(input_ids))
         self.assertEqual(splits["development"], input_ids[:3])
-
-    def test_job_analysis_defaults_to_development_split(self):
-        class FakeClient:
-            def chat(self, **_kwargs):
-                raise RuntimeError("Client darf fuer limit=0 nicht laufen")
-
-        result = run_job_analysis_evaluation(
-            "test-model",
-            FakeClient(),
-            limit=0,
-        )
-
-        self.assertEqual(result["split"], "development")
-        self.assertEqual(result["summary"]["jobs"], 0)
-
-    def test_job_analysis_result_filename_contains_split(self):
-        result = {
-            "model": "gpt-5.4-mini",
-            "split": "holdout",
-            "results": [],
-        }
-
-        with tempfile.TemporaryDirectory() as directory:
-            path = write_job_analysis_result(result, directory)
-
-            self.assertEqual(
-                path,
-                Path(directory) / "gpt-5.4-mini-job-analysis-holdout.json",
-            )
 
     def test_two_stage_defaults_to_development_split(self):
         class FakeClient:

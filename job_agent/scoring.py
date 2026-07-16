@@ -105,6 +105,7 @@ def score_job(job: Job):
         "experience_rank": experience["rank"],
         "experience_level": experience["label"],
         "role_group": role["id"],
+        "location_precheck": location_score["label"],
         "reasons": reasons,
     }
 
@@ -366,12 +367,6 @@ def match_is_optional(text, match, context_size=55):
     """Check whether optional wording belongs to a nearby requirement."""
     start, end = match_context(text, match, context_size)
     return contains_any(text[start:end], OPTIONAL_EXPERIENCE_PHRASES)
-
-
-def match_is_first_experience(text, match, context_size=45):
-    """Check whether a requirement explicitly asks only for first experience."""
-    start, end = match_context(text, match, context_size)
-    return contains_any(text[start:end], FIRST_EXPERIENCE_PHRASES)
 
 
 def match_context(text, match, context_size):

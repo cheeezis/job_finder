@@ -3,19 +3,17 @@
 import argparse
 
 from job_agent.console import configure_utf8_output
+from job_agent.llm.config import DEFAULT_LLM_SETTINGS
 from job_agent.llm.errors import LLMError
-from job_agent.llm.openai import DEFAULT_MODEL, OpenAIClient
+from job_agent.llm.openai import OpenAIClient
 from llm_evaluation.benchmark import (
     JOB_ANALYSIS_SPLITS,
-    run_job_analysis_evaluation,
     run_two_stage_evaluation,
-    write_job_analysis_result,
     write_two_stage_result,
 )
-from llm_evaluation.profile_matching import (
-    run_profile_match_evaluation,
-    write_profile_match_result,
-)
+
+
+DEFAULT_MODEL = DEFAULT_LLM_SETTINGS.model
 
 
 def parse_args():
@@ -33,24 +31,8 @@ def parse_args():
     parser.add_argument(
         "--timeout",
         type=int,
-        default=300,
+        default=DEFAULT_LLM_SETTINGS.timeout_seconds,
         help="Maximum seconds per OpenAI request",
-    )
-    mode = parser.add_mutually_exclusive_group()
-    mode.add_argument(
-        "--job-analysis-only",
-        action="store_true",
-        help="Extract job facts without profile matching or recommendations",
-    )
-    mode.add_argument(
-        "--profile-match-only",
-        action="store_true",
-        help="Match cached job analyses to the profile without rerunning stage 1",
-    )
-    parser.add_argument(
-        "--analysis-model",
-        default=DEFAULT_MODEL,
-        help=f"Model used to create the stage-1 cache (default: {DEFAULT_MODEL})",
     )
     parser.add_argument(
         "--split",
@@ -83,35 +65,6 @@ def main():
         raise SystemExit(str(error)) from error
 
     for model in models:
-        if args.profile_match_only:
-            result = run_profile_match_evaluation(
-                args.analysis_model,
-                model,
-                client,
-                limit=args.limit,
-                split=args.split,
-            )
-            path = write_profile_match_result(result)
-            print_quality_summary(model, result["summary"])
-            print(f"Gespeichert: {path}")
-            continue
-
-        if args.job_analysis_only:
-            result = run_job_analysis_evaluation(
-                model,
-                client,
-                limit=args.limit,
-                split=args.split,
-            )
-            path = write_job_analysis_result(result)
-            summary = result["summary"]
-            print(
-                f"{model}: {summary['valid_responses']}/{summary['jobs']} gueltig, "
-                f"{summary['average_seconds_per_job']} s/Job"
-            )
-            print(f"Gespeichert: {path}")
-            continue
-
         result = run_two_stage_evaluation(
             model,
             client,

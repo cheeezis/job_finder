@@ -5,10 +5,10 @@ import json
 from openai import OpenAI
 from openai import OpenAIError as SDKOpenAIError
 
+from job_agent.llm.config import DEFAULT_LLM_SETTINGS
 from job_agent.llm.errors import LLMError
 
 
-DEFAULT_MODEL = "gpt-5.4-mini"
 UNSUPPORTED_SCHEMA_KEYS = {"uniqueItems"}
 
 
@@ -30,16 +30,16 @@ def prepare_output_schema(schema):
 
 
 class OpenAIClient:
-    """Call OpenAI with the same small interface used by the local client."""
+    """Request structured responses from the OpenAI API."""
 
     provider = "openai"
 
     def __init__(
         self,
-        timeout=300,
+        timeout=DEFAULT_LLM_SETTINGS.timeout_seconds,
         sdk_client=None,
-        reasoning_effort="low",
-        max_output_tokens=8192,
+        reasoning_effort=DEFAULT_LLM_SETTINGS.reasoning_effort,
+        max_output_tokens=DEFAULT_LLM_SETTINGS.max_output_tokens,
     ):
         self.reasoning_effort = reasoning_effort
         self.max_output_tokens = max_output_tokens

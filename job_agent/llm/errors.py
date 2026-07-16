@@ -1,4 +1,4 @@
-"""Shared errors for interchangeable LLM providers."""
+"""Shared errors raised by LLM providers."""
 
 
 class LLMError(RuntimeError):

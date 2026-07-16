@@ -50,11 +50,15 @@ def make_job_analysis(
     }
 
 
-def make_profile_match(technology_statuses, experience_status="met"):
+def make_profile_match(
+    technology_statuses,
+    experience_status="met",
+    task_status="met",
+):
     """Return complete evidence matches for the compact extracted job."""
     matches = [
         make_match("role", "met"),
-        make_match("tasks", "met"),
+        make_match("tasks", task_status),
         make_match("experience", experience_status),
     ]
     matches.extend(
@@ -133,6 +137,21 @@ class TwoStageFitScoreTests(unittest.TestCase):
         self.assertGreaterEqual(result["overall_score"], 75)
         self.assertEqual(result["recommendation"], "not_recommended")
         self.assertTrue(result["hard_conflicts"])
+
+    def test_partial_task_overlap_is_not_scored_like_a_perfect_match(self):
+        job = {
+            "location_precheck": "100% Remote aus Deutschland",
+            "work_mode": "remote",
+        }
+        result = score_two_stage_result(
+            job,
+            make_job_analysis(),
+            make_profile_match(["met"], task_status="partially_met"),
+        )
+
+        self.assertEqual(result["dimension_ratings"]["task_fit"], "good")
+        self.assertEqual(result["dimension_scores"]["task_fit"], 15)
+        self.assertEqual(result["overall_score"], 95)
 
     def test_local_job_is_a_good_location_fit(self):
         job = {

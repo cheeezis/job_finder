@@ -1,5 +1,6 @@
 """Command-line entry point for collecting, remembering, and scoring jobs."""
 
+import argparse
 import json
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
@@ -7,7 +8,8 @@ from urllib.parse import urlsplit, urlunsplit
 from job_agent.console import configure_utf8_output
 from job_agent.deduplication import deduplicate_jobs
 from job_agent.main import print_results, score_jobs
-from job_agent.memory import load_memory, save_memory, update_memory
+from job_agent.llm.service import analyze_results
+from job_agent.memory import MEMORY_FILE, load_memory, save_memory, update_memory
 from job_agent.reporting import write_review_files
 from job_agent.sources import arbeitsagentur
 from job_agent.sources import get_in_it
@@ -21,12 +23,28 @@ SOURCES = [
 ]
 
 JOBS_FILE = "data/jobs_imported.json"
-MEMORY_FILE = "data/seen_jobs.json"
+
+
+def parse_args():
+    """Parse explicit options for potentially billable LLM analysis."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--llm",
+        action="store_true",
+        help="Analyze new included jobs with the configured OpenAI model",
+    )
+    parser.add_argument(
+        "--llm-limit",
+        type=int,
+        help="Analyze at most N eligible jobs in this run",
+    )
+    return parser.parse_args()
 
 
 def main():
     """Run the full pipeline: collect jobs, update memory, then score."""
     configure_utf8_output()
+    args = parse_args()
     print("1/3 Sammle Jobs aus Quellen")
     jobs = collect_jobs()
 
@@ -45,6 +63,17 @@ def main():
 
     print("\n3/3 Bewerte Jobs")
     results = score_jobs(jobs)
+    if args.llm:
+        print("\nKI-Bewertung")
+        llm_stats = analyze_results(
+            results,
+            limit=args.llm_limit,
+        )
+        print(
+            f"KI: {llm_stats['analyzed']} neu analysiert, "
+            f"{llm_stats['cached']} aus Cache, "
+            f"{llm_stats['failed']} fehlgeschlagen"
+        )
     write_review_files(results)
     print_results(results)
 

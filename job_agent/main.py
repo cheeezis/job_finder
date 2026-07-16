@@ -29,7 +29,7 @@ def score_jobs(jobs):
     for job in deduplicate_jobs(jobs):
         result = score_job(job)
         job.filter_status = FilterStatus(result["filter_status"])
-        job.match_score = result["match_percent"]
+        job.rule_score = result["match_percent"]
         job.score_reasons = list(result["reasons"])
         results.append({**job.to_dict(), "is_new": job.is_new, **result})
 

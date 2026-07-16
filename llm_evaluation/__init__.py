@@ -1,1 +1,1 @@
-"""Blind evaluation tools for local language models."""
+"""Blind evaluation tools for the job agent's LLM pipeline."""

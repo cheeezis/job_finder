@@ -14,7 +14,7 @@ STATUS_VALUES = {
     "not_met": 0.0,
 }
 HARD_CONFLICT_CATEGORIES = {"education", "employment", "travel"}
-FIT_SCORE_VERSION = 2
+FIT_SCORE_VERSION = 3
 
 
 def score_two_stage_result(job, job_analysis, profile_match):
@@ -28,7 +28,7 @@ def score_two_stage_result(job, job_analysis, profile_match):
         "technology_fit": score_technologies(job_analysis, matches),
         "experience_fit": score_experience(job_analysis, matches),
         "location_fit": score_location(job),
-        "task_fit": score_role_family(job_analysis),
+        "task_fit": score_tasks(job_analysis, matches),
     }
     scores = {name: RATING_POINTS[rating] for name, rating in ratings.items()}
     overall_score = sum(scores.values())
@@ -169,6 +169,21 @@ def score_experience(job_analysis, matches):
     if expectation == "professional_experience":
         return "partial" if requirement["priority"] == "preferred" else "weak"
     return "partial"
+
+
+def score_tasks(job_analysis, matches):
+    """Combine task direction with evidence-based task overlap."""
+    direction_rating = score_role_family(job_analysis)
+    overlap_rating = {
+        "met": "excellent",
+        "partially_met": "good",
+        "unknown": "partial",
+        "not_met": "weak",
+    }[matches["tasks"]["status"]]
+    return min(
+        (direction_rating, overlap_rating),
+        key=RATING_POINTS.__getitem__,
+    )
 
 
 def score_location(job):

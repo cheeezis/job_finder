@@ -5,4 +5,5 @@ data/seen_jobs.json
 data/jobs_scored.json
 data/jobs_review.md
 data/stepstone_cache.json
+data/llm_analysis_cache.json
 llm_evaluation/results/

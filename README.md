@@ -19,7 +19,11 @@ Der Agent kann:
 - persoenliche Match-Scores von 0 bis 100 nach klaren Jobsuch-Prioritaeten erzeugen
 - quellenuebergreifende Duplikate zusammenfuehren
 - bereits gesehene Jobs intern merken
+- nach drei erfolgreichen, vergeblichen Quellensuchen nicht mehr gefundene Jobs
+  als inaktiv markieren
 - kompakte KI-Empfehlungen als JSON und Markdown ausgeben
+- Fehler einer Quelle isolieren und die uebrigen Quellen weiterverarbeiten
+- jeden Lauf protokollieren und wichtige interne Daten rotierend sichern
 
 Die persoenliche Bewertung priorisiert zuerst einen realistischen Berufseinstieg
 (50 Punkte), danach Standort und Homeoffice (30 Punkte). Die grobe fachliche
@@ -80,6 +84,26 @@ Der Webhook bleibt ausserhalb der gespeicherten Dateien. Erfolgreich gesendete
 Jobversionen werden nicht erneut gemeldet; Fehler bleiben fuer den naechsten
 Lauf vorgemerkt.
 
+Jeder Lauf schreibt seine vollstaendige Terminalausgabe zusaetzlich nach
+`data/logs/`. Vor dem Veraendern persistenter Daten werden Job-Gedaechtnis,
+LLM-Cache und Discord-Versandstatus als ZIP unter `data/backups/` gesichert.
+Es bleiben hoechstens die sieben neuesten Sicherungen erhalten.
+
+Scheitert eine komplette Quelle unerwartet, wird der Fehler protokolliert und
+der Lauf mit den uebrigen Quellen fortgesetzt. Eine Stelle gilt erst dann als
+inaktiv, wenn sie in drei erfolgreichen Laeufen ihrer bekannten Quellen nicht
+mehr gefunden wurde. Fehlgeschlagene oder leere Quellensuchen zaehlen dabei
+nicht als Verschwinden.
+
+## Automatischer Betrieb
+
+Die lokale Windows-Aufgabe `Job Agent Daily` startet den Agenten taeglich um
+10:00 Uhr mit `--notify`. Ein bei ausgeschaltetem PC verpasster Start wird beim
+naechsten Einschalten und Anmelden nachgeholt. Aus dem Energiesparmodus darf die
+Aufgabe den PC aufwecken. Die benoetigten Werte `OPENAI_API_KEY` und
+`DISCORD_WEBHOOK_URL` liegen als persoenliche Windows-Umgebungsvariablen vor und
+werden nicht im Repository gespeichert.
+
 Nur vorhandene interne Jobs regelbasiert pruefen, ohne Dateien zu erzeugen:
 
 ```powershell
@@ -119,6 +143,7 @@ job_agent/llm/profile_loader.py Laden und Validieren des LLM-Profils
 job_agent/llm/openai.py     Client fuer strukturierte OpenAI-Antworten
 job_agent/llm/service.py    produktive Zwei-Stufen-Analyse und LLM-Cache
 job_agent/models.py         einheitliches Job- und Statusmodell
+job_agent/operations.py     Laufprotokolle und rotierende Datensicherungen
 job_agent/paths.py          gemeinsame interne und externe Datenpfade
 job_agent/profile.py        Profil-, Skill- und Scoring-Regeln
 job_agent/deduplication.py  quellenuebergreifende Job-Deduplizierung
@@ -139,6 +164,8 @@ data/internal/llm_cache.json LLM-Ergebnisse und ausstehende Analysen
 data/internal/notifications.json Versand- und Wiederholungsstatus
 data/output/recommendations.json kompakte finale KI-Ergebnisse
 data/output/recommendations.md lesbare KI-Empfehlungen
+data/logs/                  vollstaendige Protokolle einzelner Laeufe
+data/backups/               sieben neueste Sicherungen persistenter Zustandsdaten
 profile.yaml                persoenliche Faktenbasis fuer das LLM
 llm_evaluation/             getrenntes Labor fuer LLM-Vergleiche
 llm_evaluation/fixtures/    blinde Testeingaben und menschliche Bewertungen

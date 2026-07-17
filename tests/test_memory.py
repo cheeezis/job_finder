@@ -34,7 +34,10 @@ class MemoryTests(unittest.TestCase):
 
         stats = update_memory([job], memory)
 
-        self.assertEqual(stats, {"new": 1, "known": 0})
+        self.assertEqual(
+            stats,
+            {"new": 1, "known": 0, "inactive": 0, "reactivated": 0},
+        )
         self.assertTrue(job.is_new)
         self.assertIsNotNone(job.first_seen_at)
         self.assertEqual(job.first_seen_at, job.last_seen_at)
@@ -49,10 +52,51 @@ class MemoryTests(unittest.TestCase):
         known_job = make_job()
         stats = update_memory([known_job], memory)
 
-        self.assertEqual(stats, {"new": 0, "known": 1})
+        self.assertEqual(
+            stats,
+            {"new": 0, "known": 1, "inactive": 0, "reactivated": 0},
+        )
         self.assertFalse(known_job.is_new)
         self.assertEqual(known_job.first_seen_at, first_job.first_seen_at)
         self.assertEqual(known_job.workflow_status, WorkflowStatus.INTERESTING)
+
+    def test_job_becomes_inactive_after_three_successful_missed_runs(self):
+        memory = {}
+        update_memory([make_job()], memory)
+
+        first = update_memory([], memory, successful_sources={"test"})
+        second = update_memory([], memory, successful_sources={"test"})
+        third = update_memory([], memory, successful_sources={"test"})
+
+        self.assertEqual(first["inactive"], 0)
+        self.assertEqual(second["inactive"], 0)
+        self.assertEqual(third["inactive"], 1)
+        self.assertFalse(memory["test:123"]["active"])
+        self.assertEqual(memory["test:123"]["missed_runs"], 3)
+
+    def test_failed_source_does_not_count_as_a_missed_run(self):
+        memory = {}
+        update_memory([make_job()], memory)
+
+        update_memory([], memory, successful_sources={"other"})
+
+        self.assertEqual(memory["test:123"]["missed_runs"], 0)
+        self.assertTrue(memory["test:123"]["active"])
+
+    def test_returning_job_is_reactivated_without_losing_status(self):
+        memory = {}
+        update_memory([make_job()], memory)
+        memory["test:123"].update(
+            {"active": False, "missed_runs": 3, "workflow_status": "interesting"}
+        )
+
+        job = make_job()
+        stats = update_memory([job], memory, successful_sources={"test"})
+
+        self.assertEqual(stats["reactivated"], 1)
+        self.assertTrue(memory["test:123"]["active"])
+        self.assertEqual(memory["test:123"]["missed_runs"], 0)
+        self.assertEqual(job.workflow_status, WorkflowStatus.INTERESTING)
 
     def test_memory_file_has_an_explicit_version(self):
         with tempfile.TemporaryDirectory() as directory:

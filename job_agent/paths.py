@@ -3,8 +3,12 @@
 from pathlib import Path
 
 
-INTERNAL_DIR = Path("data/internal")
-OUTPUT_DIR = Path("data/output")
+PROJECT_DIR = Path(__file__).resolve().parent.parent
+DATA_DIR = PROJECT_DIR / "data"
+INTERNAL_DIR = DATA_DIR / "internal"
+OUTPUT_DIR = DATA_DIR / "output"
+LOG_DIR = DATA_DIR / "logs"
+BACKUP_DIR = DATA_DIR / "backups"
 
 JOBS_FILE = INTERNAL_DIR / "jobs.json"
 MEMORY_FILE = INTERNAL_DIR / "seen_jobs.json"

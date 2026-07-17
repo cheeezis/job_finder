@@ -4,19 +4,17 @@ import re
 
 from job_agent.models import FilterStatus, Job
 from job_agent.profile import (
-    ADMIN_TITLE_WORDS,
-    BLOCKED_FOCUS_KEYWORDS,
     BLOCKED_TITLE_WORDS,
     BODY_ENTRY_LEVEL_PHRASES,
     ENTRY_LEVEL_WORDS,
-    EXPLICIT_FOCUS_PHRASES,
     FIRST_EXPERIENCE_PHRASES,
     FOREIGN_ONLY_LOCATION_WORDS,
     GERMANY_LOCATION_WORDS,
     HIGH_TRAVEL_PHRASES,
     LOCAL_PLACES,
     MANDATORY_ADVANCED_DEGREE_PATTERNS,
-    MODERN_WORKPLACE_TITLE_WORDS,
+    GENERAL_IT_ROLE,
+    GENERAL_IT_TITLE_KEYWORDS,
     OPTIONAL_EXPERIENCE_PHRASES,
     PROFILE_DOMAIN_KEYWORDS,
     ROLE_GROUPS,
@@ -25,13 +23,9 @@ from job_agent.profile import (
     SCORE_LIMITS,
     SKILL_GROUPS,
     STRONG_EXPERIENCE_PHRASES,
-    SUPPORTED_TITLE_TECHNOLOGIES,
-    UNSUPPORTED_TITLE_TECHNOLOGIES,
 )
 from job_agent.text import normalize_text
 
-
-SAP_FOCUS_KEYWORDS = {"sap", "abap", "s/4hana", "s4hana"}
 
 EXPERIENCE_TERM = (
     r"(?:berufserfahrung|arbeitserfahrung|entwicklungserfahrung|"
@@ -149,32 +143,8 @@ def passes_hard_filters(title, description, location, remote, full_text, role):
     if blocked_word:
         return False, f"Titel enthaelt Ausschlusswort: {blocked_word}"
 
-    if contains_any(title, ADMIN_TITLE_WORDS) and not is_entry_level(
-        title,
-        full_text,
-    ):
-        return False, "Systemadministration ist keine Einstiegsrolle"
-
-    if contains_any(title, MODERN_WORKPLACE_TITLE_WORDS) and not is_entry_level(
-        title,
-        full_text,
-    ):
-        return False, "Microsoft-Cloud/Modern-Workplace ist keine Einstiegsrolle"
-
     if not role:
-        return False, "Titel passt zu keiner gesuchten Rollenfamilie"
-
-    unsupported = find_unsupported_title_technology(title)
-    junior_abap = role["id"] == "junior_sap" and unsupported == "abap"
-    if unsupported and not junior_abap:
-        return False, f"Nicht passender Technologie-Schwerpunkt im Titel: {unsupported}"
-
-    blocked_focus = find_blocked_focus_keyword(title, description)
-    junior_sap_focus = (
-        role["id"] == "junior_sap" and blocked_focus in SAP_FOCUS_KEYWORDS
-    )
-    if blocked_focus and not junior_sap_focus:
-        return False, f"Fachlicher Fokus passt nicht: {blocked_focus}"
+        return False, "Titel ist keine erkennbare IT-Rolle"
 
     years = extract_required_years(full_text)
     if years > 3:
@@ -185,10 +155,6 @@ def passes_hard_filters(title, description, location, remote, full_text, role):
 
     if contains_any(full_text, HIGH_TRAVEL_PHRASES):
         return False, "Hohe oder deutschlandweite Reisetatigkeit gefordert"
-
-    salary = extract_annual_salary(full_text)
-    if salary and salary[1] < SALARY_MINIMUM:
-        return False, f"Gehaltsobergrenze liegt unter {format_euros(SALARY_MINIMUM)}"
 
     location_score = analyze_location(location, remote, description)
     if not location_score["allowed"]:
@@ -233,38 +199,35 @@ def find_role(title, description):
 
         return role
 
+    if contains_any(title, GENERAL_IT_TITLE_KEYWORDS):
+        return GENERAL_IT_ROLE
     return None
 
 
 def find_blocked_title_word(title):
     for word in BLOCKED_TITLE_WORDS:
-        # Mixed level ads such as "Junior/Senior" remain reviewable.
-        if word == "senior" and contains_keyword(title, "junior"):
+        # Explicit entry signals win over generic experience labels such as
+        # Junior/Senior or Junior IT Project Manager.
+        if word in {
+            "senior",
+            "experte",
+            "expert",
+            "lead",
+            "principal",
+            "head",
+            "leitung",
+            "leiter",
+            "projektleiter",
+            "projektmanager",
+            "teamleiter",
+            "abteilungsleiter",
+            "manager",
+            "testmanager",
+            "test manager",
+        } and is_entry_level(title, title):
             continue
         if contains_keyword(title, word):
             return word
-    return None
-
-
-def find_unsupported_title_technology(title):
-    if contains_any(title, SUPPORTED_TITLE_TECHNOLOGIES):
-        return None
-    for technology in UNSUPPORTED_TITLE_TECHNOLOGIES:
-        if contains_keyword(title, technology):
-            return technology
-    return None
-
-
-def find_blocked_focus_keyword(title, description):
-    for keyword in BLOCKED_FOCUS_KEYWORDS:
-        if contains_keyword(title, keyword):
-            return keyword
-
-        # Body mentions only become hard blockers when an explicit focus phrase
-        # names the technology. Repeated incidental mentions are not enough.
-        for phrase in EXPLICIT_FOCUS_PHRASES:
-            if contains_keyword(description[:1800], phrase.format(keyword=keyword)):
-                return keyword
     return None
 
 
@@ -477,7 +440,9 @@ def score_preferences(full_text):
         penalties.append({"points": 2, "label": "ueberwiegend englischsprachige Stelle"})
 
     salary = extract_annual_salary(full_text)
-    if salary and SALARY_MINIMUM <= salary[1] < SALARY_TARGET:
+    if salary and salary[1] < SALARY_MINIMUM:
+        penalties.append({"points": 5, "label": "Gehalt unter persoenlichem Minimum"})
+    elif salary and salary[1] < SALARY_TARGET:
         penalties.append({"points": 3, "label": "Gehalt unter Wunschgehalt"})
 
     return penalties
@@ -518,10 +483,6 @@ def salary_number(value):
 
 def valid_salary(value):
     return 20_000 <= value <= 200_000
-
-
-def format_euros(value):
-    return f"{value:,.0f} EUR".replace(",", ".")
 
 
 def text_is_mainly_english(text):

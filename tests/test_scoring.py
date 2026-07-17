@@ -68,11 +68,57 @@ class ScoringTests(unittest.TestCase):
             )
         )
         self.assertEqual(result["filter_status"], "excluded")
-        self.assertIn("Rollenfamilie", result["reasons"][0])
+        self.assertIn("IT-Rolle", result["reasons"][0])
 
     def test_dev_abbreviation_is_allowed(self):
         result = score_job(make_job(title="Junior Python Dev"))
         self.assertEqual(result["filter_status"], "included")
+
+    def test_broad_it_title_reaches_personal_review(self):
+        result = score_job(
+            make_job(
+                title="Developer Node.js / TypeScript",
+                location="Deutschland",
+                remote="100%",
+                description="Erfahrung ist idealerweise vorhanden.",
+            )
+        )
+
+        self.assertEqual(result["filter_status"], "included")
+        self.assertEqual(result["role_group"], "general_it")
+
+    def test_non_it_remote_role_stays_excluded(self):
+        result = score_job(
+            make_job(
+                title="Junior Sales Manager",
+                location="Deutschland",
+                remote="100%",
+            )
+        )
+
+        self.assertEqual(result["filter_status"], "excluded")
+
+    def test_junior_it_manager_reaches_personal_review(self):
+        result = score_job(
+            make_job(
+                title="Junior IT Project Manager",
+                location="Deutschland",
+                remote="100%",
+            )
+        )
+
+        self.assertEqual(result["filter_status"], "included")
+
+    def test_it_leadership_role_stays_excluded(self):
+        result = score_job(
+            make_job(
+                title="Leitung IT-Entwicklung",
+                location="Deutschland",
+                remote="100%",
+            )
+        )
+
+        self.assertEqual(result["filter_status"], "excluded")
 
     def test_homeoffice_outside_local_area_is_not_full_remote(self):
         result = score_job(
@@ -227,12 +273,11 @@ class ScoringTests(unittest.TestCase):
         )
         self.assertEqual(result["filter_status"], "included")
 
-    def test_explicit_sap_focus_in_body_is_excluded(self):
+    def test_explicit_sap_focus_reaches_personal_review(self):
         result = score_job(
             make_job(description="Der Schwerpunkt SAP bestimmt deine taeglichen Aufgaben.")
         )
-        self.assertEqual(result["filter_status"], "excluded")
-        self.assertIn("sap", result["reasons"][0])
+        self.assertEqual(result["filter_status"], "included")
 
     def test_supported_java_role_is_allowed(self):
         result = score_job(
@@ -314,7 +359,7 @@ class ScoringTests(unittest.TestCase):
         )
         self.assertEqual(result["filter_status"], "excluded")
 
-    def test_microsoft_365_requires_entry_level_and_technical_context(self):
+    def test_microsoft_365_roles_reach_personal_review(self):
         junior = score_job(
             make_job(
                 title="Microsoft 365 Junior Consultant",
@@ -330,7 +375,7 @@ class ScoringTests(unittest.TestCase):
             )
         )
         self.assertEqual(junior["filter_status"], "included")
-        self.assertEqual(experienced["filter_status"], "excluded")
+        self.assertEqual(experienced["filter_status"], "included")
 
         experienced_consultant = score_job(
             make_job(
@@ -338,9 +383,9 @@ class ScoringTests(unittest.TestCase):
                 description="Microsoft 365, Cloud und PowerShell.",
             )
         )
-        self.assertEqual(experienced_consultant["filter_status"], "excluded")
+        self.assertEqual(experienced_consultant["filter_status"], "included")
 
-    def test_only_entry_level_sap_roles_are_allowed(self):
+    def test_sap_roles_reach_personal_review(self):
         junior = score_job(
             make_job(
                 title="Junior SAP Consultant",
@@ -355,7 +400,7 @@ class ScoringTests(unittest.TestCase):
         )
         self.assertEqual(junior["filter_status"], "included")
         self.assertEqual(junior["role_group"], "junior_sap")
-        self.assertEqual(experienced["filter_status"], "excluded")
+        self.assertEqual(experienced["filter_status"], "included")
 
     def test_junior_abap_role_is_reviewable(self):
         result = score_job(
@@ -367,7 +412,7 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(result["filter_status"], "included")
         self.assertEqual(result["role_group"], "junior_sap")
 
-    def test_requirements_roles_are_entry_level_only(self):
+    def test_requirements_roles_reach_personal_review(self):
         junior = score_job(
             make_job(
                 title="Junior Requirements Engineer",
@@ -381,17 +426,17 @@ class ScoringTests(unittest.TestCase):
             )
         )
         self.assertEqual(junior["filter_status"], "included")
-        self.assertEqual(experienced["filter_status"], "excluded")
+        self.assertEqual(experienced["filter_status"], "included")
 
-    def test_specialist_applications_and_support_are_excluded(self):
+    def test_specialist_applications_and_support_reach_personal_review(self):
         payroll = score_job(make_job(title="Technical Consultant Lohnmigration"))
         healthcare = score_job(make_job(title="ORBIS Anwendungsbetreuer"))
         support = score_job(make_job(title="IT-Supportmitarbeiter 2nd Level"))
-        self.assertEqual(payroll["filter_status"], "excluded")
-        self.assertEqual(healthcare["filter_status"], "excluded")
-        self.assertEqual(support["filter_status"], "excluded")
+        self.assertEqual(payroll["filter_status"], "included")
+        self.assertEqual(healthcare["filter_status"], "included")
+        self.assertEqual(support["filter_status"], "included")
 
-    def test_system_administration_is_entry_level_only(self):
+    def test_system_administration_reaches_personal_review(self):
         junior = score_job(
             make_job(
                 title="Junior Systemadministrator / DevOps",
@@ -406,14 +451,13 @@ class ScoringTests(unittest.TestCase):
         )
         self.assertEqual(junior["filter_status"], "included")
         self.assertEqual(junior["role_group"], "junior_administration")
-        self.assertEqual(experienced["filter_status"], "excluded")
+        self.assertEqual(experienced["filter_status"], "included")
 
-    def test_unsupported_core_technology_is_excluded(self):
+    def test_unfamiliar_core_technology_reaches_personal_review(self):
         result = score_job(
             make_job(title="Junior C# Software Developer", description="Reine C# Entwicklung.")
         )
-        self.assertEqual(result["filter_status"], "excluded")
-        self.assertIn("c#", result["reasons"][0])
+        self.assertEqual(result["filter_status"], "included")
 
     def test_test_automation_role_is_allowed(self):
         result = score_job(
@@ -461,18 +505,22 @@ class ScoringTests(unittest.TestCase):
         )
         self.assertEqual(result["filter_status"], "included")
 
-    def test_salary_below_minimum_is_excluded(self):
+    def test_salary_below_minimum_is_a_warning_not_an_exclusion(self):
         result = score_job(make_job(description="Jahresgehalt 44.000 EUR brutto."))
-        self.assertEqual(result["filter_status"], "excluded")
-        self.assertIn("45.000 EUR", result["reasons"][0])
+        self.assertEqual(result["filter_status"], "included")
+        self.assertTrue(
+            any("unter persoenlichem Minimum" in reason for reason in result["reasons"])
+        )
 
-    def test_structured_salary_below_minimum_is_excluded(self):
+    def test_structured_salary_below_minimum_is_a_warning(self):
         result = score_job(
             make_job(salary_min_eur=40_000, salary_max_eur=44_000)
         )
 
-        self.assertEqual(result["filter_status"], "excluded")
-        self.assertIn("45.000 EUR", result["reasons"][0])
+        self.assertEqual(result["filter_status"], "included")
+        self.assertTrue(
+            any("unter persoenlichem Minimum" in reason for reason in result["reasons"])
+        )
 
     def test_structured_minimum_without_maximum_is_not_an_upper_limit(self):
         result = score_job(make_job(salary_min_eur=40_000))

@@ -299,6 +299,53 @@ ROLE_GROUPS = [
     },
 ]
 
+# Broad fallback used only to keep clearly technical IT jobs in the inexpensive
+# prefilter. Personal interest and technology fit are decided by the LLM.
+GENERAL_IT_TITLE_KEYWORDS = [
+    "developer",
+    "entwickler",
+    "software",
+    "informatik",
+    "fachinformatiker",
+    "it",
+    "system engineer",
+    "systemingenieur",
+    "systemadministrator",
+    "administrator",
+    "data",
+    "daten",
+    "cloud",
+    "devops",
+    "network",
+    "netzwerk",
+    "cyber",
+    "it-security",
+    "programmierer",
+    "programmer",
+    "architect",
+    "architekt",
+    "product owner",
+    "requirements",
+    "technical consultant",
+    "technischer consultant",
+    "sap",
+    "abap",
+    "salesforce",
+    "microsoft 365",
+    "modern workplace",
+    "helpdesk",
+    "support specialist",
+    "support spezialist",
+    "systembetreuer",
+    "anwendungsbetreuer",
+]
+
+GENERAL_IT_ROLE = {
+    "id": "general_it",
+    "label": "Allgemeine IT-Rolle",
+    "points": 10,
+}
+
 SKILL_GROUPS = [
     {
         "id": "python",
@@ -418,6 +465,12 @@ BLOCKED_TITLE_WORDS = [
     "lead",
     "principal",
     "head",
+    "leitung",
+    "leiter",
+    "projektleiter",
+    "projektmanager",
+    "teamleiter",
+    "abteilungsleiter",
     "manager",
     "testmanager",
     "test manager",
@@ -433,74 +486,6 @@ BLOCKED_TITLE_WORDS = [
     "freelance",
     "freelancer",
     "freiberuflich",
-    "quereinstieg",
-    "helpdesk",
-    "service desk",
-    "first level support",
-    "1st level support",
-    "second level support",
-    "2nd level support",
-    "it-support",
-    "supportmitarbeiter",
-    "it-systembetreuer",
-    "it-systembetreuung",
-    "lohnmigration",
-    "orbis",
-    "anwendungsbetreuer",
-]
-
-ADMIN_TITLE_WORDS = [
-    "systemadministrator",
-    "system administrator",
-    "it-administrator",
-    "it administrator",
-    "netzwerkadministrator",
-    "network administrator",
-]
-
-MODERN_WORKPLACE_TITLE_WORDS = [
-    "modern workplace",
-    "microsoft 365",
-    "m365",
-]
-
-# These technologies are excluded only when the title makes them the role's
-# explicit core and no supported core technology appears in the title.
-UNSUPPORTED_TITLE_TECHNOLOGIES = [
-    "c#",
-    ".net",
-    "c++",
-    "cobol",
-    "salesforce",
-    "go",
-    "golang",
-    "embedded",
-    "abap",
-    "sps",
-]
-
-SUPPORTED_TITLE_TECHNOLOGIES = [
-    "python",
-    "java",
-    "javascript",
-    "typescript",
-    "node.js",
-    "ai",
-    "ki",
-    "machine learning",
-    "data",
-]
-
-BLOCKED_FOCUS_KEYWORDS = ["sap", "abap", "s/4hana", "s4hana", "sps"]
-
-EXPLICIT_FOCUS_PHRASES = [
-    "schwerpunkt {keyword}",
-    "fokus {keyword}",
-    "{keyword} entwickler",
-    "{keyword}-entwickler",
-    "{keyword} developer",
-    "{keyword} consultant",
-    "{keyword} berater",
 ]
 
 # Approximate 30 km local area around Exampletown (Wasserkuppe).

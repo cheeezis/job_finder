@@ -183,7 +183,9 @@ class Job:
             first_seen_at=parse_datetime(values.get("first_seen_at")),
             last_seen_at=parse_datetime(values.get("last_seen_at")),
             fetched_at=parse_datetime(values.get("fetched_at")),
-            workflow_status=WorkflowStatus(values["workflow_status"]),
+            workflow_status=WorkflowStatus(
+                values.get("workflow_status", WorkflowStatus.NEW.value)
+            ),
             rule_score=values.get("rule_score"),
             llm_score=values.get("llm_score"),
             llm_result=values.get("llm_result"),

@@ -38,6 +38,15 @@ def analyze_results(
     cache_state = load_cache(settings.cache_path)
     analyses = cache_state["analyses"]
     pending = cache_state["pending"]
+    cached_profile_version = cache_state.get("profile_version")
+    profile_changed = (
+        cached_profile_version is not None
+        and cached_profile_version != profile.version
+    )
+    if profile_changed:
+        analyses.clear()
+        pending.clear()
+    cache_state["profile_version"] = profile.version
     jobs_with_keys = [
         (job, analysis_cache_key(job, profile.version, settings))
         for job in results["included"]
@@ -51,7 +60,12 @@ def analyze_results(
             cache_changed |= attach_result(job, cached, "cached")
             cache_changed |= pending.pop(key, None) is not None
             cached_count += 1
-        elif job.get("is_new") or job.get("content_changed") or key in pending:
+        elif (
+            profile_changed
+            or job.get("is_new")
+            or job.get("content_changed")
+            or key in pending
+        ):
             eligible.append((job, key))
 
     for job, key in eligible:
@@ -120,6 +134,7 @@ def analyze_job_record(job, profile, settings, client, cache_key):
         profile,
         settings.model,
         client,
+        job_context=job,
     )
     fit = score_two_stage_result(job, job_analysis, profile_result["match"])
     analyzed_at = datetime.now(timezone.utc).isoformat()
@@ -213,6 +228,7 @@ def compact_result(record):
         "recommendation": fit["recommendation"],
         "confidence": fit["confidence"],
         "summary": job_analysis["role_summary"],
+        "seniority": job_analysis.get("seniority", "unspecified"),
         "tasks": job_analysis["tasks"][:3],
         "requirements": compact_requirements(job_analysis),
         "matching_evidence": fit["matching_evidence"][:3],
@@ -272,12 +288,19 @@ def load_cache(path):
     """Load successful analyses and pending retries."""
     cache_path = Path(path)
     if not cache_path.exists():
-        return {"analyses": {}, "pending": {}}
+        return {"profile_version": None, "analyses": {}, "pending": {}}
     document = json.loads(cache_path.read_text(encoding="utf-8"))
     if document.get("version") != CACHE_VERSION:
         raise ValueError("LLM-Cache verwendet eine unbekannte Version")
+    analyses = document.get("analyses", {})
+    profile_version = document.get("profile_version")
+    if profile_version is None and analyses:
+        profile_version = next(iter(analyses.values())).get("metadata", {}).get(
+            "profile_version"
+        )
     return {
-        "analyses": document.get("analyses", {}),
+        "profile_version": profile_version,
+        "analyses": analyses,
         "pending": document.get("pending", {}),
     }
 

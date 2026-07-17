@@ -59,6 +59,31 @@ def load_llm_profile(path=PROFILE_PATH):
     for section in ("skills", "strengths", "career_preferences"):
         require_mapping(root.get(section), section)
 
+    preferences = root["career_preferences"]
+    priorities = require_mapping(
+        preferences.get("evaluation_priorities"),
+        "career_preferences.evaluation_priorities",
+    )
+    require_list(
+        priorities.get("order"),
+        "career_preferences.evaluation_priorities.order",
+    )
+    for name in (
+        "entry_suitability",
+        "working_conditions",
+        "general_direction",
+        "technology_head_start",
+        "vague_advertisements",
+    ):
+        require_text(
+            priorities.get(name),
+            f"career_preferences.evaluation_priorities.{name}",
+        )
+    require_mapping(
+        priorities.get("recommendation_meaning"),
+        "career_preferences.evaluation_priorities.recommendation_meaning",
+    )
+
     for rule in root["truth_rules"]:
         require_text(rule, "truth_rules")
 

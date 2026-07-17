@@ -54,6 +54,8 @@ def make_profile_match(
     technology_statuses,
     experience_status="met",
     task_status="met",
+    ratings=None,
+    information_quality="clear",
 ):
     """Return complete evidence matches for the compact extracted job."""
     matches = [
@@ -65,7 +67,21 @@ def make_profile_match(
         make_match(f"technology:0:{index}", status)
         for index, status in enumerate(technology_statuses)
     )
-    return {"matches": matches, "uncertainties": []}
+    return {
+        "matches": matches,
+        "assessment": {
+            "dimension_ratings": ratings
+            or {
+                "entry_fit": "excellent",
+                "working_conditions_fit": "excellent",
+                "direction_fit": "excellent",
+                "technology_head_start": "excellent",
+            },
+            "information_quality": information_quality,
+            "rationale": ["Nachvollziehbare persoenliche Bewertung."],
+        },
+        "uncertainties": [],
+    }
 
 
 def make_match(requirement_id, status):
@@ -96,7 +112,7 @@ class TwoStageFitScoreTests(unittest.TestCase):
         self.assertEqual(result["overall_score"], 100)
         self.assertEqual(result["recommendation"], "strong_match")
 
-    def test_broad_unclear_stack_uses_minimum_count_and_remains_borderline(self):
+    def test_broad_minimum_stack_with_partial_experience_is_borderline(self):
         job = {
             "location_precheck": "100% Remote aus Deutschland",
             "work_mode": "remote",
@@ -113,15 +129,44 @@ class TwoStageFitScoreTests(unittest.TestCase):
             job,
             analysis,
             make_profile_match(
-                ["met", "met", "not_met", "not_met", "not_met"],
+                ["met", "partially_met", "not_met", "not_met", "not_met"],
                 experience_status="partially_met",
+                ratings={
+                    "entry_fit": "good",
+                    "working_conditions_fit": "excellent",
+                    "direction_fit": "good",
+                    "technology_head_start": "partial",
+                },
             ),
         )
 
-        self.assertEqual(result["dimension_ratings"]["technology_fit"], "good")
-        self.assertEqual(result["dimension_ratings"]["experience_fit"], "weak")
-        self.assertEqual(result["overall_score"], 70)
+        self.assertEqual(result["dimension_ratings"]["entry_fit"], "partial")
+        self.assertEqual(result["dimension_scores"]["technology_head_start"], 2)
+        self.assertEqual(result["overall_score"], 59)
         self.assertEqual(result["recommendation"], "borderline")
+
+    def test_uncertain_entry_and_neutral_direction_is_not_recommended(self):
+        job = {
+            "location_precheck": "100% Remote aus Deutschland",
+            "work_mode": "remote",
+        }
+        result = score_two_stage_result(
+            job,
+            make_job_analysis(role="frontend", seniority="unspecified"),
+            make_profile_match(
+                ["partially_met"],
+                ratings={
+                    "entry_fit": "partial",
+                    "working_conditions_fit": "excellent",
+                    "direction_fit": "partial",
+                    "technology_head_start": "partial",
+                },
+                information_quality="sufficient",
+            ),
+        )
+
+        self.assertEqual(result["overall_score"], 39)
+        self.assertEqual(result["recommendation"], "not_recommended")
 
     def test_senior_signal_blocks_an_otherwise_high_score(self):
         job = {
@@ -134,11 +179,11 @@ class TwoStageFitScoreTests(unittest.TestCase):
             make_profile_match(["met"]),
         )
 
-        self.assertGreaterEqual(result["overall_score"], 75)
+        self.assertEqual(result["overall_score"], 39)
         self.assertEqual(result["recommendation"], "not_recommended")
         self.assertTrue(result["hard_conflicts"])
 
-    def test_partial_task_overlap_is_not_scored_like_a_perfect_match(self):
+    def test_realistic_but_not_explicit_entry_job_is_capped_as_match(self):
         job = {
             "location_precheck": "100% Remote aus Deutschland",
             "work_mode": "remote",
@@ -146,12 +191,33 @@ class TwoStageFitScoreTests(unittest.TestCase):
         result = score_two_stage_result(
             job,
             make_job_analysis(),
-            make_profile_match(["met"], task_status="partially_met"),
+            make_profile_match(
+                ["met"],
+                ratings={
+                    "entry_fit": "good",
+                    "working_conditions_fit": "excellent",
+                    "direction_fit": "excellent",
+                    "technology_head_start": "excellent",
+                },
+            ),
         )
 
-        self.assertEqual(result["dimension_ratings"]["task_fit"], "good")
-        self.assertEqual(result["dimension_scores"]["task_fit"], 15)
-        self.assertEqual(result["overall_score"], 95)
+        self.assertEqual(result["overall_score"], 79)
+        self.assertEqual(result["recommendation"], "match")
+
+    def test_vague_advertisement_is_capped_as_borderline(self):
+        job = {
+            "location_precheck": "100% Remote aus Deutschland",
+            "work_mode": "remote",
+        }
+        result = score_two_stage_result(
+            job,
+            make_job_analysis(),
+            make_profile_match(["met"], information_quality="vague"),
+        )
+
+        self.assertEqual(result["overall_score"], 59)
+        self.assertEqual(result["recommendation"], "borderline")
 
     def test_local_job_is_a_good_location_fit(self):
         job = {
@@ -160,6 +226,30 @@ class TwoStageFitScoreTests(unittest.TestCase):
         }
 
         self.assertEqual(score_location(job), "good")
+
+    def test_deterministic_remote_check_corrects_working_condition_rating(self):
+        job = {
+            "location_precheck": "100% Remote aus Deutschland",
+            "work_mode": "remote",
+        }
+        result = score_two_stage_result(
+            job,
+            make_job_analysis(),
+            make_profile_match(
+                ["met"],
+                ratings={
+                    "entry_fit": "excellent",
+                    "working_conditions_fit": "partial",
+                    "direction_fit": "excellent",
+                    "technology_head_start": "excellent",
+                },
+            ),
+        )
+
+        self.assertEqual(
+            result["dimension_ratings"]["working_conditions_fit"],
+            "excellent",
+        )
 
     def test_unmet_language_requirement_is_a_risk_not_a_hard_conflict(self):
         job = {

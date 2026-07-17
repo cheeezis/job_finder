@@ -149,6 +149,7 @@ def run_two_stage_evaluation(
                 profile,
                 model,
                 client,
+                job_context=job,
             )
             analysis = score_two_stage_result(
                 job,

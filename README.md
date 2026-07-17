@@ -16,10 +16,17 @@ Der Agent kann:
 - alle Quellen in ein verbindliches Jobmodell ueberfuehren
 - Rohbeschreibung, Klartext sowie Veroeffentlichungs- und Abrufdaten speichern
 - Jobs kostenlos vorfiltern und passende neue Jobs per OpenAI bewerten
-- feste, laufuebergreifend vergleichbare Match-Scores von 0 bis 100 erzeugen
+- persoenliche Match-Scores von 0 bis 100 nach klaren Jobsuch-Prioritaeten erzeugen
 - quellenuebergreifende Duplikate zusammenfuehren
 - bereits gesehene Jobs intern merken
 - kompakte KI-Empfehlungen als JSON und Markdown ausgeben
+
+Die persoenliche Bewertung priorisiert zuerst einen realistischen Berufseinstieg
+(50 Punkte), danach Standort und Homeoffice (30 Punkte). Die grobe fachliche
+Richtung (15 Punkte) und bereits vorhandene Technologien (5 Punkte) sind
+nachgeordnet. Nur eine klar einstiegsfreundliche Stelle kann `strong_match`
+werden; ein unsicherer Einstieg oder eine vage Anzeige bleibt hoechstens
+`borderline`.
 
 ## Nutzung
 
@@ -50,8 +57,10 @@ Ein kostenbegrenzter Testlauf analysiert hoechstens einen neuen passenden Job:
 python run_agent.py --llm-limit 1
 ```
 
-Positive neue oder aktualisierte Empfehlungen fuer Discord vormerken, ohne sie
-zu senden, geschieht automatisch bei jedem Lauf. Fuer den echten Versand muss
+Passende und grenzwertige neue oder aktualisierte Empfehlungen fuer Discord
+vormerken, ohne sie zu senden, geschieht automatisch bei jedem Lauf. Die
+Nachrichten enthalten Kurzbeschreibung, Erfahrungslevel sowie Pro und Contra.
+Fuer den echten Versand muss
 der Webhook als `DISCORD_WEBHOOK_URL` gesetzt und der Versand explizit aktiviert
 werden:
 

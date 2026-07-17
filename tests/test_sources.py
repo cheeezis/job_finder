@@ -42,6 +42,27 @@ class StepStoneSearchTests(unittest.TestCase):
 
 
 class StepStoneCacheTests(unittest.TestCase):
+    def test_saved_cache_contains_only_reusable_source_fields(self):
+        url = "https://www.stepstone.de/stellenangebote--cached.html"
+        job = self.make_job("Cached", url)
+        job.rule_score = 80
+
+        with tempfile.TemporaryDirectory() as directory:
+            cache_path = Path(directory) / "stepstone.json"
+            stepstone.save_cache(
+                cache_path,
+                {
+                    "version": stepstone.CACHE_VERSION,
+                    "last_links": [url],
+                    "jobs": {url: job},
+                },
+            )
+            saved_job = json.loads(cache_path.read_text(encoding="utf-8"))["jobs"][url]
+
+        self.assertIn("description_clean", saved_job)
+        self.assertNotIn("rule_score", saved_job)
+        self.assertNotIn("workflow_status", saved_job)
+
     def test_fetch_jobs_only_downloads_uncached_details(self):
         cached_url = "https://www.stepstone.de/stellenangebote--cached.html"
         new_url = "https://www.stepstone.de/stellenangebote--new.html"
@@ -194,6 +215,21 @@ class StepStoneCacheTests(unittest.TestCase):
 
 
 class SharedDetailCacheTests(unittest.TestCase):
+    def test_saved_cache_contains_only_reusable_source_fields(self):
+        now = datetime(2026, 7, 17, 12, tzinfo=timezone.utc)
+        url = "https://example.test/get-in-it/1"
+        job = self.make_job(get_in_it.SOURCE_NAME, url, now)
+        job.llm_score = 90
+
+        with tempfile.TemporaryDirectory() as directory:
+            cache_path = Path(directory) / "details.json"
+            save_detail_cache(cache_path, {url: job})
+            saved_job = json.loads(cache_path.read_text(encoding="utf-8"))["jobs"][url]
+
+        self.assertIn("fetched_at", saved_job)
+        self.assertNotIn("llm_score", saved_job)
+        self.assertNotIn("first_seen_at", saved_job)
+
     def test_fresh_details_are_reused_by_arbeitsagentur_and_get_in_it(self):
         now = datetime(2026, 7, 17, 12, tzinfo=timezone.utc)
         sources = [

@@ -15,7 +15,7 @@ class LlmProfileTests(unittest.TestCase):
     def test_project_profile_loads_as_json_compatible_facts(self):
         profile = load_llm_profile()
 
-        self.assertEqual(profile.version, 1)
+        self.assertEqual(profile.version, 2)
         self.assertEqual(
             profile.data["profile"]["professional_experience_years"],
             0,
@@ -25,6 +25,10 @@ class LlmProfileTests(unittest.TestCase):
             "in_progress",
         )
         self.assertTrue(profile.data["truth_rules"])
+        self.assertEqual(
+            profile.data["career_preferences"]["evaluation_priorities"]["order"][0],
+            "entry_suitability",
+        )
         json.dumps(profile.data)
 
     def test_missing_required_section_is_rejected(self):
@@ -37,7 +41,7 @@ class LlmProfileTests(unittest.TestCase):
 
     def test_invalid_version_is_rejected(self):
         text = Path("profile.yaml").read_text(encoding="utf-8")
-        text = text.replace("version: 1", "version: unknown", 1)
+        text = text.replace("version: 2", "version: unknown", 1)
 
         with TemporaryProfile(text) as path:
             with self.assertRaisesRegex(ProfileValidationError, "version"):

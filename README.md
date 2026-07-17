@@ -28,6 +28,13 @@ nachgeordnet. Nur eine klar einstiegsfreundliche Stelle kann `strong_match`
 werden; ein unsicherer Einstieg oder eine vage Anzeige bleibt hoechstens
 `borderline`.
 
+Die kostenlose Vorfilterung verwirft nur klare Konflikte wie unpassenden
+Standort, ausgeschlossene Beschaeftigungsarten, eindeutige Fuehrungs-/Seniorrollen,
+mehr als drei geforderte Erfahrungsjahre oder hohe Reisetaetigkeit. Ungewohnte
+IT-Richtungen und Technologien erreichen dagegen die persoenliche KI-Bewertung.
+Ein genanntes Gehalt unter 45.000 Euro wird als Warnung angezeigt, aber nicht
+vorab ausgeschlossen.
+
 ## Nutzung
 
 Abhaengigkeiten installieren:

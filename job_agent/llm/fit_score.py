@@ -1,20 +1,42 @@
 """Deterministic scoring for validated two-stage LLM results."""
 
 from job_agent.llm.contract import (
-    RATING_POINTS,
     recommendation_for_analysis,
 )
-from job_agent.profile import ROLE_FAMILY_FIT_RATINGS
 
 
-STATUS_VALUES = {
-    "met": 1.0,
-    "partially_met": 0.5,
-    "unknown": 0.25,
-    "not_met": 0.0,
+DIMENSION_POINTS = {
+    "entry_fit": {
+        "excellent": 50,
+        "good": 35,
+        "partial": 15,
+        "weak": 5,
+        "conflict": 0,
+    },
+    "working_conditions_fit": {
+        "excellent": 30,
+        "good": 24,
+        "partial": 12,
+        "weak": 5,
+        "conflict": 0,
+    },
+    "direction_fit": {
+        "excellent": 15,
+        "good": 12,
+        "partial": 8,
+        "weak": 3,
+        "conflict": 0,
+    },
+    "technology_head_start": {
+        "excellent": 5,
+        "good": 4,
+        "partial": 2,
+        "weak": 1,
+        "conflict": 0,
+    },
 }
 HARD_CONFLICT_CATEGORIES = {"education", "employment", "travel"}
-FIT_SCORE_VERSION = 3
+FIT_SCORE_VERSION = 4
 
 
 def score_two_stage_result(job, job_analysis, profile_match):
@@ -23,15 +45,24 @@ def score_two_stage_result(job, job_analysis, profile_match):
         item["requirement_id"]: item for item in profile_match["matches"]
     }
     hard_conflicts = find_hard_conflicts(job, job_analysis, matches)
-    ratings = {
-        "role_fit": score_role_family(job_analysis),
-        "technology_fit": score_technologies(job_analysis, matches),
-        "experience_fit": score_experience(job_analysis, matches),
-        "location_fit": score_location(job),
-        "task_fit": score_tasks(job_analysis, matches),
+    assessment = profile_match["assessment"]
+    ratings = adjusted_ratings(
+        job,
+        job_analysis,
+        matches,
+        assessment["dimension_ratings"],
+    )
+    scores = {
+        name: DIMENSION_POINTS[name][rating]
+        for name, rating in ratings.items()
     }
-    scores = {name: RATING_POINTS[rating] for name, rating in ratings.items()}
-    overall_score = sum(scores.values())
+    overall_score = capped_score(
+        sum(scores.values()),
+        ratings,
+        assessment["information_quality"],
+    )
+    if hard_conflicts:
+        overall_score = min(overall_score, 39)
     recommendation = recommendation_for_analysis(
         overall_score,
         hard_conflicts,
@@ -68,7 +99,7 @@ def score_two_stage_result(job, job_analysis, profile_match):
         "recommendation": recommendation,
         "confidence": confidence,
         "summary": truncate(
-            f"{job_analysis['role_summary']} Deterministischer Fit: "
+            f"{job_analysis['role_summary']} Persoenlicher Fit: "
             f"{overall_score}/100 ({recommendation}).",
             600,
         ),
@@ -84,106 +115,56 @@ def score_two_stage_result(job, job_analysis, profile_match):
     }
 
 
-def score_role_family(job_analysis):
-    """Score the best relevant role family against personal priorities."""
-    families = [job_analysis["primary_role_family"]]
-    families.extend(job_analysis["secondary_role_families"])
-    return max(
-        (ROLE_FAMILY_FIT_RATINGS[family] for family in families),
-        key=RATING_POINTS.__getitem__,
-    )
-
-
-def score_technologies(job_analysis, matches):
-    """Aggregate technology groups according to their minimum-count semantics."""
-    groups = [
-        (index, group)
-        for index, group in enumerate(job_analysis["technology_requirements"])
-        if group["priority"] != "preferred"
-    ]
-    only_preferred = not groups
-    if only_preferred:
-        groups = list(enumerate(job_analysis["technology_requirements"]))
-    if not groups:
-        return "good"
-
-    group_values = []
-    all_levels_unclear = True
-    for group_index, group in groups:
-        values = [
-            STATUS_VALUES[matches[f"technology:{group_index}:{index}"]["status"]]
-            for index in range(len(group["technologies"]))
-        ]
-        required_count = group["minimum_count"]
-        group_values.append(
-            sum(sorted(values, reverse=True)[:required_count]) / required_count
-        )
-        if any(
-            technology["expected_level"] != "unclear"
-            for technology in group["technologies"]
-        ):
-            all_levels_unclear = False
-
-    ratio = sum(group_values) / len(group_values)
-    if ratio >= 0.9:
-        rating = "excellent"
-    elif ratio >= 0.65:
-        rating = "good"
-    elif ratio >= 0.35:
-        rating = "partial"
-    elif ratio > 0:
-        rating = "weak"
-    else:
-        rating = "partial" if only_preferred else "conflict"
-
-    if all_levels_unclear and rating == "excellent":
-        return "good"
-    return rating
-
-
-def score_experience(job_analysis, matches):
-    """Score entry suitability without treating projects as employment."""
-    seniority = job_analysis["seniority"]
-    requirement = job_analysis["experience_requirement"]
-    expectation = requirement["expectation"]
-    minimum_years = requirement["minimum_years"]
-    status = matches["experience"]["status"]
-
+def capped_score(score, ratings, information_quality):
+    """Enforce the priority hierarchy without interpreting job language in Python."""
+    entry_cap = {
+        "excellent": 100,
+        "good": 79,
+        "partial": 59,
+        "weak": 39,
+        "conflict": 39,
+    }[ratings["entry_fit"]]
+    cap = entry_cap
+    if information_quality == "vague":
+        cap = min(cap, 59)
+    if ratings["working_conditions_fit"] == "conflict":
+        cap = min(cap, 39)
     if (
-        seniority == "senior"
-        or expectation == "senior_expertise"
-        or minimum_years is not None
-        and minimum_years > 3
+        ratings["entry_fit"] == "partial"
+        and ratings["direction_fit"] in {"partial", "weak", "conflict"}
+        and information_quality != "clear"
     ):
-        return "conflict"
-    if seniority == "mid" or expectation == "several_years":
-        return "weak"
-    if expectation == "none_stated":
-        return "excellent" if seniority != "mixed" else "good"
-    if expectation == "first_exposure":
-        return "excellent" if status in {"met", "partially_met"} else "good"
-    if expectation == "practical_experience":
-        if requirement["priority"] == "preferred":
-            return "good" if status in {"met", "partially_met"} else "partial"
-        return "good" if status == "met" else "weak"
-    if expectation == "professional_experience":
-        return "partial" if requirement["priority"] == "preferred" else "weak"
-    return "partial"
+        cap = min(cap, 39)
+    return min(score, cap)
 
 
-def score_tasks(job_analysis, matches):
-    """Combine task direction with evidence-based task overlap."""
-    direction_rating = score_role_family(job_analysis)
-    overlap_rating = {
-        "met": "excellent",
-        "partially_met": "good",
-        "unknown": "partial",
-        "not_met": "weak",
-    }[matches["tasks"]["status"]]
-    return min(
-        (direction_rating, overlap_rating),
-        key=RATING_POINTS.__getitem__,
-    )
+def adjusted_ratings(job, job_analysis, matches, ratings):
+    """Apply objective minimum-count semantics to the LLM's priority ratings."""
+    adjusted = dict(ratings)
+    adjusted["working_conditions_fit"] = {
+        "excellent": "excellent",
+        "good": "good",
+        "weak": "partial",
+        "conflict": "conflict",
+    }[score_location(job)]
+    for group_index, group in enumerate(job_analysis["technology_requirements"]):
+        if group["priority"] == "preferred" or group["minimum_count"] <= 1:
+            continue
+        covered = sum(
+            {
+                "met": 1.0,
+                "partially_met": 0.5,
+                "unknown": 0.0,
+                "not_met": 0.0,
+            }[matches[f"technology:{group_index}:{index}"]["status"]]
+            for index in range(len(group["technologies"]))
+        )
+        if covered < group["minimum_count"] and adjusted["entry_fit"] in {
+            "excellent",
+            "good",
+        }:
+            adjusted["entry_fit"] = "partial"
+    return adjusted
 
 
 def score_location(job):

@@ -44,12 +44,16 @@ def make_job(
         "llm_result": {
             "recommendation": recommendation,
             "summary": "Sehr passende Einstiegsstelle.",
+            "seniority": "junior_entry",
+            "matching_evidence": ["Python-Projekte passen zur Stelle."],
+            "gaps": ["Docker ist nicht belegt."],
+            "risks": [],
         },
     }
 
 
 class NotificationTests(unittest.TestCase):
-    def test_preview_queues_only_positive_active_new_jobs(self):
+    def test_preview_queues_all_unsent_active_matches_and_borderline_jobs(self):
         results = {
             "included": [
                 make_job("job:positive"),
@@ -69,9 +73,9 @@ class NotificationTests(unittest.TestCase):
             stats = process_notifications(results, state_path=path)
             state = load_notification_state(path)
 
-        self.assertEqual(stats["queued"], 1)
-        self.assertEqual(stats["ready"], 1)
-        self.assertEqual(len(state["pending"]), 1)
+        self.assertEqual(stats["queued"], 3)
+        self.assertEqual(stats["ready"], 3)
+        self.assertEqual(len(state["pending"]), 3)
         self.assertEqual(state["sent"], {})
 
     def test_successful_delivery_is_not_sent_twice(self):
@@ -194,6 +198,13 @@ class NotificationTests(unittest.TestCase):
         self.assertLessEqual(len(chunks[0]), 10)
         self.assertEqual(payload["allowed_mentions"], {"parse": []})
         self.assertIn("Junior Python Developer", payload["embeds"][0]["title"])
+        fields = {
+            field["name"]: field["value"]
+            for field in payload["embeds"][0]["fields"]
+        }
+        self.assertEqual(fields["Level"], "Einsteiger / Junior")
+        self.assertIn("Python-Projekte", fields["Pro"])
+        self.assertIn("Docker", fields["Contra"])
         self.assertEqual(
             payload["embeds"][0]["url"],
             "https://example.test/job:0",

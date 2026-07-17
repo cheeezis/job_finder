@@ -1,100 +1,72 @@
 """Versioned scoring rubric and structured output contract for LLM reviews."""
 
-RUBRIC_VERSION = 5
-SCHEMA_VERSION = 3
+RUBRIC_VERSION = 6
+SCHEMA_VERSION = 4
 
-RATING_POINTS = {
-    "excellent": 20,
-    "good": 15,
-    "partial": 10,
-    "weak": 5,
-    "conflict": 0,
-}
+RATING_VALUES = ("excellent", "good", "partial", "weak", "conflict")
 
 RUBRIC = {
-    "role_fit": {
-        "max_points": 20,
+    "entry_fit": {
+        "max_points": 50,
         "guidance": (
-            "Bewerte die tatsaechliche Rolle: primaere Zielrollen am hoechsten, "
-            "danach sekundaere, explorative und niedrig priorisierte Rollen."
+            "Eine realistische Einstiegsstelle ist die wichtigste Voraussetzung."
         ),
         "anchors": {
-            "excellent": "klare primaere Zielrolle",
-            "good": "passende sekundaere Zielrolle",
-            "partial": "explorative oder niedrig priorisierte Rolle",
-            "weak": "nur geringe fachliche Naehe",
-            "conflict": "unpassende Rolle oder klares Ausschlussprofil",
+            "excellent": "klare Junior- oder Berufseinsteigerrolle",
+            "good": "Einstieg ohne ausdrueckliches Junior-Label realistisch",
+            "partial": "Einstieg wegen Anforderungen unsicher",
+            "weak": "deutliche Erfahrungsluecke fuer diese konkrete Stelle",
+            "conflict": "klar keine realistische Einstiegsstelle",
         },
     },
-    "technology_fit": {
-        "max_points": 20,
+    "working_conditions_fit": {
+        "max_points": 30,
         "guidance": (
-            "Vergleiche geforderte Technologien mit belegten Kenntnissen. "
-            "Python, RAG und agentische KI sind besonders relevant; Grundlagen "
-            "duerfen nicht als praktische oder fortgeschrittene Kenntnisse "
-            "gelten. Mehrere geforderte Technologien brauchen mehrere Belege."
+            "Fulda, lokaler Umkreis oder vollstaendiges Homeoffice sind nach der "
+            "Einstiegstauglichkeit am wichtigsten."
         ),
         "anchors": {
-            "excellent": "belegte Kerntechnologien decken die Stelle weitgehend ab",
-            "good": "mehrere zentrale Technologien sind belegt; nur Nebenluecken",
-            "partial": "relevante Ueberschneidung mit deutlichem Lernbedarf",
-            "weak": "die meisten zentralen Technologien fehlen",
-            "conflict": "der zwingende Kern-Stack ist nicht belegt",
+            "excellent": "bevorzugter Standort oder vollstaendig remote",
+            "good": "akzeptable lokale oder hybride Bedingungen",
+            "partial": "Arbeitsbedingungen sind nicht vollstaendig klar",
+            "weak": "nur mit deutlichem Kompromiss akzeptabel",
+            "conflict": "Standort oder Arbeitsbedingungen ausgeschlossen",
         },
     },
-    "experience_fit": {
-        "max_points": 20,
+    "direction_fit": {
+        "max_points": 15,
         "guidance": (
-            "Bevorzuge echte Einstiegsrollen ohne Berufserfahrung. Praktikum, "
-            "Studium und Projekte sind Belege, aber keine regulaere "
-            "Berufserfahrung. Berufserfahrung darf nur anerkannt werden, wenn "
-            "sie im Profil ausdruecklich belegt ist."
+            "Die Aufgaben sollen grob zu Software, Daten, KI oder technischem "
+            "Consulting passen; ein perfekter Schwerpunkt ist nicht erforderlich."
         ),
         "anchors": {
-            "excellent": "explizite Einstiegsrolle oder keine Erfahrung erforderlich",
-            "good": "erste praktische Erfahrung reicht; Projekte oder Praktikum passen",
-            "partial": "ein bis drei Jahre sind nur bevorzugt oder unklar formuliert",
-            "weak": "ein bis drei Jahre oder fundierte Berufserfahrung sind zwingend",
-            "conflict": "Seniorniveau oder mehr als drei Jahre erforderlich",
+            "excellent": "inhaltlich besonders interessante Richtung",
+            "good": "ungefaehr passende technische oder analytische Richtung",
+            "partial": "neutral, aber grundsaetzlich akzeptabel",
+            "weak": "wenig ansprechender Schwerpunkt",
+            "conflict": "klar unpassende Taetigkeit",
         },
     },
-    "location_fit": {
-        "max_points": 20,
+    "technology_head_start": {
+        "max_points": 5,
         "guidance": (
-            "Nutze den bereits deterministisch ermittelten location_precheck. "
-            "Remote innerhalb Deutschlands ist bevorzugt, danach lokal mit "
-            "Homeoffice und lokal vor Ort. Berechne keine Entfernungen selbst."
+            "Vorhandene Technologien sind nur ein kleiner Startvorteil. Grundlagen "
+            "sind keine volle praktische Erfahrung."
         ),
         "anchors": {
-            "excellent": "vollstaendig remote in Deutschland",
-            "good": "lokal vor Ort oder mit passender Hybridregelung",
-            "partial": "zulaessiger Zusatzstandort mit erfuellter Remote-Regel",
-            "weak": "Standort oder Remote-Anteil ist unklar",
-            "conflict": "gepruefter Standortkonflikt",
-        },
-    },
-    "task_fit": {
-        "max_points": 20,
-        "guidance": (
-            "Bewerte konkrete Aufgaben statt nur den Titel. Entwicklung mit "
-            "Python, RAG, Agenten, Daten und Backend ist besonders interessant. "
-            "Bewerte hier die inhaltliche Richtung; Technologieluecken werden "
-            "bereits in technology_fit bewertet."
-        ),
-        "anchors": {
-            "excellent": "Schwerpunkt auf Python, RAG, Agenten oder angewandter KI",
-            "good": "passende Software-, Backend- oder Datenaufgaben",
-            "partial": "interessante Teilaufgaben, aber anderer Schwerpunkt",
-            "weak": "Aufgaben passen nur gering zur gewuenschten Entwicklung",
-            "conflict": "Aufgaben widersprechen der angestrebten Entwicklung",
+            "excellent": "geforderte Kerntechnologien praktisch belegt",
+            "good": "mehrere hilfreiche Kenntnisse belegt",
+            "partial": "ein Teil ist belegt oder nur Grundlagen vorhanden",
+            "weak": "wenig direkt nutzbare Vorerfahrung",
+            "conflict": "zwingender Kern-Stack klar nicht erfuellt",
         },
     },
 }
 
 SCORE_BANDS = (
-    (90, "strong_match"),
-    (75, "match"),
-    (60, "borderline"),
+    (80, "strong_match"),
+    (60, "match"),
+    (40, "borderline"),
     (0, "not_recommended"),
 )
 
@@ -168,7 +140,7 @@ ANALYSIS_SCHEMA = {
             "additionalProperties": False,
             "required": list(RUBRIC),
             "properties": {
-                name: {"type": "string", "enum": list(RATING_POINTS)}
+                name: {"type": "string", "enum": list(RATING_VALUES)}
                 for name in RUBRIC
             },
         },

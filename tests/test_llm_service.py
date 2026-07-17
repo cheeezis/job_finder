@@ -1,5 +1,6 @@
 """Tests for productive LLM orchestration and caching."""
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -49,7 +50,20 @@ def make_record(cache_key):
                 "technology_requirements": [],
                 "other_requirements": [],
             },
-            "profile_match": {"matches": []},
+            "profile_match": {
+                "matches": [],
+                "assessment": {
+                    "dimension_ratings": {
+                        "entry_fit": "excellent",
+                        "working_conditions_fit": "excellent",
+                        "direction_fit": "excellent",
+                        "technology_head_start": "excellent",
+                    },
+                    "information_quality": "clear",
+                    "rationale": ["Klare Einstiegsstelle."],
+                },
+                "uncertainties": [],
+            },
             "fit": {
                 "recommendation": "strong_match",
                 "confidence": "high",
@@ -93,6 +107,10 @@ class LlmServiceTests(unittest.TestCase):
         self.assertEqual(stats["analyzed"], 1)
         self.assertEqual(results["included"][0]["llm_score"], 90)
         self.assertEqual(results["included"][0]["llm_status"], "analyzed")
+        self.assertEqual(
+            results["included"][0]["llm_result"]["seniority"],
+            "unspecified",
+        )
         self.assertNotIn("llm_analysis", results["included"][0])
         self.assertNotIn("llm_metadata", results["included"][0])
         self.assertEqual(len(cache["analyses"]), 1)
@@ -138,6 +156,38 @@ class LlmServiceTests(unittest.TestCase):
         self.assertEqual(stats["eligible"], 0)
         self.assertNotIn("llm_score", results["included"][0])
         client_class.assert_not_called()
+
+    def test_profile_change_reanalyzes_known_included_jobs(self):
+        results = {"included": [make_job(is_new=False)], "excluded": []}
+
+        with tempfile.TemporaryDirectory() as directory:
+            settings = self.settings(directory)
+            settings.cache_path.write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "profile_version": 1,
+                        "analyses": {"old": make_record("old")},
+                        "pending": {},
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            def fake_analysis(_job, _profile, _settings, _client, cache_key):
+                return make_record(cache_key)
+
+            with patch(
+                "job_agent.llm.service.analyze_job_record",
+                side_effect=fake_analysis,
+            ) as analyze:
+                stats = analyze_results(results, settings, client=object())
+            cache = load_cache(settings.cache_path)
+
+        self.assertEqual(stats["analyzed"], 1)
+        self.assertEqual(cache["profile_version"], 2)
+        self.assertNotIn("old", cache["analyses"])
+        analyze.assert_called_once()
 
     def test_changed_known_job_is_analyzed_with_its_new_content(self):
         results = {

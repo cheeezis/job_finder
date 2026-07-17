@@ -77,6 +77,16 @@ def make_match():
             item("technology:0:0", "skills.programming[0].name"),
             item("other:0", "languages[0].level"),
         ],
+        "assessment": {
+            "dimension_ratings": {
+                "entry_fit": "excellent",
+                "working_conditions_fit": "excellent",
+                "direction_fit": "excellent",
+                "technology_head_start": "good",
+            },
+            "information_quality": "clear",
+            "rationale": ["Klare Einstiegsrolle mit passenden Bedingungen."],
+        },
         "uncertainties": [],
     }
 
@@ -87,7 +97,16 @@ class LlmProfileMatchTests(unittest.TestCase):
         self.job_analysis = make_job_analysis()
 
     def test_prompt_contains_profile_and_job_analysis_but_no_score(self):
-        messages = build_profile_match_messages(self.profile, self.job_analysis)
+        messages = build_profile_match_messages(
+            self.profile,
+            self.job_analysis,
+            {
+                "locations": ["Fulda"],
+                "work_mode": "remote",
+                "remote_percentage": 100,
+                "location_precheck": "100% Remote aus Deutschland",
+            },
+        )
         prompt = json.loads(messages[1]["content"])
 
         self.assertEqual(prompt["profile_version"], self.profile.version)
@@ -99,6 +118,8 @@ class LlmProfileMatchTests(unittest.TestCase):
             "skills.programming[0].name",
             prompt["allowed_profile_evidence_paths"],
         )
+        self.assertIn("entry_fit", prompt["evaluation_rubric"])
+        self.assertEqual(prompt["job_context"]["work_mode"], "remote")
         self.assertNotIn("overall_score", PROFILE_MATCH_SCHEMA["properties"])
         self.assertNotIn("recommendation", PROFILE_MATCH_SCHEMA["properties"])
 
@@ -133,6 +154,13 @@ class LlmProfileMatchTests(unittest.TestCase):
     def test_positive_match_requires_profile_evidence(self):
         match = make_match()
         match["matches"][3]["profile_evidence_paths"] = []
+
+        with self.assertRaises(ProfileMatchValidationError):
+            validate_profile_match(match, self.job_analysis, self.profile)
+
+    def test_assessment_requires_all_priority_dimensions(self):
+        match = make_match()
+        del match["assessment"]["dimension_ratings"]["entry_fit"]
 
         with self.assertRaises(ProfileMatchValidationError):
             validate_profile_match(match, self.job_analysis, self.profile)

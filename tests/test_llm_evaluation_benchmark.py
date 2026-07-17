@@ -15,15 +15,21 @@ from llm_evaluation.benchmark import (
 
 def make_analysis(score=75, recommendation="match"):
     """Return a complete analysis matching the versioned schema."""
-    dimension_score = score // 5
     dimensions = {
-        "role_fit": dimension_score,
-        "technology_fit": dimension_score,
-        "experience_fit": dimension_score,
-        "location_fit": dimension_score,
-        "task_fit": dimension_score,
+        "entry_fit": min(score, 50),
+        "working_conditions_fit": 0,
+        "direction_fit": 0,
+        "technology_head_start": 0,
     }
-    dimensions["task_fit"] += score - sum(dimensions.values())
+    remainder = score - dimensions["entry_fit"]
+    for name, maximum in (
+        ("working_conditions_fit", 30),
+        ("direction_fit", 15),
+        ("technology_head_start", 5),
+    ):
+        points = min(remainder, maximum)
+        dimensions[name] = points
+        remainder -= points
     return {
         "overall_score": score,
         "recommendation": recommendation,
@@ -31,11 +37,10 @@ def make_analysis(score=75, recommendation="match"):
         "summary": "Nachvollziehbare Testbewertung.",
         "dimension_scores": dimensions,
         "dimension_ratings": {
-            "role_fit": "good",
-            "technology_fit": "good",
-            "experience_fit": "good",
-            "location_fit": "good",
-            "task_fit": "good",
+            "entry_fit": "good",
+            "working_conditions_fit": "good",
+            "direction_fit": "good",
+            "technology_head_start": "good",
         },
         "key_tasks": [],
         "key_requirements": [],
@@ -77,7 +82,7 @@ class LlmBenchmarkTests(unittest.TestCase):
 
         self.assertEqual(result["mode"], "two_stage")
         self.assertEqual(result["split"], "development")
-        self.assertEqual(result["profile_version"], 1)
+        self.assertEqual(result["profile_version"], 2)
         self.assertEqual(result["summary"]["jobs"], 0)
 
     def test_two_stage_result_filename_contains_split(self):

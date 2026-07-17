@@ -12,7 +12,7 @@ from job_agent.paths import NOTIFICATION_STATE_FILE
 
 
 STATE_VERSION = 1
-POSITIVE_RECOMMENDATIONS = {"strong_match", "match"}
+NOTIFIABLE_RECOMMENDATIONS = {"strong_match", "match", "borderline"}
 NOTIFIABLE_STATUSES = {"new", "review", "interesting"}
 MAX_EMBEDS = 10
 MAX_EMBED_CHARACTERS = 6000
@@ -77,14 +77,8 @@ def process_notifications(
         if not is_notifiable(job):
             state["pending"].pop(key, None)
             continue
-        event_is_new = (
-            job.get("is_new")
-            or job.get("content_changed")
-            or job.get("llm_status") == "analyzed"
-        )
         if (
-            event_is_new
-            and key not in state["sent"]
+            key not in state["sent"]
             and key not in state["pending"]
         ):
             state["pending"][key] = pending_entry(job, timestamp)
@@ -137,7 +131,7 @@ def is_notifiable(job):
     """Return whether one reviewed result belongs in Discord notifications."""
     result = job.get("llm_result") or {}
     return (
-        result.get("recommendation") in POSITIVE_RECOMMENDATIONS
+        result.get("recommendation") in NOTIFIABLE_RECOMMENDATIONS
         and job.get("workflow_status", "new") in NOTIFIABLE_STATUSES
     )
 
@@ -214,11 +208,16 @@ def discord_embed(job):
     """Render the compact fields needed to decide whether to open a job."""
     result = job["llm_result"]
     locations = ", ".join(job.get("locations", [])) or "unbekannt"
+    pros = result.get("matching_evidence", [])
+    cons = [*result.get("gaps", []), *result.get("risks", [])]
     return {
         "title": truncate(f"{job['llm_score']}% | {job['title']}", 256),
         "url": job_url(job),
-        "description": truncate(result.get("summary", ""), 1200),
-        "color": 0x176B54,
+        "description": truncate(
+            f"**Kurzbeschreibung**\n{result.get('summary', 'Keine Zusammenfassung')}",
+            1200,
+        ),
+        "color": recommendation_color(result.get("recommendation")),
         "fields": [
             {
                 "name": "Firma",
@@ -230,8 +229,47 @@ def discord_embed(job):
                 "value": truncate(locations, 1024),
                 "inline": True,
             },
+            {
+                "name": "Level",
+                "value": seniority_label(result.get("seniority")),
+                "inline": True,
+            },
+            {
+                "name": "Pro",
+                "value": bullet_list(pros, "Keine besonderen Pluspunkte erkannt"),
+                "inline": False,
+            },
+            {
+                "name": "Contra",
+                "value": bullet_list(cons, "Keine wesentlichen Nachteile erkannt"),
+                "inline": False,
+            },
         ],
     }
+
+
+def seniority_label(seniority):
+    """Translate the structured LLM seniority class for display."""
+    return {
+        "junior_entry": "Einsteiger / Junior",
+        "mid": "Berufserfahren / Mid-Level",
+        "senior": "Senior",
+        "mixed": "Gemischtes Level",
+        "unspecified": "Nicht eindeutig angegeben",
+    }.get(seniority, "Nicht eindeutig angegeben")
+
+
+def bullet_list(items, fallback):
+    """Render compact Discord bullets from validated LLM result lists."""
+    values = list(dict.fromkeys(str(item).strip() for item in items if item))
+    if not values:
+        return fallback
+    return truncate("\n".join(f"• {item}" for item in values), 1024)
+
+
+def recommendation_color(recommendation):
+    """Use amber for borderline and green for positive recommendations."""
+    return 0xD99A25 if recommendation == "borderline" else 0x176B54
 
 
 def job_url(job):

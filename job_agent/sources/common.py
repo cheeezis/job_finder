@@ -23,6 +23,22 @@ RELEVANT_CONTENT_FIELDS = (
     "salary_min_eur",
     "salary_max_eur",
 )
+DETAIL_CACHE_FIELDS = (
+    "id",
+    "title",
+    "company",
+    "locations",
+    "sources",
+    "description_raw",
+    "description_clean",
+    "work_mode",
+    "remote_percentage",
+    "employment_type",
+    "salary_min_eur",
+    "salary_max_eur",
+    "published_at",
+    "fetched_at",
+)
 
 
 def utc_now():
@@ -62,7 +78,10 @@ def save_detail_cache(path, jobs):
         json.dumps(
             {
                 "version": DETAIL_CACHE_VERSION,
-                "jobs": {url: job.to_dict() for url, job in jobs.items()},
+                "jobs": {
+                    url: detail_cache_job_dict(job)
+                    for url, job in jobs.items()
+                },
             },
             indent=2,
             ensure_ascii=False,
@@ -70,6 +89,12 @@ def save_detail_cache(path, jobs):
         encoding="utf-8",
     )
     temporary_path.replace(cache_path)
+
+
+def detail_cache_job_dict(job):
+    """Serialize only source data needed to reuse one detail page."""
+    values = job.to_dict()
+    return {field: values[field] for field in DETAIL_CACHE_FIELDS}
 
 
 def detail_is_fresh(job, now=None):

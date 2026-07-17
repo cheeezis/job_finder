@@ -17,11 +17,11 @@ class EvaluationCasesTests(unittest.TestCase):
             EXPECTED_RESULTS_PATH.read_text(encoding="utf-8")
         )
 
-    def test_test_set_contains_twenty_five_unique_jobs(self):
+    def test_test_set_contains_twenty_six_unique_jobs(self):
         input_ids = [case["job_id"] for case in self.inputs["cases"]]
         expected_ids = [case["job_id"] for case in self.expected["cases"]]
 
-        self.assertEqual(len(input_ids), 25)
+        self.assertEqual(len(input_ids), 26)
         self.assertEqual(len(input_ids), len(set(input_ids)))
         self.assertEqual(input_ids, expected_ids)
         self.assertEqual(self.inputs["rubric_version"], RUBRIC_VERSION)

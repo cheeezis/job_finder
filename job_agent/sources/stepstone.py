@@ -23,6 +23,7 @@ from job_agent.paths import STEPSTONE_CACHE_FILE
 from job_agent.remote import classify_remote, detect_remote
 from job_agent.search_plan import append_unique, iter_search_queries
 from job_agent.sources.common import (
+    detail_cache_job_dict,
     detail_is_fresh,
     extract_annual_salary_eur,
     extract_schema_locations,
@@ -278,7 +279,7 @@ def save_cache(path, cache):
         "version": CACHE_VERSION,
         "last_links": cache.get("last_links", []),
         "jobs": {
-            url: job.to_dict()
+            url: detail_cache_job_dict(job)
             for url, job in cache.get("jobs", {}).items()
         },
     }

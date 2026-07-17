@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
@@ -10,6 +11,7 @@ from job_agent.deduplication import deduplicate_jobs
 from job_agent.main import print_results, score_jobs
 from job_agent.llm.service import analyze_results
 from job_agent.memory import load_memory, save_memory, update_memory
+from job_agent.notifications import process_notifications
 from job_agent.paths import JOBS_FILE, MEMORY_FILE
 from job_agent.reporting import write_recommendations
 from job_agent.sources import arbeitsagentur
@@ -31,6 +33,11 @@ def parse_args():
         type=int,
         help="Analyze at most N eligible jobs in this run",
     )
+    parser.add_argument(
+        "--notify",
+        action="store_true",
+        help="Send queued positive recommendations to Discord",
+    )
     return parser.parse_args()
 
 
@@ -38,10 +45,10 @@ def main():
     """Run the full pipeline: collect jobs, update memory, then score."""
     configure_utf8_output()
     args = parse_args()
-    print("1/3 Sammle Jobs aus Quellen")
+    print("1/4 Sammle Jobs aus Quellen")
     jobs = collect_jobs()
 
-    print("\n2/3 Aktualisiere Job-Gedaechtnis")
+    print("\n2/4 Aktualisiere Job-Gedaechtnis")
     memory = load_memory(MEMORY_FILE)
     memory_stats = update_memory(jobs, memory)
     save_memory(memory, MEMORY_FILE)
@@ -55,7 +62,7 @@ def main():
     print(f'Bekannte Jobs: {memory_stats["known"]}')
     print(f"Gedaechtnis gespeichert in {MEMORY_FILE}")
 
-    print("\n3/3 Bewerte Jobs")
+    print("\n3/4 Bewerte Jobs")
     results = score_jobs(jobs)
     print("\nKI-Bewertung")
     llm_stats = analyze_results(results, limit=args.llm_limit)
@@ -66,6 +73,25 @@ def main():
     )
     write_recommendations(results)
     print_results(results)
+
+    print("\n4/4 Bereite Benachrichtigungen vor")
+    notification_stats = process_notifications(
+        results,
+        send=args.notify,
+        webhook_url=os.getenv("DISCORD_WEBHOOK_URL"),
+    )
+    if notification_stats["configuration_error"]:
+        print(f"Discord: {notification_stats['configuration_error']}")
+    elif args.notify:
+        print(
+            f"Discord: {notification_stats['sent']} gesendet, "
+            f"{notification_stats['failed']} fehlgeschlagen"
+        )
+    else:
+        print(
+            f"Discord: {notification_stats['ready']} bereit; "
+            "mit --notify senden"
+        )
 
 
 def collect_jobs():

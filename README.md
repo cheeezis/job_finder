@@ -50,6 +50,20 @@ Ein kostenbegrenzter Testlauf analysiert hoechstens einen neuen passenden Job:
 python run_agent.py --llm-limit 1
 ```
 
+Positive neue oder aktualisierte Empfehlungen fuer Discord vormerken, ohne sie
+zu senden, geschieht automatisch bei jedem Lauf. Fuer den echten Versand muss
+der Webhook als `DISCORD_WEBHOOK_URL` gesetzt und der Versand explizit aktiviert
+werden:
+
+```powershell
+$env:DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/..."
+python run_agent.py --notify
+```
+
+Der Webhook bleibt ausserhalb der gespeicherten Dateien. Erfolgreich gesendete
+Jobversionen werden nicht erneut gemeldet; Fehler bleiben fuer den naechsten
+Lauf vorgemerkt.
+
 Nur vorhandene interne Jobs regelbasiert pruefen, ohne Dateien zu erzeugen:
 
 ```powershell
@@ -106,6 +120,7 @@ data/internal/stepstone_cache.json technischer StepStone-Cache
 data/internal/arbeitsagentur_cache.json Detailcache der Arbeitsagentur
 data/internal/get_in_it_cache.json Detailcache von get-in-IT
 data/internal/llm_cache.json LLM-Ergebnisse und ausstehende Analysen
+data/internal/notifications.json Versand- und Wiederholungsstatus
 data/output/recommendations.json kompakte finale KI-Ergebnisse
 data/output/recommendations.md lesbare KI-Empfehlungen
 profile.yaml                persoenliche Faktenbasis fuer das LLM

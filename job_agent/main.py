@@ -31,7 +31,14 @@ def score_jobs(jobs):
         job.filter_status = FilterStatus(result["filter_status"])
         job.rule_score = result["match_percent"]
         job.score_reasons = list(result["reasons"])
-        results.append({**job.to_dict(), "is_new": job.is_new, **result})
+        results.append(
+            {
+                **job.to_dict(),
+                "is_new": job.is_new,
+                "content_changed": job.content_changed,
+                **result,
+            }
+        )
 
     # Separate buckets keep hard-filter reasons visible in the review.
     included = [

@@ -23,8 +23,10 @@ from job_agent.paths import STEPSTONE_CACHE_FILE
 from job_agent.remote import classify_remote, detect_remote
 from job_agent.search_plan import append_unique, iter_search_queries
 from job_agent.sources.common import (
+    detail_is_fresh,
     extract_annual_salary_eur,
     extract_schema_locations,
+    mark_content_change,
     normalize_employment_type,
     parse_published_date,
     source_job_id,
@@ -74,6 +76,7 @@ class StepStoneHttpClient:
 def fetch_jobs(
     cache_path=CACHE_FILE,
     client=None,
+    now=None,
 ):
     """Search StepStone and return imported job details."""
     cache_file = Path(cache_path)
@@ -98,13 +101,15 @@ def fetch_jobs(
     for index, url in enumerate(links):
         cache_key = normalize_detail_url(url)
         cached_job = cache["jobs"].get(cache_key)
-        if cached_job:
+        if detail_is_fresh(cached_job, now):
+            cached_job.content_changed = False
             jobs.append(cached_job)
             print(f"CACHE: {url}")
             continue
 
         try:
             job = fetch_job(url, client)
+            mark_content_change(job, cached_job)
             jobs.append(job)
             cache["jobs"][cache_key] = job
             save_cache(cache_file, cache)
@@ -112,11 +117,18 @@ def fetch_jobs(
         except StepStoneBlockedError as error:
             print(f"ABBRUCH: {error}")
             print("Keine weiteren StepStone-Requests in diesem Lauf")
+            if cached_job:
+                cached_job.content_changed = False
+                jobs.append(cached_job)
             jobs.extend(cached_jobs(links[index + 1 :], cache))
             break
         except Exception as error:
             print(f"FEHLER: {url}")
             print(f"       {error}")
+            if cached_job:
+                cached_job.content_changed = False
+                jobs.append(cached_job)
+                print(f"CACHE (veraltet): {url}")
     return jobs
 
 
@@ -283,6 +295,7 @@ def cached_jobs(links, cache):
     for url in links:
         job = cache.get("jobs", {}).get(normalize_detail_url(url))
         if job:
+            job.content_changed = False
             jobs.append(job)
     return jobs
 

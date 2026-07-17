@@ -11,7 +11,12 @@ from job_agent.llm.fit_score import FIT_SCORE_VERSION
 from job_agent.llm.service import analyze_results, attach_result, load_cache
 
 
-def make_job(*, is_new=True, title="Junior Python Developer"):
+def make_job(
+    *,
+    is_new=True,
+    content_changed=False,
+    title="Junior Python Developer",
+):
     """Return one included serialized job row."""
     return {
         "id": "test:1",
@@ -24,6 +29,7 @@ def make_job(*, is_new=True, title="Junior Python Developer"):
         "match_percent": 80,
         "experience_rank": 0,
         "is_new": is_new,
+        "content_changed": content_changed,
     }
 
 
@@ -132,6 +138,28 @@ class LlmServiceTests(unittest.TestCase):
         self.assertEqual(stats["eligible"], 0)
         self.assertNotIn("llm_score", results["included"][0])
         client_class.assert_not_called()
+
+    def test_changed_known_job_is_analyzed_with_its_new_content(self):
+        results = {
+            "included": [make_job(is_new=False, content_changed=True)],
+            "excluded": [],
+        }
+
+        with tempfile.TemporaryDirectory() as directory:
+            settings = self.settings(directory)
+
+            def fake_analysis(_job, _profile, _settings, _client, cache_key):
+                return make_record(cache_key)
+
+            with patch(
+                "job_agent.llm.service.analyze_job_record",
+                side_effect=fake_analysis,
+            ) as analyze:
+                stats = analyze_results(results, settings, client=object())
+
+        self.assertEqual(stats["analyzed"], 1)
+        self.assertEqual(results["included"][0]["llm_score"], 90)
+        analyze.assert_called_once()
 
     def test_client_initialization_error_marks_job_for_later_retry(self):
         results = {"included": [make_job()], "excluded": []}

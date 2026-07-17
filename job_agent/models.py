@@ -91,6 +91,7 @@ class Job:
     filter_status: FilterStatus | None = None
     score_reasons: list[str] = field(default_factory=list)
     is_new: bool = False
+    content_changed: bool = False
 
     def __post_init__(self):
         """Reject invalid percentages, scores, and salary ranges."""

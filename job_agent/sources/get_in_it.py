@@ -8,18 +8,26 @@ can contain malformed escaping.
 import json
 import re
 from html import unescape
+from pathlib import Path
 from urllib.parse import urlencode, urljoin
 
 from job_agent.config import GET_IN_IT_SEARCH_LOCATIONS, GET_IN_IT_SEARCH_TERMS
 from job_agent.http import fetch_json, fetch_text
 from job_agent.models import Job, JobSource
+from job_agent.paths import GET_IN_IT_CACHE_FILE
 from job_agent.remote import classify_remote, detect_remote
 from job_agent.search_plan import append_unique, iter_search_queries, unique_in_order
 from job_agent.sources.common import (
+    DETAIL_CACHE_SAVE_INTERVAL,
+    canonical_detail_url,
+    detail_is_fresh,
     extract_annual_salary_eur,
     extract_schema_locations,
+    load_detail_cache,
+    mark_content_change,
     normalize_employment_type,
     parse_published_date,
+    save_detail_cache,
     source_job_id,
     utc_now,
 )
@@ -30,6 +38,7 @@ SOURCE_NAME = "get_in_it"
 API_SEARCH_URL = "https://www.get-in-it.de/api/v2/open/job/search"
 API_PAGE_SIZE = 39
 HESSEN_STATE_ID = 5
+CACHE_FILE = GET_IN_IT_CACHE_FILE
 
 THEMATIC_PRIORITIES = {
     36: "Anwendungsentwicklung",
@@ -50,21 +59,45 @@ TERM_PRIORITY_RULES = [
 ]
 
 
-def fetch_jobs():
+def fetch_jobs(cache_path=CACHE_FILE, now=None):
     """Search get in IT and return imported job details."""
     links = collect_links()
     if not links:
         print("Keine get-in-IT-Links gefunden")
         return []
 
+    cache_file = Path(cache_path)
+    cache = load_detail_cache(cache_file)
     jobs = []
+    unsaved_details = 0
     for url in links:
+        cache_key = canonical_detail_url(url)
+        cached_job = cache.get(cache_key)
+        if detail_is_fresh(cached_job, now):
+            cached_job.content_changed = False
+            jobs.append(cached_job)
+            print(f"CACHE: {url}")
+            continue
+
         try:
-            jobs.append(fetch_job(url))
+            job = fetch_job(url)
+            mark_content_change(job, cached_job)
+            jobs.append(job)
+            cache[cache_key] = job
+            unsaved_details += 1
+            if unsaved_details >= DETAIL_CACHE_SAVE_INTERVAL:
+                save_detail_cache(cache_file, cache)
+                unsaved_details = 0
             print(f"OK: {url}")
         except Exception as error:
             print(f"FEHLER: {url}")
             print(f"       {error}")
+            if cached_job:
+                cached_job.content_changed = False
+                jobs.append(cached_job)
+                print(f"CACHE (veraltet): {url}")
+    if unsaved_details:
+        save_detail_cache(cache_file, cache)
     return jobs
 
 

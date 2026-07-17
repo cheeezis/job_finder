@@ -10,6 +10,7 @@ Der Agent kann:
 - Arbeitsagentur-Suchergebnisse fuer definierte Suchbegriffe abrufen
 - StepStone-Suchergebnisse fuer definierte Suchbegriffe abrufen
 - StepStone-Detailseiten lokal cachen und Zugriffsgrenzen respektieren
+- bekannte Detailseiten aller Quellen sieben Tage lokal wiederverwenden
 - get-in-IT-Suchergebnisse ueber die oeffentliche JSON-API abrufen
 - Jobdetail-Seiten importieren
 - alle Quellen in ein verbindliches Jobmodell ueberfuehren
@@ -102,6 +103,8 @@ job_agent/sources/          Quellenadapter
 data/internal/jobs.json     vollstaendige kanonische Jobdaten
 data/internal/seen_jobs.json lokales Job-Gedaechtnis
 data/internal/stepstone_cache.json technischer StepStone-Cache
+data/internal/arbeitsagentur_cache.json Detailcache der Arbeitsagentur
+data/internal/get_in_it_cache.json Detailcache von get-in-IT
 data/internal/llm_cache.json LLM-Ergebnisse und ausstehende Analysen
 data/output/recommendations.json kompakte finale KI-Ergebnisse
 data/output/recommendations.md lesbare KI-Empfehlungen

@@ -1,12 +1,95 @@
 """Shared normalization helpers for source adapters."""
 
 import hashlib
-from datetime import date, datetime, timezone
+import json
+from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
+
+from job_agent.models import Job
+
+
+DETAIL_CACHE_VERSION = 1
+DETAIL_REFRESH_AGE = timedelta(days=7)
+DETAIL_CACHE_SAVE_INTERVAL = 25
+RELEVANT_CONTENT_FIELDS = (
+    "title",
+    "company",
+    "locations",
+    "description_clean",
+    "work_mode",
+    "remote_percentage",
+    "employment_type",
+    "salary_min_eur",
+    "salary_max_eur",
+)
 
 
 def utc_now():
     """Return a timezone-aware timestamp for source fetches."""
     return datetime.now(timezone.utc)
+
+
+def canonical_detail_url(url):
+    """Remove tracking parameters from a stable detail-page URL."""
+    parts = urlsplit(url or "")
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+
+
+def load_detail_cache(path):
+    """Load one source's current URL-to-job detail cache."""
+    cache_path = Path(path)
+    if not cache_path.exists():
+        return {}
+    try:
+        document = json.loads(cache_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+    if document.get("version") != DETAIL_CACHE_VERSION:
+        return {}
+    return {
+        url: Job.from_dict(values)
+        for url, values in document.get("jobs", {}).items()
+    }
+
+
+def save_detail_cache(path, jobs):
+    """Persist one source's detail cache via an atomic replacement."""
+    cache_path = Path(path)
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = cache_path.with_suffix(f"{cache_path.suffix}.tmp")
+    temporary_path.write_text(
+        json.dumps(
+            {
+                "version": DETAIL_CACHE_VERSION,
+                "jobs": {url: job.to_dict() for url, job in jobs.items()},
+            },
+            indent=2,
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    temporary_path.replace(cache_path)
+
+
+def detail_is_fresh(job, now=None):
+    """Return whether a cached detail page is younger than seven days."""
+    if job is None or job.fetched_at is None:
+        return False
+    current_time = now or utc_now()
+    fetched_at = job.fetched_at
+    if fetched_at.tzinfo is None:
+        fetched_at = fetched_at.replace(tzinfo=timezone.utc)
+    return current_time - fetched_at < DETAIL_REFRESH_AGE
+
+
+def mark_content_change(job, previous_job):
+    """Mark a refreshed job when fields relevant to filtering or review changed."""
+    job.content_changed = previous_job is not None and any(
+        getattr(job, field) != getattr(previous_job, field)
+        for field in RELEVANT_CONTENT_FIELDS
+    )
+    return job
 
 
 def source_job_id(source, external_id, url):

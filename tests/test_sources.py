@@ -3,13 +3,15 @@
 import json
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import ANY, Mock, patch
 from urllib.error import HTTPError
 
 from job_agent.config import STEPSTONE_SEARCH_LOCATIONS, STEPSTONE_SEARCH_TERMS
 from job_agent.models import Job, JobSource, WorkMode
-from job_agent.sources import stepstone
+from job_agent.sources import arbeitsagentur, get_in_it, stepstone
+from job_agent.sources.common import save_detail_cache
 from job_agent.sources.stepstone import build_search_url
 
 
@@ -140,6 +142,41 @@ class StepStoneCacheTests(unittest.TestCase):
         self.assertEqual(jobs, [cached_job])
         fetch_job.assert_called_once_with(blocked_url, ANY)
 
+    def test_stale_cached_detail_is_refreshed_and_marked_changed(self):
+        url = "https://www.stepstone.de/stellenangebote--cached.html"
+        cached_job = self.make_job("Cached", url)
+        cached_job.fetched_at = datetime.now(timezone.utc) - timedelta(days=8)
+        refreshed_job = self.make_job("Changed", url)
+
+        with tempfile.TemporaryDirectory() as directory:
+            cache_path = Path(directory) / "stepstone.json"
+            cache_path.write_text(
+                json.dumps(
+                    {
+                        "version": stepstone.CACHE_VERSION,
+                        "last_links": [url],
+                        "jobs": {url: cached_job.to_dict()},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with (
+                patch.object(stepstone, "search_links", return_value=[url]),
+                patch.object(
+                    stepstone,
+                    "fetch_job",
+                    return_value=refreshed_job,
+                ) as fetch_job,
+            ):
+                jobs = stepstone.fetch_jobs(
+                    cache_path=cache_path,
+                    client=Mock(),
+                )
+
+        self.assertEqual(jobs, [refreshed_job])
+        self.assertTrue(jobs[0].content_changed)
+        fetch_job.assert_called_once_with(url, ANY)
+
     @staticmethod
     def make_job(title, url):
         return Job(
@@ -152,6 +189,100 @@ class StepStoneCacheTests(unittest.TestCase):
             description_clean="Python",
             work_mode=WorkMode.REMOTE,
             remote_percentage=100,
+            fetched_at=datetime.now(timezone.utc),
+        )
+
+
+class SharedDetailCacheTests(unittest.TestCase):
+    def test_fresh_details_are_reused_by_arbeitsagentur_and_get_in_it(self):
+        now = datetime(2026, 7, 17, 12, tzinfo=timezone.utc)
+        sources = [
+            (arbeitsagentur, "https://example.test/arbeitsagentur/1"),
+            (get_in_it, "https://example.test/get-in-it/1"),
+        ]
+
+        for source, url in sources:
+            with self.subTest(source=source.SOURCE_NAME):
+                cached_job = self.make_job(source.SOURCE_NAME, url, now)
+                with tempfile.TemporaryDirectory() as directory:
+                    cache_path = Path(directory) / "details.json"
+                    save_detail_cache(cache_path, {url: cached_job})
+                    with (
+                        patch.object(source, "collect_links", return_value=[url]),
+                        patch.object(source, "fetch_job") as fetch_job,
+                    ):
+                        jobs = source.fetch_jobs(cache_path=cache_path, now=now)
+
+                self.assertEqual(jobs, [cached_job])
+                self.assertFalse(jobs[0].content_changed)
+                fetch_job.assert_not_called()
+
+    def test_stale_changed_detail_is_downloaded_and_marked(self):
+        now = datetime(2026, 7, 17, 12, tzinfo=timezone.utc)
+        url = "https://example.test/get-in-it/1"
+        cached_job = self.make_job(
+            get_in_it.SOURCE_NAME,
+            url,
+            now - timedelta(days=8),
+        )
+        refreshed_job = self.make_job(get_in_it.SOURCE_NAME, url, now)
+        refreshed_job.description_clean = "Python und neue Cloud-Aufgaben"
+
+        with tempfile.TemporaryDirectory() as directory:
+            cache_path = Path(directory) / "details.json"
+            save_detail_cache(cache_path, {url: cached_job})
+            with (
+                patch.object(get_in_it, "collect_links", return_value=[url]),
+                patch.object(
+                    get_in_it,
+                    "fetch_job",
+                    return_value=refreshed_job,
+                ) as fetch_job,
+            ):
+                jobs = get_in_it.fetch_jobs(cache_path=cache_path, now=now)
+
+        self.assertEqual(jobs, [refreshed_job])
+        self.assertTrue(jobs[0].content_changed)
+        fetch_job.assert_called_once_with(url)
+
+    def test_failed_refresh_falls_back_to_stale_detail(self):
+        now = datetime(2026, 7, 17, 12, tzinfo=timezone.utc)
+        url = "https://example.test/arbeitsagentur/1"
+        cached_job = self.make_job(
+            arbeitsagentur.SOURCE_NAME,
+            url,
+            now - timedelta(days=8),
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            cache_path = Path(directory) / "details.json"
+            save_detail_cache(cache_path, {url: cached_job})
+            with (
+                patch.object(arbeitsagentur, "collect_links", return_value=[url]),
+                patch.object(
+                    arbeitsagentur,
+                    "fetch_job",
+                    side_effect=RuntimeError("nicht erreichbar"),
+                ),
+            ):
+                jobs = arbeitsagentur.fetch_jobs(cache_path=cache_path, now=now)
+
+        self.assertEqual(jobs, [cached_job])
+        self.assertFalse(jobs[0].content_changed)
+
+    @staticmethod
+    def make_job(source, url, fetched_at):
+        return Job(
+            id=f"{source}:1",
+            title="Python Developer",
+            company="Example GmbH",
+            locations=["Remote"],
+            sources=[JobSource(source=source, url=url)],
+            description_raw="Python",
+            description_clean="Python",
+            work_mode=WorkMode.REMOTE,
+            remote_percentage=100,
+            fetched_at=fetched_at,
         )
 
 

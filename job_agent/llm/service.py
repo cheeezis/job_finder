@@ -51,7 +51,7 @@ def analyze_results(
             cache_changed |= attach_result(job, cached, "cached")
             cache_changed |= pending.pop(key, None) is not None
             cached_count += 1
-        elif job.get("is_new") or key in pending:
+        elif job.get("is_new") or job.get("content_changed") or key in pending:
             eligible.append((job, key))
 
     for job, key in eligible:

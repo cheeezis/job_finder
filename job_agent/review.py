@@ -8,7 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from job_agent.memory import load_memory, save_memory
-from job_agent.models import WorkflowStatus
+from job_agent.models import PersonalRating, WorkflowStatus
 from job_agent.paths import MEMORY_FILE, RECOMMENDATIONS_JSON
 
 
@@ -35,6 +35,8 @@ def load_review_jobs(
             "workflow_status",
             WorkflowStatus.NEW.value,
         )
+        job["personal_rating"] = entry.get("personal_rating")
+        job["review_note"] = entry.get("review_note", "")
         review_jobs.append(job)
     return review_jobs
 
@@ -48,6 +50,32 @@ def update_workflow_status(job_id, workflow_status, memory_path=MEMORY_FILE):
     memory[job_id]["workflow_status"] = status.value
     save_memory(memory, memory_path)
     return status.value
+
+
+def update_personal_review(
+    job_id,
+    personal_rating=None,
+    review_note=None,
+    memory_path=MEMORY_FILE,
+):
+    """Persist an optional personal rating and note for one job."""
+    memory = load_memory(memory_path)
+    if job_id not in memory:
+        raise KeyError(f"Unbekannte Job-ID: {job_id}")
+    entry = memory[job_id]
+    if personal_rating is not None:
+        entry["personal_rating"] = PersonalRating(personal_rating).value
+    if review_note is not None:
+        if not isinstance(review_note, str):
+            raise ValueError("Notiz muss Text sein")
+        if len(review_note) > 2000:
+            raise ValueError("Notiz darf maximal 2000 Zeichen lang sein")
+        entry["review_note"] = review_note.strip()
+    save_memory(memory, memory_path)
+    return {
+        "personal_rating": entry.get("personal_rating"),
+        "review_note": entry.get("review_note", ""),
+    }
 
 
 class ReviewRequestHandler(BaseHTTPRequestHandler):
@@ -70,6 +98,7 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
                         self.memory_path,
                     ),
                     "workflow_statuses": [status.value for status in WorkflowStatus],
+                    "personal_ratings": [rating.value for rating in PersonalRating],
                 }
             )
             return
@@ -77,21 +106,31 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         """Persist a workflow status selected in the browser."""
-        if self.path != "/api/status":
+        if self.path not in {"/api/status", "/api/review"}:
             self.send_error(404)
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-            status = update_workflow_status(
-                payload["job_id"],
-                payload["workflow_status"],
-                self.memory_path,
-            )
+            if self.path == "/api/status":
+                result = {
+                    "workflow_status": update_workflow_status(
+                        payload["job_id"],
+                        payload["workflow_status"],
+                        self.memory_path,
+                    )
+                }
+            else:
+                result = update_personal_review(
+                    payload["job_id"],
+                    payload.get("personal_rating"),
+                    payload.get("review_note"),
+                    self.memory_path,
+                )
         except (ValueError, KeyError, json.JSONDecodeError) as error:
             self.send_json({"error": str(error)}, status=400)
             return
-        self.send_json({"workflow_status": status})
+        self.send_json(result)
 
     def send_file(self, path, content_type):
         """Return one UTF-8 page from disk."""

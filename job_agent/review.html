@@ -19,10 +19,11 @@
     .subtitle { margin: 8px 0 0; color: #607087; }
     .counter { color: #607087; white-space: nowrap; }
     .filters, .card { background: white; border: 1px solid #dfe4eb; border-radius: 16px; box-shadow: 0 8px 24px rgba(28, 39, 58, .06); }
-    .filters { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 12px; padding: 16px; margin: 24px 0; }
+    .filters { display: grid; grid-template-columns: 1fr 1fr 1fr 2fr; gap: 12px; padding: 16px; margin: 24px 0; }
     label { display: grid; gap: 6px; font-size: .82rem; color: #607087; }
-    select, input, button, .button { font: inherit; border-radius: 9px; }
-    select, input { width: 100%; padding: 10px 12px; border: 1px solid #cbd3df; background: white; color: #172033; }
+    select, input, textarea, button, .button { font: inherit; border-radius: 9px; }
+    select, input, textarea { width: 100%; padding: 10px 12px; border: 1px solid #cbd3df; background: white; color: #172033; }
+    textarea { min-height: 92px; resize: vertical; }
     .card { padding: clamp(20px, 4vw, 36px); }
     .score-row { display: flex; justify-content: space-between; gap: 16px; align-items: center; }
     .score { font-size: 1.7rem; font-weight: 750; color: #12664f; }
@@ -41,6 +42,9 @@
     button.primary { background: #176b54; color: white; border-color: #176b54; }
     button.ignore { color: #8a3840; }
     .status-select { margin-left: auto; width: auto; min-width: 150px; }
+    .personal-actions { width: 100%; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .personal-actions strong { margin-right: 4px; }
+    .note-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
     .navigation { display: flex; justify-content: space-between; margin-top: 16px; }
     .empty, .error { padding: 36px; text-align: center; color: #607087; }
     .error { color: #8a3840; }
@@ -76,6 +80,9 @@
         <option value="not_recommended">Nicht empfohlen</option>
       </select>
     </label>
+    <label>Meine Einschätzung
+      <select id="personal-rating-filter"><option value="">Alle Einschätzungen</option></select>
+    </label>
     <label>Suche
       <input id="search-filter" type="search" placeholder="Titel oder Firma">
     </label>
@@ -103,6 +110,21 @@
       <a id="job-link" class="button" target="_blank" rel="noopener noreferrer">Anzeige öffnen</a>
       <select id="status-select" class="status-select" aria-label="Workflow-Status"></select>
     </div>
+    <section class="section">
+      <h3>Meine Einschätzung</h3>
+      <div class="personal-actions">
+        <strong id="personal-rating"></strong>
+        <button data-personal-rating="very_interesting" class="primary">Sehr interessant</button>
+        <button data-personal-rating="interesting">Interessant</button>
+        <button data-personal-rating="maybe">Vielleicht</button>
+        <button data-personal-rating="not_interesting" class="ignore">Nicht interessant</button>
+      </div>
+    </section>
+    <section class="section">
+      <h3>Meine Notiz</h3>
+      <textarea id="review-note" maxlength="2000" placeholder="Optional: Warum passt oder passt die Stelle nicht?"></textarea>
+      <div class="note-actions"><button id="save-note">Notiz speichern</button></div>
+    </section>
   </article>
 
   <nav id="navigation" class="navigation" hidden>
@@ -120,6 +142,10 @@
   const recommendationLabels = {
     strong_match: "Sehr passend", match: "Passend",
     borderline: "Vielleicht passend", not_recommended: "Nicht empfohlen"
+  };
+  const personalRatingLabels = {
+    very_interesting: "Sehr interessant", interesting: "Interessant",
+    maybe: "Vielleicht", not_interesting: "Nicht interessant"
   };
   let jobs = [];
   let visibleJobs = [];
@@ -159,10 +185,12 @@
   function applyFilters() {
     const status = element("status-filter").value;
     const recommendation = element("recommendation-filter").value;
+    const personalRating = element("personal-rating-filter").value;
     const query = element("search-filter").value.trim().toLocaleLowerCase("de");
     visibleJobs = jobs.filter(job =>
       (!status || job.workflow_status === status) &&
       (!recommendation || job.recommendation === recommendation) &&
+      (!personalRating || job.personal_rating === personalRating) &&
       (!query || `${job.title} ${job.company}`.toLocaleLowerCase("de").includes(query))
     );
     currentIndex = 0;
@@ -194,6 +222,10 @@
       : job.work_mode === "hybrid" ? "Homeoffice" : "nicht angegeben";
     setText("remote", `Remote: ${remote}`);
     setText("current-status", `Status: ${statusLabels[job.workflow_status] || job.workflow_status}`);
+    setText("personal-rating", job.personal_rating
+      ? `Meine Einschätzung: ${personalRatingLabels[job.personal_rating] || job.personal_rating}`
+      : "Noch nicht eingeschätzt");
+    element("review-note").value = job.review_note || "";
     setText("summary", job.summary);
     element("status-select").value = job.workflow_status;
     element("job-link").href = job.url || "#";
@@ -232,6 +264,30 @@
     }
   }
 
+  async function savePersonalReview(personalRating, advance) {
+    const job = visibleJobs[currentIndex];
+    const response = await fetch("/api/review", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        job_id: job.id,
+        personal_rating: personalRating,
+        review_note: element("review-note").value
+      })
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Einschätzung konnte nicht gespeichert werden");
+    job.personal_rating = result.personal_rating;
+    job.review_note = result.review_note;
+    const original = jobs.find(item => item.id === job.id);
+    if (original) {
+      original.personal_rating = result.personal_rating;
+      original.review_note = result.review_note;
+    }
+    if (advance && currentIndex < visibleJobs.length - 1) currentIndex += 1;
+    render();
+  }
+
   async function load() {
     try {
       const response = await fetch("/api/recommendations");
@@ -240,6 +296,10 @@
       jobs = result.recommendations.sort((a, b) => b.llm_score - a.llm_score);
       addOptions(element("status-filter"), result.workflow_statuses);
       addOptions(element("status-select"), result.workflow_statuses);
+      addOptions(element("personal-rating-filter"), result.personal_ratings);
+      Array.from(element("personal-rating-filter").options).forEach(option => {
+        option.textContent = personalRatingLabels[option.value] || option.textContent;
+      });
       applyFilters();
     } catch (error) {
       element("message").className = "error";
@@ -249,12 +309,21 @@
 
   element("status-filter").addEventListener("change", applyFilters);
   element("recommendation-filter").addEventListener("change", applyFilters);
+  element("personal-rating-filter").addEventListener("change", applyFilters);
   element("search-filter").addEventListener("input", applyFilters);
   element("previous").addEventListener("click", () => { currentIndex -= 1; render(); });
   element("next").addEventListener("click", () => { currentIndex += 1; render(); });
   element("status-select").addEventListener("change", event => changeStatus(event.target.value).catch(showError));
   document.querySelectorAll("[data-quick-status]").forEach(button =>
     button.addEventListener("click", () => changeStatus(button.dataset.quickStatus).catch(showError))
+  );
+  document.querySelectorAll("[data-personal-rating]").forEach(button =>
+    button.addEventListener("click", () =>
+      savePersonalReview(button.dataset.personalRating, true).catch(showError)
+    )
+  );
+  element("save-note").addEventListener("click", () =>
+    savePersonalReview(undefined, false).catch(showError)
   );
   function showError(error) { window.alert(error.message); }
   load();

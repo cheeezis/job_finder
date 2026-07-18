@@ -36,7 +36,7 @@ DIMENSION_POINTS = {
     },
 }
 HARD_CONFLICT_CATEGORIES = {"education", "employment", "travel"}
-FIT_SCORE_VERSION = 4
+FIT_SCORE_VERSION = 7
 
 
 def score_two_stage_result(job, job_analysis, profile_match):
@@ -139,8 +139,19 @@ def capped_score(score, ratings, information_quality):
 
 
 def adjusted_ratings(job, job_analysis, matches, ratings):
-    """Apply objective minimum-count semantics to the LLM's priority ratings."""
+    """Apply objective semantics to the LLM's priority ratings."""
     adjusted = dict(ratings)
+    experience = job_analysis["experience_requirement"]
+    clear_entry_role = (
+        job_analysis["seniority"] == "junior_entry"
+        and experience["expectation"]
+        in {"none_stated", "first_exposure", "practical_experience"}
+        and experience["minimum_years"] is None
+    )
+    if clear_entry_role:
+        # A clearly labelled entry role must not be downgraded merely because
+        # its later tasks have not yet been performed as regular employment.
+        adjusted["entry_fit"] = "excellent"
     adjusted["working_conditions_fit"] = {
         "excellent": "excellent",
         "good": "good",
@@ -159,10 +170,14 @@ def adjusted_ratings(job, job_analysis, matches, ratings):
             }[matches[f"technology:{group_index}:{index}"]["status"]]
             for index in range(len(group["technologies"]))
         )
-        if covered < group["minimum_count"] and adjusted["entry_fit"] in {
+        if (
+            not clear_entry_role
+            and covered < group["minimum_count"]
+            and adjusted["entry_fit"] in {
             "excellent",
             "good",
-        }:
+            }
+        ):
             adjusted["entry_fit"] = "partial"
     return adjusted
 

@@ -207,6 +207,7 @@ def analysis_cache_key(job, profile_version, settings):
 def attach_result(job, record, status):
     """Attach one persisted LLM result to a serialized job row."""
     score_changed = record["metadata"].get("fit_score_version") != FIT_SCORE_VERSION
+    previous_score = record["score"]
     if score_changed:
         analysis = record["analysis"]
         fit = score_two_stage_result(
@@ -220,6 +221,7 @@ def attach_result(job, record, status):
 
     job["llm_status"] = status
     job["llm_score"] = record["score"]
+    job["llm_score_changed"] = score_changed and record["score"] != previous_score
     job["llm_result"] = compact_result(record)
     return score_changed
 

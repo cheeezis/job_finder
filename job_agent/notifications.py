@@ -82,10 +82,11 @@ def process_notifications(
         if not is_notifiable(job):
             state["pending"].pop(key, None)
             continue
-        if (
-            key not in state["sent"]
-            and key not in state["pending"]
-        ):
+        sent_entry = state["sent"].get(key)
+        if sent_entry and is_material_promotion(job, sent_entry):
+            state["sent"].pop(key)
+            sent_entry = None
+        if key not in state["sent"] and key not in state["pending"]:
             state["pending"][key] = pending_entry(job, timestamp)
             queued += 1
 
@@ -125,6 +126,7 @@ def process_notifications(
                 entry = state["pending"].pop(key)
                 state["sent"][key] = {
                     "job_id": entry["job_id"],
+                    "recommendation": jobs_by_key[key]["llm_result"]["recommendation"],
                     "sent_at": timestamp,
                 }
             stats["sent"] += len(keys)
@@ -139,6 +141,16 @@ def is_notifiable(job):
         result.get("recommendation") in NOTIFIABLE_RECOMMENDATIONS
         and job.get("workflow_status", "new") in NOTIFIABLE_STATUSES
     )
+
+
+def is_material_promotion(job, sent_entry):
+    """Return whether a prior notification deserves one updated message."""
+    current = (job.get("llm_result") or {}).get("recommendation")
+    ranks = {"borderline": 1, "match": 2, "strong_match": 3}
+    previous = sent_entry.get("recommendation")
+    if previous is None:
+        return job.get("llm_score_changed", False) and ranks.get(current, 0) >= 2
+    return ranks.get(current, 0) > ranks.get(previous, 0) and ranks.get(current, 0) >= 2
 
 
 def notification_key(job):

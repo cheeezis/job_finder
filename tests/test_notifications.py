@@ -1,5 +1,6 @@
 """Tests for durable Discord job notification summaries."""
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -164,6 +165,79 @@ class NotificationTests(unittest.TestCase):
             changed["description_clean"] = "Python, APIs und neue Cloud-Aufgaben"
             stats = process_notifications(
                 {"included": [changed], "excluded": []},
+                send=True,
+                webhook_url="https://discord.test/webhook",
+                state_path=path,
+                client=client,
+            )
+
+        self.assertEqual(stats["sent"], 1)
+        self.assertEqual(client.send.call_count, 2)
+
+    def test_promoted_recommendation_is_sent_once_as_an_update(self):
+        original = make_job(recommendation="borderline")
+        client = Mock()
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "notifications.json"
+            process_notifications(
+                {"included": [original], "excluded": []},
+                send=True,
+                webhook_url="https://discord.test/webhook",
+                state_path=path,
+                client=client,
+            )
+            promoted = make_job(
+                recommendation="strong_match",
+                is_new=False,
+                llm_status="cached",
+            )
+            stats = process_notifications(
+                {"included": [promoted], "excluded": []},
+                send=True,
+                webhook_url="https://discord.test/webhook",
+                state_path=path,
+                client=client,
+            )
+            repeated = process_notifications(
+                {"included": [promoted], "excluded": []},
+                send=True,
+                webhook_url="https://discord.test/webhook",
+                state_path=path,
+                client=client,
+            )
+
+        self.assertEqual(stats["sent"], 1)
+        self.assertEqual(repeated["sent"], 0)
+        self.assertEqual(client.send.call_count, 2)
+
+    def test_legacy_notification_is_updated_when_a_score_correction_promotes_it(self):
+        original = make_job(recommendation="borderline")
+        client = Mock()
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "notifications.json"
+            process_notifications(
+                {"included": [original], "excluded": []},
+                send=True,
+                webhook_url="https://discord.test/webhook",
+                state_path=path,
+                client=client,
+            )
+            state = load_notification_state(path)
+            next(iter(state["sent"].values())).pop("recommendation")
+            path.write_text(
+                json.dumps({"version": 1, **state}),
+                encoding="utf-8",
+            )
+            corrected = make_job(
+                recommendation="strong_match",
+                is_new=False,
+                llm_status="cached",
+            )
+            corrected["llm_score_changed"] = True
+            stats = process_notifications(
+                {"included": [corrected], "excluded": []},
                 send=True,
                 webhook_url="https://discord.test/webhook",
                 state_path=path,

@@ -243,6 +243,7 @@ def fetch_job(url):
         work_mode=work_mode,
         remote_percentage=remote_percentage,
         employment_type=normalize_employment_type(posting.get("employmentType")),
+        career_levels=extract_career_levels(description),
         salary_min_eur=salary_min_eur,
         salary_max_eur=salary_max_eur,
         published_at=parse_published_date(posting.get("datePosted")),
@@ -342,3 +343,21 @@ def format_schema_remote(posting):
     if "telecommute" in location_type or "remote" in location_type:
         return "homeoffice"
     return ""
+
+
+def extract_career_levels(description):
+    """Read the explicitly labelled get-in-IT career level from job facts."""
+    match = re.search(
+        r"Karrierestufe:\s*(.+?)(?=\s*(?:Beschaeftigungsgrad|"
+        r"Beschäftigungsgrad|Dauer der Beschaeftigung|Dauer der Beschäftigung|"
+        r"Verguetung|Vergütung|Arbeitsverhaeltnis|Arbeitsverhältnis):|$)",
+        description,
+        re.IGNORECASE,
+    )
+    if not match:
+        return []
+    return [
+        value.strip()
+        for value in match.group(1).split(";")
+        if value.strip()
+    ]

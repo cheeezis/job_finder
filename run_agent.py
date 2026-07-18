@@ -4,7 +4,7 @@ import argparse
 import json
 import os
 from pathlib import Path
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from job_agent.console import configure_utf8_output
 from job_agent.deduplication import deduplicate_jobs
@@ -20,8 +20,14 @@ from job_agent.paths import (
     NOTIFICATION_STATE_FILE,
 )
 from job_agent.reporting import write_recommendations
+from job_agent.sources import arbeitnow
 from job_agent.sources import arbeitsagentur
+from job_agent.sources import css
+from job_agent.sources import edag
 from job_agent.sources import get_in_it
+from job_agent.sources import jumo
+from job_agent.sources import nethinks
+from job_agent.sources import proemion
 from job_agent.sources import stepstone
 
 
@@ -29,6 +35,12 @@ SOURCES = [
     arbeitsagentur,
     stepstone,
     get_in_it,
+    arbeitnow,
+    jumo,
+    edag,
+    css,
+    proemion,
+    nethinks,
 ]
 
 def parse_args():
@@ -152,9 +164,22 @@ def collect_jobs(sources=None):
 
 
 def canonical_url(url):
-    """Remove query parameters and fragments used only for tracking."""
+    """Remove tracking parameters while retaining source-stable job IDs."""
     parts = urlsplit(url or "")
-    return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+    stable_parameters = [
+        (name, value)
+        for name, value in parse_qsl(parts.query, keep_blank_values=True)
+        if name == "jobOfferId"
+    ]
+    return urlunsplit(
+        (
+            parts.scheme,
+            parts.netloc,
+            parts.path,
+            urlencode(stable_parameters),
+            "",
+        )
+    )
 
 
 if __name__ == "__main__":

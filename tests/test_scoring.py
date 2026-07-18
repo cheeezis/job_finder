@@ -120,6 +120,16 @@ class ScoringTests(unittest.TestCase):
 
         self.assertEqual(result["filter_status"], "excluded")
 
+    def test_apprenticeships_are_excluded_from_a_post_degree_job_search(self):
+        result = score_job(
+            make_job(
+                title="Auszu\u00adbil\u00addende Fachinformatiker Anwendungsentwicklung (m/w/d)",
+            )
+        )
+
+        self.assertEqual(result["filter_status"], "excluded")
+        self.assertIn("auszubildende", result["reasons"][0])
+
     def test_homeoffice_outside_local_area_is_not_full_remote(self):
         result = score_job(
             make_job(location="Muenchen, Home-Office", remote="homeoffice")

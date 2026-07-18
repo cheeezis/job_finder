@@ -78,6 +78,7 @@ class Job:
     work_mode: WorkMode = WorkMode.UNKNOWN
     remote_percentage: int | None = None
     employment_type: str | None = None
+    career_levels: list[str] = field(default_factory=list)
     salary_min_eur: int | None = None
     salary_max_eur: int | None = None
     published_at: date | None = None
@@ -146,6 +147,7 @@ class Job:
             "work_mode": self.work_mode.value,
             "remote_percentage": self.remote_percentage,
             "employment_type": self.employment_type,
+            "career_levels": list(self.career_levels),
             "salary_min_eur": self.salary_min_eur,
             "salary_max_eur": self.salary_max_eur,
             "published_at": format_temporal(self.published_at),
@@ -177,6 +179,7 @@ class Job:
             work_mode=WorkMode(values["work_mode"]),
             remote_percentage=values.get("remote_percentage"),
             employment_type=values.get("employment_type"),
+            career_levels=list(values.get("career_levels", [])),
             salary_min_eur=values.get("salary_min_eur"),
             salary_max_eur=values.get("salary_max_eur"),
             published_at=parse_date(values.get("published_at")),

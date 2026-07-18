@@ -69,6 +69,11 @@ def process_notifications(
     jobs_by_key = {}
     queued = 0
 
+    # A job may have been queued in an earlier run but be excluded after a
+    # stricter general rule or an updated posting. It must not remain queued.
+    for job in results.get("excluded", []):
+        state["pending"].pop(notification_key(job), None)
+
     for job in results["included"]:
         if not job.get("llm_result"):
             continue
@@ -147,6 +152,7 @@ def notification_key(job):
         "work_mode": job.get("work_mode"),
         "remote_percentage": job.get("remote_percentage"),
         "employment_type": job.get("employment_type"),
+        "career_levels": job.get("career_levels", []),
         "salary_min_eur": job.get("salary_min_eur"),
         "salary_max_eur": job.get("salary_max_eur"),
     }
@@ -231,7 +237,7 @@ def discord_embed(job):
             },
             {
                 "name": "Level",
-                "value": seniority_label(result.get("seniority")),
+                "value": career_level_label(job, result.get("seniority")),
                 "inline": True,
             },
             {
@@ -257,6 +263,12 @@ def seniority_label(seniority):
         "mixed": "Gemischtes Level",
         "unspecified": "Nicht eindeutig angegeben",
     }.get(seniority, "Nicht eindeutig angegeben")
+
+
+def career_level_label(job, seniority):
+    """Prefer an explicit portal label over an inferred LLM level."""
+    levels = [str(level).strip() for level in job.get("career_levels", []) if level]
+    return " / ".join(levels) or seniority_label(seniority)
 
 
 def bullet_list(items, fallback):

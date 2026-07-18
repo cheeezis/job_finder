@@ -42,6 +42,12 @@ CACHE_FILE = STEPSTONE_CACHE_FILE
 CACHE_VERSION = 2
 REQUEST_DELAY_SECONDS = 1.5
 BLOCKING_STATUS_CODES = {403, 429}
+CAREER_LEVEL_LABELS = {
+    "Berufseinstieg/Trainee",
+    "Berufserfahrene",
+    "Führungskraft",
+    "Studentische Aushilfe",
+}
 
 
 class StepStoneBlockedError(RuntimeError):
@@ -242,6 +248,7 @@ def fetch_job(url, client=None):
         work_mode=work_mode,
         remote_percentage=remote_percentage,
         employment_type=normalize_employment_type(posting.get("employmentType")),
+        career_levels=extract_career_levels(html),
         salary_min_eur=salary_min_eur,
         salary_max_eur=salary_max_eur,
         published_at=parse_published_date(posting.get("datePosted")),
@@ -303,6 +310,17 @@ def cached_jobs(links, cache):
 
 def clean_company(company):
     return re.sub(r"_20\d{2}-.+$", "", company).strip()
+
+
+def extract_career_levels(html):
+    """Read StepStone's explicit career-level labels from page metadata."""
+    labels = []
+    for value in re.findall(r'"contractType"\s*:\s*"([^"]*)"', html):
+        for label in unescape(value).split(","):
+            label = label.strip()
+            if label in CAREER_LEVEL_LABELS and label not in labels:
+                labels.append(label)
+    return labels
 
 
 def extract_source_id(url, posting):

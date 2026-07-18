@@ -4,7 +4,7 @@ import hashlib
 import json
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from job_agent.models import Job
 
@@ -20,6 +20,7 @@ RELEVANT_CONTENT_FIELDS = (
     "work_mode",
     "remote_percentage",
     "employment_type",
+    "career_levels",
     "salary_min_eur",
     "salary_max_eur",
 )
@@ -34,6 +35,7 @@ DETAIL_CACHE_FIELDS = (
     "work_mode",
     "remote_percentage",
     "employment_type",
+    "career_levels",
     "salary_min_eur",
     "salary_max_eur",
     "published_at",
@@ -47,9 +49,22 @@ def utc_now():
 
 
 def canonical_detail_url(url):
-    """Remove tracking parameters from a stable detail-page URL."""
+    """Remove tracking parameters while preserving a source's stable job ID."""
     parts = urlsplit(url or "")
-    return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+    stable_parameters = [
+        (name, value)
+        for name, value in parse_qsl(parts.query, keep_blank_values=True)
+        if name == "jobOfferId"
+    ]
+    return urlunsplit(
+        (
+            parts.scheme,
+            parts.netloc,
+            parts.path,
+            urlencode(stable_parameters),
+            "",
+        )
+    )
 
 
 def load_detail_cache(path):

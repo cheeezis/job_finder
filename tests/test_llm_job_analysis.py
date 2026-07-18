@@ -81,6 +81,23 @@ class LlmJobAnalysisTests(unittest.TestCase):
         self.assertNotIn("recommendation", JOB_ANALYSIS_SCHEMA["properties"])
         self.assertNotIn("overall_score", JOB_ANALYSIS_SCHEMA["properties"])
 
+    def test_portal_career_level_is_valid_seniority_evidence(self):
+        class FakeClient:
+            def chat(self, **kwargs):
+                self.call = kwargs
+                return analysis, {}
+
+        analysis = make_job_analysis()
+        analysis["seniority_evidence_quote"] = "Berufseinstieg/Trainee"
+        job = source_job() | {"career_levels": ["Berufseinstieg/Trainee"]}
+        client = FakeClient()
+
+        result, _ = analyze_job(job, "test-model", client)
+
+        self.assertEqual(result["seniority"], "junior_entry")
+        prompt = json.loads(client.call["messages"][1]["content"])
+        self.assertIn("Karrierestufe (Portal-Metadatum)", prompt["job"]["description_clean"])
+
     def test_complete_job_analysis_is_valid(self):
         analysis = make_job_analysis()
 

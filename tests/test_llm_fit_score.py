@@ -190,7 +190,7 @@ class TwoStageFitScoreTests(unittest.TestCase):
         }
         result = score_two_stage_result(
             job,
-            make_job_analysis(),
+            make_job_analysis(seniority="unspecified"),
             make_profile_match(
                 ["met"],
                 ratings={
@@ -204,6 +204,35 @@ class TwoStageFitScoreTests(unittest.TestCase):
 
         self.assertEqual(result["overall_score"], 79)
         self.assertEqual(result["recommendation"], "match")
+
+    def test_explicit_entry_job_is_not_downgraded_for_missing_later_experience(self):
+        job = {
+            "location_precheck": "im 30-km-Radius",
+            "work_mode": "onsite",
+        }
+        result = score_two_stage_result(
+            job,
+            make_job_analysis(
+                seniority="junior_entry",
+                expectation="practical_experience",
+                technology_count=3,
+                minimum_count=3,
+            ),
+            make_profile_match(
+                ["partially_met", "partially_met", "partially_met"],
+                experience_status="partially_met",
+                ratings={
+                    "entry_fit": "partial",
+                    "working_conditions_fit": "good",
+                    "direction_fit": "good",
+                    "technology_head_start": "partial",
+                },
+            ),
+        )
+
+        self.assertEqual(result["dimension_ratings"]["entry_fit"], "excellent")
+        self.assertEqual(result["overall_score"], 88)
+        self.assertEqual(result["recommendation"], "strong_match")
 
     def test_vague_advertisement_is_capped_as_borderline(self):
         job = {

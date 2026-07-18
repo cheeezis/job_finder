@@ -10,8 +10,8 @@ from urllib.error import HTTPError
 
 from job_agent.config import STEPSTONE_SEARCH_LOCATIONS, STEPSTONE_SEARCH_TERMS
 from job_agent.models import Job, JobSource, WorkMode
-from job_agent.sources import arbeitsagentur, get_in_it, stepstone
-from job_agent.sources.common import save_detail_cache
+from job_agent.sources import arbeitnow, arbeitsagentur, edag, get_in_it, jumo, stepstone
+from job_agent.sources.common import canonical_detail_url, save_detail_cache
 from job_agent.sources.stepstone import build_search_url
 
 
@@ -39,6 +39,101 @@ class StepStoneSearchTests(unittest.TestCase):
             url,
             "https://www.stepstone.de/jobs/Python-Developer/in-Remote?page=1",
         )
+
+
+class ArbeitnowTests(unittest.TestCase):
+    def test_collect_records_paginates_and_removes_repeated_slugs(self):
+        pages = [
+            {
+                "data": [{"slug": "one"}, {"slug": "two"}],
+                "links": {"next": "page-2"},
+            },
+            {
+                "data": [{"slug": "two"}, {"slug": "three"}],
+                "links": {"next": None},
+            },
+        ]
+
+        with patch.object(arbeitnow, "fetch_json", side_effect=pages) as fetch:
+            records = arbeitnow.collect_records()
+
+        self.assertEqual([record["slug"] for record in records], ["one", "two", "three"])
+        self.assertEqual(fetch.call_count, 2)
+
+    def test_fetch_jobs_marks_changed_api_records(self):
+        url = "https://www.arbeitnow.com/jobs/example/one"
+        old = arbeitnow.job_from_record(
+            {
+                "slug": "one",
+                "company_name": "Example GmbH",
+                "title": "Junior Developer",
+                "description": "<p>Python</p>",
+                "remote": True,
+                "url": url,
+                "location": "Fulda",
+            }
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            cache_path = Path(directory) / "arbeitnow.json"
+            save_detail_cache(cache_path, {url: old})
+            changed = {
+                "slug": "one",
+                "company_name": "Example GmbH",
+                "title": "Junior Developer",
+                "description": "<p>Python und APIs</p>",
+                "remote": True,
+                "url": url,
+                "location": "Fulda",
+            }
+            with patch.object(arbeitnow, "collect_records", return_value=[changed]):
+                jobs = arbeitnow.fetch_jobs(cache_path=cache_path)
+
+        self.assertEqual(len(jobs), 1)
+        self.assertTrue(jobs[0].content_changed)
+
+
+class CompanyCareerTests(unittest.TestCase):
+    def test_jumo_job_ids_are_unique(self):
+        html = """
+            onclick="showJobOfferDetail.do?jobOfferId=abc12345&amp;j=jobexchange"
+            onclick="showJobOfferDetail.do?jobOfferId=def67890&amp;j=jobexchange"
+            onclick="showJobOfferDetail.do?jobOfferId=abc12345&amp;j=jobexchange"
+        """
+
+        self.assertEqual(jumo.extract_job_ids(html), ["abc12345", "def67890"])
+
+    def test_edag_list_keeps_fulda_and_multiple_locations(self):
+        html = """
+            <a class="sfjob" href="/de/karriere/stellenanzeigen/detail/local-12345">
+              <div class="sfjob-location">Fulda</div>
+            </a>
+            <a class="sfjob" href="/de/karriere/stellenanzeigen/detail/multi-23456">
+              <div class="sfjob-location">Mehrere Standorte verfügbar</div>
+            </a>
+            <a class="sfjob" href="/de/karriere/stellenanzeigen/detail/other-34567">
+              <div class="sfjob-location">München</div>
+            </a>
+        """
+
+        links = edag.extract_local_links(html)
+
+        self.assertEqual(len(links), 2)
+        self.assertTrue(links[0].endswith("local-12345"))
+        self.assertTrue(links[1].endswith("multi-23456"))
+
+    def test_jumo_cache_key_keeps_job_offer_id(self):
+        first = canonical_detail_url(
+            "https://jobs.jumo.de/engage/jobexchange/showJobOfferDetail.do?"
+            "jobOfferId=first&j=jobexchange"
+        )
+        second = canonical_detail_url(
+            "https://jobs.jumo.de/engage/jobexchange/showJobOfferDetail.do?"
+            "jobOfferId=second&j=jobexchange"
+        )
+
+        self.assertNotEqual(first, second)
+        self.assertEqual(first, first.split("&")[0])
 
 
 class StepStoneCacheTests(unittest.TestCase):

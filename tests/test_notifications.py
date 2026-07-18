@@ -7,6 +7,7 @@ from unittest.mock import Mock
 
 from job_agent.notifications import (
     NotificationError,
+    discord_embed,
     discord_payload,
     load_notification_state,
     notification_chunks,
@@ -187,6 +188,21 @@ class NotificationTests(unittest.TestCase):
         self.assertIn("DISCORD_WEBHOOK_URL", stats["configuration_error"])
         self.assertEqual(len(state["pending"]), 1)
 
+    def test_excluded_job_is_removed_from_pending_notifications(self):
+        job = make_job()
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "notifications.json"
+            process_notifications({"included": [job], "excluded": []}, state_path=path)
+            stats = process_notifications(
+                {"included": [], "excluded": [job]},
+                state_path=path,
+            )
+            state = load_notification_state(path)
+
+        self.assertEqual(stats["ready"], 0)
+        self.assertEqual(state["pending"], {})
+
     def test_payload_disables_mentions_and_chunks_within_discord_limits(self):
         jobs = [make_job(f"job:{index}") for index in range(12)]
         candidates = [(str(index), job) for index, job in enumerate(jobs)]
@@ -209,6 +225,15 @@ class NotificationTests(unittest.TestCase):
             payload["embeds"][0]["url"],
             "https://example.test/job:0",
         )
+
+    def test_explicit_portal_career_level_overrides_inferred_level(self):
+        job = make_job()
+        job["career_levels"] = ["Berufseinstieg/Trainee"]
+        fields = {
+            field["name"]: field["value"] for field in discord_embed(job)["fields"]
+        }
+
+        self.assertEqual(fields["Level"], "Berufseinstieg/Trainee")
 
     def test_webhook_requests_delivery_confirmation(self):
         url = webhook_url_with_confirmation(

@@ -47,6 +47,7 @@ def analyze_results(
         analyses.clear()
         pending.clear()
     cache_state["profile_version"] = profile.version
+    rebuild_empty_cache = not analyses and not pending
     jobs_with_keys = [
         (job, analysis_cache_key(job, profile.version, settings))
         for job in results["included"]
@@ -61,6 +62,8 @@ def analyze_results(
             cache_changed |= pending.pop(key, None) is not None
             cached_count += 1
         elif (
+            rebuild_empty_cache
+            or
             profile_changed
             or job.get("is_new")
             or job.get("content_changed")
@@ -179,6 +182,7 @@ def analysis_cache_key(job, profile_version, settings):
                 "locations",
                 "work_mode",
                 "remote_percentage",
+                "career_levels",
                 "location_precheck",
             )
         },

@@ -12,6 +12,8 @@ Der Agent kann:
 - StepStone-Detailseiten lokal cachen und Zugriffsgrenzen respektieren
 - bekannte Detailseiten aller Quellen sieben Tage lokal wiederverwenden
 - get-in-IT-Suchergebnisse ueber die oeffentliche JSON-API abrufen
+- Arbeitnow-Stellen ueber die kostenlose oeffentliche API abrufen
+- direkte Karriereseiten von JUMO, EDAG, CSS, Proemion und NETHINKS abrufen
 - Jobdetail-Seiten importieren
 - alle Quellen in ein verbindliches Jobmodell ueberfuehren
 - Rohbeschreibung, Klartext sowie Veroeffentlichungs- und Abrufdaten speichern
@@ -160,6 +162,12 @@ data/internal/seen_jobs.json lokales Job-Gedaechtnis
 data/internal/stepstone_cache.json technischer StepStone-Cache
 data/internal/arbeitsagentur_cache.json Detailcache der Arbeitsagentur
 data/internal/get_in_it_cache.json Detailcache von get-in-IT
+data/internal/arbeitnow_cache.json Detailcache von Arbeitnow
+data/internal/jumo_cache.json       Detailcache von JUMO
+data/internal/edag_cache.json       Detailcache von EDAG
+data/internal/css_cache.json        Detailcache von CSS
+data/internal/proemion_cache.json   Detailcache von Proemion
+data/internal/nethinks_cache.json   Detailcache von NETHINKS
 data/internal/llm_cache.json LLM-Ergebnisse und ausstehende Analysen
 data/internal/notifications.json Versand- und Wiederholungsstatus
 data/output/recommendations.json kompakte finale KI-Ergebnisse

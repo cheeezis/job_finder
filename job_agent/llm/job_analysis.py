@@ -259,8 +259,18 @@ class JobAnalysisValidationError(ValueError):
 
 def build_job_analysis_messages(job):
     """Build a profile-free prompt for objective requirement extraction."""
+    prompt_job = dict(job)
+    career_levels = [
+        str(level).strip() for level in job.get("career_levels", []) if level
+    ]
+    if career_levels:
+        description = str(prompt_job.get("description_clean") or "").strip()
+        portal_facts = f"Karrierestufe (Portal-Metadatum): {'; '.join(career_levels)}"
+        prompt_job["description_clean"] = "\n\n".join(
+            part for part in (description, portal_facts) if part
+        )
     prompt_data = {
-        "job": job,
+        "job": prompt_job,
         "output_schema": JOB_ANALYSIS_SCHEMA,
     }
     return [
@@ -381,7 +391,8 @@ def analyze_job(job, model, client, validation_retries=1):
     """Extract validated job facts through an injected LLM client."""
     messages = build_job_analysis_messages(job)
     source_text = "\n".join(
-        str(job.get(field) or "") for field in ("title", "description_clean")
+        str(job.get(field) or "")
+        for field in ("title", "description_clean", "career_levels")
     )
 
     for attempt in range(validation_retries + 1):

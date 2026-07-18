@@ -60,6 +60,7 @@ def recommendation_for_job(job):
         "locations": job.get("locations", []),
         "work_mode": job.get("work_mode"),
         "remote_percentage": job.get("remote_percentage"),
+        "career_levels": job.get("career_levels", []),
         "published_at": job.get("published_at"),
         "url": primary_url(job),
         "llm_score": job["llm_score"],

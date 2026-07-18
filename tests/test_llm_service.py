@@ -145,17 +145,19 @@ class LlmServiceTests(unittest.TestCase):
         self.assertEqual(known_results["included"][0]["llm_status"], "cached")
         client_class.assert_not_called()
 
-    def test_known_uncached_job_is_skipped_by_default(self):
+    def test_empty_cache_reanalyzes_known_job(self):
         results = {"included": [make_job(is_new=False)], "excluded": []}
 
         with tempfile.TemporaryDirectory() as directory:
             settings = self.settings(directory)
-            with patch("job_agent.llm.service.OpenAIClient") as client_class:
-                stats = analyze_results(results, settings)
+            with patch(
+                "job_agent.llm.service.analyze_job_record",
+                side_effect=lambda _job, _profile, _settings, _client, key: make_record(key),
+            ):
+                stats = analyze_results(results, settings, client=object())
 
-        self.assertEqual(stats["eligible"], 0)
-        self.assertNotIn("llm_score", results["included"][0])
-        client_class.assert_not_called()
+        self.assertEqual(stats["analyzed"], 1)
+        self.assertEqual(results["included"][0]["llm_status"], "analyzed")
 
     def test_profile_change_reanalyzes_known_included_jobs(self):
         results = {"included": [make_job(is_new=False)], "excluded": []}

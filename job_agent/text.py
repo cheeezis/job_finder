@@ -28,6 +28,9 @@ def normalize_text(text):
         "\u00df": "ss",
     }
     normalized = str(text or "").lower()
+    # Career pages sometimes insert invisible soft hyphens for line wrapping.
+    # They must not split searchable words such as "Auszubildende".
+    normalized = normalized.replace("\u00ad", "").replace("\u200b", "")
     for old, new in replacements.items():
         normalized = normalized.replace(old, new)
     return normalized

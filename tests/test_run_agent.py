@@ -4,7 +4,7 @@ import unittest
 from types import SimpleNamespace
 
 from job_agent.models import Job, JobSource
-from run_agent import collect_jobs
+from run_agent import canonical_url, collect_jobs
 
 
 def make_job(job_id):
@@ -42,6 +42,18 @@ class RunAgentTests(unittest.TestCase):
 
         self.assertEqual(jobs, [])
         self.assertEqual(status, {"empty": False})
+
+    def test_canonical_url_keeps_jumo_job_offer_id(self):
+        first = canonical_url(
+            "https://jobs.jumo.de/engage/jobexchange/showJobOfferDetail.do?"
+            "jobOfferId=first&j=jobexchange"
+        )
+        second = canonical_url(
+            "https://jobs.jumo.de/engage/jobexchange/showJobOfferDetail.do?"
+            "jobOfferId=second&j=jobexchange"
+        )
+
+        self.assertNotEqual(first, second)
 
 
 if __name__ == "__main__":

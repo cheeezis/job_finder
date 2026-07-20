@@ -175,7 +175,7 @@ def search_links(client=None):
 
             print(
                 f"  Seite {page}: {len(found_links)} Link(s), "
-                f"{globally_new} quellenweit neu"
+                f"{globally_new} in diesem Lauf erstmals"
             )
             if not found_links or not page_links:
                 break

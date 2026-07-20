@@ -189,7 +189,7 @@ def search_api(priority_id, location):
             results.append(job)
 
         total = int(data.get("total", 0) or 0)
-        print(f"  API {len(results)}/{total} Treffer geladen")
+        print(f"  API {len(results)}/{total} eindeutige Treffer bisher")
         if not page_results or not new_results or len(results) >= total:
             return results
 

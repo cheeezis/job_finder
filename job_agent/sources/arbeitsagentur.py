@@ -132,7 +132,10 @@ def search(term):
             results.append(result)
 
         total = int(search_result.get("maxErgebnisse", 0) or 0)
-        print(f"  Seite {page}: {len(new_results)} neu, {len(results)}/{total} geladen")
+        print(
+            f"  Seite {page}: {len(new_results)} erstmals auf dieser Suche, "
+            f"{len(results)}/{total} Treffer bisher"
+        )
         if not page_results or not new_results or len(results) >= total:
             return results
 

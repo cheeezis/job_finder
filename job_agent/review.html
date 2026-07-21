@@ -104,9 +104,6 @@
     <p id="summary" class="summary"></p>
     <div id="details" class="details"></div>
     <div class="actions">
-      <button data-quick-status="interesting" class="primary">Interessant</button>
-      <button data-quick-status="review">Später prüfen</button>
-      <button data-quick-status="ignored" class="ignore">Ignorieren</button>
       <a id="job-link" class="button" target="_blank" rel="noopener noreferrer">Anzeige öffnen</a>
       <select id="status-select" class="status-select" aria-label="Workflow-Status"></select>
     </div>
@@ -314,9 +311,6 @@
   element("previous").addEventListener("click", () => { currentIndex -= 1; render(); });
   element("next").addEventListener("click", () => { currentIndex += 1; render(); });
   element("status-select").addEventListener("change", event => changeStatus(event.target.value).catch(showError));
-  document.querySelectorAll("[data-quick-status]").forEach(button =>
-    button.addEventListener("click", () => changeStatus(button.dataset.quickStatus).catch(showError))
-  );
   document.querySelectorAll("[data-personal-rating]").forEach(button =>
     button.addEventListener("click", () =>
       savePersonalReview(button.dataset.personalRating, true).catch(showError)

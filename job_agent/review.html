@@ -19,7 +19,7 @@
     .subtitle { margin: 8px 0 0; color: #607087; }
     .counter { color: #607087; white-space: nowrap; }
     .filters, .card { background: white; border: 1px solid #dfe4eb; border-radius: 16px; box-shadow: 0 8px 24px rgba(28, 39, 58, .06); }
-    .filters { display: grid; grid-template-columns: 1fr 1fr 1fr 2fr; gap: 12px; padding: 16px; margin: 24px 0; }
+    .filters { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 12px; padding: 16px; margin: 24px 0; }
     label { display: grid; gap: 6px; font-size: .82rem; color: #607087; }
     select, input, textarea, button, .button { font: inherit; border-radius: 9px; }
     select, input, textarea { width: 100%; padding: 10px 12px; border: 1px solid #cbd3df; background: white; color: #172033; }
@@ -41,8 +41,7 @@
     button:hover, .button:hover { background: #f3f5f8; }
     button.primary { background: #176b54; color: white; border-color: #176b54; }
     button.ignore { color: #8a3840; }
-    .personal-actions { width: 100%; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-    .personal-actions strong { margin-right: 4px; }
+    .status-select { margin-left: auto; width: auto; min-width: 205px; }
     .note-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
     .navigation { display: flex; justify-content: space-between; margin-top: 16px; }
     .empty, .error { padding: 36px; text-align: center; color: #607087; }
@@ -52,6 +51,7 @@
       header { display: block; }
       .counter { margin-top: 12px; }
       .filters, .details { grid-template-columns: 1fr; }
+      .status-select { margin-left: 0; flex: 1 1 100%; }
     }
   </style>
 </head>
@@ -67,7 +67,10 @@
 
   <section class="filters" aria-label="Filter">
     <label>Status
-      <select id="status-filter"><option value="">Alle Status</option></select>
+      <select id="status-filter">
+        <option value="new">Neu</option>
+        <option value="">Alle Status</option>
+      </select>
     </label>
     <label>Empfehlung
       <select id="recommendation-filter">
@@ -76,12 +79,6 @@
         <option value="match">Passend</option>
         <option value="borderline">Vielleicht passend</option>
         <option value="not_recommended">Nicht empfohlen</option>
-      </select>
-    </label>
-    <label>Meine Einschätzung
-      <select id="personal-rating-filter">
-        <option value="unrated">Noch nicht bewertet</option>
-        <option value="">Alle Einschätzungen</option>
       </select>
     </label>
     <label>Suche
@@ -100,22 +97,23 @@
     <div class="meta">
       <span id="location"></span>
       <span id="remote"></span>
+      <span id="current-status"></span>
     </div>
     <p id="summary" class="summary"></p>
     <div id="details" class="details"></div>
     <div class="actions">
+      <button id="mark-interesting" class="primary">Interessant</button>
+      <button id="mark-ignored" class="ignore">Nicht interessant</button>
       <a id="job-link" class="button" target="_blank" rel="noopener noreferrer">Anzeige öffnen</a>
+      <select id="progress-select" class="status-select" aria-label="Bewerbungsfortschritt">
+        <option value="">Bewerbungsfortschritt …</option>
+        <option value="applied">Beworben</option>
+        <option value="interview">Interview</option>
+        <option value="rejected">Absage</option>
+        <option value="offer">Angebot</option>
+        <option value="closed">Abgeschlossen</option>
+      </select>
     </div>
-    <section class="section">
-      <h3>Meine Einschätzung</h3>
-      <div class="personal-actions">
-        <strong id="personal-rating"></strong>
-        <button data-personal-rating="very_interesting" class="primary">Sehr interessant</button>
-        <button data-personal-rating="interesting">Interessant</button>
-        <button data-personal-rating="maybe">Vielleicht</button>
-        <button data-personal-rating="not_interesting" class="ignore">Nicht interessant</button>
-      </div>
-    </section>
     <section class="section">
       <h3>Meine Notiz</h3>
       <textarea id="review-note" maxlength="2000" placeholder="Optional: Warum passt oder passt die Stelle nicht?"></textarea>
@@ -134,9 +132,10 @@
     strong_match: "Sehr passend", match: "Passend",
     borderline: "Vielleicht passend", not_recommended: "Nicht empfohlen"
   };
-  const personalRatingLabels = {
-    very_interesting: "Sehr interessant", interesting: "Interessant",
-    maybe: "Vielleicht", not_interesting: "Nicht interessant"
+  const statusLabels = {
+    new: "Neu", review: "Prüfen", interesting: "Interessant",
+    ignored: "Nicht interessant", applied: "Beworben", interview: "Interview",
+    rejected: "Absage", offer: "Angebot", closed: "Abgeschlossen"
   };
   let jobs = [];
   let visibleJobs = [];
@@ -176,14 +175,10 @@
   function applyFilters() {
     const status = element("status-filter").value;
     const recommendation = element("recommendation-filter").value;
-    const personalRating = element("personal-rating-filter").value;
     const query = element("search-filter").value.trim().toLocaleLowerCase("de");
     visibleJobs = jobs.filter(job =>
       (!status || job.workflow_status === status) &&
       (!recommendation || job.recommendation === recommendation) &&
-      (personalRating === "unrated"
-        ? !job.personal_rating
-        : !personalRating || job.personal_rating === personalRating) &&
       (!query || `${job.title} ${job.company}`.toLocaleLowerCase("de").includes(query))
     );
     currentIndex = 0;
@@ -214,9 +209,7 @@
       ? `${job.remote_percentage}%`
       : job.work_mode === "hybrid" ? "Homeoffice" : "nicht angegeben";
     setText("remote", `Remote: ${remote}`);
-    setText("personal-rating", job.personal_rating
-      ? `Meine Einschätzung: ${personalRatingLabels[job.personal_rating] || job.personal_rating}`
-      : "Noch nicht eingeschätzt");
+    setText("current-status", `Status: ${statusLabels[job.workflow_status] || job.workflow_status}`);
     element("review-note").value = job.review_note || "";
     setText("summary", job.summary);
     element("job-link").href = job.url || "#";
@@ -233,27 +226,43 @@
     element("next").disabled = currentIndex === visibleJobs.length - 1;
   }
 
-  async function savePersonalReview(personalRating, advance) {
+  async function changeStatus(workflowStatus) {
     const job = visibleJobs[currentIndex];
-    const response = await fetch("/api/review", {
+    const response = await fetch("/api/status", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({
         job_id: job.id,
-        personal_rating: personalRating,
-        review_note: element("review-note").value
+        workflow_status: workflowStatus
       })
     });
     const result = await response.json();
-    if (!response.ok) throw new Error(result.error || "Einschätzung konnte nicht gespeichert werden");
-    job.personal_rating = result.personal_rating;
+    if (!response.ok) throw new Error(result.error || "Status konnte nicht gespeichert werden");
+    job.workflow_status = result.workflow_status;
+    const original = jobs.find(item => item.id === job.id);
+    if (original) original.workflow_status = result.workflow_status;
+    if (element("status-filter").value && element("status-filter").value !== result.workflow_status) {
+      applyFilters();
+    } else if (currentIndex < visibleJobs.length - 1) {
+      currentIndex += 1;
+      render();
+    } else {
+      render();
+    }
+  }
+
+  async function saveReviewNote() {
+    const job = visibleJobs[currentIndex];
+    const response = await fetch("/api/note", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({job_id: job.id, review_note: element("review-note").value})
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Notiz konnte nicht gespeichert werden");
     job.review_note = result.review_note;
     const original = jobs.find(item => item.id === job.id);
-    if (original) {
-      original.personal_rating = result.personal_rating;
-      original.review_note = result.review_note;
-    }
-    if (advance && currentIndex < visibleJobs.length - 1) currentIndex += 1;
+    if (original) original.review_note = result.review_note;
     render();
   }
 
@@ -263,15 +272,10 @@
       if (!response.ok) throw new Error("Empfehlungen konnten nicht geladen werden");
       const result = await response.json();
       jobs = result.recommendations.sort((a, b) => b.llm_score - a.llm_score);
-      addOptions(element("status-filter"), result.workflow_statuses, {
-        new: "Neu", review: "Später prüfen", interesting: "Interessant",
-        ignored: "Ignoriert", applied: "Beworben", interview: "Interview",
-        rejected: "Absage", offer: "Angebot", closed: "Abgeschlossen"
-      });
       addOptions(
-        element("personal-rating-filter"),
-        result.personal_ratings,
-        personalRatingLabels
+        element("status-filter"),
+        result.workflow_statuses.filter(status => status !== "new"),
+        statusLabels
       );
       applyFilters();
     } catch (error) {
@@ -282,17 +286,21 @@
 
   element("status-filter").addEventListener("change", applyFilters);
   element("recommendation-filter").addEventListener("change", applyFilters);
-  element("personal-rating-filter").addEventListener("change", applyFilters);
   element("search-filter").addEventListener("input", applyFilters);
   element("previous").addEventListener("click", () => { currentIndex -= 1; render(); });
   element("next").addEventListener("click", () => { currentIndex += 1; render(); });
-  document.querySelectorAll("[data-personal-rating]").forEach(button =>
-    button.addEventListener("click", () =>
-      savePersonalReview(button.dataset.personalRating, true).catch(showError)
-    )
+  element("mark-interesting").addEventListener("click", () =>
+    changeStatus("interesting").catch(showError)
   );
+  element("mark-ignored").addEventListener("click", () =>
+    changeStatus("ignored").catch(showError)
+  );
+  element("progress-select").addEventListener("change", event => {
+    if (!event.target.value) return;
+    changeStatus(event.target.value).catch(showError);
+  });
   element("save-note").addEventListener("click", () =>
-    savePersonalReview(undefined, false).catch(showError)
+    saveReviewNote().catch(showError)
   );
   function showError(error) { window.alert(error.message); }
   load();

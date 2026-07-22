@@ -132,11 +132,11 @@ Verbindliche Regeln:
 - Nenne fehlende oder unsichere Teile konkret in missing_or_uncertain.
 - Fuehre widerspruechliche oder schwer belegbare Punkte unter uncertainties auf.
 - Einstiegstauglichkeit hat klar Vorrang vor Arbeitsbedingungen, Richtung und
-  Technologien. Excellent gilt fuer ausdrueckliche Junior-/Berufseinsteigerrollen
-  sowie fuer Stellen, die erkennbar Berufseinsteiger ansprechen und hoechstens
-  optionale Erfahrung verlangen. Ein fehlendes Junior-Wort verhindert excellent
-  also nicht. Good gilt ohne solches Einstiegssignal nur, wenn geforderte erste
-  Praxis realistisch weitgehend belegt ist.
+  Technologien. Excellent gilt nur bei seniority junior_entry mit
+  seniority_basis explicit_label. Formulierungen wie erste Erfahrungen,
+  Grundkenntnisse, Interesse oder Motivation sind kein ausdrueckliches
+  Einstiegslabel. Good gilt ohne ausdrueckliches Einstiegslabel nur, wenn die
+  geforderte erste Praxis realistisch weitgehend belegt ist.
 - Bei Mindestanforderungen an mehrere Technologien zaehlen Grundlagen nur als
   Teilbeleg. Ist die geforderte Mindestanzahl dadurch nicht voll erreicht, darf
   entry_fit hoechstens partial sein.
@@ -169,6 +169,7 @@ def flatten_job_requirements(job_analysis):
             "primary_role_family": job_analysis["primary_role_family"],
             "secondary_role_families": job_analysis["secondary_role_families"],
             "seniority": job_analysis["seniority"],
+            "seniority_basis": job_analysis["seniority_basis"],
         },
         {
             "id": "tasks",

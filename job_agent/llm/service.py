@@ -38,15 +38,20 @@ def analyze_results(
     cache_state = load_cache(settings.cache_path)
     analyses = cache_state["analyses"]
     pending = cache_state["pending"]
+    current_analysis_version = analysis_configuration_key(settings)
+    analysis_changed = (
+        cache_state.get("analysis_version") != current_analysis_version
+    )
     cached_profile_version = cache_state.get("profile_version")
     profile_changed = (
         cached_profile_version is not None
         and cached_profile_version != profile.version
     )
-    if profile_changed:
+    if profile_changed or analysis_changed:
         analyses.clear()
         pending.clear()
     cache_state["profile_version"] = profile.version
+    cache_state["analysis_version"] = current_analysis_version
     rebuild_empty_cache = not analyses and not pending
     jobs_with_keys = [
         (job, analysis_cache_key(job, profile.version, settings))
@@ -204,6 +209,26 @@ def analysis_cache_key(job, profile_version, settings):
     return hashlib.sha256(encoded).hexdigest()
 
 
+def analysis_configuration_key(settings):
+    """Identify LLM settings that require reanalyzing cached job facts."""
+    payload = {
+        "model": settings.model,
+        "reasoning_effort": settings.reasoning_effort,
+        "max_output_tokens": settings.max_output_tokens,
+        "job_analysis_prompt_version": JOB_ANALYSIS_PROMPT_VERSION,
+        "job_analysis_schema_version": JOB_ANALYSIS_SCHEMA_VERSION,
+        "profile_match_prompt_version": PROFILE_MATCH_PROMPT_VERSION,
+        "profile_match_schema_version": PROFILE_MATCH_SCHEMA_VERSION,
+    }
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
 def attach_result(job, record, status):
     """Attach one persisted LLM result to a serialized job row."""
     score_changed = record["metadata"].get("fit_score_version") != FIT_SCORE_VERSION
@@ -294,7 +319,12 @@ def load_cache(path):
     """Load successful analyses and pending retries."""
     cache_path = Path(path)
     if not cache_path.exists():
-        return {"profile_version": None, "analyses": {}, "pending": {}}
+        return {
+            "profile_version": None,
+            "analysis_version": None,
+            "analyses": {},
+            "pending": {},
+        }
     document = json.loads(cache_path.read_text(encoding="utf-8"))
     if document.get("version") != CACHE_VERSION:
         raise ValueError("LLM-Cache verwendet eine unbekannte Version")
@@ -306,6 +336,7 @@ def load_cache(path):
         )
     return {
         "profile_version": profile_version,
+        "analysis_version": document.get("analysis_version"),
         "analyses": analyses,
         "pending": document.get("pending", {}),
     }

@@ -145,6 +145,39 @@ class LlmServiceTests(unittest.TestCase):
         self.assertEqual(known_results["included"][0]["llm_status"], "cached")
         client_class.assert_not_called()
 
+    def test_analysis_configuration_change_reanalyzes_known_job(self):
+        first_results = {"included": [make_job()], "excluded": []}
+
+        with tempfile.TemporaryDirectory() as directory:
+            settings = self.settings(directory)
+
+            with patch(
+                "job_agent.llm.service.analyze_job_record",
+                side_effect=lambda _job, _profile, _settings, _client, key: make_record(key),
+            ):
+                analyze_results(first_results, settings, client=object())
+
+            changed_settings = LlmSettings(
+                model="new-test-model",
+                cache_path=settings.cache_path,
+            )
+            known_results = {
+                "included": [make_job(is_new=False)],
+                "excluded": [],
+            }
+            with patch(
+                "job_agent.llm.service.analyze_job_record",
+                side_effect=lambda _job, _profile, _settings, _client, key: make_record(key),
+            ) as analyze:
+                stats = analyze_results(
+                    known_results,
+                    changed_settings,
+                    client=object(),
+                )
+
+        self.assertEqual(stats["analyzed"], 1)
+        analyze.assert_called_once()
+
     def test_empty_cache_reanalyzes_known_job(self):
         results = {"included": [make_job(is_new=False)], "excluded": []}
 

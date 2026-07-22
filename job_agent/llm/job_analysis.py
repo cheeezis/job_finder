@@ -8,8 +8,8 @@ from jsonschema import ValidationError, validate
 from job_agent.llm.validation import build_validation_retry_messages
 
 
-JOB_ANALYSIS_SCHEMA_VERSION = 2
-JOB_ANALYSIS_PROMPT_VERSION = 5
+JOB_ANALYSIS_SCHEMA_VERSION = 3
+JOB_ANALYSIS_PROMPT_VERSION = 6
 
 ROLE_FAMILIES = [
     "ai_ml",
@@ -44,6 +44,7 @@ JOB_ANALYSIS_SCHEMA = {
         "primary_role_family",
         "secondary_role_families",
         "seniority",
+        "seniority_basis",
         "seniority_evidence_quote",
         "experience_requirement",
         "tasks",
@@ -63,6 +64,14 @@ JOB_ANALYSIS_SCHEMA = {
         "seniority": {
             "type": "string",
             "enum": ["junior_entry", "mixed", "mid", "senior", "unspecified"],
+        },
+        "seniority_basis": {
+            "type": "string",
+            "enum": [
+                "explicit_label",
+                "inferred_from_experience",
+                "not_stated",
+            ],
         },
         "seniority_evidence_quote": {"type": "string", "maxLength": 500},
         "experience_requirement": {
@@ -229,6 +238,13 @@ Verbindliche Regeln:
   eine gemeinsame weitere Anforderung zusammen. Zerlege Alternativen nicht in
   mehrere Eintraege, die spaeter faelschlich gleichzeitig verlangt wuerden.
 - Uebernimm Erfahrungsjahre nur, wenn sie ausdruecklich genannt werden.
+- Setze seniority junior_entry nur bei einem ausdruecklichen Label in Titel,
+  Beschreibung oder Portal-Metadaten, etwa Junior, Berufseinsteiger oder
+  Trainee. Erste Erfahrungen, Grundkenntnisse, Interesse oder Motivation allein
+  sind kein Junior-Label und duerfen junior_entry nicht begruenden.
+- seniority_basis ist explicit_label bei einem solchen ausdruecklichen Label,
+  inferred_from_experience nur bei Mid-/Senior-Einstufung aus klarer Erfahrung,
+  sonst not_stated.
 - Ein Junior-Titel ist ein Senioritaetssignal, aber kein Beleg dafuer, dass keine
   Erfahrung erwartet wird.
 - Trenne erste Beruehrung, praktische Erfahrung, Berufserfahrung, mehrjaehrige
@@ -295,10 +311,21 @@ def validate_job_analysis(analysis, source_text=None):
             "Primaere Rollenfamilie darf nicht zugleich sekundaer sein"
         )
 
+    seniority = analysis["seniority"]
+    seniority_basis = analysis["seniority_basis"]
     seniority_quote = analysis["seniority_evidence_quote"]
-    if analysis["seniority"] == "unspecified" and seniority_quote:
+    if seniority == "unspecified":
+        if seniority_basis != "not_stated" or seniority_quote:
+            raise JobAnalysisValidationError(
+                "Unbekannte Senioritaet braucht not_stated und einen leeren Beleg"
+            )
+    elif seniority_basis == "not_stated" or not seniority_quote:
         raise JobAnalysisValidationError(
-            "Unbekannte Senioritaet darf keinen Beleg vortaeuschen"
+            "Genannte Senioritaet braucht Grundlage und wortgetreuen Beleg"
+        )
+    elif seniority == "junior_entry" and seniority_basis != "explicit_label":
+        raise JobAnalysisValidationError(
+            "Junior-Einstufung braucht ein ausdrueckliches Label"
         )
 
     experience = analysis["experience_requirement"]

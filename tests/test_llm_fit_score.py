@@ -22,6 +22,11 @@ def make_job_analysis(
         "primary_role_family": role,
         "secondary_role_families": [],
         "seniority": seniority,
+        "seniority_basis": (
+            "explicit_label" if seniority == "junior_entry"
+            else "inferred_from_experience" if seniority in {"mid", "senior"}
+            else "not_stated"
+        ),
         "seniority_evidence_quote": "Junior" if seniority == "junior_entry" else "",
         "experience_requirement": {
             "expectation": expectation,

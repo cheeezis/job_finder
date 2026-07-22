@@ -8,11 +8,33 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from job_agent.memory import load_memory, save_memory
-from job_agent.models import PersonalRating, WorkflowStatus
+from job_agent.models import WorkflowStatus
 from job_agent.paths import MEMORY_FILE, RECOMMENDATIONS_JSON
 
 
 REVIEW_PAGE = Path(__file__).with_name("review.html")
+RATING_STATUS_MIGRATION = {
+    "very_interesting": WorkflowStatus.INTERESTING.value,
+    "interesting": WorkflowStatus.INTERESTING.value,
+    "not_interesting": WorkflowStatus.IGNORED.value,
+}
+
+
+def migrate_personal_ratings(memory_path=MEMORY_FILE):
+    """Translate completed calibration ratings into their workflow status once."""
+    memory = load_memory(memory_path)
+    migrated = 0
+    for entry in memory.values():
+        if entry.get("workflow_status") != WorkflowStatus.NEW.value:
+            continue
+        target_status = RATING_STATUS_MIGRATION.get(entry.get("personal_rating"))
+        if target_status is None:
+            continue
+        entry["workflow_status"] = target_status
+        migrated += 1
+    if migrated:
+        save_memory(memory, memory_path)
+    return migrated
 
 
 def load_review_jobs(
@@ -35,7 +57,6 @@ def load_review_jobs(
             "workflow_status",
             WorkflowStatus.NEW.value,
         )
-        job["personal_rating"] = entry.get("personal_rating")
         job["review_note"] = entry.get("review_note", "")
         review_jobs.append(job)
     return review_jobs
@@ -52,28 +73,19 @@ def update_workflow_status(job_id, workflow_status, memory_path=MEMORY_FILE):
     return status.value
 
 
-def update_personal_review(
-    job_id,
-    personal_rating=None,
-    review_note=None,
-    memory_path=MEMORY_FILE,
-):
-    """Persist an optional personal rating and note for one job."""
+def update_review_note(job_id, review_note, memory_path=MEMORY_FILE):
+    """Persist an optional note alongside one unified workflow status."""
     memory = load_memory(memory_path)
     if job_id not in memory:
         raise KeyError(f"Unbekannte Job-ID: {job_id}")
     entry = memory[job_id]
-    if personal_rating is not None:
-        entry["personal_rating"] = PersonalRating(personal_rating).value
-    if review_note is not None:
-        if not isinstance(review_note, str):
-            raise ValueError("Notiz muss Text sein")
-        if len(review_note) > 2000:
-            raise ValueError("Notiz darf maximal 2000 Zeichen lang sein")
-        entry["review_note"] = review_note.strip()
+    if not isinstance(review_note, str):
+        raise ValueError("Notiz muss Text sein")
+    if len(review_note) > 2000:
+        raise ValueError("Notiz darf maximal 2000 Zeichen lang sein")
+    entry["review_note"] = review_note.strip()
     save_memory(memory, memory_path)
     return {
-        "personal_rating": entry.get("personal_rating"),
         "review_note": entry.get("review_note", ""),
     }
 
@@ -98,7 +110,6 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
                         self.memory_path,
                     ),
                     "workflow_statuses": [status.value for status in WorkflowStatus],
-                    "personal_ratings": [rating.value for rating in PersonalRating],
                 }
             )
             return
@@ -106,7 +117,7 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         """Persist a workflow status selected in the browser."""
-        if self.path not in {"/api/status", "/api/review"}:
+        if self.path not in {"/api/status", "/api/note"}:
             self.send_error(404)
             return
         try:
@@ -121,9 +132,8 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
                     )
                 }
             else:
-                result = update_personal_review(
+                result = update_review_note(
                     payload["job_id"],
-                    payload.get("personal_rating"),
                     payload.get("review_note"),
                     self.memory_path,
                 )
@@ -169,6 +179,9 @@ def parse_args():
 def main():
     """Start the review server on the local computer only."""
     args = parse_args()
+    migrated = migrate_personal_ratings()
+    if migrated:
+        print(f"{migrated} Kalibrierungsbewertungen in Status uebertragen")
     address = ("127.0.0.1", args.port)
     server = ThreadingHTTPServer(address, ReviewRequestHandler)
     url = f"http://{address[0]}:{address[1]}"

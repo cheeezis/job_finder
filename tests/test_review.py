@@ -8,12 +8,13 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from urllib.request import Request, urlopen
 
-from job_agent.memory import save_memory
+from job_agent.memory import load_memory, save_memory
 from job_agent.review import (
     REVIEW_PAGE,
     ReviewRequestHandler,
     load_review_jobs,
-    update_personal_review,
+    migrate_personal_ratings,
+    update_review_note,
     update_workflow_status,
 )
 
@@ -64,26 +65,51 @@ class ReviewTests(unittest.TestCase):
         jobs = load_review_jobs(self.recommendations_path, self.memory_path)
         self.assertEqual(jobs[0]["workflow_status"], "applied")
 
-    def test_personal_rating_and_note_are_persisted_separately(self):
-        review = update_personal_review(
+    def test_note_is_persisted_with_workflow_status(self):
+        review = update_review_note(
             "job:1",
-            "very_interesting",
             "Juniorrolle in Fulda und fachlich passend.",
             self.memory_path,
         )
 
         jobs = load_review_jobs(self.recommendations_path, self.memory_path)
-        self.assertEqual(review["personal_rating"], "very_interesting")
         self.assertEqual(jobs[0]["workflow_status"], "interesting")
-        self.assertEqual(jobs[0]["personal_rating"], "very_interesting")
         self.assertEqual(
             jobs[0]["review_note"],
             "Juniorrolle in Fulda und fachlich passend.",
         )
 
-    def test_invalid_personal_rating_is_rejected(self):
+    def test_invalid_note_is_rejected(self):
         with self.assertRaises(ValueError):
-            update_personal_review("job:1", "great", memory_path=self.memory_path)
+            update_review_note("job:1", 42, memory_path=self.memory_path)
+
+    def test_calibration_ratings_are_translated_without_overwriting_progress(self):
+        memory = {
+            "job:interesting": {
+                "workflow_status": "new",
+                "personal_rating": "very_interesting",
+            },
+            "job:ignored": {
+                "workflow_status": "new",
+                "personal_rating": "not_interesting",
+            },
+            "job:maybe": {
+                "workflow_status": "new",
+                "personal_rating": "maybe",
+            },
+            "job:applied": {
+                "workflow_status": "applied",
+                "personal_rating": "not_interesting",
+            },
+        }
+        save_memory(memory, self.memory_path)
+
+        self.assertEqual(migrate_personal_ratings(self.memory_path), 2)
+        restored = load_memory(self.memory_path)
+        self.assertEqual(restored["job:interesting"]["workflow_status"], "interesting")
+        self.assertEqual(restored["job:ignored"]["workflow_status"], "ignored")
+        self.assertEqual(restored["job:maybe"]["workflow_status"], "new")
+        self.assertEqual(restored["job:applied"]["workflow_status"], "applied")
 
     def test_invalid_status_is_rejected_without_changing_memory(self):
         with self.assertRaises(ValueError):
@@ -123,20 +149,19 @@ class ReviewTests(unittest.TestCase):
             )
             with urlopen(request) as response:
                 result = json.load(response)
-            review_request = Request(
-                f"{base_url}/api/review",
+            note_request = Request(
+                f"{base_url}/api/note",
                 data=json.dumps(
                     {
                         "job_id": "job:1",
-                        "personal_rating": "maybe",
                         "review_note": "Fachlich interessant, aber noch unsicher.",
                     }
                 ).encode("utf-8"),
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
-            with urlopen(review_request) as response:
-                review_result = json.load(response)
+            with urlopen(note_request) as response:
+                note_result = json.load(response)
         finally:
             server.shutdown()
             server.server_close()
@@ -147,8 +172,11 @@ class ReviewTests(unittest.TestCase):
             "interesting",
         )
         self.assertEqual(result["workflow_status"], "ignored")
-        self.assertIn("very_interesting", document["personal_ratings"])
-        self.assertEqual(review_result["personal_rating"], "maybe")
+        self.assertNotIn("personal_ratings", document)
+        self.assertEqual(
+            note_result["review_note"],
+            "Fachlich interessant, aber noch unsicher.",
+        )
         jobs = load_review_jobs(self.recommendations_path, self.memory_path)
         self.assertEqual(jobs[0]["workflow_status"], "ignored")
         self.assertEqual(jobs[0]["review_note"], "Fachlich interessant, aber noch unsicher.")

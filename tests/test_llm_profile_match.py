@@ -23,6 +23,7 @@ def make_job_analysis():
         "primary_role_family": "ai_ml",
         "secondary_role_families": ["consulting_business_analysis"],
         "seniority": "junior_entry",
+        "seniority_basis": "explicit_label",
         "seniority_evidence_quote": "Junior IT KI Consultant",
         "experience_requirement": {
             "expectation": "first_exposure",

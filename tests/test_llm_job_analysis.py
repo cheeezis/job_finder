@@ -20,6 +20,7 @@ def make_job_analysis():
         "primary_role_family": "ai_ml",
         "secondary_role_families": ["consulting_business_analysis"],
         "seniority": "junior_entry",
+        "seniority_basis": "explicit_label",
         "seniority_evidence_quote": "Junior IT KI Consultant",
         "experience_requirement": {
             "expectation": "first_exposure",
@@ -138,6 +139,17 @@ class LlmJobAnalysisTests(unittest.TestCase):
         analysis["seniority"] = "unspecified"
 
         with self.assertRaises(JobAnalysisValidationError):
+            validate_job_analysis(analysis)
+
+    def test_inferred_entry_signal_cannot_be_classified_as_junior(self):
+        analysis = make_job_analysis()
+        analysis["seniority_basis"] = "inferred_from_experience"
+        analysis["seniority_evidence_quote"] = "Erste Erfahrungen mit C++"
+
+        with self.assertRaisesRegex(
+            JobAnalysisValidationError,
+            "ausdrueckliches Label",
+        ):
             validate_job_analysis(analysis)
 
     def test_paraphrased_evidence_is_rejected(self):

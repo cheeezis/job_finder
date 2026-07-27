@@ -13,6 +13,8 @@ from job_agent.notifications import (
     load_notification_state,
     notification_chunks,
     process_notifications,
+    run_summary_payload,
+    send_run_summary,
     webhook_url_with_confirmation,
 )
 
@@ -316,6 +318,48 @@ class NotificationTests(unittest.TestCase):
 
         self.assertIn("thread_id=123", url)
         self.assertIn("wait=true", url)
+
+    def test_run_summary_includes_source_breakdown_and_disables_mentions(self):
+        payload = run_summary_payload(
+            {
+                "duration": "2 Min. 05 Sek.",
+                "jobs_total": 20,
+                "jobs_new": 3,
+                "jobs_known": 17,
+                "included": 5,
+                "excluded": 15,
+                "analyzed": 2,
+                "cached": 3,
+                "analysis_failed": 0,
+                "recommended": 2,
+                "not_recommended": 3,
+                "sources": [
+                    {
+                        "label": "Arbeitsagentur",
+                        "status": "success",
+                        "jobs": 12,
+                        "new": 2,
+                    },
+                    {
+                        "label": "StepStone",
+                        "status": "failed",
+                        "jobs": 0,
+                        "new": 0,
+                    },
+                ],
+            }
+        )
+
+        self.assertEqual(payload["allowed_mentions"], {"parse": []})
+        self.assertIn("20 gesamt (3 neu, 17 bekannt)", payload["content"])
+        self.assertIn("Arbeitsagentur: 12 Stellen, 2 neu", payload["content"])
+        self.assertIn("StepStone: Fehler", payload["content"])
+
+    def test_run_summary_reports_missing_webhook_without_sending(self):
+        self.assertIn(
+            "DISCORD_WEBHOOK_URL",
+            send_run_summary({"sources": []}, webhook_url=None),
+        )
 
 
 if __name__ == "__main__":

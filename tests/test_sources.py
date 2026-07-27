@@ -54,11 +54,15 @@ class ArbeitnowTests(unittest.TestCase):
             },
         ]
 
-        with patch.object(arbeitnow, "fetch_json", side_effect=pages) as fetch:
+        with (
+            patch.object(arbeitnow, "fetch_json", side_effect=pages) as fetch,
+            patch.object(arbeitnow.time, "sleep") as sleep,
+        ):
             records = arbeitnow.collect_records()
 
         self.assertEqual([record["slug"] for record in records], ["one", "two", "three"])
         self.assertEqual(fetch.call_count, 2)
+        sleep.assert_called_once_with(arbeitnow.REQUEST_PAUSE_SECONDS)
 
     def test_fetch_jobs_marks_changed_api_records(self):
         url = "https://www.arbeitnow.com/jobs/example/one"
@@ -91,6 +95,30 @@ class ArbeitnowTests(unittest.TestCase):
 
         self.assertEqual(len(jobs), 1)
         self.assertTrue(jobs[0].content_changed)
+
+    def test_rate_limited_api_uses_recent_cache(self):
+        url = "https://www.arbeitnow.com/jobs/example/cached"
+        cached = arbeitnow.job_from_record(
+            {
+                "slug": "cached",
+                "company_name": "Example GmbH",
+                "title": "Junior Developer",
+                "description": "<p>Python</p>",
+                "remote": True,
+                "url": url,
+                "location": "Fulda",
+            }
+        )
+        limited = HTTPError(arbeitnow.API_URL, 429, "Too Many Requests", None, None)
+
+        with tempfile.TemporaryDirectory() as directory:
+            cache_path = Path(directory) / "arbeitnow.json"
+            save_detail_cache(cache_path, {url: cached})
+            with patch.object(arbeitnow, "collect_records", side_effect=limited):
+                jobs = arbeitnow.fetch_jobs(cache_path=cache_path)
+
+        self.assertEqual([job.id for job in jobs], ["arbeitnow:cached"])
+        self.assertFalse(jobs[0].content_changed)
 
 
 class CompanyCareerTests(unittest.TestCase):

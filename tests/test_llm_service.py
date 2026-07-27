@@ -192,6 +192,35 @@ class LlmServiceTests(unittest.TestCase):
         self.assertEqual(stats["analyzed"], 1)
         self.assertEqual(results["included"][0]["llm_status"], "analyzed")
 
+    def test_known_job_without_cache_record_is_analyzed(self):
+        first_results = {"included": [make_job()], "excluded": []}
+        known_results = {
+            "included": [
+                make_job(
+                    is_new=False,
+                    title="Junior Data Engineer",
+                )
+            ],
+            "excluded": [],
+        }
+
+        with tempfile.TemporaryDirectory() as directory:
+            settings = self.settings(directory)
+            with patch(
+                "job_agent.llm.service.analyze_job_record",
+                side_effect=lambda _job, _profile, _settings, _client, key: make_record(key),
+            ):
+                analyze_results(first_results, settings, client=object())
+            with patch(
+                "job_agent.llm.service.analyze_job_record",
+                side_effect=lambda _job, _profile, _settings, _client, key: make_record(key),
+            ) as analyze:
+                stats = analyze_results(known_results, settings, client=object())
+
+        self.assertEqual(stats["analyzed"], 1)
+        self.assertEqual(known_results["included"][0]["llm_status"], "analyzed")
+        analyze.assert_called_once()
+
     def test_profile_change_reanalyzes_known_included_jobs(self):
         results = {"included": [make_job(is_new=False)], "excluded": []}
 

@@ -84,7 +84,9 @@ python run_agent.py --notify
 
 Der Webhook bleibt ausserhalb der gespeicherten Dateien. Erfolgreich gesendete
 Jobversionen werden nicht erneut gemeldet; Fehler bleiben fuer den naechsten
-Lauf vorgemerkt.
+Lauf vorgemerkt. Nach jedem Lauf mit `--notify` folgt eine kompakte
+Laufstatistik mit Laufzeit, Vorfilter- und KI-Zahlen sowie einer Aufschluesselung
+der gefundenen Stellen nach Quelle.
 
 Jeder Lauf schreibt seine vollstaendige Terminalausgabe zusaetzlich nach
 `data/logs/`. Vor dem Veraendern persistenter Daten werden Job-Gedaechtnis,

@@ -134,6 +134,52 @@ def process_notifications(
     return stats
 
 
+def send_run_summary(summary, *, webhook_url, client=None):
+    """Send one compact operational summary after a requested agent run."""
+    if not webhook_url:
+        return "DISCORD_WEBHOOK_URL ist nicht gesetzt"
+
+    webhook_client = client or DiscordWebhookClient(webhook_url)
+    try:
+        webhook_client.send(run_summary_payload(summary))
+    except NotificationError as error:
+        return str(error)
+    return None
+
+
+def run_summary_payload(summary):
+    """Render a compact, mention-safe summary that fits one Discord message."""
+    sources = summary["sources"]
+    lines = [
+        "**📊 Job Agent – Lauf abgeschlossen**",
+        "",
+        f"Laufzeit: {summary['duration']}",
+        f"Jobs: {summary['jobs_total']} gesamt "
+        f"({summary['jobs_new']} neu, {summary['jobs_known']} bekannt)",
+        f"Vorfilter: {summary['included']} an KI, {summary['excluded']} ausgeschlossen",
+        f"KI: {summary['analyzed']} neu analysiert, {summary['cached']} aus Cache, "
+        f"{summary['analysis_failed']} Fehler",
+        f"Bewertung: {summary['recommended']} passend, "
+        f"{summary['not_recommended']} nicht empfohlen",
+        "",
+        "**Quellen**",
+    ]
+    for source in sources:
+        if source["status"] == "failed":
+            lines.append(f"• {source['label']}: Fehler")
+        elif source["jobs"]:
+            lines.append(
+                f"• {source['label']}: {source['jobs']} Stellen, "
+                f"{source['new']} neu"
+            )
+        else:
+            lines.append(f"• {source['label']}: keine Treffer")
+    return {
+        "content": "\n".join(lines),
+        "allowed_mentions": {"parse": []},
+    }
+
+
 def is_notifiable(job):
     """Return whether one reviewed result belongs in Discord notifications."""
     result = job.get("llm_result") or {}

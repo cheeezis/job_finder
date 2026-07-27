@@ -1,7 +1,9 @@
 """Arbeitnow source adapter using its free public job-board API."""
 
+import time
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.error import HTTPError
 from urllib.parse import urlencode
 
 from job_agent.http import fetch_json
@@ -9,6 +11,7 @@ from job_agent.models import Job, JobSource, WorkMode
 from job_agent.paths import ARBEITNOW_CACHE_FILE
 from job_agent.sources.common import (
     canonical_detail_url,
+    detail_is_fresh,
     load_detail_cache,
     mark_content_change,
     normalize_employment_type,
@@ -22,6 +25,7 @@ SOURCE_NAME = "arbeitnow"
 API_URL = "https://www.arbeitnow.com/api/job-board-api"
 CACHE_FILE = ARBEITNOW_CACHE_FILE
 MAX_PAGES = 50
+REQUEST_PAUSE_SECONDS = 6
 
 
 def fetch_jobs(cache_path=CACHE_FILE):
@@ -30,7 +34,21 @@ def fetch_jobs(cache_path=CACHE_FILE):
     cache = load_detail_cache(cache_file)
     jobs = []
 
-    for record in collect_records():
+    try:
+        records = collect_records()
+    except HTTPError as error:
+        if error.code != 429:
+            raise
+        jobs = fresh_cached_jobs(cache)
+        if not jobs:
+            raise
+        print(
+            "Arbeitnow begrenzt Anfragen; nutze "
+            f"{len(jobs)} aktuelle Stellen aus dem lokalen Cache"
+        )
+        return jobs
+
+    for record in records:
         job = job_from_record(record)
         cache_key = canonical_detail_url(job.primary_url)
         previous = cache.get(cache_key)
@@ -64,8 +82,14 @@ def collect_records():
 
         if not page_records or not (payload.get("links") or {}).get("next"):
             break
+        time.sleep(REQUEST_PAUSE_SECONDS)
 
     return records
+
+
+def fresh_cached_jobs(cache):
+    """Reuse only recently fetched listings after an API rate limit response."""
+    return [job for job in cache.values() if detail_is_fresh(job)]
 
 
 def job_from_record(record):

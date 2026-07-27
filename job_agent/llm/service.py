@@ -52,7 +52,6 @@ def analyze_results(
         pending.clear()
     cache_state["profile_version"] = profile.version
     cache_state["analysis_version"] = current_analysis_version
-    rebuild_empty_cache = not analyses and not pending
     jobs_with_keys = [
         (job, analysis_cache_key(job, profile.version, settings))
         for job in results["included"]
@@ -66,14 +65,7 @@ def analyze_results(
             cache_changed |= attach_result(job, cached, "cached")
             cache_changed |= pending.pop(key, None) is not None
             cached_count += 1
-        elif (
-            rebuild_empty_cache
-            or
-            profile_changed
-            or job.get("is_new")
-            or job.get("content_changed")
-            or key in pending
-        ):
+        else:
             eligible.append((job, key))
 
     for job, key in eligible:

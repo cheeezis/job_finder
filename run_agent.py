@@ -104,6 +104,10 @@ def run_pipeline(args):
 
     print("\n3/4 Bewerte Jobs")
     results = score_jobs(jobs)
+    candidate_ids = {job["id"] for job in results["included"]}
+    enriched = arbeitnow.enrich_candidate_jobs(jobs, candidate_ids)
+    if enriched:
+        results = score_jobs(jobs)
     print("\nKI-Bewertung")
     llm_stats = analyze_results(results, limit=args.llm_limit)
     print(

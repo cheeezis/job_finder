@@ -120,6 +120,35 @@ class ArbeitnowTests(unittest.TestCase):
         self.assertEqual([job.id for job in jobs], ["arbeitnow:cached"])
         self.assertFalse(jobs[0].content_changed)
 
+    def test_candidate_enrichment_keeps_original_application_url_and_text(self):
+        job = arbeitnow.job_from_record(
+            {
+                "slug": "one",
+                "company_name": "Example GmbH",
+                "title": "Junior Developer",
+                "description": "Find Jobs in Germany on Arbeitnow",
+                "remote": True,
+                "url": "https://www.arbeitnow.com/jobs/example/one",
+                "location": "Fulda",
+            }
+        )
+        html = '<meta property="og:description" content="' + ("Python APIs " * 30) + '">'
+
+        with tempfile.TemporaryDirectory() as directory:
+            cache_path = Path(directory) / "arbeitnow.json"
+            with patch.object(
+                arbeitnow,
+                "fetch_text_with_final_url",
+                return_value=("https://company.test/jobs/one", html),
+            ):
+                count = arbeitnow.enrich_candidate_jobs(
+                    [job], {job.id}, cache_path=cache_path
+                )
+
+        self.assertEqual(count, 1)
+        self.assertEqual(job.sources[0].application_url, "https://company.test/jobs/one")
+        self.assertIn("Python APIs", job.description_clean)
+
 
 class CompanyCareerTests(unittest.TestCase):
     def test_jumo_job_ids_are_unique(self):

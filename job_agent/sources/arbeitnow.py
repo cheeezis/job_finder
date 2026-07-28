@@ -1,12 +1,13 @@
 """Arbeitnow source adapter using its free public job-board API."""
 
 import time
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.parse import urlencode
 
-from job_agent.http import fetch_json
+from job_agent.http import fetch_json, fetch_text_with_final_url
 from job_agent.models import Job, JobSource, WorkMode
 from job_agent.paths import ARBEITNOW_CACHE_FILE
 from job_agent.sources.common import (
@@ -26,6 +27,7 @@ API_URL = "https://www.arbeitnow.com/api/job-board-api"
 CACHE_FILE = ARBEITNOW_CACHE_FILE
 MAX_PAGES = 50
 REQUEST_PAUSE_SECONDS = 6
+PLACEHOLDER_DESCRIPTION = "find jobs in germany on arbeitnow"
 
 
 def fetch_jobs(cache_path=CACHE_FILE):
@@ -90,6 +92,51 @@ def collect_records():
 def fresh_cached_jobs(cache):
     """Reuse only recently fetched listings after an API rate limit response."""
     return [job for job in cache.values() if detail_is_fresh(job)]
+
+
+def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE):
+    """Replace placeholder portal text with the original ad for eligible jobs."""
+    cache_file = Path(cache_path)
+    cache = load_detail_cache(cache_file)
+    enriched = 0
+    for job in jobs:
+        if job.id not in candidate_ids or not is_placeholder_description(job.description_clean):
+            continue
+        source = next((item for item in job.sources if item.source == SOURCE_NAME), None)
+        if source is None:
+            continue
+        try:
+            target_url, html = fetch_text_with_final_url(f"{source.url.rstrip('/')}/apply")
+            source.application_url = target_url
+            description = external_description(html)
+            if len(description) < 200:
+                continue
+            previous = cache.get(canonical_detail_url(source.url))
+            job.description_raw = html
+            job.description_clean = description
+            mark_content_change(job, previous)
+            cache[canonical_detail_url(source.url)] = job
+            enriched += 1
+            print(f"Arbeitnow Originalanzeige: {job.title}")
+        except Exception as error:
+            print(f"Arbeitnow Originalanzeige nicht erreichbar: {job.title} ({type(error).__name__})")
+    if enriched:
+        save_detail_cache(cache_file, cache)
+    return enriched
+
+
+def is_placeholder_description(description):
+    return PLACEHOLDER_DESCRIPTION in str(description or "").lower()
+
+
+def external_description(html):
+    """Use a page's OpenGraph description as a portable fallback for job text."""
+    matches = re.findall(
+        r'<meta[^>]+(?:property|name)=["\'](?:og:description|description)["\'][^>]+content=["\'](.*?)["\']',
+        html,
+        re.IGNORECASE | re.DOTALL,
+    )
+    return max((html_to_text(value) for value in matches), key=len, default="")
 
 
 def job_from_record(record):

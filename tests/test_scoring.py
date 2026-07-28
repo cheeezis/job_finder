@@ -191,7 +191,7 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(result["filter_status"], "included")
         self.assertEqual(result["experience_rank"], 1)
 
-    def test_non_junior_professional_experience_remains_reviewable(self):
+    def test_non_junior_strong_experience_is_excluded(self):
         german = score_job(
             make_job(
                 title="Webentwickler IoT",
@@ -204,10 +204,17 @@ class ScoringTests(unittest.TestCase):
                 description="Deep previous experience with React is required.",
             )
         )
-        self.assertEqual(german["filter_status"], "included")
-        self.assertEqual(english["filter_status"], "included")
-        self.assertEqual(german["experience_rank"], 5)
-        self.assertEqual(english["experience_rank"], 5)
+        self.assertEqual(german["filter_status"], "excluded")
+        self.assertEqual(english["filter_status"], "excluded")
+
+    def test_junior_role_with_strong_experience_remains_reviewable(self):
+        result = score_job(
+            make_job(
+                title="Junior Data Engineer",
+                description="Mehrjaehrige Erfahrung mit Python ist wuenschenswert.",
+            )
+        )
+        self.assertEqual(result["filter_status"], "included")
 
     def test_skill_experience_without_professional_signal_remains_reviewable(self):
         result = score_job(

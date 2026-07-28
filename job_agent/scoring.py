@@ -150,6 +150,9 @@ def passes_hard_filters(title, description, location, remote, full_text, role):
     if years > 3:
         return False, f"Mehr als 3 Jahre Erfahrung gefordert: {years} Jahre"
 
+    if strong_experience_is_required(title, description):
+        return False, "Mehrjaehrige oder fundierte Erfahrung gefordert"
+
     if any(re.search(pattern, full_text) for pattern in MANDATORY_ADVANCED_DEGREE_PATTERNS):
         return False, "Verpflichtender Master- oder Promotionsabschluss"
 
@@ -323,6 +326,20 @@ def has_required_experience(text):
         for match in re.finditer(pattern, text):
             if not match_is_optional(text, match):
                 return True
+    return False
+
+
+def strong_experience_is_required(title, description):
+    """Reject vague seniority requirements unless the vacancy is entry-level."""
+    if is_entry_level(title, description):
+        return False
+    for phrase in STRONG_EXPERIENCE_PHRASES:
+        position = description.find(phrase)
+        if position < 0:
+            continue
+        context = description[max(0, position - 55) : position + len(phrase) + 55]
+        if not contains_any(context, OPTIONAL_EXPERIENCE_PHRASES):
+            return True
     return False
 
 

@@ -20,6 +20,13 @@ def fetch_json(url, headers=None, timeout=20):
     return json.loads(fetch_text(url, headers=headers, timeout=timeout))
 
 
+def fetch_text_with_final_url(url, headers=None, timeout=20):
+    """Fetch a URL and return both its redirected final URL and HTML text."""
+    request = Request(url, headers=_build_headers(headers))
+    with urlopen(request, timeout=timeout) as response:
+        return response.url, response.read().decode("utf-8")
+
+
 def _build_headers(headers=None):
     """Merge optional request headers with the agent defaults."""
     merged = dict(DEFAULT_HEADERS)

@@ -208,21 +208,26 @@ def flatten_job_requirements(job_analysis):
     return requirements
 
 
+def profile_match_job_context(job_context):
+    """Return the deterministic job context used for personal matching."""
+    return {
+        field: (job_context or {}).get(field)
+        for field in (
+            "locations",
+            "work_mode",
+            "remote_percentage",
+            "location_precheck",
+            "employment_type",
+        )
+    }
+
+
 def build_profile_match_messages(profile, job_analysis, job_context=None):
     """Build a prompt containing validated profile and flattened job facts."""
     prompt_data = {
         "profile": profile.data,
         "profile_version": profile.version,
-        "job_context": {
-            field: (job_context or {}).get(field)
-            for field in (
-                "locations",
-                "work_mode",
-                "remote_percentage",
-                "location_precheck",
-                "employment_type",
-            )
-        },
+        "job_context": profile_match_job_context(job_context),
         "allowed_profile_evidence_paths": sorted(
             collect_profile_evidence_paths(profile.data)
         ),

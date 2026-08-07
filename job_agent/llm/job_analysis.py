@@ -9,7 +9,7 @@ from job_agent.llm.validation import build_validation_retry_messages
 
 
 JOB_ANALYSIS_SCHEMA_VERSION = 3
-JOB_ANALYSIS_PROMPT_VERSION = 6
+JOB_ANALYSIS_PROMPT_VERSION = 7
 
 ROLE_FAMILIES = [
     "ai_ml",
@@ -273,9 +273,12 @@ class JobAnalysisValidationError(ValueError):
     """Raised when an extracted job analysis violates its contract."""
 
 
-def build_job_analysis_messages(job):
-    """Build a profile-free prompt for objective requirement extraction."""
-    prompt_job = dict(job)
+def job_analysis_input(job):
+    """Return only untrusted vacancy facts needed for objective extraction."""
+    prompt_job = {
+        "title": str(job.get("title") or "").strip(),
+        "description_clean": str(job.get("description_clean") or "").strip(),
+    }
     career_levels = [
         str(level).strip() for level in job.get("career_levels", []) if level
     ]
@@ -285,8 +288,13 @@ def build_job_analysis_messages(job):
         prompt_job["description_clean"] = "\n\n".join(
             part for part in (description, portal_facts) if part
         )
+    return prompt_job
+
+
+def build_job_analysis_messages(job):
+    """Build a profile-free prompt for objective requirement extraction."""
     prompt_data = {
-        "job": prompt_job,
+        "job": job_analysis_input(job),
         "output_schema": JOB_ANALYSIS_SCHEMA,
     }
     return [

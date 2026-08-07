@@ -11,7 +11,11 @@ from urllib.error import HTTPError
 from job_agent.config import STEPSTONE_SEARCH_LOCATIONS, STEPSTONE_SEARCH_TERMS
 from job_agent.models import Job, JobSource, WorkMode
 from job_agent.sources import arbeitnow, arbeitsagentur, edag, get_in_it, jumo, stepstone
-from job_agent.sources.common import canonical_detail_url, save_detail_cache
+from job_agent.sources.common import (
+    canonical_detail_url,
+    load_detail_cache,
+    save_detail_cache,
+)
 from job_agent.sources.stepstone import build_search_url
 
 
@@ -120,6 +124,116 @@ class ArbeitnowTests(unittest.TestCase):
         self.assertEqual([job.id for job in jobs], ["arbeitnow:cached"])
         self.assertFalse(jobs[0].content_changed)
 
+    def test_fetch_jobs_reuses_enrichment_and_keeps_only_current_snapshot(self):
+        current_url = "https://www.arbeitnow.com/jobs/example/current"
+        removed_url = "https://www.arbeitnow.com/jobs/example/removed"
+        placeholder = "Find Jobs in Germany on Arbeitnow"
+        enriched = arbeitnow.job_from_record(
+            {
+                "slug": "current",
+                "company_name": "Example GmbH",
+                "title": "Junior Developer",
+                "description": placeholder,
+                "remote": True,
+                "url": current_url,
+                "location": "Fulda",
+            }
+        )
+        enriched.description_raw = "<main>Original Python job</main>"
+        enriched.description_clean = "Original Python job " * 20
+        enriched.sources[0].application_url = "https://company.test/jobs/current"
+        removed = arbeitnow.job_from_record(
+            {
+                "slug": "removed",
+                "company_name": "Old GmbH",
+                "title": "Old Developer",
+                "description": "Old job",
+                "remote": True,
+                "url": removed_url,
+                "location": "Berlin",
+            }
+        )
+        current_record = {
+            "slug": "current",
+            "company_name": "Example GmbH",
+            "title": "Junior Developer",
+            "description": placeholder,
+            "remote": True,
+            "url": current_url,
+            "location": "Fulda",
+        }
+
+        with tempfile.TemporaryDirectory() as directory:
+            cache_path = Path(directory) / "arbeitnow.json"
+            save_detail_cache(
+                cache_path,
+                {current_url: enriched, removed_url: removed},
+            )
+            with patch.object(
+                arbeitnow,
+                "collect_records",
+                return_value=[current_record],
+            ):
+                jobs = arbeitnow.fetch_jobs(cache_path=cache_path)
+            saved = load_detail_cache(cache_path)
+
+        self.assertEqual(len(jobs), 1)
+        self.assertIn("Original Python job", jobs[0].description_clean)
+        self.assertEqual(
+            jobs[0].sources[0].application_url,
+            "https://company.test/jobs/current",
+        )
+        self.assertEqual(list(saved), [current_url])
+        self.assertFalse(jobs[0].content_changed)
+
+    def test_direct_description_never_requests_original_page(self):
+        job = arbeitnow.job_from_record(
+            {
+                "slug": "direct",
+                "company_name": "Example GmbH",
+                "title": "Junior Developer",
+                "description": "A complete direct job description with Python and APIs.",
+                "remote": True,
+                "url": "https://www.arbeitnow.com/jobs/example/direct",
+                "location": "Fulda",
+            }
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            cache_path = Path(directory) / "arbeitnow.json"
+            with patch.object(arbeitnow, "fetch_text_with_final_url") as fetch:
+                count = arbeitnow.enrich_candidate_jobs(
+                    [job],
+                    {job.id},
+                    cache_path=cache_path,
+                )
+
+        self.assertEqual(count, 0)
+        fetch.assert_not_called()
+
+    def test_missing_cached_application_is_not_reused(self):
+        record = {
+            "slug": "missing",
+            "company_name": "Example GmbH",
+            "title": "Junior Developer",
+            "description": "Find Jobs in Germany on Arbeitnow",
+            "remote": True,
+            "url": "https://www.arbeitnow.com/jobs/example/missing",
+            "location": "Fulda",
+        }
+        previous = arbeitnow.job_from_record(record)
+        previous.description_clean = "Cached but invalid description " * 20
+        previous.sources[0].application_url = (
+            "https://company.test/jobs/missing?not_found=true"
+        )
+        current = arbeitnow.job_from_record(record)
+
+        reused = arbeitnow.reuse_cached_enrichment(current, previous)
+
+        self.assertFalse(reused)
+        self.assertIsNone(current.sources[0].application_url)
+        self.assertTrue(arbeitnow.is_placeholder_description(current.description_clean))
+
     def test_candidate_enrichment_keeps_original_application_url_and_text(self):
         job = arbeitnow.job_from_record(
             {
@@ -148,6 +262,70 @@ class ArbeitnowTests(unittest.TestCase):
         self.assertEqual(count, 1)
         self.assertEqual(job.sources[0].application_url, "https://company.test/jobs/one")
         self.assertIn("Python APIs", job.description_clean)
+
+    def test_external_description_prefers_structured_job_posting(self):
+        structured_description = "Structured Python job " * 30
+        html = (
+            '<meta content="Short portal summary" property="og:description">'
+            '<script type="application/ld+json">'
+            + json.dumps(
+                {
+                    "@type": "JobPosting",
+                    "description": f"<p>{structured_description}</p>",
+                }
+            )
+            + "</script>"
+        )
+
+        self.assertEqual(
+            arbeitnow.external_description(html),
+            structured_description.strip(),
+        )
+
+    def test_failed_enrichment_does_not_keep_application_url(self):
+        job = arbeitnow.job_from_record(
+            {
+                "slug": "missing",
+                "company_name": "Example GmbH",
+                "title": "Junior Developer",
+                "description": "Find Jobs in Germany on Arbeitnow",
+                "remote": True,
+                "url": "https://www.arbeitnow.com/jobs/example/missing",
+                "location": "Fulda",
+            }
+        )
+        html = '<meta property="og:description" content="' + ("Python " * 40) + '">'
+
+        with tempfile.TemporaryDirectory() as directory:
+            cache_path = Path(directory) / "arbeitnow.json"
+            with patch.object(
+                arbeitnow,
+                "fetch_text_with_final_url",
+                return_value=("https://company.test/jobs?not_found=true", html),
+            ):
+                count = arbeitnow.enrich_candidate_jobs(
+                    [job],
+                    {job.id},
+                    cache_path=cache_path,
+                )
+            with patch.object(
+                arbeitnow,
+                "fetch_text_with_final_url",
+                return_value=(
+                    "https://company.test/jobs/missing",
+                    '<meta property="og:description" content="Too short">',
+                ),
+            ):
+                short_count = arbeitnow.enrich_candidate_jobs(
+                    [job],
+                    {job.id},
+                    cache_path=cache_path,
+                )
+
+        self.assertEqual(count, 0)
+        self.assertEqual(short_count, 0)
+        self.assertIsNone(job.sources[0].application_url)
+        self.assertTrue(arbeitnow.is_placeholder_description(job.description_clean))
 
 
 class CompanyCareerTests(unittest.TestCase):

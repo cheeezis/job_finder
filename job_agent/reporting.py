@@ -110,7 +110,15 @@ def append_list(lines, heading, values):
 def primary_url(job):
     """Return the preferred listing URL from serialized source data."""
     sources = job.get("sources", [])
-    return sources[0].get("application_url") or sources[0].get("url", "") if sources else ""
+    application_url = next(
+        (
+            source.get("application_url")
+            for source in sources
+            if source.get("application_url")
+        ),
+        None,
+    )
+    return application_url or (sources[0].get("url", "") if sources else "")
 
 
 def format_locations(job):

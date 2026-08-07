@@ -1,11 +1,11 @@
 """Arbeitnow source adapter using its free public job-board API."""
 
 import time
-import re
 from datetime import datetime, timezone
+from html.parser import HTMLParser
 from pathlib import Path
 from urllib.error import HTTPError
-from urllib.parse import urlencode
+from urllib.parse import parse_qs, urlencode, urlsplit
 
 from job_agent.http import fetch_json, fetch_text_with_final_url
 from job_agent.models import Job, JobSource, WorkMode
@@ -20,6 +20,7 @@ from job_agent.sources.common import (
     source_job_id,
     utc_now,
 )
+from job_agent.structured_data import extract_json_ld_job_posting
 from job_agent.text import html_to_text
 
 SOURCE_NAME = "arbeitnow"
@@ -28,6 +29,26 @@ CACHE_FILE = ARBEITNOW_CACHE_FILE
 MAX_PAGES = 50
 REQUEST_PAUSE_SECONDS = 6
 PLACEHOLDER_DESCRIPTION = "find jobs in germany on arbeitnow"
+MIN_EXTERNAL_DESCRIPTION_LENGTH = 200
+
+
+class _DescriptionMetaParser(HTMLParser):
+    """Collect portable description metadata regardless of attribute order."""
+
+    def __init__(self):
+        super().__init__()
+        self.descriptions = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag.casefold() != "meta":
+            return
+        values = {str(name).casefold(): value for name, value in attrs}
+        description_type = str(
+            values.get("property") or values.get("name") or ""
+        ).casefold()
+        content = values.get("content")
+        if description_type in {"og:description", "description"} and content:
+            self.descriptions.append(content)
 
 
 def fetch_jobs(cache_path=CACHE_FILE):
@@ -50,16 +71,18 @@ def fetch_jobs(cache_path=CACHE_FILE):
         )
         return jobs
 
+    current_cache = {}
     for record in records:
         job = job_from_record(record)
         cache_key = canonical_detail_url(job.primary_url)
         previous = cache.get(cache_key)
+        reuse_cached_enrichment(job, previous)
         mark_content_change(job, previous)
-        cache[cache_key] = job
+        current_cache[cache_key] = job
         jobs.append(job)
 
     if jobs:
-        save_detail_cache(cache_file, cache)
+        save_detail_cache(cache_file, current_cache)
     return jobs
 
 
@@ -94,6 +117,37 @@ def fresh_cached_jobs(cache):
     return [job for job in cache.values() if detail_is_fresh(job)]
 
 
+def reuse_cached_enrichment(job, previous):
+    """Keep a successful original ad while Arbeitnow still sends a placeholder."""
+    if (
+        previous is None
+        or not is_placeholder_description(job.description_clean)
+        or is_placeholder_description(previous.description_clean)
+    ):
+        return False
+
+    previous_source = next(
+        (item for item in previous.sources if item.source == SOURCE_NAME),
+        None,
+    )
+    current_source = next(
+        (item for item in job.sources if item.source == SOURCE_NAME),
+        None,
+    )
+    if (
+        previous_source is None
+        or current_source is None
+        or not previous_source.application_url
+        or application_page_is_missing(previous_source.application_url)
+    ):
+        return False
+
+    job.description_raw = previous.description_raw
+    job.description_clean = previous.description_clean
+    current_source.application_url = previous_source.application_url
+    return True
+
+
 def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE):
     """Replace placeholder portal text with the original ad for eligible jobs."""
     cache_file = Path(cache_path)
@@ -107,11 +161,13 @@ def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE):
             continue
         try:
             target_url, html = fetch_text_with_final_url(f"{source.url.rstrip('/')}/apply")
-            source.application_url = target_url
+            if application_page_is_missing(target_url):
+                continue
             description = external_description(html)
-            if len(description) < 200:
+            if len(description) < MIN_EXTERNAL_DESCRIPTION_LENGTH:
                 continue
             previous = cache.get(canonical_detail_url(source.url))
+            source.application_url = target_url
             job.description_raw = html
             job.description_clean = description
             mark_content_change(job, previous)
@@ -130,13 +186,29 @@ def is_placeholder_description(description):
 
 
 def external_description(html):
-    """Use a page's OpenGraph description as a portable fallback for job text."""
-    matches = re.findall(
-        r'<meta[^>]+(?:property|name)=["\'](?:og:description|description)["\'][^>]+content=["\'](.*?)["\']',
-        html,
-        re.IGNORECASE | re.DOTALL,
+    """Prefer structured job text and fall back to description metadata."""
+    posting = extract_json_ld_job_posting(html)
+    if posting:
+        structured = html_to_text(posting.get("description"))
+        if len(structured) >= MIN_EXTERNAL_DESCRIPTION_LENGTH:
+            return structured
+
+    parser = _DescriptionMetaParser()
+    parser.feed(str(html or ""))
+    return max(
+        (html_to_text(value) for value in parser.descriptions),
+        key=len,
+        default="",
     )
-    return max((html_to_text(value) for value in matches), key=len, default="")
+
+
+def application_page_is_missing(url):
+    """Reject redirects that explicitly identify a missing application page."""
+    values = parse_qs(urlsplit(url or "").query)
+    return any(
+        value.casefold() in {"1", "true", "yes"}
+        for value in values.get("not_found", [])
+    )
 
 
 def job_from_record(record):

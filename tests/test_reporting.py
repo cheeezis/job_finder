@@ -35,8 +35,16 @@ def analyzed_job():
 
 class ReportingTests(unittest.TestCase):
     def test_output_contains_only_final_llm_recommendations(self):
+        job = analyzed_job()
+        job["sources"] = [
+            {"url": "https://portal.test/job"},
+            {
+                "url": "https://arbeitnow.test/job",
+                "application_url": "https://company.test/job",
+            },
+        ]
         results = {
-            "included": [analyzed_job(), {"id": "rule-only"}],
+            "included": [job, {"id": "rule-only"}],
             "excluded": [{"id": "excluded"}],
         }
 
@@ -50,6 +58,7 @@ class ReportingTests(unittest.TestCase):
         self.assertEqual(len(stored["recommendations"]), 1)
         recommendation = stored["recommendations"][0]
         self.assertEqual(recommendation["llm_score"], 90)
+        self.assertEqual(recommendation["url"], "https://company.test/job")
         self.assertNotIn("description_clean", recommendation)
         self.assertNotIn("reasons", recommendation)
         self.assertIn("90% | Junior Python Developer", markdown)

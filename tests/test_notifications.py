@@ -311,6 +311,18 @@ class NotificationTests(unittest.TestCase):
 
         self.assertEqual(fields["Level"], "Berufseinstieg/Trainee")
 
+    def test_embed_prefers_application_url_from_any_source(self):
+        job = make_job()
+        job["sources"] = [
+            {"url": "https://portal.test/job"},
+            {
+                "url": "https://arbeitnow.test/job",
+                "application_url": "https://company.test/job",
+            },
+        ]
+
+        self.assertEqual(discord_embed(job)["url"], "https://company.test/job")
+
     def test_webhook_requests_delivery_confirmation(self):
         url = webhook_url_with_confirmation(
             "https://discord.test/webhook?thread_id=123"

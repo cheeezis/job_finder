@@ -13,6 +13,7 @@ from job_agent.llm.job_analysis import (
     JOB_ANALYSIS_SCHEMA_VERSION,
     JobAnalysisValidationError,
     analyze_job,
+    job_analysis_input,
 )
 from job_agent.llm.openai import OpenAIClient
 from job_agent.llm.profile_loader import load_llm_profile
@@ -21,10 +22,21 @@ from job_agent.llm.profile_match import (
     PROFILE_MATCH_SCHEMA_VERSION,
     ProfileMatchValidationError,
     match_job_to_profile,
+    profile_match_job_context,
 )
 
 
 CACHE_VERSION = 1
+LEGACY_REVIEWED_PROMPT_VERSION = 6
+REVIEWED_WORKFLOW_STATUSES = {
+    "interesting",
+    "ignored",
+    "applied",
+    "interview",
+    "rejected",
+    "offer",
+    "closed",
+}
 
 
 def analyze_results(
@@ -42,13 +54,22 @@ def analyze_results(
     analysis_changed = (
         cache_state.get("analysis_version") != current_analysis_version
     )
+    legacy_prompt_upgrade = (
+        cache_state.get("analysis_version")
+        == analysis_configuration_key(
+            settings,
+            job_analysis_prompt_version=LEGACY_REVIEWED_PROMPT_VERSION,
+        )
+    )
     cached_profile_version = cache_state.get("profile_version")
     profile_changed = (
         cached_profile_version is not None
         and cached_profile_version != profile.version
     )
-    if profile_changed or analysis_changed:
+    if profile_changed or (analysis_changed and not legacy_prompt_upgrade):
         analyses.clear()
+        pending.clear()
+    elif analysis_changed:
         pending.clear()
     cache_state["profile_version"] = profile.version
     cache_state["analysis_version"] = current_analysis_version
@@ -58,9 +79,23 @@ def analyze_results(
     ]
     eligible = []
     cached_count = 0
-    cache_changed = False
+    cache_changed = profile_changed or analysis_changed
     for job, key in jobs_with_keys:
         cached = analyses.get(key)
+        if cached is None and legacy_prompt_upgrade and is_reviewed_unchanged(job):
+            legacy_key = legacy_analysis_cache_key(
+                job,
+                profile.version,
+                settings,
+            )
+            cached = analyses.pop(legacy_key, None)
+            if cached is not None:
+                cached["cache_key"] = key
+                cached.setdefault("metadata", {})[
+                    "cache_compatibility"
+                ] = "manual_review_preserved_prompt_6"
+                analyses[key] = cached
+                cache_changed = True
         if cached is not None:
             cache_changed |= attach_result(job, cached, "cached")
             cache_changed |= pending.pop(key, None) is not None
@@ -171,6 +206,23 @@ def analyze_job_record(job, profile, settings, client, cache_key):
 def analysis_cache_key(job, profile_version, settings):
     """Hash every input that can change the persisted analysis result."""
     payload = {
+        "job_analysis_input": job_analysis_input(job),
+        "profile_match_job_context": profile_match_job_context(job),
+        "model": settings.model,
+        "reasoning_effort": settings.reasoning_effort,
+        "max_output_tokens": settings.max_output_tokens,
+        "job_analysis_prompt_version": JOB_ANALYSIS_PROMPT_VERSION,
+        "job_analysis_schema_version": JOB_ANALYSIS_SCHEMA_VERSION,
+        "profile_match_prompt_version": PROFILE_MATCH_PROMPT_VERSION,
+        "profile_match_schema_version": PROFILE_MATCH_SCHEMA_VERSION,
+        "profile_version": profile_version,
+    }
+    return hash_payload(payload)
+
+
+def legacy_analysis_cache_key(job, profile_version, settings):
+    """Recreate the prompt-6 cache key for one reviewed job migration."""
+    payload = {
         "job": {
             field: job.get(field)
             for field in (
@@ -186,32 +238,43 @@ def analysis_cache_key(job, profile_version, settings):
         "model": settings.model,
         "reasoning_effort": settings.reasoning_effort,
         "max_output_tokens": settings.max_output_tokens,
-        "job_analysis_prompt_version": JOB_ANALYSIS_PROMPT_VERSION,
+        "job_analysis_prompt_version": LEGACY_REVIEWED_PROMPT_VERSION,
         "job_analysis_schema_version": JOB_ANALYSIS_SCHEMA_VERSION,
         "profile_match_prompt_version": PROFILE_MATCH_PROMPT_VERSION,
         "profile_match_schema_version": PROFILE_MATCH_SCHEMA_VERSION,
         "profile_version": profile_version,
     }
-    encoded = json.dumps(
-        payload,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
+    return hash_payload(payload)
 
 
-def analysis_configuration_key(settings):
+def is_reviewed_unchanged(job):
+    """Allow legacy reuse only after a final manual review decision."""
+    return (
+        job.get("workflow_status") in REVIEWED_WORKFLOW_STATUSES
+        and not job.get("is_new")
+        and not job.get("content_changed")
+    )
+
+
+def analysis_configuration_key(
+    settings,
+    job_analysis_prompt_version=JOB_ANALYSIS_PROMPT_VERSION,
+):
     """Identify LLM settings that require reanalyzing cached job facts."""
     payload = {
         "model": settings.model,
         "reasoning_effort": settings.reasoning_effort,
         "max_output_tokens": settings.max_output_tokens,
-        "job_analysis_prompt_version": JOB_ANALYSIS_PROMPT_VERSION,
+        "job_analysis_prompt_version": job_analysis_prompt_version,
         "job_analysis_schema_version": JOB_ANALYSIS_SCHEMA_VERSION,
         "profile_match_prompt_version": PROFILE_MATCH_PROMPT_VERSION,
         "profile_match_schema_version": PROFILE_MATCH_SCHEMA_VERSION,
     }
+    return hash_payload(payload)
+
+
+def hash_payload(payload):
+    """Return the stable SHA-256 key used by the local LLM cache."""
     encoded = json.dumps(
         payload,
         ensure_ascii=False,

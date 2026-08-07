@@ -9,6 +9,7 @@ from job_agent.llm.job_analysis import (
     JobAnalysisValidationError,
     analyze_job,
     build_job_analysis_messages,
+    job_analysis_input,
     validate_job_analysis,
 )
 
@@ -81,6 +82,25 @@ class LlmJobAnalysisTests(unittest.TestCase):
         self.assertNotIn("score_bands", prompt)
         self.assertNotIn("recommendation", JOB_ANALYSIS_SCHEMA["properties"])
         self.assertNotIn("overall_score", JOB_ANALYSIS_SCHEMA["properties"])
+
+    def test_prompt_excludes_prefilter_and_workflow_fields(self):
+        job = source_job() | {
+            "company": "Example GmbH",
+            "sources": [{"url": "https://example.test/job"}],
+            "workflow_status": "interesting",
+            "rule_score": 95,
+            "match_percent": 95,
+            "role_group": "ai_ml",
+            "reasons": ["Profilbezug"],
+            "llm_result": {"recommendation": "strong_match"},
+        }
+
+        prompt_job = job_analysis_input(job)
+
+        self.assertEqual(prompt_job, source_job())
+        self.assertNotIn("company", prompt_job)
+        self.assertNotIn("match_percent", prompt_job)
+        self.assertNotIn("workflow_status", prompt_job)
 
     def test_portal_career_level_is_valid_seniority_evidence(self):
         class FakeClient:

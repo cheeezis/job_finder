@@ -3,7 +3,7 @@
 import json
 import unittest
 
-from job_agent.llm.profile_loader import load_llm_profile
+from job_agent.llm.profile_loader import LlmProfile
 from job_agent.llm.profile_match import (
     PROFILE_MATCH_SCHEMA,
     ProfileMatchValidationError,
@@ -54,6 +54,34 @@ def make_job_analysis():
     }
 
 
+def make_test_profile():
+    """Return a synthetic profile independent of public example settings."""
+    return LlmProfile(
+        version=1,
+        data={
+            "profile": {
+                "summary": "Fiktives Testprofil.",
+                "professional_experience_years": 0,
+                "location": {},
+            },
+            "education": [],
+            "experience": [{"type": "Praktikum"}],
+            "projects": [{"implemented": ["KI-Prototyp"]}],
+            "skills": {
+                "programming": [{"name": "Python", "level": "basic"}]
+            },
+            "certifications": [],
+            "current_learning": [],
+            "strengths": {"items": []},
+            "career_preferences": {
+                "direction": {"primary": ["AI Developer"]}
+            },
+            "languages": [{"name": "Deutsch", "level": "C1"}],
+            "truth_rules": ["Keine Angaben erfinden"],
+        },
+    )
+
+
 def make_match():
     """Return a valid profile match for the compact extracted job."""
     def item(requirement_id, evidence_path):
@@ -68,7 +96,7 @@ def make_match():
     return {
         "matches": [
             item("role", "career_preferences.direction.primary[0]"),
-            item("tasks", "projects[1].implemented[0]"),
+            item("tasks", "projects[0].implemented[0]"),
             {
                 **item("experience", "experience[0].type"),
                 "status": "partially_met",
@@ -93,7 +121,7 @@ def make_match():
 
 class LlmProfileMatchTests(unittest.TestCase):
     def setUp(self):
-        self.profile = load_llm_profile()
+        self.profile = make_test_profile()
         self.job_analysis = make_job_analysis()
 
     def test_prompt_contains_profile_and_job_analysis_but_no_score(self):

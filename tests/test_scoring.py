@@ -1,6 +1,7 @@
 ﻿"""Regression tests for deterministic scoring and deduplication."""
 
 import unittest
+from unittest.mock import patch
 
 from job_agent.deduplication import deduplicate_jobs
 from job_agent.main import score_jobs
@@ -558,12 +559,16 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(result["filter_status"], "excluded")
         self.assertIn("Master", result["reasons"][0])
 
+    @patch("job_agent.scoring.SALARY_TARGET", 48_000)
+    @patch("job_agent.scoring.SALARY_MINIMUM", 45_000)
     def test_salary_range_with_target_inside_is_allowed(self):
         result = score_job(
             make_job(description="Jahresgehalt 42.000 - 50.000 EUR brutto.")
         )
         self.assertEqual(result["filter_status"], "included")
 
+    @patch("job_agent.scoring.SALARY_TARGET", 48_000)
+    @patch("job_agent.scoring.SALARY_MINIMUM", 45_000)
     def test_salary_below_minimum_is_a_warning_not_an_exclusion(self):
         result = score_job(make_job(description="Jahresgehalt 44.000 EUR brutto."))
         self.assertEqual(result["filter_status"], "included")
@@ -571,6 +576,8 @@ class ScoringTests(unittest.TestCase):
             any("unter persoenlichem Minimum" in reason for reason in result["reasons"])
         )
 
+    @patch("job_agent.scoring.SALARY_TARGET", 48_000)
+    @patch("job_agent.scoring.SALARY_MINIMUM", 45_000)
     def test_structured_salary_below_minimum_is_a_warning(self):
         result = score_job(
             make_job(salary_min_eur=40_000, salary_max_eur=44_000)
@@ -579,6 +586,16 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(result["filter_status"], "included")
         self.assertTrue(
             any("unter persoenlichem Minimum" in reason for reason in result["reasons"])
+        )
+
+    @patch("job_agent.scoring.SALARY_TARGET", None)
+    @patch("job_agent.scoring.SALARY_MINIMUM", None)
+    def test_missing_salary_preferences_disable_salary_warnings(self):
+        result = score_job(make_job(description="Jahresgehalt 30.000 EUR brutto."))
+
+        self.assertEqual(result["filter_status"], "included")
+        self.assertFalse(
+            any("Gehalt unter" in reason for reason in result["reasons"])
         )
 
     def test_structured_minimum_without_maximum_is_not_an_upper_limit(self):

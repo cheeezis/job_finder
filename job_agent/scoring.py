@@ -457,9 +457,9 @@ def score_preferences(full_text):
         penalties.append({"points": 2, "label": "ueberwiegend englischsprachige Stelle"})
 
     salary = extract_annual_salary(full_text)
-    if salary and salary[1] < SALARY_MINIMUM:
+    if salary and SALARY_MINIMUM is not None and salary[1] < SALARY_MINIMUM:
         penalties.append({"points": 5, "label": "Gehalt unter persoenlichem Minimum"})
-    elif salary and salary[1] < SALARY_TARGET:
+    elif salary and SALARY_TARGET is not None and salary[1] < SALARY_TARGET:
         penalties.append({"points": 3, "label": "Gehalt unter Wunschgehalt"})
 
     return penalties

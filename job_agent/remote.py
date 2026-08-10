@@ -67,6 +67,17 @@ def detect_remote(*text_parts, structured_remote=""):
 
 def extract_remote_percent(text):
     """Find the highest percentage that is clearly connected to remote work."""
+    day_text = text
+    for word, number in {
+        "ein": "1",
+        "eine": "1",
+        "einen": "1",
+        "zwei": "2",
+        "drei": "3",
+        "vier": "4",
+        "fuenf": "5",
+    }.items():
+        day_text = re.sub(rf"\b{word}\b", number, day_text)
     patterns = [
         (
             r"(?:bis zu|up to)?\s*(100|[1-9]\d)\s*%\s*"
@@ -80,6 +91,21 @@ def extract_remote_percent(text):
     matches = []
     for pattern in patterns:
         matches.extend(int(match) for match in re.findall(pattern, text))
+
+    remote_day_patterns = [
+        r"(?:bis zu\s+)?([1-5])\s+(?:tage?n?\s+)?(?:pro|je)\s+woche\s+(?:im\s+)?(?:homeoffice|home office|remote|mobil)",
+        r"(?:homeoffice|home office|remote|mobiles arbeiten)[^.!?\n]{0,35}(?:bis zu\s+)?([1-5])\s+tage?n?(?:\s+(?:pro|je)\s+woche)?",
+        r"(?:bis zu\s+)?([1-5])\s+tage?n?(?:\s+(?:pro|je)\s+woche)?\s+(?:im\s+)?(?:homeoffice|home office|remote|mobil)",
+    ]
+    for pattern in remote_day_patterns:
+        matches.extend(int(days) * 20 for days in re.findall(pattern, day_text))
+
+    presence_patterns = [
+        r"([1-5])\s+praesenztage?n?(?:\s+(?:pro|je)\s+woche)?",
+        r"([1-5])\s+tage?n?(?:\s+(?:pro|je)\s+woche)?\s+(?:vor ort|im buero|im office)",
+    ]
+    for pattern in presence_patterns:
+        matches.extend((5 - int(days)) * 20 for days in re.findall(pattern, day_text))
 
     if not matches:
         return 0

@@ -261,6 +261,14 @@ class TwoStageFitScoreTests(unittest.TestCase):
 
         self.assertEqual(score_location(job), "good")
 
+    def test_commuter_location_is_a_good_location_fit(self):
+        job = {
+            "location_precheck": "Pendelort Beispielstadt mit 60% Remote",
+            "work_mode": "hybrid",
+        }
+
+        self.assertEqual(score_location(job), "good")
+
     def test_deterministic_remote_check_corrects_working_condition_rating(self):
         job = {
             "location_precheck": "100% Remote aus Deutschland",

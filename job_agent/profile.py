@@ -488,6 +488,7 @@ BLOCKED_TITLE_WORDS = [
 ]
 
 LOCAL_PLACES = MATCHING_SETTINGS["local_places"]
+COMMUTER_LOCATIONS = MATCHING_SETTINGS.get("commuter_locations", [])
 
 GERMANY_LOCATION_WORDS = [
     "deutschland",

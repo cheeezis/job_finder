@@ -7,6 +7,7 @@ matching:
   preferred_location_label: Musterstadt
   local_places:
     - musterstadt
+  commuter_locations: []
   profile_domain_keywords: []
   salary_target_eur: null
   salary_minimum_eur: null

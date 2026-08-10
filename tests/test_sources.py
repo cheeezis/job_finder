@@ -9,6 +9,7 @@ from unittest.mock import ANY, Mock, patch
 from urllib.error import HTTPError
 
 from job_agent.config import (
+    COMMUTER_SEARCH_RADIUS_KM,
     LOCAL_SEARCH_POSTAL_CODE,
     STEPSTONE_SEARCH_RADIUS_KM,
     STEPSTONE_SEARCH_LOCATIONS,
@@ -32,6 +33,30 @@ from job_agent.sources.common import (
     save_detail_cache,
 )
 from job_agent.sources.stepstone import build_search_url
+
+
+class CommuterSearchTests(unittest.TestCase):
+    def test_arbeitsagentur_search_can_target_one_commuter_city(self):
+        url = arbeitsagentur.build_search_url(
+            "Junior IT",
+            location="Beispielstadt",
+            radius=COMMUTER_SEARCH_RADIUS_KM,
+        )
+
+        self.assertIn("wo=Beispielstadt", url)
+        self.assertIn(f"umkreis={COMMUTER_SEARCH_RADIUS_KM}", url)
+
+    def test_get_in_it_uses_reduced_terms_for_commuter_cities(self):
+        with (
+            patch.object(get_in_it, "GET_IN_IT_SEARCH_TERMS", []),
+            patch.object(get_in_it, "GET_IN_IT_SEARCH_LOCATIONS", []),
+            patch.object(get_in_it, "COMMUTER_SEARCH_TERMS", ["Junior Developer"]),
+            patch.object(get_in_it, "COMMUTER_SEARCH_LOCATIONS", ["Beispielstadt"]),
+        ):
+            searches = list(get_in_it.build_api_searches())
+
+        self.assertTrue(searches)
+        self.assertTrue(all(item["location"] == "Beispielstadt" for item in searches))
 
 
 class ComposeItSourceTests(unittest.TestCase):

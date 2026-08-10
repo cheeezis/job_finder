@@ -13,7 +13,7 @@ Der Agent kann:
 - bekannte Detailseiten aller Quellen sieben Tage lokal wiederverwenden
 - get-in-IT-Suchergebnisse ueber die oeffentliche JSON-API abrufen
 - Arbeitnow-Stellen ueber die kostenlose oeffentliche API abrufen
-- direkte Karriereseiten von JUMO, EDAG, CSS, Proemion, NETHINKS, Compose IT und bytewerk abrufen
+- direkte Karriereseiten von JUMO, EDAG, CSS, Proemion, NETHINKS, Compose IT, bytewerk und RhönEnergie abrufen
 - Jobdetail-Seiten importieren
 - alle Quellen in ein verbindliches Jobmodell ueberfuehren
 - Rohbeschreibung, Klartext sowie Veroeffentlichungs- und Abrufdaten speichern
@@ -172,6 +172,7 @@ data/internal/proemion_cache.json   Detailcache von Proemion
 data/internal/nethinks_cache.json   Detailcache von NETHINKS
 data/internal/compose_it_cache.json Detailcache von Compose IT
 data/internal/bytewerk_cache.json   Detailcache von bytewerk
+data/internal/rhoenenergie_cache.json Detailcache der RhönEnergie-Gruppe
 data/internal/llm_cache.json LLM-Ergebnisse und ausstehende Analysen
 data/internal/notifications.json Versand- und Wiederholungsstatus
 data/output/recommendations.json kompakte finale KI-Ergebnisse

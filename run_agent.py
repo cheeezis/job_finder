@@ -30,6 +30,7 @@ from job_agent.sources import get_in_it
 from job_agent.sources import jumo
 from job_agent.sources import nethinks
 from job_agent.sources import proemion
+from job_agent.sources import rhoenenergie
 from job_agent.sources import stepstone
 
 
@@ -40,6 +41,7 @@ SOURCES = [
     arbeitnow,
     compose_it,
     bytewerk,
+    rhoenenergie,
     jumo,
     edag,
     css,
@@ -260,6 +262,7 @@ def source_label(name):
         "arbeitnow": "Arbeitnow",
         "compose_it": "Compose IT",
         "bytewerk": "bytewerk",
+        "rhoenenergie": "RhönEnergie",
         "jumo": "JUMO",
         "edag": "EDAG",
         "css": "CSS",

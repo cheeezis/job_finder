@@ -11,7 +11,6 @@ from job_agent.llm.profile_match import (
     collect_profile_evidence_paths,
     flatten_job_requirements,
     match_job_to_profile,
-    resolve_profile_path,
     validate_profile_match,
 )
 
@@ -132,17 +131,10 @@ class LlmProfileMatchTests(unittest.TestCase):
             ["role", "tasks", "experience", "technology:0:0", "other:0"],
         )
 
-    def test_profile_paths_are_scalar_and_resolvable(self):
+    def test_profile_paths_include_nested_scalar_values(self):
         paths = collect_profile_evidence_paths(self.profile.data)
 
         self.assertIn("skills.programming[0].level", paths)
-        self.assertEqual(
-            resolve_profile_path(
-                self.profile.data,
-                "skills.programming[0].level",
-            ),
-            "practical_knowledge",
-        )
 
     def test_complete_profile_match_is_valid(self):
         match = make_match()

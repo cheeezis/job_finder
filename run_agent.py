@@ -4,7 +4,6 @@ import argparse
 import json
 import os
 import time
-from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from job_agent.console import configure_utf8_output

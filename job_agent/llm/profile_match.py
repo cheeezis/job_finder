@@ -1,7 +1,6 @@
 """Evidence-based matching of extracted job requirements to a profile."""
 
 import json
-import re
 
 from jsonschema import ValidationError, validate
 
@@ -287,14 +286,6 @@ def validate_profile_match(match, job_analysis, profile):
             names = ", ".join(sorted(unknown_paths))
             raise ProfileMatchValidationError(f"Unbekannte Profilbelege: {names}")
     return match
-
-
-def resolve_profile_path(profile_data, path):
-    """Resolve one validated dotted/list path for display and later auditing."""
-    current = profile_data
-    for key, index in re.findall(r"(?:^|\.)([^.\[]+)|\[(\d+)\]", path):
-        current = current[int(index)] if index else current[key]
-    return current
 
 
 def match_job_to_profile(

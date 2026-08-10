@@ -1,10 +1,20 @@
 """Tests for top-level source isolation in the productive runner."""
 
+import json
+import tempfile
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from job_agent.models import Job, JobSource
-from run_agent import build_run_summary, canonical_url, collect_jobs, format_duration
+from run_agent import (
+    build_run_summary,
+    canonical_url,
+    collect_jobs,
+    format_duration,
+    run_pipeline,
+)
 
 
 def make_job(job_id):
@@ -20,6 +30,51 @@ def make_job(job_id):
 
 
 class RunAgentTests(unittest.TestCase):
+    def test_pipeline_persists_jobs_after_arbeitnow_enrichment(self):
+        job = make_job("arbeitnow:1")
+        results = {"included": [{"id": job.id}], "excluded": []}
+
+        def enrich(jobs, _candidate_ids):
+            jobs[0].description_clean = "Originalbeschreibung"
+            return 1
+
+        with tempfile.TemporaryDirectory() as directory:
+            jobs_file = Path(directory) / "jobs.json"
+            with (
+                patch("run_agent.JOBS_FILE", jobs_file),
+                patch("run_agent.create_backup", return_value=None),
+                patch("run_agent.collect_jobs", return_value=([job], {"arbeitnow": True}, [])),
+                patch("run_agent.load_memory", return_value={}),
+                patch("run_agent.save_memory"),
+                patch(
+                    "run_agent.update_memory",
+                    return_value={"new": 1, "known": 0, "inactive": 0, "reactivated": 0},
+                ),
+                patch("run_agent.score_jobs", return_value=results) as score_jobs,
+                patch("run_agent.arbeitnow.enrich_candidate_jobs", side_effect=enrich),
+                patch(
+                    "run_agent.analyze_results",
+                    return_value={"analyzed": 0, "cached": 0, "failed": 0},
+                ),
+                patch("run_agent.write_recommendations"),
+                patch("run_agent.print_results"),
+                patch(
+                    "run_agent.process_notifications",
+                    return_value={
+                        "queued": 0,
+                        "ready": 0,
+                        "sent": 0,
+                        "failed": 0,
+                        "configuration_error": None,
+                    },
+                ),
+            ):
+                run_pipeline(SimpleNamespace(llm_limit=None, notify=False))
+
+            persisted = json.loads(jobs_file.read_text(encoding="utf-8"))
+            self.assertEqual(persisted[0]["description_clean"], "Originalbeschreibung")
+            self.assertEqual(score_jobs.call_count, 2)
+
     def test_failed_source_does_not_stop_following_sources(self):
         failing = SimpleNamespace(
             SOURCE_NAME="broken",

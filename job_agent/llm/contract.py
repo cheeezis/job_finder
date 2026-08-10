@@ -6,7 +6,7 @@ from job_agent.user_settings import USER_SETTINGS
 PREFERRED_LOCATION_LABEL = USER_SETTINGS["matching"]["preferred_location_label"]
 
 RUBRIC_VERSION = 6
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 RATING_VALUES = ("excellent", "good", "partial", "weak", "conflict")
 
@@ -110,7 +110,6 @@ ANALYSIS_SCHEMA = {
         "dimension_scores",
         "dimension_ratings",
         "key_tasks",
-        "key_requirements",
         "matching_evidence",
         "gaps",
         "risks",
@@ -153,31 +152,6 @@ ANALYSIS_SCHEMA = {
             "type": "array",
             "maxItems": 3,
             "items": {"type": "string", "maxLength": 300},
-        },
-        "key_requirements": {
-            "type": "array",
-            "maxItems": 5,
-            "items": {
-                "type": "object",
-                "additionalProperties": False,
-                "required": ["requirement", "priority", "match", "evidence"],
-                "properties": {
-                    "requirement": {"type": "string", "maxLength": 300},
-                    "priority": {
-                        "type": "string",
-                        "enum": ["required", "preferred", "unclear"],
-                    },
-                    "match": {
-                        "type": "string",
-                        "enum": ["strong", "partial", "missing", "unknown"],
-                    },
-                    "evidence": {
-                        "type": "array",
-                        "maxItems": 2,
-                        "items": {"type": "string", "maxLength": 300},
-                    },
-                },
-            },
         },
         "matching_evidence": {
             "type": "array",

@@ -13,7 +13,7 @@ from job_agent.sources.company_careers import (
     fetch_company_jobs,
     identifier_from_url,
 )
-from job_agent.text import html_to_text, normalize_text
+from job_agent.text import compact_text, html_to_text, normalize_text
 
 SOURCE_NAME = "compose_it"
 COMPANY = "COMPOSE IT"
@@ -100,7 +100,3 @@ def job_from_html(source_name, fallback_company, url, html):
         employment_type=normalize_employment_type(employment),
         fetched_at=utc_now(),
     )
-
-
-def compact_text(value):
-    return " ".join(str(value or "").split())

@@ -27,7 +27,6 @@ from job_agent.llm.profile_match import (
 
 
 CACHE_VERSION = 1
-LEGACY_REVIEWED_PROMPT_VERSION = 6
 REVIEWED_WORKFLOW_STATUSES = {
     "interesting",
     "ignored",
@@ -54,13 +53,6 @@ def analyze_results(
     analysis_changed = (
         cache_state.get("analysis_version") != current_analysis_version
     )
-    legacy_prompt_upgrade = (
-        cache_state.get("analysis_version")
-        == analysis_configuration_key(
-            settings,
-            job_analysis_prompt_version=LEGACY_REVIEWED_PROMPT_VERSION,
-        )
-    )
     cached_profile_version = cache_state.get("profile_version")
     profile_changed = (
         cached_profile_version is not None
@@ -69,10 +61,8 @@ def analyze_results(
     previous_profile_analyses = {}
     if profile_changed and not analysis_changed:
         previous_profile_analyses = dict(analyses)
-    if profile_changed or (analysis_changed and not legacy_prompt_upgrade):
+    if profile_changed or analysis_changed:
         analyses.clear()
-        pending.clear()
-    elif analysis_changed:
         pending.clear()
     cache_state["profile_version"] = profile.version
     cache_state["analysis_version"] = current_analysis_version
@@ -101,20 +91,6 @@ def analyze_results(
                 cached.setdefault("metadata", {})[
                     "cache_compatibility"
                 ] = "manual_review_preserved_profile_change"
-                analyses[key] = cached
-                cache_changed = True
-        if cached is None and legacy_prompt_upgrade and is_reviewed_unchanged(job):
-            legacy_key = legacy_analysis_cache_key(
-                job,
-                profile.version,
-                settings,
-            )
-            cached = analyses.pop(legacy_key, None)
-            if cached is not None:
-                cached["cache_key"] = key
-                cached.setdefault("metadata", {})[
-                    "cache_compatibility"
-                ] = "manual_review_preserved_prompt_6"
                 analyses[key] = cached
                 cache_changed = True
         if cached is not None:
@@ -241,35 +217,8 @@ def analysis_cache_key(job, profile_version, settings):
     return hash_payload(payload)
 
 
-def legacy_analysis_cache_key(job, profile_version, settings):
-    """Recreate the prompt-6 cache key for one reviewed job migration."""
-    payload = {
-        "job": {
-            field: job.get(field)
-            for field in (
-                "title",
-                "description_clean",
-                "locations",
-                "work_mode",
-                "remote_percentage",
-                "career_levels",
-                "location_precheck",
-            )
-        },
-        "model": settings.model,
-        "reasoning_effort": settings.reasoning_effort,
-        "max_output_tokens": settings.max_output_tokens,
-        "job_analysis_prompt_version": LEGACY_REVIEWED_PROMPT_VERSION,
-        "job_analysis_schema_version": JOB_ANALYSIS_SCHEMA_VERSION,
-        "profile_match_prompt_version": PROFILE_MATCH_PROMPT_VERSION,
-        "profile_match_schema_version": PROFILE_MATCH_SCHEMA_VERSION,
-        "profile_version": profile_version,
-    }
-    return hash_payload(payload)
-
-
 def is_reviewed_unchanged(job):
-    """Allow legacy reuse only after a final manual review decision."""
+    """Preserve results only after a final manual review decision."""
     return (
         job.get("workflow_status") in REVIEWED_WORKFLOW_STATUSES
         and not job.get("is_new")
@@ -277,16 +226,13 @@ def is_reviewed_unchanged(job):
     )
 
 
-def analysis_configuration_key(
-    settings,
-    job_analysis_prompt_version=JOB_ANALYSIS_PROMPT_VERSION,
-):
+def analysis_configuration_key(settings):
     """Identify LLM settings that require reanalyzing cached job facts."""
     payload = {
         "model": settings.model,
         "reasoning_effort": settings.reasoning_effort,
         "max_output_tokens": settings.max_output_tokens,
-        "job_analysis_prompt_version": job_analysis_prompt_version,
+        "job_analysis_prompt_version": JOB_ANALYSIS_PROMPT_VERSION,
         "job_analysis_schema_version": JOB_ANALYSIS_SCHEMA_VERSION,
         "profile_match_prompt_version": PROFILE_MATCH_PROMPT_VERSION,
         "profile_match_schema_version": PROFILE_MATCH_SCHEMA_VERSION,

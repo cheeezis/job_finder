@@ -121,6 +121,11 @@ class Job:
         return self.primary_source.url if self.primary_source else ""
 
     @property
+    def source_names(self):
+        """Return source names once in their original order."""
+        return list(dict.fromkeys(source.source for source in self.sources))
+
+    @property
     def location_text(self):
         """Return all advertised locations as display text."""
         return ", ".join(self.locations) or "unbekannt"

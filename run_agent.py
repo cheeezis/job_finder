@@ -4,7 +4,6 @@ import argparse
 import json
 import os
 import time
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from job_agent.console import configure_utf8_output
 from job_agent.deduplication import deduplicate_jobs
@@ -32,6 +31,7 @@ from job_agent.sources import nethinks
 from job_agent.sources import proemion
 from job_agent.sources import rhoenenergie
 from job_agent.sources import stepstone
+from job_agent.sources.common import canonical_detail_url as canonical_url
 
 
 SOURCES = [
@@ -95,12 +95,6 @@ def run_pipeline(args):
         successful_sources=successful_sources,
     )
     save_memory(memory, MEMORY_FILE)
-    JOBS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    JOBS_FILE.write_text(
-        json.dumps([job.to_dict() for job in jobs], indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-    print(f"{len(jobs)} Job(s) gespeichert in {JOBS_FILE}")
     print(f'Neue Jobs: {memory_stats["new"]}')
     print(f'Bekannte Jobs: {memory_stats["known"]}')
     print(f'Neu inaktiv: {memory_stats["inactive"]}')
@@ -113,6 +107,12 @@ def run_pipeline(args):
     enriched = arbeitnow.enrich_candidate_jobs(jobs, candidate_ids)
     if enriched:
         results = score_jobs(jobs)
+    JOBS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    JOBS_FILE.write_text(
+        json.dumps([job.to_dict() for job in jobs], indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    print(f"{len(jobs)} Job(s) gespeichert in {JOBS_FILE}")
     print("\nKI-Bewertung")
     llm_stats = analyze_results(results, limit=args.llm_limit)
     print(
@@ -269,25 +269,6 @@ def source_label(name):
         "proemion": "Proemion",
         "nethinks": "NETHINKS",
     }.get(name, name)
-
-
-def canonical_url(url):
-    """Remove tracking parameters while retaining source-stable job IDs."""
-    parts = urlsplit(url or "")
-    stable_parameters = [
-        (name, value)
-        for name, value in parse_qsl(parts.query, keep_blank_values=True)
-        if name == "jobOfferId"
-    ]
-    return urlunsplit(
-        (
-            parts.scheme,
-            parts.netloc,
-            parts.path,
-            urlencode(stable_parameters),
-            "",
-        )
-    )
 
 
 if __name__ == "__main__":

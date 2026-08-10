@@ -2,6 +2,7 @@
 
 import re
 
+from job_agent.config import LOCAL_SEARCH_RADIUS_KM
 from job_agent.models import FilterStatus, Job
 from job_agent.profile import (
     BLOCKED_TITLE_WORDS,
@@ -392,27 +393,25 @@ def analyze_location(location, remote, description):
         }
 
     if is_local_area(location):
+        radius_label = f"{LOCAL_SEARCH_RADIUS_KM}-km-Radius"
         if full_remote:
             return {"allowed": True, "points": 15, "label": "lokal und 100% Remote"}
         if is_hybrid(remote):
-            return {"allowed": True, "points": 13, "label": "30-km-Radius und Hybrid"}
-        return {"allowed": True, "points": 10, "label": "im 30-km-Radius"}
+            return {
+                "allowed": True,
+                "points": 13,
+                "label": f"{radius_label} und Hybrid",
+            }
+        return {"allowed": True, "points": 10, "label": f"im {radius_label}"}
 
     if full_remote:
         return {"allowed": True, "points": 15, "label": "100% Remote aus Deutschland"}
-
-    if is_frankfurt(location) and remote_percent(remote) >= 80:
-        return {"allowed": True, "points": 8, "label": "Frankfurt mit mindestens 80% Remote"}
 
     return {"allowed": False, "points": 0, "label": "Ort/Remote passt nicht"}
 
 
 def is_local_area(location):
     return contains_any(location, LOCAL_PLACES)
-
-
-def is_frankfurt(location):
-    return contains_any(location, ["frankfurt", "ffm"])
 
 
 def is_full_remote(location, remote):

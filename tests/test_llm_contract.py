@@ -35,7 +35,7 @@ class LlmContractTests(unittest.TestCase):
 
         self.assertEqual(set(dimensions["required"]), set(RUBRIC))
         self.assertEqual(set(dimensions["properties"]), set(RUBRIC))
-        self.assertEqual(SCHEMA_VERSION, 4)
+        self.assertEqual(SCHEMA_VERSION, 5)
         json.dumps(ANALYSIS_SCHEMA)
 
     def test_score_bands_have_stable_boundaries(self):

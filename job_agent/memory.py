@@ -67,7 +67,7 @@ def update_memory(
             entry["title"] = job.title
             entry["company"] = job.company
             entry["source_urls"] = [source.url for source in job.sources]
-            entry["source_names"] = source_names(job)
+            entry["source_names"] = job.source_names
             entry["missed_runs"] = 0
             entry["active"] = True
             continue
@@ -84,7 +84,7 @@ def update_memory(
             "last_seen_at": now.isoformat(),
             "workflow_status": WorkflowStatus.NEW.value,
             "source_urls": [source.url for source in job.sources],
-            "source_names": source_names(job),
+            "source_names": job.source_names,
             "missed_runs": 0,
             "active": True,
         }
@@ -108,11 +108,6 @@ def update_memory(
         "inactive": inactive_count,
         "reactivated": reactivated_count,
     }
-
-
-def source_names(job):
-    """Return stable source names for absence tracking."""
-    return list(dict.fromkeys(source.source for source in job.sources))
 
 
 def inferred_sources(job_id):

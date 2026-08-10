@@ -9,6 +9,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
 from job_agent.paths import NOTIFICATION_STATE_FILE
+from job_agent.reporting import primary_url
 
 
 STATE_VERSION = 1
@@ -276,7 +277,7 @@ def discord_embed(job):
     cons = [*result.get("gaps", []), *result.get("risks", [])]
     return {
         "title": truncate(f"{job['llm_score']}% | {job['title']}", 256),
-        "url": job_url(job),
+        "url": primary_url(job),
         "description": truncate(
             f"**Kurzbeschreibung**\n{result.get('summary', 'Keine Zusammenfassung')}",
             1200,
@@ -340,20 +341,6 @@ def bullet_list(items, fallback):
 def recommendation_color(recommendation):
     """Use amber for borderline and green for positive recommendations."""
     return 0xD99A25 if recommendation == "borderline" else 0x176B54
-
-
-def job_url(job):
-    """Return the preferred public listing URL."""
-    sources = job.get("sources", [])
-    application_url = next(
-        (
-            source.get("application_url")
-            for source in sources
-            if source.get("application_url")
-        ),
-        None,
-    )
-    return application_url or (sources[0].get("url", "") if sources else "")
 
 
 def embed_character_count(embed):

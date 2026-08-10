@@ -43,7 +43,7 @@ def load_llm_profile(path=PROFILE_PATH):
     version = require_positive_int(root.get("version"), "version")
     profile = require_mapping(root.get("profile"), "profile")
     require_text(profile.get("summary"), "profile.summary")
-    require_nonnegative_int(
+    require_optional_nonnegative_int(
         profile.get("professional_experience_years"),
         "profile.professional_experience_years",
     )
@@ -54,6 +54,9 @@ def load_llm_profile(path=PROFILE_PATH):
         "experience",
         "projects",
         "languages",
+    ):
+        require_list(root.get(section), section, allow_empty=True)
+    for section in (
         "truth_rules",
     ):
         require_list(root.get(section), section)
@@ -137,6 +140,12 @@ def require_nonnegative_int(value, name):
             f"{name} muss eine nicht-negative Ganzzahl sein"
         )
     return value
+
+
+def require_optional_nonnegative_int(value, name):
+    if value is None:
+        return None
+    return require_nonnegative_int(value, name)
 
 
 def make_json_compatible(value):

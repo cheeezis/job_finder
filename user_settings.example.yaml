@@ -1,0 +1,12 @@
+search:
+  local_location: Musterstadt
+  local_postal_code: "00000"
+  local_radius_km: 25
+
+matching:
+  preferred_location_label: Musterstadt
+  local_places:
+    - musterstadt
+  profile_domain_keywords: []
+  salary_target_eur: null
+  salary_minimum_eur: null

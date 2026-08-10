@@ -10,6 +10,7 @@ from urllib.error import HTTPError
 
 from job_agent.config import (
     LOCAL_SEARCH_POSTAL_CODE,
+    STEPSTONE_SEARCH_RADIUS_KM,
     STEPSTONE_SEARCH_LOCATIONS,
     STEPSTONE_SEARCH_TERMS,
 )
@@ -133,7 +134,8 @@ class StepStoneSearchTests(unittest.TestCase):
         self.assertEqual(
             url,
             "https://www.stepstone.de/jobs/Python-Developer/"
-            f"in-{LOCAL_SEARCH_POSTAL_CODE}?page=2&radius=30",
+            f"in-{LOCAL_SEARCH_POSTAL_CODE}?page=2"
+            f"&radius={STEPSTONE_SEARCH_RADIUS_KM}",
         )
 
     def test_remote_search_does_not_add_local_radius(self):

@@ -17,10 +17,15 @@ class LlmProfileTests(unittest.TestCase):
         profile = load_llm_profile(EXAMPLE_PROFILE_PATH)
 
         self.assertEqual(profile.version, 3)
-        self.assertEqual(
-            profile.data["profile"]["professional_experience_years"],
-            0,
+        self.assertIsNone(
+            profile.data["profile"]["professional_experience_years"]
         )
+        self.assertEqual(profile.data["profile"]["location"], {})
+        self.assertEqual(profile.data["education"], [])
+        self.assertEqual(profile.data["experience"], [])
+        self.assertEqual(profile.data["projects"], [])
+        self.assertEqual(profile.data["skills"], {})
+        self.assertEqual(profile.data["languages"], [])
         self.assertEqual(profile.data["certifications"], [])
         self.assertEqual(profile.data["current_learning"], [])
         self.assertTrue(profile.data["truth_rules"])

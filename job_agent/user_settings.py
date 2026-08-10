@@ -39,8 +39,14 @@ def load_user_settings(path=SETTINGS_PATH):
         "matching.profile_domain_keywords",
         allow_empty=True,
     )
-    require_positive_int(matching.get("salary_target_eur"), "matching.salary_target_eur")
-    require_positive_int(matching.get("salary_minimum_eur"), "matching.salary_minimum_eur")
+    require_optional_positive_int(
+        matching.get("salary_target_eur"),
+        "matching.salary_target_eur",
+    )
+    require_optional_positive_int(
+        matching.get("salary_minimum_eur"),
+        "matching.salary_minimum_eur",
+    )
     return values
 
 
@@ -60,6 +66,12 @@ def require_positive_int(value, name):
     if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
         raise ValueError(f"{name} muss eine positive Ganzzahl sein")
     return value
+
+
+def require_optional_positive_int(value, name):
+    if value is None:
+        return None
+    return require_positive_int(value, name)
 
 
 def require_text_list(value, name, allow_empty=False):

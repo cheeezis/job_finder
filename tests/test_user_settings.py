@@ -12,7 +12,8 @@ class UserSettingsTests(unittest.TestCase):
         self.assertTrue(settings["search"]["local_location"])
         self.assertGreater(settings["search"]["local_radius_km"], 0)
         self.assertTrue(settings["matching"]["local_places"])
-        self.assertGreater(settings["matching"]["salary_minimum_eur"], 0)
+        self.assertIsNone(settings["matching"]["salary_target_eur"])
+        self.assertIsNone(settings["matching"]["salary_minimum_eur"])
 
 
 if __name__ == "__main__":

@@ -11,7 +11,12 @@ from html import unescape
 from pathlib import Path
 from urllib.parse import urlencode, urljoin
 
-from job_agent.config import GET_IN_IT_SEARCH_LOCATIONS, GET_IN_IT_SEARCH_TERMS
+from job_agent.config import (
+    COMMUTER_SEARCH_LOCATIONS,
+    COMMUTER_SEARCH_TERMS,
+    GET_IN_IT_SEARCH_LOCATIONS,
+    GET_IN_IT_SEARCH_TERMS,
+)
 from job_agent.http import fetch_json, fetch_text
 from job_agent.models import Job, JobSource
 from job_agent.paths import GET_IN_IT_CACHE_FILE
@@ -126,21 +131,26 @@ def build_api_searches():
     """Map our shared search terms to get-in-IT's available category filters."""
     seen = set()
 
-    for query in iter_search_queries(
-        GET_IN_IT_SEARCH_TERMS,
-        GET_IN_IT_SEARCH_LOCATIONS,
-    ):
-        for priority_id in priority_ids_for_term(query.term):
-            key = (priority_id, query.location)
-            if key in seen:
-                continue
+    search_plans = [
+        (GET_IN_IT_SEARCH_TERMS, GET_IN_IT_SEARCH_LOCATIONS),
+        (COMMUTER_SEARCH_TERMS, COMMUTER_SEARCH_LOCATIONS),
+    ]
+    for terms, locations in search_plans:
+        for query in iter_search_queries(terms, locations):
+            for priority_id in priority_ids_for_term(query.term):
+                key = (priority_id, query.location)
+                if key in seen:
+                    continue
 
-            seen.add(key)
-            yield {
-                "priority_id": priority_id,
-                "location": query.location,
-                "label": THEMATIC_PRIORITIES.get(priority_id, f"Thema {priority_id}"),
-            }
+                seen.add(key)
+                yield {
+                    "priority_id": priority_id,
+                    "location": query.location,
+                    "label": THEMATIC_PRIORITIES.get(
+                        priority_id,
+                        f"Thema {priority_id}",
+                    ),
+                }
 
 
 def priority_ids_for_term(term):

@@ -4,9 +4,11 @@ import re
 
 from job_agent.config import LOCAL_SEARCH_RADIUS_KM
 from job_agent.models import FilterStatus, Job
+from job_agent.remote import detect_remote
 from job_agent.profile import (
     BLOCKED_TITLE_WORDS,
     BODY_ENTRY_LEVEL_PHRASES,
+    COMMUTER_LOCATIONS,
     ENTRY_LEVEL_WORDS,
     FIRST_EXPERIENCE_PHRASES,
     FOREIGN_ONLY_LOCATION_WORDS,
@@ -53,8 +55,12 @@ def score_job(job: Job):
     """Return a fixed 0-100 match score and explain every decision."""
     title = normalize_text(job.title)
     location = normalize_text(job.location_text)
-    remote = normalize_text(job.remote_text)
     description = strip_platform_boilerplate(normalize_text(job.description_clean))
+    remote = normalize_text(job.remote_text)
+    if job.remote_percentage is None:
+        remote = normalize_text(
+            detect_remote(title, location, description, structured_remote=remote)
+        )
     salary_text = structured_salary_text(job)
     full_text = " ".join([title, location, remote, description, salary_text])
 
@@ -407,11 +413,38 @@ def analyze_location(location, remote, description):
     if full_remote:
         return {"allowed": True, "points": 15, "label": "100% Remote aus Deutschland"}
 
+    commuter_location = find_commuter_location(location)
+    if commuter_location:
+        minimum = commuter_location["minimum_remote_percentage"]
+        percentage = remote_percent(remote)
+        if percentage >= minimum:
+            return {
+                "allowed": True,
+                "points": 8,
+                "label": (
+                    f"Pendelort {commuter_location['search_location']} mit "
+                    f"{percentage}% Remote"
+                ),
+            }
+
     return {"allowed": False, "points": 0, "label": "Ort/Remote passt nicht"}
 
 
 def is_local_area(location):
     return contains_any(location, LOCAL_PLACES)
+
+
+def find_commuter_location(location):
+    for item in COMMUTER_LOCATIONS:
+        excluded_aliases = [
+            normalize_text(alias) for alias in item.get("excluded_aliases", [])
+        ]
+        if contains_any(location, excluded_aliases):
+            continue
+        aliases = [normalize_text(alias) for alias in item["aliases"]]
+        if contains_any(location, aliases):
+            return item
+    return None
 
 
 def is_full_remote(location, remote):

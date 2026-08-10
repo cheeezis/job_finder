@@ -6,7 +6,7 @@ from unittest.mock import patch
 from job_agent.deduplication import deduplicate_jobs
 from job_agent.main import score_jobs
 from job_agent.models import Job, JobSource
-from job_agent.remote import classify_remote
+from job_agent.remote import classify_remote, detect_remote
 from job_agent.scoring import score_job
 from job_agent.profile import LOCAL_PLACES
 
@@ -46,6 +46,55 @@ def make_job(**overrides):
 
 
 class ScoringTests(unittest.TestCase):
+    def test_commuter_location_uses_configured_remote_threshold(self):
+        locations = [
+            {
+                "search_location": "Beispielstadt",
+                "aliases": ["Beispielstadt"],
+                "minimum_remote_percentage": 60,
+            }
+        ]
+        with patch("job_agent.scoring.COMMUTER_LOCATIONS", locations):
+            accepted = score_job(make_job(location="Beispielstadt", remote="60%"))
+            rejected = score_job(make_job(location="Beispielstadt", remote="40%"))
+
+        self.assertEqual(accepted["filter_status"], "included")
+        self.assertIn("Pendelort Beispielstadt", accepted["reasons"][3])
+        self.assertEqual(rejected["filter_status"], "excluded")
+
+    def test_remote_days_are_converted_to_weekly_percentage(self):
+        self.assertEqual(
+            detect_remote("Drei Tage pro Woche im Homeoffice"),
+            "60%",
+        )
+        self.assertEqual(
+            detect_remote("Zwei Präsenztage pro Woche"),
+            "60%",
+        )
+
+    def test_commuter_location_reads_remote_days_from_description(self):
+        locations = [
+            {
+                "search_location": "Beispielstadt",
+                "aliases": ["Beispielstadt"],
+                "minimum_remote_percentage": 60,
+            }
+        ]
+        job = make_job(
+            location="Beispielstadt",
+            remote="homeoffice",
+            description=(
+                "Python APIs. Keine Berufserfahrung erforderlich. "
+                "Drei Tage pro Woche im Homeoffice."
+            ),
+        )
+
+        with patch("job_agent.scoring.COMMUTER_LOCATIONS", locations):
+            result = score_job(job)
+
+        self.assertEqual(result["filter_status"], "included")
+        self.assertIn("60% Remote", result["reasons"][3])
+
     def test_fixed_score_is_between_zero_and_one_hundred(self):
         result = score_job(
             make_job(
@@ -148,11 +197,23 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(result["filter_status"], "excluded")
         self.assertIn("Deutschland", result["reasons"][0])
 
-    def test_frankfurt_requires_full_remote(self):
-        accepted = score_job(make_job(location="Frankfurt", remote="100%"))
-        rejected = score_job(make_job(location="Frankfurt", remote="80%"))
+    def test_commuter_rule_honors_excluded_alias_and_threshold(self):
+        locations = [
+            {
+                "search_location": "Beispielstadt",
+                "aliases": ["Beispielstadt"],
+                "excluded_aliases": ["Beispielstadt-West"],
+                "minimum_remote_percentage": 80,
+            }
+        ]
+        with patch("job_agent.scoring.COMMUTER_LOCATIONS", locations):
+            accepted = score_job(make_job(location="Beispielstadt", remote="80%"))
+            rejected = score_job(make_job(location="Beispielstadt", remote="60%"))
+            wrong_city = score_job(make_job(location="Beispielstadt-West", remote="80%"))
+
         self.assertEqual(accepted["filter_status"], "included")
         self.assertEqual(rejected["filter_status"], "excluded")
+        self.assertEqual(wrong_city["filter_status"], "excluded")
 
     def test_four_required_years_are_excluded(self):
         result = score_job(

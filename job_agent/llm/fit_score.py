@@ -189,7 +189,7 @@ def score_location(job):
         return "conflict"
     if "100% remote" in precheck or work_mode == "remote":
         return "excellent"
-    if "-km-radius" in precheck or "lokal" in precheck:
+    if "-km-radius" in precheck or "lokal" in precheck or "pendelort" in precheck:
         return "good"
     return "weak"
 

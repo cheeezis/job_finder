@@ -11,6 +11,9 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 from job_agent.config import (
+    COMMUTER_SEARCH_LOCATIONS,
+    COMMUTER_SEARCH_RADIUS_KM,
+    COMMUTER_SEARCH_TERMS,
     LOCAL_SEARCH_LOCATION,
     LOCAL_SEARCH_RADIUS_KM,
     SEARCH_TERMS,
@@ -84,9 +87,19 @@ def collect_links():
     seen = set()
     links = []
 
-    for term in SEARCH_TERMS:
-        print(f"Suche: {term}")
-        results = search(term)
+    searches = [
+        (term, LOCAL_SEARCH_LOCATION, LOCAL_SEARCH_RADIUS_KM)
+        for term in SEARCH_TERMS
+    ]
+    searches.extend(
+        (term, location, COMMUTER_SEARCH_RADIUS_KM)
+        for location in COMMUTER_SEARCH_LOCATIONS
+        for term in COMMUTER_SEARCH_TERMS
+    )
+
+    for term, location, radius in searches:
+        print(f"Suche: {term} / {location}")
+        results = search(term, location=location, radius=radius)
         print(f"  {len(results)} Treffer")
 
         for result in results:
@@ -107,14 +120,14 @@ def collect_links():
     return links
 
 
-def search(term):
+def search(term, location=LOCAL_SEARCH_LOCATION, radius=LOCAL_SEARCH_RADIUS_KM):
     """Load every available result page for one search term."""
     results = []
     seen_references = set()
     page = 1
 
     while True:
-        html = fetch_text(build_search_url(term, page))
+        html = fetch_text(build_search_url(term, page, location, radius))
         search_result = extract_ng_state(html).get("suchergebnis", {})
         page_results = (
             search_result.get("ergebnisliste")
@@ -142,13 +155,17 @@ def search(term):
         page += 1
 
 
-def build_search_url(term, page=1):
-    # The local radius is centered on the configured home location.
+def build_search_url(
+    term,
+    page=1,
+    location=LOCAL_SEARCH_LOCATION,
+    radius=LOCAL_SEARCH_RADIUS_KM,
+):
     query = {
         "angebotsart": "1",
         "was": term,
-        "wo": LOCAL_SEARCH_LOCATION,
-        "umkreis": str(LOCAL_SEARCH_RADIUS_KM),
+        "wo": location,
+        "umkreis": str(radius),
         "page": str(page),
     }
     return f"{SEARCH_BASE_URL}?{urlencode(query)}"

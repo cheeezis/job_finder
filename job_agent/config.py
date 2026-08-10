@@ -84,3 +84,15 @@ STEPSTONE_SEARCH_RADIUS_KM = LOCAL_SEARCH_RADIUS_KM
 
 GET_IN_IT_SEARCH_TERMS = SEARCH_TERMS
 GET_IN_IT_SEARCH_LOCATIONS = SEARCH_LOCATIONS
+
+COMMUTER_SEARCH_LOCATIONS = [
+    item["search_location"]
+    for item in USER_SETTINGS["matching"].get("commuter_locations", [])
+]
+COMMUTER_SEARCH_TERMS = [
+    "Junior IT",
+    "Junior Softwareentwickler",
+    "Berufseinsteiger IT",
+    "Trainee IT",
+]
+COMMUTER_SEARCH_RADIUS_KM = 10

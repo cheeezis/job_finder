@@ -34,6 +34,10 @@ def load_user_settings(path=SETTINGS_PATH):
         "matching.preferred_location_label",
     )
     require_text_list(matching.get("local_places"), "matching.local_places")
+    require_commuter_locations(
+        matching.get("commuter_locations", []),
+        "matching.commuter_locations",
+    )
     require_text_list(
         matching.get("profile_domain_keywords"),
         "matching.profile_domain_keywords",
@@ -79,6 +83,30 @@ def require_text_list(value, name, allow_empty=False):
         raise ValueError(f"{name} muss eine Liste sein")
     for item in value:
         require_text(item, name)
+    return value
+
+
+def require_commuter_locations(value, name):
+    if not isinstance(value, list):
+        raise ValueError(f"{name} muss eine Liste sein")
+    for index, item in enumerate(value):
+        item_name = f"{name}[{index}]"
+        require_mapping(item, item_name)
+        require_text(item.get("search_location"), f"{item_name}.search_location")
+        require_text_list(item.get("aliases"), f"{item_name}.aliases")
+        require_text_list(
+            item.get("excluded_aliases", []),
+            f"{item_name}.excluded_aliases",
+            allow_empty=True,
+        )
+        percentage = require_positive_int(
+            item.get("minimum_remote_percentage"),
+            f"{item_name}.minimum_remote_percentage",
+        )
+        if percentage > 100:
+            raise ValueError(
+                f"{item_name}.minimum_remote_percentage darf hoechstens 100 sein"
+            )
     return value
 
 

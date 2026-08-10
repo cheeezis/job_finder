@@ -18,6 +18,7 @@ from job_agent.sources import (
     edag,
     get_in_it,
     jumo,
+    rhoenenergie,
     stepstone,
 )
 from job_agent.sources.common import (
@@ -90,6 +91,27 @@ class BytewerkSourceTests(unittest.TestCase):
         self.assertEqual(
             links,
             ["https://bytewerk-gmbh.jobs.personio.de/job/1249333"],
+        )
+
+
+class RhoenenergieSourceTests(unittest.TestCase):
+    def test_collect_links_keeps_only_current_job_details(self):
+        html = """
+        <a href="/karriere/IT-Fachadministrator-mwd-de-j1077.html">IT</a>
+        <a href="https://re-gruppe.de/karriere/Busfahrer-mwd-de-j121.html">Bus</a>
+        <a href="/karriere/">Karriere</a>
+        <a href="https://other.test/karriere/Developer-de-j999.html">Andere</a>
+        """
+
+        with patch.object(rhoenenergie, "fetch_text", return_value=html):
+            links = rhoenenergie.collect_links()
+
+        self.assertEqual(
+            links,
+            [
+                "https://re-gruppe.de/karriere/IT-Fachadministrator-mwd-de-j1077.html",
+                "https://re-gruppe.de/karriere/Busfahrer-mwd-de-j121.html",
+            ],
         )
 
 

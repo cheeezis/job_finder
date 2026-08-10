@@ -148,6 +148,11 @@ Scoring-, Filter- und Deduplizierungsregeln testen:
 python -m unittest discover -s tests -v
 ```
 
+Die automatisierten Tests benoetigen keine echten Zugangsdaten und fuehren
+keine kostenpflichtigen OpenAI-Aufrufe aus. Das LLM-Benchmark verwendet 26
+vollstaendig synthetische, manuell bewertete Stellenanzeigen. Firmen, URLs und
+Anzeigentexte darin sind erfunden.
+
 `gpt-5.4-mini` ist nach Development-, Holdout- und Reserve-Vergleich das
 Standardmodell. Die OpenAI-Anbindung verwendet `OPENAI_API_KEY`:
 
@@ -219,3 +224,7 @@ tests/                      automatisierte Scoring- und Filtertests
 run_agent.py                kompletter Agentenlauf
 review_jobs.bat             anklickbarer Start der Review-Oberflaeche
 ```
+
+## Lizenz
+
+Der Quellcode steht unter der [MIT-Lizenz](LICENSE).

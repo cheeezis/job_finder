@@ -1,0 +1,35 @@
+version: 1
+job_analysis_schema_version: 3
+frozen_prompt_version: 7
+
+# Only these cases may be used while developing the extraction prompt.
+splits:
+  development:
+    - synthetic:01
+    - synthetic:02
+    - synthetic:03
+  holdout:
+    - synthetic:04
+    - synthetic:05
+    - synthetic:06
+    - synthetic:07
+    - synthetic:08
+    - synthetic:09
+    - synthetic:10
+    - synthetic:11
+    - synthetic:12
+    - synthetic:13
+  reserve:
+    - synthetic:14
+    - synthetic:15
+    - synthetic:16
+    - synthetic:17
+    - synthetic:18
+    - synthetic:19
+    - synthetic:20
+    - synthetic:21
+    - synthetic:22
+    - synthetic:23
+    - synthetic:24
+    - synthetic:25
+    - synthetic:26

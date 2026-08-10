@@ -60,6 +60,24 @@ Copy-Item profile.example.yaml profile.local.yaml
 bleiben lokal und werden nicht von Git erfasst. Ohne lokale Dateien verwendet
 der Agent die anonymisierten Beispiele.
 
+Die beiden lokalen Dateien danach an die eigene Suche und das belegbare Profil
+anpassen. Insbesondere duerfen Profilangaben keine nicht vorhandenen Kenntnisse,
+Erfahrungen oder Abschluesse enthalten.
+
+## Lokale Daten und Datenschutz
+
+Das Repository enthaelt nur anonymisierte Konfigurationsbeispiele. Folgende
+Inhalte bleiben bewusst ausserhalb von Git:
+
+- persoenliche Profil- und Sucheinstellungen
+- gefundene Stellen, Detail-Caches und manuelle Review-Notizen
+- LLM-Ergebnisse und Benachrichtigungsstatus
+- `OPENAI_API_KEY` und `DISCORD_WEBHOOK_URL`
+
+Vor einem Fork oder einer Veroeffentlichung sollte `git status --ignored`
+kontrolliert werden. Lokale Konfigurationen, der Ordner `data/` und echte
+Zugangsdaten duerfen nicht erzwungen zu Git hinzugefuegt werden.
+
 Kompletter Agentenlauf mit Vorfilter und KI-Bewertung:
 
 ```powershell
@@ -110,14 +128,13 @@ inaktiv, wenn sie in drei erfolgreichen Laeufen ihrer bekannten Quellen nicht
 mehr gefunden wurde. Fehlgeschlagene oder leere Quellensuchen zaehlen dabei
 nicht als Verschwinden.
 
-## Automatischer Betrieb
+## Optionaler automatischer Betrieb
 
-Die lokale Windows-Aufgabe `Job Agent Daily` startet den Agenten taeglich um
-10:00 Uhr mit `--notify`. Ein bei ausgeschaltetem PC verpasster Start wird beim
-naechsten Einschalten und Anmelden nachgeholt. Aus dem Energiesparmodus darf die
-Aufgabe den PC aufwecken. Die benoetigten Werte `OPENAI_API_KEY` und
-`DISCORD_WEBHOOK_URL` liegen als persoenliche Windows-Umgebungsvariablen vor und
-werden nicht im Repository gespeichert.
+`python run_agent.py --notify` kann beispielsweise ueber die Windows-
+Aufgabenplanung taeglich gestartet werden. Die Aufgabe selbst ist nicht Teil
+des Repositorys und muss lokal eingerichtet werden. `OPENAI_API_KEY` und
+`DISCORD_WEBHOOK_URL` sollten dabei als lokale Umgebungsvariablen gesetzt und
+nicht in Skripten oder versionierten Dateien gespeichert werden.
 
 Nur vorhandene interne Jobs regelbasiert pruefen, ohne Dateien zu erzeugen:
 

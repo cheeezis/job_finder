@@ -6,24 +6,23 @@ import unittest
 from pathlib import Path
 
 from job_agent.llm.profile_loader import (
+    EXAMPLE_PROFILE_PATH,
     ProfileValidationError,
     load_llm_profile,
 )
 
 
 class LlmProfileTests(unittest.TestCase):
-    def test_project_profile_loads_as_json_compatible_facts(self):
-        profile = load_llm_profile()
+    def test_example_profile_loads_as_json_compatible_facts(self):
+        profile = load_llm_profile(EXAMPLE_PROFILE_PATH)
 
-        self.assertEqual(profile.version, 2)
+        self.assertEqual(profile.version, 3)
         self.assertEqual(
             profile.data["profile"]["professional_experience_years"],
             0,
         )
-        self.assertEqual(
-            profile.data["current_learning"][0]["status"],
-            "in_progress",
-        )
+        self.assertEqual(profile.data["certifications"], [])
+        self.assertEqual(profile.data["current_learning"], [])
         self.assertTrue(profile.data["truth_rules"])
         self.assertEqual(
             profile.data["career_preferences"]["evaluation_priorities"]["order"][0],
@@ -32,7 +31,7 @@ class LlmProfileTests(unittest.TestCase):
         json.dumps(profile.data)
 
     def test_missing_required_section_is_rejected(self):
-        text = Path("profile.yaml").read_text(encoding="utf-8")
+        text = EXAMPLE_PROFILE_PATH.read_text(encoding="utf-8")
         text = text.replace("truth_rules:\n", "removed_truth_rules:\n", 1)
 
         with TemporaryProfile(text) as path:
@@ -40,8 +39,8 @@ class LlmProfileTests(unittest.TestCase):
                 load_llm_profile(path)
 
     def test_invalid_version_is_rejected(self):
-        text = Path("profile.yaml").read_text(encoding="utf-8")
-        text = text.replace("version: 2", "version: unknown", 1)
+        text = EXAMPLE_PROFILE_PATH.read_text(encoding="utf-8")
+        text = text.replace("version: 3", "version: unknown", 1)
 
         with TemporaryProfile(text) as path:
             with self.assertRaisesRegex(ProfileValidationError, "version"):

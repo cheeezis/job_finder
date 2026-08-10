@@ -7,7 +7,10 @@ from pathlib import Path
 import yaml
 
 
-PROFILE_PATH = Path(__file__).resolve().parents[2] / "profile.yaml"
+PROJECT_DIR = Path(__file__).resolve().parents[2]
+LOCAL_PROFILE_PATH = PROJECT_DIR / "profile.local.yaml"
+EXAMPLE_PROFILE_PATH = PROJECT_DIR / "profile.example.yaml"
+PROFILE_PATH = LOCAL_PROFILE_PATH if LOCAL_PROFILE_PATH.exists() else EXAMPLE_PROFILE_PATH
 
 
 class ProfileValidationError(ValueError):
@@ -50,11 +53,12 @@ def load_llm_profile(path=PROFILE_PATH):
         "education",
         "experience",
         "projects",
-        "current_learning",
         "languages",
         "truth_rules",
     ):
         require_list(root.get(section), section)
+    for section in ("certifications", "current_learning"):
+        require_list(root.get(section), section, allow_empty=True)
 
     for section in ("skills", "strengths", "career_preferences"):
         require_mapping(root.get(section), section)
@@ -92,6 +96,11 @@ def load_llm_profile(path=PROFILE_PATH):
         require_text(item.get("name"), f"current_learning[{index}].name")
         require_text(item.get("status"), f"current_learning[{index}].status")
 
+    for index, certification in enumerate(root["certifications"]):
+        item = require_mapping(certification, f"certifications[{index}]")
+        require_text(item.get("name"), f"certifications[{index}].name")
+        require_text(item.get("status"), f"certifications[{index}].status")
+
     return LlmProfile(
         version=version,
         data=make_json_compatible(root),
@@ -104,8 +113,8 @@ def require_mapping(value, name):
     return value
 
 
-def require_list(value, name):
-    if not isinstance(value, list) or not value:
+def require_list(value, name, allow_empty=False):
+    if not isinstance(value, list) or (not value and not allow_empty):
         raise ProfileValidationError(f"{name} muss eine nicht-leere Liste sein")
     return value
 

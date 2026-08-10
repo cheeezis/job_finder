@@ -7,13 +7,14 @@ from job_agent.main import score_jobs
 from job_agent.models import Job, JobSource
 from job_agent.remote import classify_remote
 from job_agent.scoring import score_job
+from job_agent.profile import LOCAL_PLACES
 
 
 def make_job(**overrides):
     values = {
         "title": "Junior Python Developer",
         "company": "Example GmbH",
-        "location": "Fulda",
+        "location": LOCAL_PLACES[0],
         "remote": "0%",
         "description": "Python APIs. Keine Berufserfahrung erforderlich.",
         "url": "https://example.test/job",

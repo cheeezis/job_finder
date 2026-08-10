@@ -1,5 +1,7 @@
 """Central search settings for all source adapters."""
 
+from job_agent.user_settings import USER_SETTINGS
+
 SEARCH_TERMS = [
     "Junior Python Developer",
     "Python",
@@ -64,8 +66,10 @@ STEPSTONE_SEARCH_TERMS = [
     "Microsoft 365 Junior Consultant",
 ]
 
-LOCAL_SEARCH_LOCATION = "Exampletown"
-LOCAL_SEARCH_RADIUS_KM = 30
+SEARCH_SETTINGS = USER_SETTINGS["search"]
+LOCAL_SEARCH_LOCATION = SEARCH_SETTINGS["local_location"]
+LOCAL_SEARCH_POSTAL_CODE = SEARCH_SETTINGS["local_postal_code"]
+LOCAL_SEARCH_RADIUS_KM = SEARCH_SETTINGS["local_radius_km"]
 
 SEARCH_LOCATIONS = [
     LOCAL_SEARCH_LOCATION,
@@ -73,7 +77,7 @@ SEARCH_LOCATIONS = [
 ]
 
 STEPSTONE_SEARCH_LOCATIONS = [
-    "12345",
+    LOCAL_SEARCH_POSTAL_CODE,
     "Remote",
 ]
 STEPSTONE_SEARCH_RADIUS_KM = LOCAL_SEARCH_RADIUS_KM

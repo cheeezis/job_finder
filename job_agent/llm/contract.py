@@ -1,5 +1,10 @@
 """Versioned scoring rubric and structured output contract for LLM reviews."""
 
+from job_agent.user_settings import USER_SETTINGS
+
+
+PREFERRED_LOCATION_LABEL = USER_SETTINGS["matching"]["preferred_location_label"]
+
 RUBRIC_VERSION = 6
 SCHEMA_VERSION = 4
 
@@ -22,7 +27,7 @@ RUBRIC = {
     "working_conditions_fit": {
         "max_points": 30,
         "guidance": (
-            "Fulda, lokaler Umkreis oder vollstaendiges Homeoffice sind nach der "
+            f"{PREFERRED_LOCATION_LABEL}, lokaler Umkreis oder vollstaendiges Homeoffice sind nach der "
             "Einstiegstauglichkeit am wichtigsten."
         ),
         "anchors": {

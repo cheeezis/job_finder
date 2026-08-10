@@ -19,15 +19,6 @@ class WorkflowStatus(str, Enum):
     CLOSED = "closed"
 
 
-class PersonalRating(str, Enum):
-    """Manual fit assessment used to calibrate future recommendations."""
-
-    VERY_INTERESTING = "very_interesting"
-    INTERESTING = "interesting"
-    MAYBE = "maybe"
-    NOT_INTERESTING = "not_interesting"
-
-
 class FilterStatus(str, Enum):
     """Result of the rule-based job filter."""
 

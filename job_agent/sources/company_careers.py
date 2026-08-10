@@ -139,13 +139,6 @@ def extract_links(html, base_url, pattern):
     return links
 
 
-def posting_identifier(posting):
-    identifier = posting.get("identifier")
-    if isinstance(identifier, dict):
-        identifier = identifier.get("value")
-    return str(identifier).strip() if identifier else None
-
-
 def ensure_url_identity(job, source_name, url):
     """Use the unique career-page URL as the source ID.
 

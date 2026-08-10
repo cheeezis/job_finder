@@ -10,13 +10,87 @@ from urllib.error import HTTPError
 
 from job_agent.config import STEPSTONE_SEARCH_LOCATIONS, STEPSTONE_SEARCH_TERMS
 from job_agent.models import Job, JobSource, WorkMode
-from job_agent.sources import arbeitnow, arbeitsagentur, edag, get_in_it, jumo, stepstone
+from job_agent.sources import (
+    arbeitnow,
+    arbeitsagentur,
+    bytewerk,
+    compose_it,
+    edag,
+    get_in_it,
+    jumo,
+    stepstone,
+)
 from job_agent.sources.common import (
     canonical_detail_url,
     load_detail_cache,
     save_detail_cache,
 )
 from job_agent.sources.stepstone import build_search_url
+
+
+class ComposeItSourceTests(unittest.TestCase):
+    def test_collect_links_keeps_only_compose_job_pages(self):
+        html = """
+        <a href="https://compose-it.de/job/it-supporter/">Support</a>
+        <a href="/job/it-systemadministrator/">Admin</a>
+        <a href="https://compose-it.de/unternehmen/karriere/">Karriere</a>
+        """
+
+        with patch.object(compose_it, "fetch_text", return_value=html):
+            links = compose_it.collect_links()
+
+        self.assertEqual(
+            links,
+            [
+                "https://compose-it.de/job/it-supporter/",
+                "https://compose-it.de/job/it-systemadministrator/",
+            ],
+        )
+
+    def test_job_from_html_extracts_visible_job_content(self):
+        html = """
+        <span class="elementor-icon-list-text">Festanstellung</span>
+        <span class="elementor-icon-list-text">Fulda (Stadtmitte)</span>
+        <h1>IT-Supporter (m/w/d)</h1>
+        <div data-elementor-type="wp-post" data-elementor-id="3364">
+          <h2>Was du mitbringen solltest</h2>
+          <p>Abgeschlossene IT-Ausbildung. Hybrid (Büro / HomeOffice).</p>
+        </div>
+        <div id="bewerberform">Bewerbungsformular mit irrelevanten Feldern</div>
+        """
+
+        job = compose_it.job_from_html(
+            compose_it.SOURCE_NAME,
+            compose_it.COMPANY,
+            "https://compose-it.de/job/it-supporter/",
+            html,
+        )
+
+        self.assertEqual(job.id, "compose_it:it-supporter")
+        self.assertEqual(job.title, "IT-Supporter (m/w/d)")
+        self.assertEqual(job.company, "COMPOSE IT")
+        self.assertEqual(job.locations, ["Fulda (Stadtmitte)"])
+        self.assertEqual(job.employment_type, "Festanstellung")
+        self.assertEqual(job.work_mode, WorkMode.HYBRID)
+        self.assertIn("Abgeschlossene IT-Ausbildung", job.description_clean)
+        self.assertNotIn("irrelevanten Feldern", job.description_clean)
+
+
+class BytewerkSourceTests(unittest.TestCase):
+    def test_collect_links_keeps_only_bytewerk_job_pages(self):
+        html = """
+        <a href="/job/1249333?language=de">IT Consultant</a>
+        <a href="/">Startseite</a>
+        <a href="https://other.jobs.personio.de/job/123">Andere Firma</a>
+        """
+
+        with patch.object(bytewerk, "fetch_text", return_value=html):
+            links = bytewerk.collect_links()
+
+        self.assertEqual(
+            links,
+            ["https://bytewerk-gmbh.jobs.personio.de/job/1249333"],
+        )
 
 
 class StepStoneSearchTests(unittest.TestCase):

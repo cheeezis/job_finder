@@ -191,6 +191,24 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(result["filter_status"], "included")
         self.assertEqual(result["experience_rank"], 1)
 
+    def test_required_experience_wins_over_separate_optional_experience(self):
+        result = score_job(
+            make_job(
+                title="AI Integration & Automation Engineer",
+                description=(
+                    "Experience in software development, ideally in backend "
+                    "development. Experience with Python and cloud technologies. "
+                    "Ideally, you also have practical experience with LLMs."
+                ),
+            )
+        )
+
+        self.assertEqual(result["filter_status"], "included")
+        self.assertEqual(result["experience_rank"], 4)
+        self.assertTrue(
+            any(reason.startswith("+8 Erfahrung") for reason in result["reasons"])
+        )
+
     def test_non_junior_strong_experience_is_excluded(self):
         german = score_job(
             make_job(
@@ -283,6 +301,29 @@ class ScoringTests(unittest.TestCase):
 
         self.assertEqual(german["filter_status"], "excluded")
         self.assertEqual(english["filter_status"], "excluded")
+
+    def test_advanced_and_non_job_titles_are_excluded(self):
+        titles_and_reasons = [
+            ("Staff Software Engineer", "staff"),
+            ("Founding Cloud Infrastructure Engineer", "founding"),
+            ("Solutions Architect - DACH", "architect"),
+            ("Software Architekt", "architekt"),
+            (
+                "Data Science & AI Weiterbildung mit IHK-Abschluss",
+                "weiterbildung",
+            ),
+        ]
+
+        for title, reason in titles_and_reasons:
+            with self.subTest(title=title):
+                result = score_job(make_job(title=title))
+                self.assertEqual(result["filter_status"], "excluded")
+                self.assertIn(reason, result["reasons"][0])
+
+    def test_blocked_staff_word_does_not_match_staffing(self):
+        result = score_job(make_job(title="Staffing Software Developer"))
+
+        self.assertEqual(result["filter_status"], "included")
 
     def test_incidental_sap_mention_is_not_a_hard_blocker(self):
         result = score_job(

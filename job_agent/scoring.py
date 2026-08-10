@@ -261,15 +261,15 @@ def analyze_experience(title, full_text):
     if contains_any(full_text, FIRST_EXPERIENCE_PHRASES):
         return {"rank": 0, "points": 25, "label": "erste Erfahrung reicht aus"}
 
-    if experience_is_optional(full_text):
-        return {"rank": 1, "points": 18, "label": "Erfahrung nur wuenschenswert"}
-
     if has_required_experience(full_text):
         return {
             "rank": 4,
             "points": 8,
             "label": "praktische Vorerfahrung mit Technologien vorausgesetzt",
         }
+
+    if experience_is_optional(full_text):
+        return {"rank": 1, "points": 18, "label": "Erfahrung nur wuenschenswert"}
 
     return {"rank": 1, "points": 20, "label": "keine klare Jahresanforderung"}
 

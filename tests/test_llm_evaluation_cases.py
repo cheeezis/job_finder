@@ -1,4 +1,4 @@
-"""Tests for the blind, hand-labelled LLM evaluation fixture."""
+"""Tests for the synthetic, hand-labelled LLM evaluation fixture."""
 
 import json
 import unittest
@@ -27,7 +27,7 @@ class EvaluationCasesTests(unittest.TestCase):
         self.assertEqual(self.inputs["rubric_version"], RUBRIC_VERSION)
         self.assertEqual(self.expected["rubric_version"], RUBRIC_VERSION)
 
-    def test_model_inputs_contain_full_descriptions_without_answers(self):
+    def test_model_inputs_contain_synthetic_descriptions_without_answers(self):
         forbidden_fields = {
             "expected_recommendation",
             "notes",
@@ -43,11 +43,16 @@ class EvaluationCasesTests(unittest.TestCase):
                 self.assertTrue(case["title"])
                 self.assertTrue(case["company"])
                 self.assertTrue(case["description_clean"])
-                self.assertTrue(case["source_url"].startswith("https://"))
+                self.assertTrue(case["job_id"].startswith("synthetic:"))
+                self.assertTrue(
+                    case["source_url"].startswith(
+                        "https://example.com/jobs/synthetic-"
+                    )
+                )
                 self.assertTrue(case["location_precheck"])
                 description_lengths.append(len(case["description_clean"]))
 
-        # The review report is shortened to 700 characters; the fixture is not.
+        # At least one case is long enough to exercise non-truncated prompt input.
         self.assertGreater(max(description_lengths), 700)
 
     def test_manual_labels_are_complete_and_use_known_values(self):

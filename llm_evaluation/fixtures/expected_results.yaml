@@ -1,0 +1,163 @@
+version: 2
+rubric_version: 6
+label_options:
+- strong_match
+- match
+- borderline
+- not_recommended
+cases:
+- job_id: synthetic:01
+  title: Data Engineer für KI-Analysen (m/w/d)
+  company: Example Analytics GmbH
+  expected_recommendation: match
+  notes: KI-, Daten- und Python-Passung mit realistischem Einstieg; der zusätzliche
+    Consulting-Anteil und die fehlende explizite Junior-Kennzeichnung verhindern strong_match.
+- job_id: synthetic:02
+  title: Junior Consultant KI und Digitalisierung (m/w/d)
+  company: Example Systems GmbH
+  expected_recommendation: match
+  notes: Klare Juniorrolle mit KI-Bezug und Mentoring; fehlende Beratungspraxis ist
+    ausdrücklich keine Voraussetzung.
+- job_id: synthetic:03
+  title: Softwareentwickler Web-Plattform (m/w/d)
+  company: Example Web Labs GmbH
+  expected_recommendation: borderline
+  notes: Eigene Projekte zählen, aber Erfahrung mit mehreren Technologien und schnelle
+    Selbstständigkeit werden ohne klare Einstiegsunterstützung erwartet.
+- job_id: synthetic:04
+  title: Full-Stack Software Engineer (m/w/d)
+  company: Example Commerce AG
+  expected_recommendation: not_recommended
+  notes: Ausdrückliches Mid-Level mit mindestens drei Jahren Berufserfahrung und
+    Produktionsverantwortung.
+- job_id: synthetic:05
+  title: Fullstack Entwickler Kundenportal (m/w/d)
+  company: Example Digital GmbH
+  expected_recommendation: not_recommended
+  notes: Mehrjährige professionelle Frontend-Erfahrung, sehr gute Backendkenntnisse
+    und Anleitung anderer werden vorausgesetzt.
+- job_id: synthetic:06
+  title: Backend Entwickler Node.js (m/w/d)
+  company: Example Cloud Services GmbH
+  expected_recommendation: not_recommended
+  notes: Mehrjährige Node.js- und TypeScript-Praxis sowie fundierte AWS- und
+    Distributed-Systems-Erfahrung sind zwingend.
+- job_id: synthetic:07
+  title: Lead Frontend Engineer (m/w/d)
+  company: Example Platform SE
+  expected_recommendation: not_recommended
+  notes: Führende Rolle mit tiefer, breiter Engineering- und Cloud-Erfahrung.
+- job_id: synthetic:08
+  title: Junior Automation Engineer (m/w/d)
+  company: Example Automation GmbH
+  expected_recommendation: match
+  notes: Echte Juniorrolle mit Mentoring; RPA liegt etwas außerhalb des bevorzugten
+    KI- und Python-Schwerpunkts, ist aber ein realistischer Einstieg.
+- job_id: synthetic:09
+  title: Webentwickler IoT-Anwendungen (m/w/d)
+  company: Example IoT Solutions GmbH
+  expected_recommendation: not_recommended
+  notes: Berufserfahrung im Data Engineering und sehr gute Kenntnisse in mehreren
+    Frontend-, Backend- und Infrastrukturtechnologien werden verlangt.
+- job_id: synthetic:10
+  title: Senior QA Engineer Datenbank (m/w/d)
+  company: Example Database GmbH
+  expected_recommendation: not_recommended
+  notes: Ausdrückliche Seniorrolle mit einschlägiger QA-, Datenbank- und
+    Automatisierungserfahrung.
+- job_id: synthetic:11
+  title: Cloud Implementation Specialist (m/w/d)
+  company: Example Telematics GmbH
+  expected_recommendation: borderline
+  notes: Python, Daten und lokaler Standort passen; mehrere nicht quantifizierte
+    Erfahrungsanforderungen in Koordination, Tests und Beratung machen die Rolle anspruchsvoll.
+- job_id: synthetic:12
+  title: Frontend Software Engineer TypeScript (m/w/d)
+  company: Example CRM GmbH
+  expected_recommendation: not_recommended
+  notes: Verantwortliche UI-Rolle mit einschlägiger Berufserfahrung und breitem
+    Frontend- sowie .NET-Stack.
+- job_id: synthetic:13
+  title: DevOps Engineer Junior oder Senior (m/w/d)
+  company: Example Hosting GmbH
+  expected_recommendation: match
+  notes: Der Einstieg wird ausdrücklich unterstützt; fehlende Infrastrukturkenntnisse
+    werden durch Mentoring und Schulungen aufgefangen.
+- job_id: synthetic:14
+  title: Kubernetes Software Developer (m/w/d)
+  company: Example Infrastructure GmbH
+  expected_recommendation: not_recommended
+  notes: Praktische Berufserfahrung mit Go und Kubernetes sowie Linux-, Netzwerk-
+    und Bereitschaftsanforderungen bilden den Kern.
+- job_id: synthetic:15
+  title: Microsoft 365 Junior Consultant (m/w/d)
+  company: Example Workplace GmbH
+  expected_recommendation: borderline
+  notes: Echte Juniorrolle mit Weiterbildung, aber erwartete Microsoft-365-Praxis
+    und eine Richtung abseits des bevorzugten Python- und RAG-Schwerpunkts.
+- job_id: synthetic:16
+  title: Platform Operations Engineer (m/w/d)
+  company: Example Energy Software GmbH
+  expected_recommendation: not_recommended
+  notes: Starke produktive Cloud-, Kubernetes-, Terraform- und Incident-Erfahrung
+    sowie 24/7-Rufbereitschaft werden verlangt.
+- job_id: synthetic:17
+  title: Automation Engineer RPA (m/w/d)
+  company: Example Automation GmbH
+  expected_recommendation: not_recommended
+  notes: Ein bis zwei Jahre kommerzielle RPA-Entwicklung und eigenständige
+    Stakeholder-Verantwortung sind zwingend.
+- job_id: synthetic:18
+  title: Full Stack Developer Java und React (m/w/d)
+  company: Example Software Consulting GmbH
+  expected_recommendation: not_recommended
+  notes: Mindestens zwei Jahre Spring- und Frontend-Erfahrung sowie sichere SQL-
+    und Produktionspraxis werden verlangt.
+- job_id: synthetic:19
+  title: Junior IT-Consultant Infrastruktur (m/w/d)
+  company: Example Consulting KG
+  expected_recommendation: match
+  notes: Echte Juniorstelle mit gründlicher Einarbeitung; fehlende Infrastrukturkenntnisse
+    sind ausdrücklich überwindbare Lücken.
+- job_id: synthetic:20
+  title: Data Engineer Data Lake (m/w/d)
+  company: Example Data Platform GmbH
+  expected_recommendation: not_recommended
+  notes: Mehrjährige Data-Warehouse- oder Data-Lake-Erfahrung sowie sichere BI-
+    und Cloud-Architekturkenntnisse sind erforderlich.
+- job_id: synthetic:21
+  title: Trainee IT-Consulting und Business Analysis (m/w/d)
+  company: Example Solutions GmbH
+  expected_recommendation: strong_match
+  notes: Ausdrückliches Traineeprogramm, vollständige Remote-Arbeit und Anforderungen,
+    die gut zu einem IT-Absolventen passen; Entwicklungserfahrung ist nur wünschenswert.
+- job_id: synthetic:22
+  title: Platform Engineer Security (m/w/d)
+  company: Example Container Platform GmbH
+  expected_recommendation: not_recommended
+  notes: Expertenkenntnisse in Go, Helm und Kubernetes sowie Architektur-,
+    Produktions- und Bereitschaftsverantwortung werden vorausgesetzt.
+- job_id: synthetic:23
+  title: Verification Engineer Medizintechnik (m/w/d)
+  company: Example Health Software GmbH
+  expected_recommendation: not_recommended
+  notes: Einschlägige Erfahrung mit Teststrategien, Systemtests, Automatisierung
+    und regulatorischer Dokumentation ist erforderlich.
+- job_id: synthetic:24
+  title: KI Business Analyst und Projektleitung (m/w/d)
+  company: Example Industry GmbH
+  expected_recommendation: not_recommended
+  notes: Mehrjährige Projekt- und KI-Erfahrung, Vertragsmanagement und fachliche
+    Führung liegen klar über dem Einstiegsniveau.
+- job_id: synthetic:25
+  title: Network Engineer Enterprise Networks (m/w/d)
+  company: Example Networks GmbH
+  expected_recommendation: not_recommended
+  notes: Breites professionelles Netzwerkprofil, eigenständige komplexe Projekte,
+    Rufbereitschaft und Reisen werden verlangt.
+- job_id: synthetic:26
+  title: React TypeScript Data Visualization Engineer (m/w/d)
+  company: Example Charts GmbH
+  expected_recommendation: not_recommended
+  notes: Keine erkennbare Einstiegsrolle und nachweisbare professionelle
+    TypeScript-Entwicklung wird vorausgesetzt; Remote allein reicht nicht.

@@ -22,7 +22,9 @@ from job_agent.paths import (
 from job_agent.reporting import write_recommendations
 from job_agent.sources import arbeitnow
 from job_agent.sources import arbeitsagentur
+from job_agent.sources import bytewerk
 from job_agent.sources import css
+from job_agent.sources import compose_it
 from job_agent.sources import edag
 from job_agent.sources import get_in_it
 from job_agent.sources import jumo
@@ -36,6 +38,8 @@ SOURCES = [
     stepstone,
     get_in_it,
     arbeitnow,
+    compose_it,
+    bytewerk,
     jumo,
     edag,
     css,
@@ -254,6 +258,8 @@ def source_label(name):
         "stepstone": "StepStone",
         "get_in_it": "get-in-IT",
         "arbeitnow": "Arbeitnow",
+        "compose_it": "Compose IT",
+        "bytewerk": "bytewerk",
         "jumo": "JUMO",
         "edag": "EDAG",
         "css": "CSS",

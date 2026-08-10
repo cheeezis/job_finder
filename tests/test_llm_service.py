@@ -14,11 +14,8 @@ from job_agent.llm.service import (
     analysis_cache_key,
     analyze_results,
     attach_result,
-    legacy_analysis_cache_key,
     load_cache,
-    save_cache,
 )
-from job_agent.llm.profile_loader import load_llm_profile
 
 
 def make_job(
@@ -180,84 +177,6 @@ class LlmServiceTests(unittest.TestCase):
         self.assertEqual(known_results["included"][0]["llm_score"], 90)
         self.assertEqual(known_results["included"][0]["llm_status"], "cached")
         client_class.assert_not_called()
-
-    def test_reviewed_job_keeps_prompt_six_result_during_upgrade(self):
-        job = make_job(is_new=False)
-        job["workflow_status"] = "ignored"
-
-        with tempfile.TemporaryDirectory() as directory:
-            settings = self.settings(directory)
-            profile = load_llm_profile()
-            legacy_key = legacy_analysis_cache_key(job, profile.version, settings)
-            legacy_record = make_record(legacy_key)
-            legacy_record["metadata"].update(
-                {
-                    "job_analysis_prompt_version": 6,
-                    "profile_version": profile.version,
-                }
-            )
-            save_cache(
-                {
-                    "profile_version": profile.version,
-                    "analysis_version": analysis_configuration_key(
-                        settings,
-                        job_analysis_prompt_version=6,
-                    ),
-                    "analyses": {legacy_key: legacy_record},
-                    "pending": {},
-                },
-                settings.cache_path,
-            )
-
-            results = {"included": [job], "excluded": []}
-            with patch("job_agent.llm.service.OpenAIClient") as client_class:
-                stats = analyze_results(results, settings)
-            cache = load_cache(settings.cache_path)
-            current_key = analysis_cache_key(job, profile.version, settings)
-
-        self.assertEqual(stats["analyzed"], 0)
-        self.assertEqual(stats["cached"], 1)
-        self.assertEqual(job["llm_status"], "cached")
-        self.assertIn(current_key, cache["analyses"])
-        self.assertNotIn(legacy_key, cache["analyses"])
-        self.assertEqual(
-            cache["analyses"][current_key]["metadata"]["cache_compatibility"],
-            "manual_review_preserved_prompt_6",
-        )
-        client_class.assert_not_called()
-
-    def test_changed_reviewed_job_does_not_keep_prompt_six_result(self):
-        job = make_job(is_new=False, content_changed=True)
-        job["workflow_status"] = "interesting"
-
-        with tempfile.TemporaryDirectory() as directory:
-            settings = self.settings(directory)
-            profile = load_llm_profile()
-            legacy_key = legacy_analysis_cache_key(job, profile.version, settings)
-            legacy_record = make_record(legacy_key)
-            legacy_record["metadata"]["profile_version"] = profile.version
-            save_cache(
-                {
-                    "profile_version": profile.version,
-                    "analysis_version": analysis_configuration_key(
-                        settings,
-                        job_analysis_prompt_version=6,
-                    ),
-                    "analyses": {legacy_key: legacy_record},
-                    "pending": {},
-                },
-                settings.cache_path,
-            )
-            results = {"included": [job], "excluded": []}
-            with patch(
-                "job_agent.llm.service.analyze_job_record",
-                side_effect=lambda _job, _profile, _settings, _client, key: make_record(key),
-            ) as analyze:
-                stats = analyze_results(results, settings, client=object())
-
-        self.assertEqual(stats["analyzed"], 1)
-        self.assertEqual(stats["cached"], 0)
-        analyze.assert_called_once()
 
     def test_analysis_configuration_change_reanalyzes_known_job(self):
         first_results = {"included": [make_job()], "excluded": []}

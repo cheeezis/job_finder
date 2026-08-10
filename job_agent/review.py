@@ -13,28 +13,6 @@ from job_agent.paths import MEMORY_FILE, RECOMMENDATIONS_JSON
 
 
 REVIEW_PAGE = Path(__file__).with_name("review.html")
-RATING_STATUS_MIGRATION = {
-    "very_interesting": WorkflowStatus.INTERESTING.value,
-    "interesting": WorkflowStatus.INTERESTING.value,
-    "not_interesting": WorkflowStatus.IGNORED.value,
-}
-
-
-def migrate_personal_ratings(memory_path=MEMORY_FILE):
-    """Translate completed calibration ratings into their workflow status once."""
-    memory = load_memory(memory_path)
-    migrated = 0
-    for entry in memory.values():
-        if entry.get("workflow_status") != WorkflowStatus.NEW.value:
-            continue
-        target_status = RATING_STATUS_MIGRATION.get(entry.get("personal_rating"))
-        if target_status is None:
-            continue
-        entry["workflow_status"] = target_status
-        migrated += 1
-    if migrated:
-        save_memory(memory, memory_path)
-    return migrated
 
 
 def load_review_jobs(
@@ -179,9 +157,6 @@ def parse_args():
 def main():
     """Start the review server on the local computer only."""
     args = parse_args()
-    migrated = migrate_personal_ratings()
-    if migrated:
-        print(f"{migrated} Kalibrierungsbewertungen in Status uebertragen")
     address = ("127.0.0.1", args.port)
     server = ThreadingHTTPServer(address, ReviewRequestHandler)
     url = f"http://{address[0]}:{address[1]}"

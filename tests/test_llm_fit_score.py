@@ -255,7 +255,7 @@ class TwoStageFitScoreTests(unittest.TestCase):
 
     def test_local_job_is_a_good_location_fit(self):
         job = {
-            "location_precheck": "im 30-km-Radius",
+            "location_precheck": "im 25-km-Radius",
             "work_mode": "onsite",
         }
 

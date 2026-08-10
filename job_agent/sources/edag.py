@@ -13,7 +13,7 @@ from job_agent.sources.company_careers import (
     fetch_company_jobs,
     identifier_from_url,
 )
-from job_agent.text import html_to_text, normalize_text
+from job_agent.text import compact_text, html_to_text, normalize_text
 
 SOURCE_NAME = "edag"
 COMPANY = "EDAG Engineering GmbH"
@@ -171,7 +171,3 @@ def extract_text(html, pattern):
 def extract_html(html, pattern):
     match = re.search(pattern, html, re.IGNORECASE | re.DOTALL)
     return match.group(1).strip() if match else ""
-
-
-def compact_text(value):
-    return " ".join(str(value or "").split())

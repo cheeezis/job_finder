@@ -36,7 +36,7 @@ DIMENSION_POINTS = {
     },
 }
 HARD_CONFLICT_CATEGORIES = {"education", "employment", "travel"}
-FIT_SCORE_VERSION = 7
+FIT_SCORE_VERSION = 8
 
 
 def score_two_stage_result(job, job_analysis, profile_match):
@@ -106,7 +106,6 @@ def score_two_stage_result(job, job_analysis, profile_match):
         "dimension_scores": scores,
         "dimension_ratings": ratings,
         "key_tasks": [truncate(task, 300) for task in job_analysis["tasks"][:3]],
-        "key_requirements": [],
         "matching_evidence": matching_evidence,
         "gaps": gaps,
         "risks": unique_texts(hard_conflicts + gaps, limit=3),
@@ -190,7 +189,7 @@ def score_location(job):
         return "conflict"
     if "100% remote" in precheck or work_mode == "remote":
         return "excellent"
-    if "30-km-radius" in precheck or "lokal" in precheck:
+    if "-km-radius" in precheck or "lokal" in precheck:
         return "good"
     return "weak"
 

@@ -8,12 +8,11 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from urllib.request import Request, urlopen
 
-from job_agent.memory import load_memory, save_memory
+from job_agent.memory import save_memory
 from job_agent.review import (
     REVIEW_PAGE,
     ReviewRequestHandler,
     load_review_jobs,
-    migrate_personal_ratings,
     update_review_note,
     update_workflow_status,
 )
@@ -82,34 +81,6 @@ class ReviewTests(unittest.TestCase):
     def test_invalid_note_is_rejected(self):
         with self.assertRaises(ValueError):
             update_review_note("job:1", 42, memory_path=self.memory_path)
-
-    def test_calibration_ratings_are_translated_without_overwriting_progress(self):
-        memory = {
-            "job:interesting": {
-                "workflow_status": "new",
-                "personal_rating": "very_interesting",
-            },
-            "job:ignored": {
-                "workflow_status": "new",
-                "personal_rating": "not_interesting",
-            },
-            "job:maybe": {
-                "workflow_status": "new",
-                "personal_rating": "maybe",
-            },
-            "job:applied": {
-                "workflow_status": "applied",
-                "personal_rating": "not_interesting",
-            },
-        }
-        save_memory(memory, self.memory_path)
-
-        self.assertEqual(migrate_personal_ratings(self.memory_path), 2)
-        restored = load_memory(self.memory_path)
-        self.assertEqual(restored["job:interesting"]["workflow_status"], "interesting")
-        self.assertEqual(restored["job:ignored"]["workflow_status"], "ignored")
-        self.assertEqual(restored["job:maybe"]["workflow_status"], "new")
-        self.assertEqual(restored["job:applied"]["workflow_status"], "applied")
 
     def test_invalid_status_is_rejected_without_changing_memory(self):
         with self.assertRaises(ValueError):

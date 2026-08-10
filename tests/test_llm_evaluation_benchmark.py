@@ -43,7 +43,6 @@ def make_analysis(score=75, recommendation="match"):
             "technology_head_start": "good",
         },
         "key_tasks": [],
-        "key_requirements": [],
         "matching_evidence": [],
         "gaps": [],
         "risks": [],

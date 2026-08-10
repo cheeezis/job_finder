@@ -57,7 +57,7 @@ def find_duplicate_position(job, company_key, positions, unique_jobs):
 
     for position in positions:
         existing = unique_jobs[position]
-        if set(source_names(job)) & set(source_names(existing)):
+        if set(job.source_names) & set(existing.source_names):
             continue
         existing_company = normalize_company(existing.company)
         if companies_match(company_key, existing_company):
@@ -97,10 +97,6 @@ def normalize_title(title):
     )
     text = re.sub(r"[^a-z0-9+#.]+", " ", text)
     return " ".join(text.split())
-
-
-def source_names(job):
-    return list(dict.fromkeys(source.source for source in job.sources))
 
 
 def merge_jobs(existing, duplicate):

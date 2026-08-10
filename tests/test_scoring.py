@@ -148,9 +148,9 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(result["filter_status"], "excluded")
         self.assertIn("Deutschland", result["reasons"][0])
 
-    def test_frankfurt_requires_eighty_percent_remote(self):
-        accepted = score_job(make_job(location="Frankfurt", remote="80%"))
-        rejected = score_job(make_job(location="Frankfurt", remote="50%"))
+    def test_frankfurt_requires_full_remote(self):
+        accepted = score_job(make_job(location="Frankfurt", remote="100%"))
+        rejected = score_job(make_job(location="Frankfurt", remote="80%"))
         self.assertEqual(accepted["filter_status"], "included")
         self.assertEqual(rejected["filter_status"], "excluded")
 

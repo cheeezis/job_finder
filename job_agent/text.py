@@ -41,3 +41,8 @@ def html_to_text(html):
     parser = _TextExtractor()
     parser.feed(str(html or ""))
     return parser.text()
+
+
+def compact_text(value):
+    """Collapse arbitrary whitespace into single spaces."""
+    return " ".join(str(value or "").split())

@@ -460,6 +460,8 @@ SKILL_GROUPS = [
 # Roles and employment types that are incompatible with an entry-level search.
 BLOCKED_TITLE_WORDS = [
     "senior",
+    "staff",
+    "founding",
     "experte",
     "expert",
     "lead",
@@ -474,6 +476,9 @@ BLOCKED_TITLE_WORDS = [
     "manager",
     "testmanager",
     "test manager",
+    "architect",
+    "architekt",
+    "weiterbildung",
     "werkstudent",
     "working student",
     "praktikum",

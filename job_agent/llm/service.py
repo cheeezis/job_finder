@@ -66,6 +66,9 @@ def analyze_results(
         cached_profile_version is not None
         and cached_profile_version != profile.version
     )
+    previous_profile_analyses = {}
+    if profile_changed and not analysis_changed:
+        previous_profile_analyses = dict(analyses)
     if profile_changed or (analysis_changed and not legacy_prompt_upgrade):
         analyses.clear()
         pending.clear()
@@ -82,6 +85,24 @@ def analyze_results(
     cache_changed = profile_changed or analysis_changed
     for job, key in jobs_with_keys:
         cached = analyses.get(key)
+        if (
+            cached is None
+            and previous_profile_analyses
+            and is_reviewed_unchanged(job)
+        ):
+            previous_key = analysis_cache_key(
+                job,
+                cached_profile_version,
+                settings,
+            )
+            cached = previous_profile_analyses.get(previous_key)
+            if cached is not None:
+                cached["cache_key"] = key
+                cached.setdefault("metadata", {})[
+                    "cache_compatibility"
+                ] = "manual_review_preserved_profile_change"
+                analyses[key] = cached
+                cache_changed = True
         if cached is None and legacy_prompt_upgrade and is_reviewed_unchanged(job):
             legacy_key = legacy_analysis_cache_key(
                 job,

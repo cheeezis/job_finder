@@ -1,7 +1,7 @@
 # Job Agent
 
-Ein kleiner Job-Agent fuer Junior Python/Data/AI-Rollen im 30-km-Radius um
-Exampletown oder 100 Prozent remote aus Deutschland.
+Ein kleiner, lokal betriebener Job-Agent fuer konfigurierbare IT-Rollen,
+einen persoenlichen Suchradius oder vollstaendig remote angebotene Stellen.
 
 ## Aktueller Stand
 
@@ -38,7 +38,7 @@ Die kostenlose Vorfilterung verwirft nur klare Konflikte wie unpassenden
 Standort, ausgeschlossene Beschaeftigungsarten, eindeutige Fuehrungs-/Seniorrollen,
 mehr als drei geforderte Erfahrungsjahre oder hohe Reisetaetigkeit. Ungewohnte
 IT-Richtungen und Technologien erreichen dagegen die persoenliche KI-Bewertung.
-Ein genanntes Gehalt unter 45.000 Euro wird als Warnung angezeigt, aber nicht
+Ein genanntes Gehalt unter dem konfigurierten Minimum wird als Warnung angezeigt, aber nicht
 vorab ausgeschlossen.
 
 ## Nutzung
@@ -48,6 +48,17 @@ Abhaengigkeiten installieren:
 ```powershell
 python -m pip install -r requirements.txt
 ```
+
+Persoenliche Konfiguration einmalig aus den oeffentlichen Beispielen anlegen:
+
+```powershell
+Copy-Item user_settings.example.yaml user_settings.local.yaml
+Copy-Item profile.example.yaml profile.local.yaml
+```
+
+`user_settings.local.yaml`, `profile.local.yaml` und alle Dateien unter `data/`
+bleiben lokal und werden nicht von Git erfasst. Ohne lokale Dateien verwendet
+der Agent die anonymisierten Beispiele.
 
 Kompletter Agentenlauf mit Vorfilter und KI-Bewertung:
 
@@ -179,7 +190,10 @@ data/output/recommendations.json kompakte finale KI-Ergebnisse
 data/output/recommendations.md lesbare KI-Empfehlungen
 data/logs/                  vollstaendige Protokolle einzelner Laeufe
 data/backups/               sieben neueste Sicherungen persistenter Zustandsdaten
-profile.yaml                persoenliche Faktenbasis fuer das LLM
+profile.example.yaml        anonymisierte Vorlage fuer das LLM-Profil
+profile.local.yaml          lokale persoenliche Faktenbasis (nicht versioniert)
+user_settings.example.yaml  anonymisierte Vorlage fuer Suche und Vorfilter
+user_settings.local.yaml    lokale Such- und Filterwerte (nicht versioniert)
 llm_evaluation/             getrenntes Labor fuer LLM-Vergleiche
 llm_evaluation/fixtures/    blinde Testeingaben und menschliche Bewertungen
 llm_evaluation/results/     lokale, nicht versionierte Modellergebnisse

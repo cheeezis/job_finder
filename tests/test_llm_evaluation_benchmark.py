@@ -82,7 +82,7 @@ class LlmBenchmarkTests(unittest.TestCase):
 
         self.assertEqual(result["mode"], "two_stage")
         self.assertEqual(result["split"], "development")
-        self.assertEqual(result["profile_version"], 2)
+        self.assertEqual(result["profile_version"], 3)
         self.assertEqual(result["summary"]["jobs"], 0)
 
     def test_two_stage_result_filename_contains_split(self):

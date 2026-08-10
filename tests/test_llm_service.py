@@ -363,9 +363,44 @@ class LlmServiceTests(unittest.TestCase):
             cache = load_cache(settings.cache_path)
 
         self.assertEqual(stats["analyzed"], 1)
-        self.assertEqual(cache["profile_version"], 2)
+        self.assertEqual(cache["profile_version"], 3)
         self.assertNotIn("old", cache["analyses"])
         analyze.assert_called_once()
+
+    def test_profile_change_preserves_manually_reviewed_unchanged_job(self):
+        job = make_job(is_new=False)
+        job["workflow_status"] = "ignored"
+        results = {"included": [job], "excluded": []}
+
+        with tempfile.TemporaryDirectory() as directory:
+            settings = self.settings(directory)
+            previous_key = analysis_cache_key(job, 2, settings)
+            settings.cache_path.write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "profile_version": 2,
+                        "analysis_version": analysis_configuration_key(settings),
+                        "analyses": {previous_key: make_record(previous_key)},
+                        "pending": {},
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with patch("job_agent.llm.service.analyze_job_record") as analyze:
+                stats = analyze_results(results, settings, client=object())
+            cache = load_cache(settings.cache_path)
+
+        current_key = analysis_cache_key(job, 3, settings)
+        self.assertEqual(stats["analyzed"], 0)
+        self.assertEqual(stats["cached"], 1)
+        self.assertIn(current_key, cache["analyses"])
+        self.assertEqual(
+            cache["analyses"][current_key]["metadata"]["cache_compatibility"],
+            "manual_review_preserved_profile_change",
+        )
+        analyze.assert_not_called()
 
     def test_changed_known_job_is_analyzed_with_its_new_content(self):
         results = {

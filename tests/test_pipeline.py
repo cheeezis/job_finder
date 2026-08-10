@@ -8,6 +8,7 @@ from pathlib import Path
 from job_agent.main import load_jobs, score_jobs
 from job_agent.memory import update_memory
 from job_agent.models import Job, JobSource, WorkMode
+from job_agent.profile import LOCAL_PLACES
 from job_agent.reporting import write_recommendations
 
 
@@ -17,7 +18,7 @@ class PipelineTests(unittest.TestCase):
             id="test:123",
             title="Junior Python Developer",
             company="Example GmbH",
-            locations=["Fulda"],
+            locations=[LOCAL_PLACES[0]],
             sources=[
                 JobSource(
                     source="test",

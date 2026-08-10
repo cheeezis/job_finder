@@ -2,3 +2,6 @@ __pycache__/
 *.pyc
 data/
 llm_evaluation/results/
+profile.yaml
+profile.local.yaml
+user_settings.local.yaml

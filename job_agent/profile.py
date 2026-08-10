@@ -4,6 +4,11 @@ Sources only collect job data. This module describes which roles, skills and
 working conditions fit the current profile.
 """
 
+from job_agent.user_settings import USER_SETTINGS
+
+
+MATCHING_SETTINGS = USER_SETTINGS["matching"]
+
 # The five score categories add up to exactly 100 points.
 SCORE_LIMITS = {
     "role": 30,
@@ -482,26 +487,7 @@ BLOCKED_TITLE_WORDS = [
     "freiberuflich",
 ]
 
-# Approximate 30 km local area around Exampletown (Wasserkuppe).
-LOCAL_PLACES = [
-    "exampletown",
-    "fulda",
-    "kuenzell",
-    "kunzell",
-    "eichenzell",
-    "petersberg",
-    "gersfeld",
-    "ebersburg",
-    "dipperz",
-    "hofbieber",
-    "hilders",
-    "ehrenberg",
-    "tann",
-    "motten",
-    "kalbach",
-    "neuhof",
-    "hosenfeld",
-]
+LOCAL_PLACES = MATCHING_SETTINGS["local_places"]
 
 GERMANY_LOCATION_WORDS = [
     "deutschland",
@@ -600,16 +586,7 @@ STRONG_EXPERIENCE_PHRASES = [
     "worked in a similar",
 ]
 
-PROFILE_DOMAIN_KEYWORDS = [
-    "sensordaten",
-    "sensor data",
-    "zeitreihe",
-    "time series",
-    "industrial data",
-    "industriedaten",
-    "iot",
-    "industrie 4.0",
-]
+PROFILE_DOMAIN_KEYWORDS = MATCHING_SETTINGS["profile_domain_keywords"]
 
 HIGH_TRAVEL_PHRASES = [
     "hohe reisebereitschaft",
@@ -629,5 +606,5 @@ MANDATORY_ADVANCED_DEGREE_PATTERNS = [
     r"(?:erforderlich|vorausgesetzt|required|must)[^.]{0,50}(?:promotion|doktorgrad|phd)",
 ]
 
-SALARY_TARGET = 48_000
-SALARY_MINIMUM = 45_000
+SALARY_TARGET = MATCHING_SETTINGS["salary_target_eur"]
+SALARY_MINIMUM = MATCHING_SETTINGS["salary_minimum_eur"]

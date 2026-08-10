@@ -8,7 +8,11 @@ from pathlib import Path
 from unittest.mock import ANY, Mock, patch
 from urllib.error import HTTPError
 
-from job_agent.config import STEPSTONE_SEARCH_LOCATIONS, STEPSTONE_SEARCH_TERMS
+from job_agent.config import (
+    LOCAL_SEARCH_POSTAL_CODE,
+    STEPSTONE_SEARCH_LOCATIONS,
+    STEPSTONE_SEARCH_TERMS,
+)
 from job_agent.models import Job, JobSource, WorkMode
 from job_agent.sources import (
     arbeitnow,
@@ -124,12 +128,12 @@ class StepStoneSearchTests(unittest.TestCase):
         )
 
     def test_local_search_uses_postcode_and_radius(self):
-        url = build_search_url("Python Developer", "12345", page=2)
+        url = build_search_url("Python Developer", LOCAL_SEARCH_POSTAL_CODE, page=2)
 
         self.assertEqual(
             url,
             "https://www.stepstone.de/jobs/Python-Developer/"
-            "in-12345?page=2&radius=30",
+            f"in-{LOCAL_SEARCH_POSTAL_CODE}?page=2&radius=30",
         )
 
     def test_remote_search_does_not_add_local_radius(self):

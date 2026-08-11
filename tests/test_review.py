@@ -1,5 +1,6 @@
 """Tests for the local recommendation review workflow."""
 
+from datetime import date
 import json
 import tempfile
 import threading
@@ -8,13 +9,16 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from urllib.request import Request, urlopen
 
-from job_agent.memory import save_memory
+from job_agent.memory import load_memory, save_memory
 from job_agent.review import (
     APPLICATIONS_PAGE,
+    LANDING_PAGE,
     REVIEW_PAGE,
     ReviewRequestHandler,
     load_review_jobs,
+    start_application,
     update_review_note,
+    update_review_decision,
     update_workflow_status,
 )
 
@@ -58,12 +62,97 @@ class ReviewTests(unittest.TestCase):
         jobs = load_review_jobs(self.recommendations_path, self.memory_path)
 
         self.assertEqual(jobs[0]["workflow_status"], "interesting")
+        self.assertFalse(jobs[0]["application_tracked"])
+
+    def test_review_jobs_recognize_historical_application(self):
+        memory = load_memory(self.memory_path)
+        memory["job:1"].update(
+            {
+                "workflow_status": "ignored",
+                "workflow_history": [
+                    {"status": "applied", "occurred_on": "2026-08-01"},
+                    {"status": "ignored", "occurred_on": "2026-08-02"},
+                ],
+            }
+        )
+        save_memory(memory, self.memory_path)
+
+        jobs = load_review_jobs(self.recommendations_path, self.memory_path)
+
+        self.assertTrue(jobs[0]["application_tracked"])
 
     def test_status_change_is_persisted(self):
         update_workflow_status("job:1", "applied", self.memory_path)
 
         jobs = load_review_jobs(self.recommendations_path, self.memory_path)
         self.assertEqual(jobs[0]["workflow_status"], "applied")
+
+    def test_start_application_records_one_dated_event(self):
+        result = start_application("job:1", self.memory_path)
+        repeated_result = start_application("job:1", self.memory_path)
+
+        entry = load_memory(self.memory_path)["job:1"]
+        applied_events = [
+            event
+            for event in entry["workflow_history"]
+            if event["status"] == "applied"
+        ]
+        self.assertEqual(result["workflow_status"], "applied")
+        self.assertTrue(result["application_tracked"])
+        self.assertEqual(repeated_result, result)
+        self.assertEqual(
+            applied_events,
+            [{"status": "applied", "occurred_on": date.today().isoformat()}],
+        )
+
+    def test_start_application_does_not_overwrite_later_progress(self):
+        memory = load_memory(self.memory_path)
+        memory["job:1"].update(
+            {
+                "workflow_status": "interview",
+                "workflow_history": [
+                    {"status": "applied", "occurred_on": "2026-08-01"},
+                    {"status": "interview", "occurred_on": "2026-08-10"},
+                ],
+            }
+        )
+        save_memory(memory, self.memory_path)
+
+        result = start_application("job:1", self.memory_path)
+
+        entry = load_memory(self.memory_path)["job:1"]
+        self.assertEqual(result["workflow_status"], "interview")
+        self.assertEqual(entry["workflow_status"], "interview")
+        self.assertEqual(len(entry["workflow_history"]), 2)
+
+    def test_stale_review_decision_does_not_overwrite_application(self):
+        memory = load_memory(self.memory_path)
+        memory["job:1"].update(
+            {
+                "workflow_status": "interview",
+                "workflow_history": [
+                    {"status": "applied", "occurred_on": "2026-08-01"},
+                    {"status": "interview", "occurred_on": "2026-08-10"},
+                ],
+            }
+        )
+        save_memory(memory, self.memory_path)
+
+        result = update_review_decision(
+            "job:1",
+            "ignored",
+            self.memory_path,
+        )
+
+        entry = load_memory(self.memory_path)["job:1"]
+        self.assertEqual(result["workflow_status"], "interview")
+        self.assertTrue(result["application_tracked"])
+        self.assertEqual(entry["workflow_status"], "interview")
+        self.assertEqual(len(entry["workflow_history"]), 2)
+
+    def test_start_application_rejects_unknown_job(self):
+        with self.assertRaisesRegex(KeyError, "Unbekannte Job-ID"):
+            start_application("job:unknown", self.memory_path)
 
     def test_note_is_persisted_with_workflow_status(self):
         review = update_review_note(
@@ -94,6 +183,87 @@ class ReviewTests(unittest.TestCase):
         with self.assertRaisesRegex(KeyError, "Unbekannte Job-ID"):
             update_workflow_status("job:unknown", "ignored", self.memory_path)
 
+    def test_pages_have_distinct_routes(self):
+        handler = type(
+            "TemporaryPageHandler",
+            (ReviewRequestHandler,),
+            {
+                "recommendations_path": self.recommendations_path,
+                "memory_path": self.memory_path,
+                "landing_page_path": LANDING_PAGE,
+                "page_path": REVIEW_PAGE,
+                "applications_page_path": APPLICATIONS_PAGE,
+            },
+        )
+        server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        thread = threading.Thread(target=server.serve_forever)
+        thread.start()
+        base_url = f"http://127.0.0.1:{server.server_port}"
+        try:
+            with urlopen(f"{base_url}/") as response:
+                landing_page = response.read().decode("utf-8")
+            with urlopen(f"{base_url}/review") as response:
+                review_page = response.read().decode("utf-8")
+            with urlopen(f"{base_url}/applications") as response:
+                applications_page = response.read().decode("utf-8")
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join()
+
+        self.assertIn('href="/review"', landing_page)
+        self.assertIn('href="/applications"', landing_page)
+        self.assertIn("Stellen prüfen", landing_page)
+        self.assertIn("Bewerbungen verwalten", landing_page)
+        self.assertIn("Als beworben markieren", review_page)
+        self.assertIn("Bewerbung verwalten", review_page)
+        self.assertNotIn("progress-select", review_page)
+        self.assertIn('href="/">← Zur Startseite</a>', review_page)
+        self.assertIn("Bewerbungsübersicht", applications_page)
+        self.assertIn('href="/">← Zur Startseite</a>', applications_page)
+        self.assertLess(
+            applications_page.index('["offers",'),
+            applications_page.index('["rejections",'),
+        )
+        self.assertLess(
+            applications_page.index('["rejections",'),
+            applications_page.index('["no_responses",'),
+        )
+
+    def test_application_start_api_adds_job_to_overview(self):
+        handler = type(
+            "TemporaryApplicationStartHandler",
+            (ReviewRequestHandler,),
+            {
+                "recommendations_path": self.recommendations_path,
+                "memory_path": self.memory_path,
+            },
+        )
+        server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        thread = threading.Thread(target=server.serve_forever)
+        thread.start()
+        base_url = f"http://127.0.0.1:{server.server_port}"
+        try:
+            request = Request(
+                f"{base_url}/api/applications",
+                data=json.dumps({"job_id": "job:1"}).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urlopen(request) as response:
+                result = json.load(response)
+            with urlopen(f"{base_url}/api/applications") as response:
+                overview = json.load(response)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join()
+
+        self.assertEqual(result["workflow_status"], "applied")
+        self.assertTrue(result["application_tracked"])
+        self.assertEqual(overview["statistics"]["total"], 1)
+        self.assertEqual(overview["applications"][0]["id"], "job:1")
+
     def test_local_api_loads_jobs_and_persists_status(self):
         handler = type(
             "TemporaryReviewHandler",
@@ -112,7 +282,7 @@ class ReviewTests(unittest.TestCase):
             with urlopen(f"{base_url}/api/recommendations") as response:
                 document = json.load(response)
             request = Request(
-                f"{base_url}/api/status",
+                f"{base_url}/api/review-status",
                 data=json.dumps(
                     {"job_id": "job:1", "workflow_status": "ignored"}
                 ).encode("utf-8"),

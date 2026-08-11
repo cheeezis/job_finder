@@ -7,12 +7,19 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from job_agent.applications import (
+    delete_history_event,
+    load_application_overview,
+    record_status_change,
+    update_history_event,
+)
 from job_agent.memory import load_memory, save_memory
 from job_agent.models import WorkflowStatus
 from job_agent.paths import MEMORY_FILE, RECOMMENDATIONS_JSON
 
 
 REVIEW_PAGE = Path(__file__).with_name("review.html")
+APPLICATIONS_PAGE = Path(__file__).with_name("applications.html")
 
 
 def load_review_jobs(
@@ -40,15 +47,70 @@ def load_review_jobs(
     return review_jobs
 
 
-def update_workflow_status(job_id, workflow_status, memory_path=MEMORY_FILE):
+def update_workflow_status(
+    job_id,
+    workflow_status,
+    memory_path=MEMORY_FILE,
+    occurred_on=None,
+):
     """Validate and persist one manual workflow decision."""
     status = WorkflowStatus(workflow_status)
     memory = load_memory(memory_path)
     if job_id not in memory:
         raise KeyError(f"Unbekannte Job-ID: {job_id}")
-    memory[job_id]["workflow_status"] = status.value
+    current_status = record_status_change(
+        memory[job_id],
+        status,
+        occurred_on,
+    )
     save_memory(memory, memory_path)
-    return status.value
+    return current_status
+
+
+def update_workflow_history(
+    job_id,
+    event_index,
+    previous_status,
+    previous_occurred_on,
+    workflow_status,
+    occurred_on,
+    memory_path=MEMORY_FILE,
+):
+    """Edit one manual workflow event."""
+    memory = load_memory(memory_path)
+    if job_id not in memory:
+        raise KeyError(f"Unbekannte Job-ID: {job_id}")
+    result = update_history_event(
+        memory[job_id],
+        event_index,
+        previous_status,
+        previous_occurred_on,
+        workflow_status,
+        occurred_on,
+    )
+    save_memory(memory, memory_path)
+    return result
+
+
+def delete_workflow_history(
+    job_id,
+    event_index,
+    previous_status,
+    previous_occurred_on,
+    memory_path=MEMORY_FILE,
+):
+    """Delete one manual workflow event."""
+    memory = load_memory(memory_path)
+    if job_id not in memory:
+        raise KeyError(f"Unbekannte Job-ID: {job_id}")
+    status = delete_history_event(
+        memory[job_id],
+        event_index,
+        previous_status,
+        previous_occurred_on,
+    )
+    save_memory(memory, memory_path)
+    return {"workflow_status": status}
 
 
 def update_review_note(job_id, review_note, memory_path=MEMORY_FILE):
@@ -74,11 +136,18 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
     recommendations_path = RECOMMENDATIONS_JSON
     memory_path = MEMORY_FILE
     page_path = REVIEW_PAGE
+    applications_page_path = APPLICATIONS_PAGE
 
     def do_GET(self):
         """Return the page or the current joined recommendation data."""
         if self.path in {"/", "/index.html"}:
             self.send_file(self.page_path, "text/html; charset=utf-8")
+            return
+        if self.path in {"/applications", "/applications.html"}:
+            self.send_file(
+                self.applications_page_path,
+                "text/html; charset=utf-8",
+            )
             return
         if self.path == "/api/recommendations":
             self.send_json(
@@ -91,11 +160,19 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
                 }
             )
             return
+        if self.path == "/api/applications":
+            self.send_json(load_application_overview(self.memory_path))
+            return
         self.send_error(404)
 
     def do_POST(self):
         """Persist a workflow status selected in the browser."""
-        if self.path not in {"/api/status", "/api/note"}:
+        if self.path not in {
+            "/api/status",
+            "/api/note",
+            "/api/history",
+            "/api/history/delete",
+        }:
             self.send_error(404)
             return
         try:
@@ -107,15 +184,34 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
                         payload["job_id"],
                         payload["workflow_status"],
                         self.memory_path,
+                        payload.get("occurred_on"),
                     )
                 }
-            else:
+            elif self.path == "/api/note":
                 result = update_review_note(
                     payload["job_id"],
                     payload.get("review_note"),
                     self.memory_path,
                 )
-        except (ValueError, KeyError, json.JSONDecodeError) as error:
+            elif self.path == "/api/history":
+                result = update_workflow_history(
+                    payload["job_id"],
+                    payload["event_index"],
+                    payload["previous_status"],
+                    payload.get("previous_occurred_on"),
+                    payload["workflow_status"],
+                    payload.get("occurred_on"),
+                    self.memory_path,
+                )
+            else:
+                result = delete_workflow_history(
+                    payload["job_id"],
+                    payload["event_index"],
+                    payload["previous_status"],
+                    payload.get("previous_occurred_on"),
+                    self.memory_path,
+                )
+        except (TypeError, ValueError, KeyError, json.JSONDecodeError) as error:
             self.send_json({"error": str(error)}, status=400)
             return
         self.send_json(result)

@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bewerbungsübersicht</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #172033;
+      background: #f3f5f8;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main { width: min(1100px, calc(100% - 32px)); margin: 36px auto 72px; }
+    header { display: flex; justify-content: space-between; gap: 24px; align-items: end; }
+    h1 { margin: 0; font-size: clamp(1.8rem, 4vw, 2.8rem); }
+    .subtitle { margin: 8px 0 0; color: #607087; }
+    a { color: #176b54; }
+    .nav-link { white-space: nowrap; }
+    .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin: 24px 0; }
+    .stat, .application { background: white; border: 1px solid #dfe4eb; border-radius: 14px; box-shadow: 0 8px 24px rgba(28, 39, 58, .06); }
+    .stat { padding: 16px; }
+    .stat-value { display: block; font-size: 1.7rem; font-weight: 750; color: #12664f; }
+    .stat-label { color: #607087; font-size: .84rem; }
+    .applications { display: grid; gap: 16px; }
+    .section-header { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin: 28px 0 14px; }
+    .section-title { margin: 0; font-size: 1.25rem; }
+    .archive { margin-top: 34px; }
+    .archive-note { color: #607087; margin: 6px 0 16px; }
+    .application { padding: 22px; }
+    .application-header { display: flex; justify-content: space-between; gap: 18px; align-items: start; }
+    h2 { margin: 0 0 5px; font-size: 1.25rem; }
+    .company { margin: 0; color: #607087; }
+    .badges { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+    .badge { padding: 5px 9px; border-radius: 999px; background: #e7f5ef; color: #12664f; font-size: .8rem; font-weight: 650; white-space: nowrap; }
+    .badge.inactive { background: #f2f3f5; color: #657084; }
+    .meta { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 15px 0; color: #445269; font-size: .9rem; }
+    details { border-top: 1px solid #e5e9ef; margin-top: 18px; padding-top: 15px; }
+    summary { cursor: pointer; font-weight: 650; }
+    .timeline { display: grid; gap: 10px; margin: 15px 0; padding-left: 22px; }
+    .timeline-item { padding-left: 4px; }
+    .timeline-edit-toggle { margin-top: 12px; }
+    .timeline-editor { margin-top: 14px; }
+    .new-event-title { margin: 18px 0 0; font-weight: 650; }
+    .empty-history, .note, .empty, .error { color: #607087; }
+    .note { padding: 10px 12px; background: #f7f8fa; border-radius: 9px; }
+    .event-form { display: grid; grid-template-columns: 1fr 170px auto; gap: 10px; align-items: end; margin-top: 14px; }
+    .history-form { display: grid; grid-template-columns: 1fr 170px auto; gap: 10px; align-items: end; }
+    .form-actions { display: flex; gap: 7px; }
+    label { display: grid; gap: 6px; color: #607087; font-size: .82rem; }
+    select, input, button { font: inherit; border-radius: 9px; }
+    select, input { width: 100%; padding: 9px 11px; border: 1px solid #cbd3df; background: white; color: #172033; }
+    button { border: 1px solid #176b54; background: #176b54; color: white; padding: 9px 14px; cursor: pointer; }
+    button:hover { background: #105541; }
+    button.secondary { background: white; color: #176b54; }
+    button.secondary:hover { background: #edf7f3; }
+    button.danger { border-color: #b14d58; background: white; color: #9b3440; }
+    button.danger:hover { background: #fff1f2; }
+    button:disabled { cursor: wait; opacity: .65; }
+    .empty, .error { padding: 36px; text-align: center; background: white; border-radius: 14px; }
+    .error { color: #8a3840; }
+    @media (max-width: 700px) {
+      header, .application-header { display: block; }
+      .nav-link { display: inline-block; margin-top: 12px; }
+      .badges { justify-content: flex-start; margin-top: 12px; }
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      .section-header { align-items: start; flex-direction: column; }
+      .event-form, .history-form { grid-template-columns: 1fr; }
+    }
+    @media (min-width: 701px) and (max-width: 900px) {
+      .stats { grid-template-columns: repeat(3, 1fr); }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>Bewerbungsübersicht</h1>
+      <p class="subtitle">Status, Verlauf und Kennzahlen deiner Bewerbungen.</p>
+    </div>
+    <a class="nav-link" href="/">← Zurück zum Job-Review</a>
+  </header>
+
+  <section id="stats" class="stats" aria-label="Bewerbungsstatistik"></section>
+  <div class="section-header">
+    <h2 class="section-title">Laufende Bewerbungen</h2>
+    <button id="archive-toggle" class="secondary" type="button" hidden></button>
+  </div>
+  <section id="message" class="empty">Bewerbungen werden geladen …</section>
+  <section id="applications" class="applications" aria-label="Laufende Bewerbungen"></section>
+  <section id="archive" class="archive" hidden>
+    <h2 class="section-title">Abgeschlossene Bewerbungen bearbeiten</h2>
+    <p class="archive-note">Nur zur Korrektur von Status und Verlauf einblenden.</p>
+    <section id="completed-applications" class="applications" aria-label="Abgeschlossene Bewerbungen"></section>
+  </section>
+</main>
+
+<script>
+  const statusLabels = {
+    new: "Neu",
+    review: "Prüfen",
+    interesting: "Interessant",
+    ignored: "Nicht interessant",
+    applied: "Beworben",
+    response: "Antwort erhalten",
+    interview: "Gespräch",
+    rejected: "Absage",
+    no_response: "Keine Rückmeldung",
+    offer: "Zusage/Angebot",
+    closed: "Abgeschlossen"
+  };
+
+  const element = id => document.getElementById(id);
+
+  function formatDate(value) {
+    if (!value) return "unbekannt";
+    return new Date(`${value}T00:00:00`).toLocaleDateString("de-DE");
+  }
+
+  function safeUrl(value) {
+    try {
+      const url = new URL(value);
+      return ["http:", "https:"].includes(url.protocol) ? url.href : "";
+    } catch {
+      return "";
+    }
+  }
+
+  function localIsoDate() {
+    const now = new Date();
+    const parts = [now.getFullYear(), now.getMonth() + 1, now.getDate()];
+    return parts.map((part, index) => String(part).padStart(index ? 2 : 4, "0")).join("-");
+  }
+
+  function make(tag, text, className) {
+    const node = document.createElement(tag);
+    if (text != null) node.textContent = text;
+    if (className) node.className = className;
+    return node;
+  }
+
+  function renderStats(stats) {
+    const definitions = [
+      ["total", "Bewerbungen"],
+      ["open", "Offen"],
+      ["completed", "Abgeschlossen"],
+      ["responses", "Antworten"],
+      ["interviews", "Gespräche"],
+      ["rejections", "Absagen"],
+      ["no_responses", "Ohne Rückmeldung"],
+      ["offers", "Zusagen"],
+      ["response_rate_percent", "Antwortquote", "%"],
+      [
+        "average_response_days",
+        `Ø Tage bis Antwort (${stats.response_time_samples} Fälle)`,
+        ""
+      ]
+    ];
+    const container = element("stats");
+    container.replaceChildren();
+    definitions.forEach(([key, label, suffix = ""]) => {
+      const card = make("div", null, "stat");
+      const value = stats[key] == null ? "–" : `${stats[key]}${suffix}`;
+      card.append(make("span", value, "stat-value"), make("span", label, "stat-label"));
+      container.append(card);
+    });
+  }
+
+  function renderTimeline(application, parent) {
+    const details = document.createElement("details");
+    details.open = application.workflow_history.length === 0;
+    details.append(make("summary", `Verlauf (${application.workflow_history.length})`));
+
+    const readOnly = document.createElement("div");
+    if (application.workflow_history.length) {
+      const list = make("ol", null, "timeline");
+      application.workflow_history.forEach(event => {
+        list.append(make("li", `${formatDate(event.occurred_on)} · ${statusLabels[event.status] || event.status}`));
+      });
+      readOnly.append(list);
+    } else {
+      readOnly.append(make("p", "Für diese ältere Bewerbung ist noch kein Datum gespeichert.", "empty-history"));
+    }
+
+    const editor = make("div", null, "timeline-editor");
+    editor.hidden = true;
+    if (application.workflow_history.length) {
+      const editList = make("ol", null, "timeline");
+      application.workflow_history.forEach(event => {
+        editList.append(historyEventForm(application.id, event));
+      });
+      editor.append(editList);
+    }
+    editor.append(make("p", "Neues Ereignis", "new-event-title"));
+    editor.append(eventForm(application.id));
+
+    const editButton = make("button", "Verlauf bearbeiten", "secondary timeline-edit-toggle");
+    editButton.type = "button";
+    editButton.addEventListener("click", () => {
+      const editing = editor.hidden;
+      editor.hidden = !editing;
+      readOnly.hidden = editing;
+      editButton.textContent = editing
+        ? "Bearbeitung beenden"
+        : "Verlauf bearbeiten";
+    });
+
+    details.append(readOnly, editButton, editor);
+    parent.append(details);
+  }
+
+  function statusSelect(statuses, selectedStatus) {
+    const select = document.createElement("select");
+    statuses.forEach(status => {
+      const option = document.createElement("option");
+      option.value = status;
+      option.textContent = statusLabels[status] || status;
+      option.selected = status === selectedStatus;
+      select.append(option);
+    });
+    return select;
+  }
+
+  async function postJson(path, payload, fallbackMessage) {
+    const response = await fetch(path, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(payload)
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || fallbackMessage);
+    return result;
+  }
+
+  function eventForm(jobId) {
+    const form = make("form", null, "event-form");
+    const statusLabel = make("label", "Ereignis");
+    const select = statusSelect(window.applicationStatuses);
+    select.name = "workflow_status";
+    statusLabel.append(select);
+    const dateLabel = make("label", "Datum");
+    const dateInput = document.createElement("input");
+    dateInput.name = "occurred_on";
+    dateInput.type = "date";
+    dateInput.required = true;
+    dateInput.value = localIsoDate();
+    dateLabel.append(dateInput);
+    const button = make("button", "Speichern");
+    button.type = "submit";
+    form.append(statusLabel, dateLabel, button);
+    form.addEventListener("submit", async event => {
+      event.preventDefault();
+      button.disabled = true;
+      try {
+        await postJson(
+          "/api/status",
+          {
+            job_id: jobId,
+            workflow_status: select.value,
+            occurred_on: dateInput.value
+          },
+          "Ereignis konnte nicht gespeichert werden"
+        );
+        await load();
+      } catch (error) {
+        window.alert(error.message);
+      } finally {
+        button.disabled = false;
+      }
+    });
+    return form;
+  }
+
+  function historyEventForm(jobId, historyEvent) {
+    const item = make("li", null, "timeline-item");
+    const form = make("form", null, "history-form");
+    const statusLabel = make("label", "Status");
+    const select = statusSelect(window.workflowStatuses, historyEvent.status);
+    statusLabel.append(select);
+    const dateLabel = make("label", "Datum");
+    const dateInput = document.createElement("input");
+    dateInput.type = "date";
+    dateInput.value = historyEvent.occurred_on || "";
+    dateLabel.append(dateInput);
+    const actions = make("div", null, "form-actions");
+    const saveButton = make("button", "Ändern");
+    saveButton.type = "submit";
+    const deleteButton = make("button", "Löschen", "danger");
+    deleteButton.type = "button";
+    actions.append(saveButton, deleteButton);
+    form.append(statusLabel, dateLabel, actions);
+
+    form.addEventListener("submit", async event => {
+      event.preventDefault();
+      saveButton.disabled = true;
+      deleteButton.disabled = true;
+      try {
+        await postJson(
+          "/api/history",
+          {
+            job_id: jobId,
+            event_index: historyEvent.event_index,
+            previous_status: historyEvent.status,
+            previous_occurred_on: historyEvent.occurred_on,
+            workflow_status: select.value,
+            occurred_on: dateInput.value || null
+          },
+          "Verlaufsereignis konnte nicht geändert werden"
+        );
+        await load();
+      } catch (error) {
+        window.alert(error.message);
+      } finally {
+        saveButton.disabled = false;
+        deleteButton.disabled = false;
+      }
+    });
+
+    deleteButton.addEventListener("click", async () => {
+      if (!window.confirm("Dieses Verlaufsereignis wirklich löschen?")) return;
+      saveButton.disabled = true;
+      deleteButton.disabled = true;
+      try {
+        await postJson(
+          "/api/history/delete",
+          {
+            job_id: jobId,
+            event_index: historyEvent.event_index,
+            previous_status: historyEvent.status,
+            previous_occurred_on: historyEvent.occurred_on
+          },
+          "Verlaufsereignis konnte nicht gelöscht werden"
+        );
+        await load();
+      } catch (error) {
+        window.alert(error.message);
+      } finally {
+        saveButton.disabled = false;
+        deleteButton.disabled = false;
+      }
+    });
+
+    item.append(form);
+    return item;
+  }
+
+  function renderApplications(applications, containerId) {
+    const container = element(containerId);
+    container.replaceChildren();
+    applications.forEach(application => {
+      const card = make("article", null, "application");
+      const header = make("div", null, "application-header");
+      const heading = document.createElement("div");
+      heading.append(make("h2", application.title), make("p", application.company, "company"));
+      const badges = make("div", null, "badges");
+      badges.append(make("span", statusLabels[application.workflow_status] || application.workflow_status, "badge"));
+      badges.append(make("span", application.active ? "Anzeige aktiv" : "Anzeige nicht mehr aktiv", `badge${application.active ? "" : " inactive"}`));
+      header.append(heading, badges);
+      card.append(header);
+
+      const meta = make("div", null, "meta");
+      meta.append(make("span", `Beworben: ${formatDate(application.applied_on)}`));
+      if (application.response_on) meta.append(make("span", `Erste Antwort: ${formatDate(application.response_on)}`));
+      if (application.days_to_response != null) meta.append(make("span", `${application.days_to_response} Tag(e) bis zur Antwort`));
+      const applicationUrl = safeUrl(application.url);
+      if (applicationUrl) {
+        const link = make("a", "Anzeige öffnen");
+        link.href = applicationUrl;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        meta.append(link);
+      }
+      card.append(meta);
+      if (application.review_note) card.append(make("p", application.review_note, "note"));
+      renderTimeline(application, card);
+      container.append(card);
+    });
+  }
+
+  function renderArchive(completedApplications) {
+    const archive = element("archive");
+    const toggle = element("archive-toggle");
+    renderApplications(completedApplications, "completed-applications");
+    toggle.hidden = completedApplications.length === 0;
+    if (!completedApplications.length) {
+      archive.hidden = true;
+      return;
+    }
+    toggle.textContent = archive.hidden
+      ? `Abgeschlossene bearbeiten (${completedApplications.length})`
+      : "Abgeschlossene ausblenden";
+  }
+
+  element("archive-toggle").addEventListener("click", () => {
+    const archive = element("archive");
+    archive.hidden = !archive.hidden;
+    const count = element("completed-applications").children.length;
+    element("archive-toggle").textContent = archive.hidden
+      ? `Abgeschlossene bearbeiten (${count})`
+      : "Abgeschlossene ausblenden";
+  });
+
+  async function load() {
+    try {
+      const response = await fetch("/api/applications");
+      if (!response.ok) throw new Error("Bewerbungen konnten nicht geladen werden");
+      const result = await response.json();
+      window.applicationStatuses = result.application_statuses;
+      window.workflowStatuses = result.workflow_statuses;
+      renderStats(result.statistics);
+      renderApplications(result.applications, "applications");
+      renderArchive(result.completed_applications);
+      element("message").hidden = result.applications.length > 0;
+      if (!result.applications.length) {
+        element("message").textContent = result.statistics.total
+          ? "Keine laufenden Bewerbungen."
+          : "Noch keine Bewerbungen gespeichert.";
+      }
+    } catch (error) {
+      element("message").hidden = false;
+      element("message").className = "error";
+      element("message").textContent = error.message;
+    }
+  }
+
+  load();
+</script>
+</body>
+</html>

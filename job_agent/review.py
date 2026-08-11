@@ -9,6 +9,7 @@ from pathlib import Path
 
 from job_agent.applications import (
     delete_history_event,
+    is_application,
     load_application_overview,
     record_status_change,
     update_history_event,
@@ -18,6 +19,7 @@ from job_agent.models import WorkflowStatus
 from job_agent.paths import MEMORY_FILE, RECOMMENDATIONS_JSON
 
 
+LANDING_PAGE = Path(__file__).with_name("landing.html")
 REVIEW_PAGE = Path(__file__).with_name("review.html")
 APPLICATIONS_PAGE = Path(__file__).with_name("applications.html")
 
@@ -42,6 +44,7 @@ def load_review_jobs(
             "workflow_status",
             WorkflowStatus.NEW.value,
         )
+        job["application_tracked"] = is_application(entry)
         job["review_note"] = entry.get("review_note", "")
         review_jobs.append(job)
     return review_jobs
@@ -65,6 +68,57 @@ def update_workflow_status(
     )
     save_memory(memory, memory_path)
     return current_status
+
+
+def update_review_decision(
+    job_id,
+    workflow_status,
+    memory_path=MEMORY_FILE,
+):
+    """Persist a review decision without changing an existing application."""
+    status = WorkflowStatus(workflow_status)
+    if status not in {WorkflowStatus.INTERESTING, WorkflowStatus.IGNORED}:
+        raise ValueError("Ungueltiger Review-Status")
+    memory = load_memory(memory_path)
+    if job_id not in memory:
+        raise KeyError(f"Unbekannte Job-ID: {job_id}")
+    entry = memory[job_id]
+    if is_application(entry):
+        return {
+            "workflow_status": entry.get(
+                "workflow_status",
+                WorkflowStatus.APPLIED.value,
+            ),
+            "application_tracked": True,
+        }
+    current_status = record_status_change(entry, status)
+    save_memory(memory, memory_path)
+    return {
+        "workflow_status": current_status,
+        "application_tracked": False,
+    }
+
+
+def start_application(job_id, memory_path=MEMORY_FILE):
+    """Record the first application without overwriting later progress."""
+    memory = load_memory(memory_path)
+    if job_id not in memory:
+        raise KeyError(f"Unbekannte Job-ID: {job_id}")
+    entry = memory[job_id]
+    if is_application(entry):
+        return {
+            "workflow_status": entry.get(
+                "workflow_status",
+                WorkflowStatus.APPLIED.value,
+            ),
+            "application_tracked": True,
+        }
+    status = record_status_change(entry, WorkflowStatus.APPLIED)
+    save_memory(memory, memory_path)
+    return {
+        "workflow_status": status,
+        "application_tracked": True,
+    }
 
 
 def update_workflow_history(
@@ -135,12 +189,16 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
 
     recommendations_path = RECOMMENDATIONS_JSON
     memory_path = MEMORY_FILE
+    landing_page_path = LANDING_PAGE
     page_path = REVIEW_PAGE
     applications_page_path = APPLICATIONS_PAGE
 
     def do_GET(self):
         """Return the page or the current joined recommendation data."""
         if self.path in {"/", "/index.html"}:
+            self.send_file(self.landing_page_path, "text/html; charset=utf-8")
+            return
+        if self.path in {"/review", "/review.html"}:
             self.send_file(self.page_path, "text/html; charset=utf-8")
             return
         if self.path in {"/applications", "/applications.html"}:
@@ -169,6 +227,8 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
         """Persist a workflow status selected in the browser."""
         if self.path not in {
             "/api/status",
+            "/api/applications",
+            "/api/review-status",
             "/api/note",
             "/api/history",
             "/api/history/delete",
@@ -178,7 +238,18 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
         try:
             length = int(self.headers.get("Content-Length", "0"))
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-            if self.path == "/api/status":
+            if self.path == "/api/applications":
+                result = start_application(
+                    payload["job_id"],
+                    self.memory_path,
+                )
+            elif self.path == "/api/review-status":
+                result = update_review_decision(
+                    payload["job_id"],
+                    payload["workflow_status"],
+                    self.memory_path,
+                )
+            elif self.path == "/api/status":
                 result = {
                     "workflow_status": update_workflow_status(
                         payload["job_id"],
@@ -258,8 +329,8 @@ def main():
     url = f"http://{address[0]}:{address[1]}"
     if not args.no_browser:
         threading.Timer(0.3, webbrowser.open, args=(url,)).start()
-    print(f"Job-Review geoeffnet unter {url}")
-    print("Dieses Fenster schliessen, um den Review zu beenden.")
+    print(f"Job-Agent geoeffnet unter {url}")
+    print("Dieses Fenster schliessen, um den Job-Agenten zu beenden.")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

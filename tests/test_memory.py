@@ -48,6 +48,9 @@ class MemoryTests(unittest.TestCase):
         first_job = make_job()
         update_memory([first_job], memory)
         memory[first_job.id]["workflow_status"] = "interesting"
+        memory[first_job.id]["workflow_history"] = [
+            {"status": "applied", "occurred_on": "2026-08-01"}
+        ]
 
         known_job = make_job()
         stats = update_memory([known_job], memory)
@@ -59,6 +62,10 @@ class MemoryTests(unittest.TestCase):
         self.assertFalse(known_job.is_new)
         self.assertEqual(known_job.first_seen_at, first_job.first_seen_at)
         self.assertEqual(known_job.workflow_status, WorkflowStatus.INTERESTING)
+        self.assertEqual(
+            memory[first_job.id]["workflow_history"],
+            [{"status": "applied", "occurred_on": "2026-08-01"}],
+        )
 
     def test_job_becomes_inactive_after_three_successful_missed_runs(self):
         memory = {}

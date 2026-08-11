@@ -31,8 +31,10 @@ REVIEWED_WORKFLOW_STATUSES = {
     "interesting",
     "ignored",
     "applied",
+    "response",
     "interview",
     "rejected",
+    "no_response",
     "offer",
     "closed",
 }

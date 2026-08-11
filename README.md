@@ -91,7 +91,16 @@ review_jobs.bat doppelklicken
 ```
 
 Die Review-Oberfläche läuft nur auf dem eigenen Computer und verwendet das
-bestehende Job-Gedächtnis unter `data/internal/seen_jobs.json`.
+bestehende Job-Gedächtnis unter `data/internal/seen_jobs.json`. Von dort führt
+ein Link zur getrennten Bewerbungsübersicht. Sie speichert datierte
+Statuswechsel, zeigt auch nicht mehr aktive Stellen und berechnet daraus lokale
+Kennzahlen. Bei älteren Bewerbungen ohne gespeichertes Datum bleibt das Datum
+bewusst unbekannt. Der finale Status `Keine Rückmeldung` wird manuell gesetzt;
+eine nicht mehr aktive Anzeige allein löst ihn nicht automatisch aus. Die
+Kartenliste zeigt standardmäßig nur laufende Bewerbungen. Abgeschlossene
+Bewerbungen bleiben in der Statistik und können bei Bedarf zur Korrektur
+eingeblendet werden; Status und Datum einzelner Verlaufsereignisse lassen sich
+dort ändern oder löschen.
 
 Ein kostenbegrenzter Testlauf analysiert höchstens einen neuen passenden Job:
 
@@ -186,6 +195,8 @@ job_agent/profile.py        Profil-, Skill- und Scoring-Regeln
 job_agent/deduplication.py  quellenübergreifende Job-Deduplizierung
 job_agent/remote.py         gemeinsame Remote-Erkennung
 job_agent/reporting.py      JSON- und Markdown-Ausgaben
+job_agent/applications.py  Bewerbungsverlauf und daraus abgeleitete Kennzahlen
+job_agent/applications.html getrennte lokale Bewerbungsübersicht
 job_agent/review.py         lokaler Webserver für den Review-Workflow
 job_agent/review.html       lokale Browseroberfläche für Entscheidungen
 job_agent/search_plan.py    gemeinsame Suchplan-Helfer

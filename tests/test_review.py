@@ -10,6 +10,7 @@ from urllib.request import Request, urlopen
 
 from job_agent.memory import save_memory
 from job_agent.review import (
+    APPLICATIONS_PAGE,
     REVIEW_PAGE,
     ReviewRequestHandler,
     load_review_jobs,
@@ -151,6 +152,112 @@ class ReviewTests(unittest.TestCase):
         jobs = load_review_jobs(self.recommendations_path, self.memory_path)
         self.assertEqual(jobs[0]["workflow_status"], "ignored")
         self.assertEqual(jobs[0]["review_note"], "Fachlich interessant, aber noch unsicher.")
+
+    def test_application_page_records_dated_event_and_returns_statistics(self):
+        handler = type(
+            "TemporaryApplicationHandler",
+            (ReviewRequestHandler,),
+            {
+                "recommendations_path": self.recommendations_path,
+                "memory_path": self.memory_path,
+                "page_path": REVIEW_PAGE,
+                "applications_page_path": APPLICATIONS_PAGE,
+            },
+        )
+        server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        thread = threading.Thread(target=server.serve_forever)
+        thread.start()
+        base_url = f"http://127.0.0.1:{server.server_port}"
+        try:
+            with urlopen(f"{base_url}/applications") as response:
+                page = response.read().decode("utf-8")
+            request = Request(
+                f"{base_url}/api/status",
+                data=json.dumps(
+                    {
+                        "job_id": "job:1",
+                        "workflow_status": "applied",
+                        "occurred_on": "2026-08-11",
+                    }
+                ).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urlopen(request):
+                pass
+            no_response_request = Request(
+                f"{base_url}/api/status",
+                data=json.dumps(
+                    {
+                        "job_id": "job:1",
+                        "workflow_status": "no_response",
+                        "occurred_on": "2026-08-20",
+                    }
+                ).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urlopen(no_response_request):
+                pass
+            with urlopen(f"{base_url}/api/applications") as response:
+                overview = json.load(response)
+            no_response_event = next(
+                event
+                for event in overview["completed_applications"][0][
+                    "workflow_history"
+                ]
+                if event["status"] == "no_response"
+            )
+            edit_request = Request(
+                f"{base_url}/api/history",
+                data=json.dumps(
+                    {
+                        "job_id": "job:1",
+                        "event_index": no_response_event["event_index"],
+                        "previous_status": "no_response",
+                        "previous_occurred_on": "2026-08-20",
+                        "workflow_status": "response",
+                        "occurred_on": "2026-08-21",
+                    }
+                ).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urlopen(edit_request) as response:
+                edit_result = json.load(response)
+            delete_request = Request(
+                f"{base_url}/api/history/delete",
+                data=json.dumps(
+                    {
+                        "job_id": "job:1",
+                        "event_index": no_response_event["event_index"],
+                        "previous_status": "response",
+                        "previous_occurred_on": "2026-08-21",
+                    }
+                ).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urlopen(delete_request) as response:
+                delete_result = json.load(response)
+            with urlopen(f"{base_url}/api/applications") as response:
+                final_overview = json.load(response)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join()
+
+        self.assertIn("Bewerbungsübersicht", page)
+        self.assertIn("Abgeschlossene Bewerbungen bearbeiten", page)
+        self.assertEqual(overview["statistics"]["total"], 1)
+        self.assertEqual(overview["applications"], [])
+        self.assertEqual(
+            overview["completed_applications"][0]["applied_on"],
+            "2026-08-11",
+        )
+        self.assertEqual(edit_result["workflow_status"], "response")
+        self.assertEqual(delete_result["workflow_status"], "applied")
+        self.assertEqual(final_overview["statistics"]["open"], 1)
 
 
 if __name__ == "__main__":

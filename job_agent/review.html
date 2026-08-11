@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Job-Review</title>
+  <title>Stellen prüfen</title>
   <style>
     :root {
       color-scheme: light;
@@ -41,9 +41,9 @@
     .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; padding-top: 22px; border-top: 1px solid #e5e9ef; }
     button, .button { border: 1px solid #c4cdd9; background: white; padding: 10px 15px; color: #172033; cursor: pointer; text-decoration: none; }
     button:hover, .button:hover { background: #f3f5f8; }
+    button:disabled { cursor: wait; opacity: .65; }
     button.primary { background: #176b54; color: white; border-color: #176b54; }
     button.ignore { color: #8a3840; }
-    .status-select { margin-left: auto; width: auto; min-width: 205px; }
     .note-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
     .navigation { display: flex; justify-content: space-between; margin-top: 16px; }
     .empty, .error { padding: 36px; text-align: center; color: #607087; }
@@ -54,7 +54,6 @@
       .counter { margin-top: 12px; }
       .header-actions { justify-items: start; }
       .filters, .details { grid-template-columns: 1fr; }
-      .status-select { margin-left: 0; flex: 1 1 100%; }
     }
   </style>
 </head>
@@ -62,12 +61,12 @@
 <main>
   <header>
     <div>
-      <h1>Job-Review</h1>
+      <h1>Stellen prüfen</h1>
       <p class="subtitle">Eine Empfehlung nach der anderen – du entscheidest.</p>
     </div>
     <div class="header-actions">
       <div id="counter" class="counter"></div>
-      <a class="overview-link" href="/applications">Bewerbungen &amp; Statistik</a>
+      <a class="overview-link" href="/">← Zur Startseite</a>
     </div>
   </header>
 
@@ -110,17 +109,9 @@
     <div class="actions">
       <button id="mark-interesting" class="primary">Interessant</button>
       <button id="mark-ignored" class="ignore">Nicht interessant</button>
+      <button id="mark-applied">Als beworben markieren</button>
+      <a id="application-link" class="button" href="/applications" hidden>Bewerbung verwalten</a>
       <a id="job-link" class="button" target="_blank" rel="noopener noreferrer">Anzeige öffnen</a>
-      <select id="progress-select" class="status-select" aria-label="Bewerbungsfortschritt">
-        <option value="">Bewerbungsfortschritt …</option>
-        <option value="applied">Beworben</option>
-        <option value="response">Antwort erhalten</option>
-        <option value="interview">Interview</option>
-        <option value="rejected">Absage</option>
-        <option value="no_response">Keine Rückmeldung</option>
-        <option value="offer">Angebot</option>
-        <option value="closed">Abgeschlossen</option>
-      </select>
     </div>
     <section class="section">
       <h3>Meine Notiz</h3>
@@ -146,6 +137,7 @@
     rejected: "Absage", no_response: "Keine Rückmeldung",
     offer: "Angebot", closed: "Abgeschlossen"
   };
+  const reviewStatuses = new Set(["review", "interesting", "ignored"]);
   let jobs = [];
   let visibleJobs = [];
   let currentIndex = 0;
@@ -224,6 +216,11 @@
       : job.work_mode === "hybrid" ? "Homeoffice" : "nicht angegeben";
     setText("remote", `Remote: ${remote}`);
     setText("current-status", `Status: ${statusLabels[job.workflow_status] || job.workflow_status}`);
+    const applicationTracked = Boolean(job.application_tracked);
+    element("mark-interesting").hidden = applicationTracked;
+    element("mark-ignored").hidden = applicationTracked;
+    element("mark-applied").hidden = applicationTracked;
+    element("application-link").hidden = !applicationTracked;
     element("review-note").value = job.review_note || "";
     setText("summary", job.summary);
     element("job-link").href = job.url || "#";
@@ -240,9 +237,29 @@
     element("next").disabled = currentIndex === visibleJobs.length - 1;
   }
 
+  function applyWorkflowResult(job, result) {
+    job.workflow_status = result.workflow_status;
+    if (result.application_tracked != null) {
+      job.application_tracked = result.application_tracked;
+    }
+    const original = jobs.find(item => item.id === job.id);
+    if (original) {
+      original.workflow_status = result.workflow_status;
+      original.application_tracked = job.application_tracked;
+    }
+    if (element("status-filter").value && element("status-filter").value !== result.workflow_status) {
+      applyFilters();
+    } else if (currentIndex < visibleJobs.length - 1) {
+      currentIndex += 1;
+      render();
+    } else {
+      render();
+    }
+  }
+
   async function changeStatus(workflowStatus) {
     const job = visibleJobs[currentIndex];
-    const response = await fetch("/api/status", {
+    const response = await fetch("/api/review-status", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({
@@ -252,16 +269,24 @@
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || "Status konnte nicht gespeichert werden");
-    job.workflow_status = result.workflow_status;
-    const original = jobs.find(item => item.id === job.id);
-    if (original) original.workflow_status = result.workflow_status;
-    if (element("status-filter").value && element("status-filter").value !== result.workflow_status) {
-      applyFilters();
-    } else if (currentIndex < visibleJobs.length - 1) {
-      currentIndex += 1;
-      render();
-    } else {
-      render();
+    applyWorkflowResult(job, result);
+  }
+
+  async function startApplication() {
+    const job = visibleJobs[currentIndex];
+    const button = element("mark-applied");
+    button.disabled = true;
+    try {
+      const response = await fetch("/api/applications", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({job_id: job.id})
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Bewerbung konnte nicht gespeichert werden");
+      applyWorkflowResult(job, result);
+    } finally {
+      button.disabled = false;
     }
   }
 
@@ -290,7 +315,7 @@
       );
       addOptions(
         element("status-filter"),
-        result.workflow_statuses.filter(status => status !== "new"),
+        result.workflow_statuses.filter(status => reviewStatuses.has(status)),
         statusLabels
       );
       applyFilters();
@@ -311,10 +336,9 @@
   element("mark-ignored").addEventListener("click", () =>
     changeStatus("ignored").catch(showError)
   );
-  element("progress-select").addEventListener("change", event => {
-    if (!event.target.value) return;
-    changeStatus(event.target.value).catch(showError);
-  });
+  element("mark-applied").addEventListener("click", () =>
+    startApplication().catch(showError)
+  );
   element("save-note").addEventListener("click", () =>
     saveReviewNote().catch(showError)
   );

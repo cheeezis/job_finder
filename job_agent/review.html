@@ -200,8 +200,13 @@
 
     const job = visibleJobs[currentIndex];
     setText("counter", `${currentIndex + 1} von ${visibleJobs.length}`);
-    setText("score", `${job.llm_score}%`);
-    setText("recommendation", recommendationLabels[job.recommendation] || job.recommendation);
+    setText("score", job.llm_unavailable ? "KI offen" : `${job.llm_score}%`);
+    setText(
+      "recommendation",
+      job.llm_unavailable
+        ? "Bewertung nicht verfügbar"
+        : recommendationLabels[job.recommendation] || job.recommendation
+    );
     setText("title", job.title);
     setText("company", job.company);
     setText("location", `Ort: ${(job.locations || []).join(", ") || "unbekannt"}`);
@@ -271,7 +276,9 @@
       const response = await fetch("/api/recommendations");
       if (!response.ok) throw new Error("Empfehlungen konnten nicht geladen werden");
       const result = await response.json();
-      jobs = result.recommendations.sort((a, b) => b.llm_score - a.llm_score);
+      jobs = result.recommendations.sort(
+        (a, b) => (b.llm_score ?? -1) - (a.llm_score ?? -1)
+      );
       addOptions(
         element("status-filter"),
         result.workflow_statuses.filter(status => status !== "new"),

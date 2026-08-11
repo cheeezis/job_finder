@@ -65,6 +65,44 @@ class ReportingTests(unittest.TestCase):
         self.assertIn("Python-APIs entwickeln", markdown)
         self.assertNotIn("rule-only", markdown)
 
+    def test_current_interesting_job_survives_missing_llm_result(self):
+        interesting = {
+            "id": "test:interesting",
+            "title": "AI Integration Engineer",
+            "company": "Example GmbH",
+            "locations": ["Remote"],
+            "sources": [{"url": "https://example.test/interesting"}],
+            "work_mode": "remote",
+            "remote_percentage": 100,
+            "workflow_status": "interesting",
+            "llm_status": "failed",
+        }
+        results = {
+            "included": [interesting, {"id": "rule-only"}],
+            "excluded": [
+                {
+                    **interesting,
+                    "id": "test:inactive",
+                    "title": "Inactive Interesting Job",
+                }
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as directory:
+            json_path = Path(directory) / "recommendations.json"
+            markdown_path = Path(directory) / "recommendations.md"
+            write_recommendations(results, json_path, markdown_path)
+            stored = json.loads(json_path.read_text(encoding="utf-8"))
+            markdown = markdown_path.read_text(encoding="utf-8")
+
+        self.assertEqual(len(stored["recommendations"]), 1)
+        recommendation = stored["recommendations"][0]
+        self.assertTrue(recommendation["llm_unavailable"])
+        self.assertIsNone(recommendation["llm_score"])
+        self.assertEqual(recommendation["url"], "https://example.test/interesting")
+        self.assertIn("KI offen | AI Integration Engineer", markdown)
+        self.assertNotIn("Inactive Interesting Job", markdown)
+
 
 if __name__ == "__main__":
     unittest.main()

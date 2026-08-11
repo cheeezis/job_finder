@@ -13,8 +13,10 @@ class WorkflowStatus(str, Enum):
     INTERESTING = "interesting"
     IGNORED = "ignored"
     APPLIED = "applied"
+    RESPONSE = "response"
     INTERVIEW = "interview"
     REJECTED = "rejected"
+    NO_RESPONSE = "no_response"
     OFFER = "offer"
     CLOSED = "closed"
 

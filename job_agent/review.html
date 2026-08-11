@@ -18,6 +18,8 @@
     h1 { margin: 0; font-size: clamp(1.8rem, 4vw, 2.8rem); }
     .subtitle { margin: 8px 0 0; color: #607087; }
     .counter { color: #607087; white-space: nowrap; }
+    .header-actions { display: grid; gap: 8px; justify-items: end; }
+    .overview-link { color: #176b54; white-space: nowrap; }
     .filters, .card { background: white; border: 1px solid #dfe4eb; border-radius: 16px; box-shadow: 0 8px 24px rgba(28, 39, 58, .06); }
     .filters { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 12px; padding: 16px; margin: 24px 0; }
     label { display: grid; gap: 6px; font-size: .82rem; color: #607087; }
@@ -50,6 +52,7 @@
     @media (max-width: 700px) {
       header { display: block; }
       .counter { margin-top: 12px; }
+      .header-actions { justify-items: start; }
       .filters, .details { grid-template-columns: 1fr; }
       .status-select { margin-left: 0; flex: 1 1 100%; }
     }
@@ -62,7 +65,10 @@
       <h1>Job-Review</h1>
       <p class="subtitle">Eine Empfehlung nach der anderen – du entscheidest.</p>
     </div>
-    <div id="counter" class="counter"></div>
+    <div class="header-actions">
+      <div id="counter" class="counter"></div>
+      <a class="overview-link" href="/applications">Bewerbungen &amp; Statistik</a>
+    </div>
   </header>
 
   <section class="filters" aria-label="Filter">
@@ -108,8 +114,10 @@
       <select id="progress-select" class="status-select" aria-label="Bewerbungsfortschritt">
         <option value="">Bewerbungsfortschritt …</option>
         <option value="applied">Beworben</option>
+        <option value="response">Antwort erhalten</option>
         <option value="interview">Interview</option>
         <option value="rejected">Absage</option>
+        <option value="no_response">Keine Rückmeldung</option>
         <option value="offer">Angebot</option>
         <option value="closed">Abgeschlossen</option>
       </select>
@@ -134,8 +142,9 @@
   };
   const statusLabels = {
     new: "Neu", review: "Prüfen", interesting: "Interessant",
-    ignored: "Nicht interessant", applied: "Beworben", interview: "Interview",
-    rejected: "Absage", offer: "Angebot", closed: "Abgeschlossen"
+    ignored: "Nicht interessant", applied: "Beworben", response: "Antwort erhalten", interview: "Interview",
+    rejected: "Absage", no_response: "Keine Rückmeldung",
+    offer: "Angebot", closed: "Abgeschlossen"
   };
   let jobs = [];
   let visibleJobs = [];

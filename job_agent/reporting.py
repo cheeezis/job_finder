@@ -24,11 +24,11 @@ def write_recommendations(
     json_path=RECOMMENDATIONS_JSON,
     markdown_path=RECOMMENDATIONS_MARKDOWN,
 ):
-    """Write only jobs that have a final LLM recommendation."""
+    """Write analyzed jobs plus current interesting jobs awaiting LLM output."""
     recommendations = [
         recommendation_for_job(job)
         for job in results["included"]
-        if job.get("llm_result")
+        if job.get("llm_result") or job.get("workflow_status") == "interesting"
     ]
     json_file = Path(json_path)
     markdown_file = Path(markdown_path)
@@ -51,9 +51,8 @@ def write_recommendations(
 
 
 def recommendation_for_job(job):
-    """Reduce one analyzed job to fields needed for a decision."""
-    llm_result = job["llm_result"]
-    return {
+    """Reduce one current job to fields needed for a decision."""
+    recommendation = {
         "id": job["id"],
         "title": job["title"],
         "company": job["company"],
@@ -63,8 +62,27 @@ def recommendation_for_job(job):
         "career_levels": job.get("career_levels", []),
         "published_at": job.get("published_at"),
         "url": primary_url(job),
-        "llm_score": job["llm_score"],
-        **llm_result,
+    }
+    llm_result = job.get("llm_result")
+    if llm_result:
+        return {
+            **recommendation,
+            "llm_score": job["llm_score"],
+            "llm_unavailable": False,
+            **llm_result,
+        }
+    return {
+        **recommendation,
+        "llm_score": None,
+        "llm_unavailable": True,
+        "recommendation": None,
+        "confidence": None,
+        "summary": "KI-Bewertung derzeit nicht verfügbar.",
+        "tasks": [],
+        "requirements": [],
+        "matching_evidence": [],
+        "gaps": [],
+        "risks": [],
     }
 
 
@@ -75,6 +93,21 @@ def render_recommendations(recommendations):
         return "\n".join(lines + ["Keine KI-Empfehlungen in diesem Lauf.", ""])
 
     for job in recommendations:
+        if job.get("llm_unavailable"):
+            lines.extend(
+                [
+                    f"## KI offen | {job['title']}",
+                    "",
+                    f"- Firma: {job['company']}",
+                    f"- Ort: {format_locations(job)}",
+                    f"- Remote: {format_remote(job)}",
+                    f"- URL: {job['url']}",
+                    "",
+                    job["summary"],
+                    "",
+                ]
+            )
+            continue
         lines.extend(
             [
                 f"## {job['llm_score']}% | {job['title']}",

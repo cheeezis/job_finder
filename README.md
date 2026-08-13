@@ -1,11 +1,11 @@
 # Job Finder
 
-Ein kleiner, lokal betriebener Job-Agent für konfigurierbare IT-Rollen,
+Ein kleiner, lokal betriebener Job-Finder für konfigurierbare IT-Rollen,
 einen persönlichen Suchradius oder vollständig remote angebotene Stellen.
 
 ## Aktueller Stand
 
-Der Agent kann:
+Der Finder kann:
 
 - Arbeitsagentur-Suchergebnisse für definierte Suchbegriffe abrufen
 - StepStone-Suchergebnisse für definierte Suchbegriffe abrufen
@@ -58,7 +58,7 @@ Copy-Item profile.example.yaml profile.local.yaml
 
 `user_settings.local.yaml`, `profile.local.yaml` und alle Dateien unter `data/`
 bleiben lokal und werden nicht von Git erfasst. Ohne lokale Dateien verwendet
-der Agent die anonymisierten Beispiele.
+der Finder die anonymisierten Beispiele.
 
 Die beiden lokalen Dateien danach an die eigene Suche und das belegbare Profil
 anpassen. Insbesondere dürfen Profilangaben keine nicht vorhandenen Kenntnisse,
@@ -78,7 +78,7 @@ Vor einem Fork oder einer Veröffentlichung sollte `git status --ignored`
 kontrolliert werden. Lokale Konfigurationen, der Ordner `data/` und echte
 Zugangsdaten dürfen nicht erzwungen zu Git hinzugefügt werden.
 
-Kompletter Agentenlauf mit Vorfilter und KI-Bewertung:
+Kompletter Finderlauf mit Vorfilter und KI-Bewertung:
 
 ```powershell
 python run_agent.py

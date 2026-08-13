@@ -1,4 +1,4 @@
-# Job Agent
+# Job Finder
 
 Ein kleiner, lokal betriebener Job-Agent für konfigurierbare IT-Rollen,
 einen persönlichen Suchradius oder vollständig remote angebotene Stellen.

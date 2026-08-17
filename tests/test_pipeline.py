@@ -56,15 +56,22 @@ class PipelineTests(unittest.TestCase):
             write_recommendations(
                 results,
                 json_path=directory_path / "recommendations.json",
-                markdown_path=directory_path / "recommendations.md",
             )
-            review = (directory_path / "recommendations.md").read_text(
-                encoding="utf-8"
+            review = json.loads(
+                (directory_path / "recommendations.json").read_text(
+                    encoding="utf-8"
+                )
             )
 
         self.assertEqual(len(results["included"]), 1)
-        self.assertIn("Junior Python Developer", review)
-        self.assertIn("https://example.test/jobs/123", review)
+        self.assertEqual(
+            review["recommendations"][0]["title"],
+            "Junior Python Developer",
+        )
+        self.assertEqual(
+            review["recommendations"][0]["url"],
+            "https://example.test/jobs/123",
+        )
 
 
 if __name__ == "__main__":

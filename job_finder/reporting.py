@@ -1,49 +1,47 @@
-"""Compact machine- and human-readable recommendation output."""
+"""Compact recommendation output for review and notifications."""
 
 import json
+import re
 from pathlib import Path
 
-from job_finder.paths import RECOMMENDATIONS_JSON, RECOMMENDATIONS_MARKDOWN
+from job_finder.paths import RECOMMENDATIONS_JSON
 
 
-RECOMMENDATION_LABELS = {
-    "strong_match": "sehr passend",
-    "match": "passend",
-    "borderline": "vielleicht passend",
-    "not_recommended": "nicht empfohlen",
+INTERNATIONAL_LOCATION_TERMS = {
+    "anywhere",
+    "emea",
+    "eu",
+    "europa",
+    "europe",
+    "global",
+    "weltweit",
+    "worldwide",
 }
-CONFIDENCE_LABELS = {
-    "high": "hoch",
-    "medium": "mittel",
-    "low": "niedrig",
-}
+INTERNATIONAL_REMOTE_SOURCES = {"himalayas", "jobicy", "startup_jobs"}
 
 
 def write_recommendations(
     results,
     json_path=RECOMMENDATIONS_JSON,
-    markdown_path=RECOMMENDATIONS_MARKDOWN,
 ):
-    """Write analyzed jobs plus current interesting jobs awaiting LLM output."""
+    """Write analyzed jobs plus jobs whose LLM result is unavailable."""
     recommendations = [
         recommendation_for_job(job)
         for job in results["included"]
-        if job.get("llm_result") or job.get("workflow_status") == "interesting"
+        if (
+            job.get("llm_result")
+            or job.get("llm_status") == "failed"
+            or job.get("workflow_status") == "interesting"
+        )
     ]
     json_file = Path(json_path)
-    markdown_file = Path(markdown_path)
     json_file.parent.mkdir(parents=True, exist_ok=True)
-    markdown_file.parent.mkdir(parents=True, exist_ok=True)
     json_file.write_text(
         json.dumps(
             {"recommendations": recommendations},
             indent=2,
             ensure_ascii=False,
         ),
-        encoding="utf-8",
-    )
-    markdown_file.write_text(
-        render_recommendations(recommendations),
         encoding="utf-8",
     )
 
@@ -61,6 +59,7 @@ def recommendation_for_job(job):
         "published_at": job.get("published_at"),
         "url": primary_url(job),
         "source_links": source_links(job),
+        "international": is_international_listing(job),
     }
     llm_result = job.get("llm_result")
     if llm_result:
@@ -85,58 +84,23 @@ def recommendation_for_job(job):
     }
 
 
-def render_recommendations(recommendations):
-    """Render final recommendations without prefilter diagnostics."""
-    lines = ["# Job-Empfehlungen", ""]
-    if not recommendations:
-        return "\n".join(lines + ["Keine KI-Empfehlungen in diesem Lauf.", ""])
-
-    for job in recommendations:
-        if job.get("llm_unavailable"):
-            lines.extend(
-                [
-                    f"## KI offen | {job['title']}",
-                    "",
-                    f"- Firma: {job['company']}",
-                    f"- Ort: {format_locations(job)}",
-                    f"- Remote: {format_remote(job)}",
-                    f"- URL: {job['url']}",
-                    "",
-                    job["summary"],
-                    "",
-                ]
-            )
-            continue
-        lines.extend(
-            [
-                f"## {job['llm_score']}% | {job['title']}",
-                "",
-                f"- Firma: {job['company']}",
-                f"- Ort: {format_locations(job)}",
-                f"- Remote: {format_remote(job)}",
-                f"- Empfehlung: {RECOMMENDATION_LABELS[job['recommendation']]}",
-                f"- Sicherheit: {CONFIDENCE_LABELS[job['confidence']]}",
-                f"- URL: {job['url']}",
-                "",
-                job["summary"],
-                "",
-            ]
-        )
-        append_list(lines, "Wichtigste Aufgaben", job.get("tasks", []))
-        append_list(lines, "Wichtigste Anforderungen", job.get("requirements", []))
-        append_list(lines, "Passende Erfahrungen", job.get("matching_evidence", []))
-        append_list(lines, "Luecken", job.get("gaps", []))
-        append_list(lines, "Risiken", job.get("risks", []))
-    return "\n".join(lines)
-
-
-def append_list(lines, heading, values):
-    """Append one non-empty recommendation section."""
-    if not values:
-        return
-    lines.extend([f"### {heading}", ""])
-    lines.extend(f"- {value}" for value in values)
-    lines.append("")
+def is_international_listing(job):
+    """Return whether a broad location label lacks an explicit Germany scope."""
+    location = " ".join(str(value) for value in job.get("locations", []))
+    normalized = location.casefold()
+    if "deutschland" in normalized or "germany" in normalized:
+        return False
+    words = set(re.findall(r"[a-zäöüß]+", normalized))
+    if words & INTERNATIONAL_LOCATION_TERMS:
+        return True
+    source_names = {
+        source.get("source")
+        for source in job.get("sources", job.get("source_links", []))
+        if isinstance(source, dict)
+    }
+    return words == {"remote"} and bool(
+        source_names and source_names <= INTERNATIONAL_REMOTE_SOURCES
+    )
 
 
 def primary_url(job):

@@ -17,6 +17,7 @@ from job_finder.applications import (
 from job_finder.memory import load_memory, save_memory
 from job_finder.models import WorkflowStatus
 from job_finder.paths import MEMORY_FILE, RECOMMENDATIONS_JSON
+from job_finder.reporting import is_international_listing
 
 
 LANDING_PAGE = Path(__file__).with_name("landing.html")
@@ -39,6 +40,7 @@ def load_review_jobs(
     review_jobs = []
     for recommendation in recommendations:
         job = dict(recommendation)
+        job.setdefault("international", is_international_listing(job))
         memory_id, entry = memory_entry_for_job(job, memory)
         job["id"] = memory_id
         job["workflow_status"] = entry.get(

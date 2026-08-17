@@ -448,6 +448,23 @@ class ReviewTests(unittest.TestCase):
                 delete_result = json.load(response)
             with urlopen(f"{base_url}/api/applications") as response:
                 final_overview = json.load(response)
+            interview_request = Request(
+                f"{base_url}/api/status",
+                data=json.dumps(
+                    {
+                        "job_id": "job:1",
+                        "workflow_status": "interview",
+                        "occurred_on": "2026-08-22",
+                        "scheduled_for": "2099-08-25T10:30",
+                    }
+                ).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urlopen(interview_request):
+                pass
+            with urlopen(f"{base_url}/api/applications") as response:
+                interview_overview = json.load(response)
         finally:
             server.shutdown()
             server.server_close()
@@ -455,6 +472,8 @@ class ReviewTests(unittest.TestCase):
 
         self.assertIn("Bewerbungsübersicht", page)
         self.assertIn("Abgeschlossene Bewerbungen bearbeiten", page)
+        self.assertIn('input.type = "datetime-local"', page)
+        self.assertIn("Nächstes Gespräch", page)
         self.assertEqual(overview["statistics"]["total"], 1)
         self.assertEqual(overview["applications"], [])
         self.assertEqual(
@@ -463,6 +482,10 @@ class ReviewTests(unittest.TestCase):
         )
         self.assertEqual(edit_result["workflow_status"], "response")
         self.assertEqual(delete_result["workflow_status"], "applied")
+        self.assertEqual(
+            interview_overview["applications"][0]["next_interview_at"],
+            "2099-08-25T10:30",
+        )
         self.assertEqual(final_overview["statistics"]["open"], 1)
 
 

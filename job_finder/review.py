@@ -92,6 +92,7 @@ def update_workflow_status(
     workflow_status,
     memory_path=MEMORY_FILE,
     occurred_on=None,
+    scheduled_for=None,
 ):
     """Validate and persist one manual workflow decision."""
     status = WorkflowStatus(workflow_status)
@@ -102,6 +103,7 @@ def update_workflow_status(
         memory[job_id],
         status,
         occurred_on,
+        scheduled_for,
     )
     save_memory(memory, memory_path)
     return current_status
@@ -166,6 +168,8 @@ def update_workflow_history(
     workflow_status,
     occurred_on,
     memory_path=MEMORY_FILE,
+    scheduled_for=None,
+    previous_scheduled_for=None,
 ):
     """Edit one manual workflow event."""
     memory = load_memory(memory_path)
@@ -178,6 +182,8 @@ def update_workflow_history(
         previous_occurred_on,
         workflow_status,
         occurred_on,
+        scheduled_for,
+        previous_scheduled_for,
     )
     save_memory(memory, memory_path)
     return result
@@ -189,6 +195,7 @@ def delete_workflow_history(
     previous_status,
     previous_occurred_on,
     memory_path=MEMORY_FILE,
+    previous_scheduled_for=None,
 ):
     """Delete one manual workflow event."""
     memory = load_memory(memory_path)
@@ -199,6 +206,7 @@ def delete_workflow_history(
         event_index,
         previous_status,
         previous_occurred_on,
+        previous_scheduled_for,
     )
     save_memory(memory, memory_path)
     return {"workflow_status": status}
@@ -293,6 +301,7 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
                         payload["workflow_status"],
                         self.memory_path,
                         payload.get("occurred_on"),
+                        payload.get("scheduled_for"),
                     )
                 }
             elif self.path == "/api/note":
@@ -310,6 +319,10 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
                     payload["workflow_status"],
                     payload.get("occurred_on"),
                     self.memory_path,
+                    scheduled_for=payload.get("scheduled_for"),
+                    previous_scheduled_for=payload.get(
+                        "previous_scheduled_for"
+                    ),
                 )
             else:
                 result = delete_workflow_history(
@@ -318,6 +331,9 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
                     payload["previous_status"],
                     payload.get("previous_occurred_on"),
                     self.memory_path,
+                    previous_scheduled_for=payload.get(
+                        "previous_scheduled_for"
+                    ),
                 )
         except (TypeError, ValueError, KeyError, json.JSONDecodeError) as error:
             self.send_json({"error": str(error)}, status=400)

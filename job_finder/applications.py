@@ -1,6 +1,6 @@
 """Local application history and derived workflow statistics."""
 
-from datetime import date
+from datetime import date, datetime
 
 from job_finder.memory import load_memory
 from job_finder.models import WorkflowStatus
@@ -29,14 +29,22 @@ RESPONSE_STATUSES = {
 }
 
 
-def record_status_change(entry, workflow_status, occurred_on=None):
+def record_status_change(
+    entry,
+    workflow_status,
+    occurred_on=None,
+    scheduled_for=None,
+):
     """Set the current status and append one dated manual transition."""
     status = WorkflowStatus(workflow_status).value
-    explicit_date = occurred_on is not None
+    explicit_event = occurred_on is not None or scheduled_for is not None
     event = {
         "status": status,
         "occurred_on": validated_date(occurred_on),
     }
+    appointment = validated_scheduled_for(status, scheduled_for)
+    if appointment is not None:
+        event["scheduled_for"] = appointment
     previous_status = entry.get("workflow_status", WorkflowStatus.NEW.value)
     history = entry.get("workflow_history")
     if not isinstance(history, list):
@@ -56,7 +64,7 @@ def record_status_change(entry, workflow_status, occurred_on=None):
                 }
             )
             history_changed = True
-    if (previous_status != status or explicit_date) and event not in history:
+    if (previous_status != status or explicit_event) and event not in history:
         history.append(event)
         history_changed = True
     if history_changed:
@@ -115,6 +123,8 @@ def update_history_event(
     previous_occurred_on,
     workflow_status,
     occurred_on,
+    scheduled_for=None,
+    previous_scheduled_for=None,
 ):
     """Edit one stored workflow event and recalculate the current status."""
     history, index = editable_history_event(
@@ -122,28 +132,29 @@ def update_history_event(
         event_index,
         previous_status,
         previous_occurred_on,
+        previous_scheduled_for,
     )
     status = WorkflowStatus(workflow_status).value
     event_date = validated_optional_date(occurred_on)
+    appointment = validated_scheduled_for(status, scheduled_for)
+    updated_event = {"status": status, "occurred_on": event_date}
+    if appointment is not None:
+        updated_event["scheduled_for"] = appointment
     for other_index, other_event in enumerate(history):
         if other_index == index:
             continue
         normalized = normalized_history_event(other_event)
         if normalized is None:
             continue
-        if (
-            normalized["status"] == status
-            and normalized["occurred_on"] == event_date
-        ):
+        if normalized == updated_event:
             raise ValueError("Dieses Verlaufsereignis existiert bereits")
-    updated_event = dict(history[index])
-    updated_event.update({"status": status, "occurred_on": event_date})
     history[index] = updated_event
     current_status = synchronize_current_status(entry)
     return {
         "event_index": index,
         "status": status,
         "occurred_on": event_date,
+        "scheduled_for": appointment,
         "workflow_status": current_status,
     }
 
@@ -153,6 +164,7 @@ def delete_history_event(
     event_index,
     previous_status,
     previous_occurred_on,
+    previous_scheduled_for=None,
 ):
     """Delete one stored workflow event and recalculate the current status."""
     history, index = editable_history_event(
@@ -160,6 +172,7 @@ def delete_history_event(
         event_index,
         previous_status,
         previous_occurred_on,
+        previous_scheduled_for,
     )
     history.pop(index)
     return synchronize_current_status(entry)
@@ -170,6 +183,7 @@ def editable_history_event(
     event_index,
     previous_status,
     previous_occurred_on,
+    previous_scheduled_for=None,
 ):
     """Return a mutable history and one validated raw event index."""
     if isinstance(event_index, bool) or not isinstance(event_index, int):
@@ -186,6 +200,12 @@ def editable_history_event(
         "status": WorkflowStatus(previous_status).value,
         "occurred_on": validated_optional_date(previous_occurred_on),
     }
+    appointment = validated_scheduled_for(
+        expected_event["status"],
+        previous_scheduled_for,
+    )
+    if appointment is not None:
+        expected_event["scheduled_for"] = appointment
     if current_event != expected_event:
         raise ValueError(
             "Verlauf wurde zwischenzeitlich geändert; Seite neu laden"
@@ -264,6 +284,11 @@ def application_row(job_id, entry):
         "applied_on": applied_on,
         "response_on": response_on,
         "days_to_response": days_to_response,
+        "next_interview_at": (
+            first_upcoming_interview(history)
+            if current_status in OPEN_APPLICATION_STATUSES
+            else None
+        ),
         "last_event_on": max(
             (
                 event["occurred_on"]
@@ -313,9 +338,15 @@ def normalized_history_event(event, event_index=None):
     try:
         status = WorkflowStatus(event.get("status")).value
         occurred_on = validated_optional_date(event.get("occurred_on"))
+        appointment = validated_scheduled_for(
+            status,
+            event.get("scheduled_for"),
+        )
     except (TypeError, ValueError):
         return None
     normalized = {"status": status, "occurred_on": occurred_on}
+    if appointment is not None:
+        normalized["scheduled_for"] = appointment
     if event_index is not None:
         normalized["event_index"] = event_index
     return normalized
@@ -326,6 +357,35 @@ def validated_optional_date(value):
     if value is None or value == "":
         return None
     return validated_date(value)
+
+
+def validated_scheduled_for(status, value):
+    """Return one optional local interview timestamp at minute precision."""
+    if value is None or value == "":
+        return None
+    if status != WorkflowStatus.INTERVIEW.value:
+        raise ValueError("Ein Gesprächstermin ist nur beim Status Gespräch möglich")
+    if not isinstance(value, str):
+        raise ValueError("Gesprächstermin muss als Datum und Uhrzeit angegeben werden")
+    try:
+        appointment = datetime.strptime(value, "%Y-%m-%dT%H:%M")
+    except ValueError as error:
+        raise ValueError(
+            "Ungültiger Gesprächstermin; erwartet wird YYYY-MM-DDTHH:MM"
+        ) from error
+    return appointment.strftime("%Y-%m-%dT%H:%M")
+
+
+def first_upcoming_interview(history, now=None):
+    """Return the next scheduled interview from a normalized history."""
+    current = (now or datetime.now()).strftime("%Y-%m-%dT%H:%M")
+    appointments = [
+        event["scheduled_for"]
+        for event in history
+        if event["status"] == WorkflowStatus.INTERVIEW.value
+        and event.get("scheduled_for", "") >= current
+    ]
+    return min(appointments, default=None)
 
 
 def first_event_date(history, statuses):

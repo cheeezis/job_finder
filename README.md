@@ -127,10 +127,14 @@ python run_finder.py --notify
 Der Webhook bleibt ausserhalb der gespeicherten Dateien. Erfolgreich gesendete
 Jobversionen werden nicht erneut gemeldet; Fehler bleiben für den nächsten
 Lauf vorgemerkt. Nach jedem Lauf mit `--notify` folgt eine kompakte
-Laufstatistik mit Laufzeit, Vorfilter- und KI-Zahlen sowie einer Aufschlüsselung
-der gefundenen Stellen nach Quelle.
+Laufstatistik mit Laufzeit, Vorfilter- und KI-Zahlen, Modellaufrufen und
+Tokenverbrauch sowie einer Aufschlüsselung der gefundenen Stellen nach Quelle.
+Endgültige lokale Validierungsfehler werden für unveränderte Stellen pausiert,
+damit sie nicht täglich erneut kostenpflichtig analysiert werden. Änderungen an
+Stelle, Profil oder KI-Konfiguration geben die Analyse wieder frei; technische
+Provider- und Netzwerkfehler bleiben erneut versuchbar.
 
-Jeder Lauf schreibt seine vollständige Terminalausgabe zusätzlich nach
+Jeder Lauf schreibt seine kompakte Terminalausgabe zusätzlich nach
 `data/logs/`. Vor dem Verändern persistenter Daten werden Job-Gedächtnis,
 LLM-Cache und Discord-Versandstatus als ZIP unter `data/backups/` gesichert.
 Es bleiben höchstens die sieben neuesten Sicherungen erhalten.
@@ -226,7 +230,7 @@ data/internal/llm_cache.json LLM-Ergebnisse und ausstehende Analysen
 data/internal/notifications.json Versand- und Wiederholungsstatus
 data/output/recommendations.json kompakte finale KI-Ergebnisse
 data/output/recommendations.md lesbare KI-Empfehlungen
-data/logs/                  vollständige Protokolle einzelner Läufe
+data/logs/                  kompakte Protokolle einzelner Läufe
 data/backups/               sieben neueste Sicherungen persistenter Zustandsdaten
 profile.example.yaml        anonymisierte Vorlage für das LLM-Profil
 profile.local.yaml          lokale persönliche Faktenbasis (nicht versioniert)

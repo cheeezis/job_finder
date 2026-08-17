@@ -40,6 +40,8 @@ def fetch_company_jobs(
     jobs = []
     unsaved = 0
     cache_updated = False
+    detail_errors = 0
+    stale_fallbacks = 0
     parser = parser or job_from_json_ld
 
     for url in links:
@@ -49,7 +51,6 @@ def fetch_company_jobs(
             cache_updated = ensure_url_identity(cached_job, source_name, url) or cache_updated
             cached_job.content_changed = False
             jobs.append(cached_job)
-            print(f"CACHE: {url}")
             continue
 
         try:
@@ -63,18 +64,21 @@ def fetch_company_jobs(
             if unsaved >= DETAIL_CACHE_SAVE_INTERVAL:
                 save_detail_cache(cache_file, cache)
                 unsaved = 0
-            print(f"OK: {url}")
-        except Exception as error:
-            print(f"FEHLER: {url}")
-            print(f"       {error}")
+        except Exception:
+            detail_errors += 1
             if cached_job:
                 cache_updated = ensure_url_identity(cached_job, source_name, url) or cache_updated
                 cached_job.content_changed = False
                 jobs.append(cached_job)
-                print(f"CACHE (veraltet): {url}")
+                stale_fallbacks += 1
 
     if unsaved or cache_updated:
         save_detail_cache(cache_file, cache)
+    if detail_errors:
+        print(
+            f"WARNUNG {source_name}: {detail_errors} Detailseite(n) "
+            f"nicht erreichbar, {stale_fallbacks} aus altem Cache übernommen"
+        )
     return jobs
 
 

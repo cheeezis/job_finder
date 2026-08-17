@@ -151,6 +151,14 @@ def send_run_summary(summary, *, webhook_url, client=None):
 def run_summary_payload(summary):
     """Render a compact, mention-safe summary that fits one Discord message."""
     sources = summary["sources"]
+    analysis_line = (
+        f"KI: {summary['analyzed']} neu analysiert, {summary['cached']} aus Cache, "
+        f"{summary['analysis_failed']} Fehler"
+    )
+    if summary.get("analysis_blocked"):
+        analysis_line += (
+            f", {summary['analysis_blocked']} Validierungsfehler pausiert"
+        )
     lines = [
         "**📊 Job Finder – Lauf abgeschlossen**",
         "",
@@ -158,13 +166,19 @@ def run_summary_payload(summary):
         f"Jobs: {summary['jobs_total']} gesamt "
         f"({summary['jobs_new']} neu, {summary['jobs_known']} bekannt)",
         f"Vorfilter: {summary['included']} an KI, {summary['excluded']} ausgeschlossen",
-        f"KI: {summary['analyzed']} neu analysiert, {summary['cached']} aus Cache, "
-        f"{summary['analysis_failed']} Fehler",
-        f"Bewertung: {summary['recommended']} passend, "
-        f"{summary['not_recommended']} nicht empfohlen",
-        "",
-        "**Quellen**",
+        analysis_line,
     ]
+    if summary.get("analysis_reason_summary"):
+        lines.append(f"KI-Anlässe: {summary['analysis_reason_summary']}")
+    lines.extend(summary.get("model_usage", []))
+    lines.extend(
+        [
+            f"Bewertung: {summary['recommended']} passend, "
+            f"{summary['not_recommended']} nicht empfohlen",
+            "",
+            "**Quellen**",
+        ]
+    )
     for source in sources:
         if source["status"] == "failed":
             lines.append(f"• {source['label']}: Fehler")

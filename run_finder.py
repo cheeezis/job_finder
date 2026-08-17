@@ -7,7 +7,7 @@ import time
 
 from job_finder.console import configure_utf8_output
 from job_finder.deduplication import deduplicate_jobs
-from job_finder.main import print_results, score_jobs
+from job_finder.main import score_jobs
 from job_finder.llm.service import analyze_results
 from job_finder.memory import load_memory, save_memory, update_memory
 from job_finder.notifications import process_notifications, send_run_summary
@@ -76,18 +76,17 @@ def main():
 def run_pipeline(args):
     """Execute one logged run of the complete job-finding pipeline."""
     started = time.monotonic()
-    backup = create_backup(
-        [MEMORY_FILE, LLM_CACHE_FILE, NOTIFICATION_STATE_FILE]
-    )
-    if backup:
-        print(f"Sicherung erstellt: {backup}")
-    print("1/4 Sammle Jobs aus Quellen")
-    jobs, source_status, source_reports = collect_jobs()
+    create_backup([MEMORY_FILE, LLM_CACHE_FILE, NOTIFICATION_STATE_FILE])
+    print("1/4 Quellen")
+    jobs, source_reports = collect_jobs()
+    print_source_summary(source_reports, len(jobs))
 
-    print("\n2/4 Aktualisiere Job-Gedaechtnis")
+    print("\n2/4 Gedächtnis")
     memory = load_memory(MEMORY_FILE)
     successful_sources = {
-        name for name, succeeded in source_status.items() if succeeded
+        report["name"]
+        for report in source_reports
+        if report["status"] == "success"
     }
     memory_stats = update_memory(
         jobs,
@@ -95,13 +94,13 @@ def run_pipeline(args):
         successful_sources=successful_sources,
     )
     save_memory(memory, MEMORY_FILE)
-    print(f'Neue Jobs: {memory_stats["new"]}')
-    print(f'Bekannte Jobs: {memory_stats["known"]}')
-    print(f'Neu inaktiv: {memory_stats["inactive"]}')
-    print(f'Reaktiviert: {memory_stats["reactivated"]}')
-    print(f"Gedaechtnis gespeichert in {MEMORY_FILE}")
+    print(
+        f'{memory_stats["new"]} neu · {memory_stats["known"]} bekannt · '
+        f'{memory_stats["inactive"]} neu inaktiv · '
+        f'{memory_stats["reactivated"]} reaktiviert'
+    )
 
-    print("\n3/4 Bewerte Jobs")
+    print("\n3/4 Filter und KI")
     results = score_jobs(jobs)
     candidate_ids = {job["id"] for job in results["included"]}
     enriched = arbeitnow.enrich_candidate_jobs(jobs, candidate_ids)
@@ -112,18 +111,30 @@ def run_pipeline(args):
         json.dumps([job.to_dict() for job in jobs], indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
-    print(f"{len(jobs)} Job(s) gespeichert in {JOBS_FILE}")
-    print("\nKI-Bewertung")
-    llm_stats = analyze_results(results, limit=args.llm_limit)
     print(
-        f"KI: {llm_stats['analyzed']} neu analysiert, "
-        f"{llm_stats['cached']} aus Cache, "
+        f"Vorfilter: {len(results['included'])} weiter · "
+        f"{len(results['excluded'])} ausgeschlossen"
+    )
+    llm_stats = analyze_results(results, limit=args.llm_limit)
+    llm_summary = (
+        f"KI: {llm_stats['analyzed']} erfolgreich · "
+        f"{llm_stats['cached']} aus Cache · "
         f"{llm_stats['failed']} fehlgeschlagen"
     )
+    if llm_stats.get("blocked"):
+        llm_summary += (
+            f" · {llm_stats['blocked']} Validierungsfehler pausiert"
+        )
+    print(llm_summary)
+    reason_summary = format_analysis_reason_summary(llm_stats.get("reasons", {}))
+    if reason_summary:
+        print(f"KI-Anlässe: {reason_summary}")
+    for line in format_model_usage(llm_stats.get("model_calls")):
+        print(line)
+    print_llm_errors(llm_stats.get("errors", []))
     write_recommendations(results)
-    print_results(results)
 
-    print("\n4/4 Bereite Benachrichtigungen vor")
+    print("\n4/4 Benachrichtigungen")
     notification_stats = process_notifications(
         results,
         send=args.notify,
@@ -164,22 +175,21 @@ def collect_jobs(sources=None):
     """Collect jobs from all configured sources and merge duplicates."""
     jobs = []
     seen_urls = set()
-    source_status = {}
     source_reports = []
 
     for source in sources or SOURCES:
-        print(f"\nQuelle: {source.SOURCE_NAME}")
         try:
             source_jobs = source.fetch_jobs()
         except Exception as error:
-            source_status[source.SOURCE_NAME] = False
             source_reports.append(
-                {"name": source.SOURCE_NAME, "status": "failed", "jobs": 0}
+                {
+                    "name": source.SOURCE_NAME,
+                    "status": "failed",
+                    "jobs": 0,
+                    "error": source_error_label(error),
+                }
             )
-            print(f"FEHLER Quelle {source.SOURCE_NAME}: {type(error).__name__}: {error}")
-            print("Der Lauf wird mit den uebrigen Quellen fortgesetzt")
             continue
-        source_status[source.SOURCE_NAME] = bool(source_jobs)
         source_reports.append(
             {
                 "name": source.SOURCE_NAME,
@@ -187,10 +197,6 @@ def collect_jobs(sources=None):
                 "jobs": len(source_jobs),
             }
         )
-        if not source_jobs:
-            print("Quelle lieferte keine Jobs; keine Anzeigen als inaktiv markieren")
-        print(f"{len(source_jobs)} Job(s) aus {source.SOURCE_NAME}")
-
         for job in source_jobs:
             url = job.primary_url
             dedupe_key = canonical_url(url)
@@ -199,7 +205,22 @@ def collect_jobs(sources=None):
             seen_urls.add(dedupe_key)
             jobs.append(job)
 
-    return deduplicate_jobs(jobs), source_status, source_reports
+    return deduplicate_jobs(jobs), source_reports
+
+
+def print_source_summary(source_reports, total_jobs):
+    """Print one source total plus exceptional source states."""
+    successful = sum(report["status"] == "success" for report in source_reports)
+    print(
+        f"  {successful}/{len(source_reports)} Quellen mit Treffern · "
+        f"{total_jobs} Stellen nach Deduplizierung"
+    )
+    for report in source_reports:
+        label = source_label(report["name"])
+        if report["status"] == "failed":
+            print(f"  WARNUNG {label}: {report.get('error', 'Fehler')}")
+        elif report["status"] == "empty":
+            print(f"  HINWEIS {label}: keine verwertbaren Treffer")
 
 
 def build_run_summary(
@@ -238,10 +259,84 @@ def build_run_summary(
         "analyzed": llm_stats["analyzed"],
         "cached": llm_stats["cached"],
         "analysis_failed": llm_stats["failed"],
+        "analysis_blocked": llm_stats.get("blocked", 0),
+        "analysis_reason_summary": format_analysis_reason_summary(
+            llm_stats.get("reasons", {})
+        ),
+        "model_usage": format_model_usage(llm_stats.get("model_calls")),
         "recommended": recommended,
         "not_recommended": len(reviewed) - recommended,
         "sources": summary_sources,
     }
+
+
+def format_analysis_reason_summary(reasons):
+    """Summarize paid-analysis causes without repeating cache hits."""
+    labels = (
+        ("new_job", "neu"),
+        ("content_or_input_changed", "Stelleninhalt geändert"),
+        ("retry_after_failed", "Wiederholung nach Fehler"),
+        ("profile_or_config_changed", "Profil/KI-Konfiguration geändert"),
+        ("deferred", "zuvor aufgeschoben"),
+        ("uncached_known_job", "bekannt ohne Cache"),
+    )
+    return ", ".join(
+        f"{reasons[key]} {label}"
+        for key, label in labels
+        if reasons.get(key)
+    )
+
+
+def format_model_usage(model_calls):
+    """Return compact lines shared by the console and Discord summary."""
+    if model_calls is None:
+        return []
+    calls = model_calls.get("calls", 0)
+    repairs = model_calls.get("validation_repairs", 0)
+    failures = model_calls.get("failed", 0)
+    parts = [f"Modellaufrufe: {calls}"]
+    if repairs:
+        parts.append(f"Korrekturversuche: {repairs}")
+    if failures:
+        parts.append(f"technisch fehlgeschlagen: {failures}")
+    lines = ["KI-Nutzung: " + " · ".join(parts)]
+
+    input_tokens = model_calls.get("input_tokens", 0)
+    output_tokens = model_calls.get("output_tokens", 0)
+    if input_tokens or output_tokens:
+        cached = model_calls.get("cached_input_tokens", 0)
+        reasoning = model_calls.get("reasoning_tokens", 0)
+        lines.append(
+            f"Tokens: {input_tokens:,} Input ({cached:,} davon Cache) · "
+            f"{output_tokens:,} Output ({reasoning:,} davon Reasoning)"
+        )
+    missing = model_calls.get("usage_missing", 0)
+    if missing:
+        lines.append(f"WARNUNG: Modellaufrufe ohne Tokenangaben: {missing}")
+    return [line.replace(",", ".") for line in lines]
+
+
+def print_llm_errors(errors, limit=5):
+    """Print bounded, grouped failure causes without untrusted job text."""
+    if not errors:
+        return
+    grouped = {}
+    for error in errors:
+        key = (error.get("category", "KI"), error["message"])
+        grouped[key] = grouped.get(key, 0) + 1
+    print("KI-Fehler:")
+    groups = list(grouped.items())
+    for (category, message), count in groups[:limit]:
+        print(f"  {count}× {category}: {message}")
+    remaining = len(groups) - limit
+    if remaining:
+        print(f"  … {remaining} weitere Fehlerarten")
+
+
+def source_error_label(error):
+    """Describe a source failure without leaking request URLs or messages."""
+    status_code = getattr(error, "code", None) or getattr(error, "status_code", None)
+    return f"HTTP {status_code}" if isinstance(status_code, int) else type(error).__name__
 
 
 def format_duration(duration_seconds):

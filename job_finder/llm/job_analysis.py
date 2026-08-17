@@ -5,7 +5,10 @@ from copy import deepcopy
 
 from jsonschema import ValidationError, validate
 
-from job_finder.llm.validation import build_validation_retry_messages
+from job_finder.llm.validation import (
+    build_validation_retry_messages,
+    chat_with_telemetry,
+)
 
 
 JOB_ANALYSIS_SCHEMA_VERSION = 3
@@ -422,16 +425,20 @@ def normalize_job_analysis(analysis):
     return normalized
 
 
-def analyze_job(job, model, client, validation_retries=1):
+def analyze_job(job, model, client, validation_retries=1, request_log=None):
     """Extract validated job facts through an injected LLM client."""
     messages = build_job_analysis_messages(job)
+    prompt_job = job_analysis_input(job)
     source_text = "\n".join(
-        str(job.get(field) or "")
-        for field in ("title", "description_clean", "career_levels")
+        str(prompt_job.get(field) or "") for field in ("title", "description_clean")
     )
 
     for attempt in range(validation_retries + 1):
-        raw_analysis, metadata = client.chat(
+        raw_analysis, metadata = chat_with_telemetry(
+            client,
+            stage="job_analysis",
+            validation_repair=attempt > 0,
+            request_log=request_log,
             model=model,
             messages=messages,
             output_schema=JOB_ANALYSIS_SCHEMA,

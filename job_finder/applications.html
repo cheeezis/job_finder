@@ -12,6 +12,7 @@
       background: #f3f5f8;
     }
     * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
     body { margin: 0; }
     main { width: min(1100px, calc(100% - 32px)); margin: 36px auto 72px; }
     header { display: flex; justify-content: space-between; gap: 24px; align-items: end; }
@@ -37,6 +38,7 @@
     .badge { padding: 5px 9px; border-radius: 999px; background: #e7f5ef; color: #12664f; font-size: .8rem; font-weight: 650; white-space: nowrap; }
     .badge.inactive { background: #f2f3f5; color: #657084; }
     .meta { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 15px 0; color: #445269; font-size: .9rem; }
+    .appointment { color: #12664f; font-weight: 700; }
     details { border-top: 1px solid #e5e9ef; margin-top: 18px; padding-top: 15px; }
     summary { cursor: pointer; font-weight: 650; }
     .timeline { display: grid; gap: 10px; margin: 15px 0; padding-left: 22px; }
@@ -46,8 +48,8 @@
     .new-event-title { margin: 18px 0 0; font-weight: 650; }
     .empty-history, .note, .empty, .error { color: #607087; }
     .note { padding: 10px 12px; background: #f7f8fa; border-radius: 9px; }
-    .event-form { display: grid; grid-template-columns: 1fr 170px auto; gap: 10px; align-items: end; margin-top: 14px; }
-    .history-form { display: grid; grid-template-columns: 1fr 170px auto; gap: 10px; align-items: end; }
+    .event-form { display: grid; grid-template-columns: 1fr 170px 210px auto; gap: 10px; align-items: end; margin-top: 14px; }
+    .history-form { display: grid; grid-template-columns: 1fr 170px 210px auto; gap: 10px; align-items: end; }
     .form-actions { display: flex; gap: 7px; }
     label { display: grid; gap: 6px; color: #607087; font-size: .82rem; }
     select, input, button { font: inherit; border-radius: 9px; }
@@ -128,6 +130,14 @@
   function formatDate(value) {
     if (!value) return "unbekannt";
     return new Date(`${value}T00:00:00`).toLocaleDateString("de-DE");
+  }
+
+  function formatDateTime(value) {
+    if (!value) return "";
+    return new Date(value).toLocaleString("de-DE", {
+      dateStyle: "medium",
+      timeStyle: "short"
+    });
   }
 
   function safeUrl(value) {
@@ -222,7 +232,9 @@
     if (application.workflow_history.length) {
       const list = make("ol", null, "timeline");
       application.workflow_history.forEach(event => {
-        list.append(make("li", `${formatDate(event.occurred_on)} · ${statusLabels[event.status] || event.status}`));
+        let text = `${formatDate(event.occurred_on)} · ${statusLabels[event.status] || event.status}`;
+        if (event.scheduled_for) text += ` · Termin: ${formatDateTime(event.scheduled_for)}`;
+        list.append(make("li", text));
       });
       readOnly.append(list);
     } else {
@@ -268,6 +280,20 @@
     return select;
   }
 
+  function appointmentField(select, initialValue = "") {
+    const label = make("label", "Gesprächstermin");
+    const input = document.createElement("input");
+    input.type = "datetime-local";
+    input.value = initialValue || "";
+    label.append(input);
+    const updateVisibility = () => {
+      label.hidden = select.value !== "interview";
+    };
+    select.addEventListener("change", updateVisibility);
+    updateVisibility();
+    return {label, input};
+  }
+
   async function postJson(path, payload, fallbackMessage) {
     const response = await fetch(path, {
       method: "POST",
@@ -285,16 +311,17 @@
     const select = statusSelect(window.applicationStatuses);
     select.name = "workflow_status";
     statusLabel.append(select);
-    const dateLabel = make("label", "Datum");
+    const dateLabel = make("label", "Status geändert am");
     const dateInput = document.createElement("input");
     dateInput.name = "occurred_on";
     dateInput.type = "date";
     dateInput.required = true;
     dateInput.value = localIsoDate();
     dateLabel.append(dateInput);
+    const appointment = appointmentField(select);
     const button = make("button", "Speichern");
     button.type = "submit";
-    form.append(statusLabel, dateLabel, button);
+    form.append(statusLabel, dateLabel, appointment.label, button);
     form.addEventListener("submit", async event => {
       event.preventDefault();
       button.disabled = true;
@@ -304,7 +331,10 @@
           {
             job_id: jobId,
             workflow_status: select.value,
-            occurred_on: dateInput.value
+            occurred_on: dateInput.value,
+            scheduled_for: select.value === "interview"
+              ? appointment.input.value || null
+              : null
           },
           "Ereignis konnte nicht gespeichert werden"
         );
@@ -324,18 +354,19 @@
     const statusLabel = make("label", "Status");
     const select = statusSelect(window.workflowStatuses, historyEvent.status);
     statusLabel.append(select);
-    const dateLabel = make("label", "Datum");
+    const dateLabel = make("label", "Status geändert am");
     const dateInput = document.createElement("input");
     dateInput.type = "date";
     dateInput.value = historyEvent.occurred_on || "";
     dateLabel.append(dateInput);
+    const appointment = appointmentField(select, historyEvent.scheduled_for);
     const actions = make("div", null, "form-actions");
     const saveButton = make("button", "Ändern");
     saveButton.type = "submit";
     const deleteButton = make("button", "Löschen", "danger");
     deleteButton.type = "button";
     actions.append(saveButton, deleteButton);
-    form.append(statusLabel, dateLabel, actions);
+    form.append(statusLabel, dateLabel, appointment.label, actions);
 
     form.addEventListener("submit", async event => {
       event.preventDefault();
@@ -349,8 +380,12 @@
             event_index: historyEvent.event_index,
             previous_status: historyEvent.status,
             previous_occurred_on: historyEvent.occurred_on,
+            previous_scheduled_for: historyEvent.scheduled_for || null,
             workflow_status: select.value,
-            occurred_on: dateInput.value || null
+            occurred_on: dateInput.value || null,
+            scheduled_for: select.value === "interview"
+              ? appointment.input.value || null
+              : null
           },
           "Verlaufsereignis konnte nicht geändert werden"
         );
@@ -374,7 +409,8 @@
             job_id: jobId,
             event_index: historyEvent.event_index,
             previous_status: historyEvent.status,
-            previous_occurred_on: historyEvent.occurred_on
+            previous_occurred_on: historyEvent.occurred_on,
+            previous_scheduled_for: historyEvent.scheduled_for || null
           },
           "Verlaufsereignis konnte nicht gelöscht werden"
         );
@@ -409,6 +445,7 @@
       meta.append(make("span", `Beworben: ${formatDate(application.applied_on)}`));
       if (application.response_on) meta.append(make("span", `Erste Antwort: ${formatDate(application.response_on)}`));
       if (application.days_to_response != null) meta.append(make("span", `${application.days_to_response} Tag(e) bis zur Antwort`));
+      if (application.next_interview_at) meta.append(make("span", `Nächstes Gespräch: ${formatDateTime(application.next_interview_at)}`, "appointment"));
       appendSourceLinks(meta, application);
       card.append(meta);
       if (application.review_note) card.append(make("p", application.review_note, "note"));

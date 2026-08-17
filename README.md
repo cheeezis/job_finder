@@ -98,7 +98,9 @@ der Bewerbungsübersicht gepflegt. Beide Bereiche verwenden das bestehende
 Job-Gedächtnis unter `data/internal/seen_jobs.json`.
 
 Die Bewerbungsübersicht speichert datierte Statuswechsel, zeigt auch nicht mehr
-aktive Stellen und berechnet daraus lokale Kennzahlen. Bei älteren Bewerbungen
+aktive Stellen und berechnet daraus lokale Kennzahlen. Für Gespräche kann
+zusätzlich ein optionaler Termin mit Datum und Uhrzeit hinterlegt werden. Bei
+älteren Bewerbungen
 ohne gespeichertes Datum bleibt das Datum bewusst unbekannt. Der finale Status
 `Keine Rückmeldung` wird manuell gesetzt; eine nicht mehr aktive Anzeige allein
 löst ihn nicht automatisch aus. Die Kartenliste zeigt standardmäßig nur

@@ -68,20 +68,20 @@ def fetch_jobs(cache_path=CACHE_FILE, now=None):
     """Search get in IT and return imported job details."""
     links = collect_links()
     if not links:
-        print("Keine get-in-IT-Links gefunden")
         return []
 
     cache_file = Path(cache_path)
     cache = load_detail_cache(cache_file)
     jobs = []
     unsaved_details = 0
+    detail_errors = 0
+    stale_fallbacks = 0
     for url in links:
         cache_key = canonical_detail_url(url)
         cached_job = cache.get(cache_key)
         if detail_is_fresh(cached_job, now):
             cached_job.content_changed = False
             jobs.append(cached_job)
-            print(f"CACHE: {url}")
             continue
 
         try:
@@ -93,16 +93,19 @@ def fetch_jobs(cache_path=CACHE_FILE, now=None):
             if unsaved_details >= DETAIL_CACHE_SAVE_INTERVAL:
                 save_detail_cache(cache_file, cache)
                 unsaved_details = 0
-            print(f"OK: {url}")
-        except Exception as error:
-            print(f"FEHLER: {url}")
-            print(f"       {error}")
+        except Exception:
+            detail_errors += 1
             if cached_job:
                 cached_job.content_changed = False
                 jobs.append(cached_job)
-                print(f"CACHE (veraltet): {url}")
+                stale_fallbacks += 1
     if unsaved_details:
         save_detail_cache(cache_file, cache)
+    if detail_errors:
+        print(
+            f"WARNUNG get-in-IT: {detail_errors} Detailseite(n) "
+            f"nicht erreichbar, {stale_fallbacks} aus altem Cache übernommen"
+        )
     return jobs
 
 
@@ -110,20 +113,21 @@ def collect_links():
     """Collect unique detail links from all generated API searches."""
     links = []
     seen = set()
+    search_errors = 0
 
     for search in build_api_searches():
-        print(f"Suche get in IT: {search['label']} / {search['location']}")
         try:
             results = search_api(search["priority_id"], search["location"])
-        except Exception as error:
-            print(f"  FEHLER Suche: {error}")
+        except Exception:
+            search_errors += 1
             continue
 
         found_links = extract_detail_links_from_api(results)
-        print(f"  {len(found_links)} Link(s)")
         for url in found_links:
             append_unique(url, links, seen)
 
+    if search_errors:
+        print(f"WARNUNG get-in-IT: {search_errors} Suche(n) fehlgeschlagen")
     return links
 
 
@@ -199,7 +203,6 @@ def search_api(priority_id, location):
             results.append(job)
 
         total = int(data.get("total", 0) or 0)
-        print(f"  API {len(results)}/{total} eindeutige Treffer bisher")
         if not page_results or not new_results or len(results) >= total:
             return results
 

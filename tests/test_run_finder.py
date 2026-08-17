@@ -1,8 +1,10 @@
 """Tests for top-level source isolation in the productive runner."""
 
+import io
 import json
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -13,7 +15,10 @@ from run_finder import (
     canonical_url,
     collect_jobs,
     format_duration,
+    format_model_usage,
+    print_llm_errors,
     run_pipeline,
+    source_error_label,
 )
 
 
@@ -43,7 +48,13 @@ class RunAgentTests(unittest.TestCase):
             with (
                 patch("run_finder.JOBS_FILE", jobs_file),
                 patch("run_finder.create_backup", return_value=None),
-                patch("run_finder.collect_jobs", return_value=([job], {"arbeitnow": True}, [])),
+                patch(
+                    "run_finder.collect_jobs",
+                    return_value=(
+                        [job],
+                        [{"name": "arbeitnow", "status": "success", "jobs": 1}],
+                    ),
+                ),
                 patch("run_finder.load_memory", return_value={}),
                 patch("run_finder.save_memory"),
                 patch(
@@ -57,7 +68,6 @@ class RunAgentTests(unittest.TestCase):
                     return_value={"analyzed": 0, "cached": 0, "failed": 0},
                 ),
                 patch("run_finder.write_recommendations"),
-                patch("run_finder.print_results"),
                 patch(
                     "run_finder.process_notifications",
                     return_value={
@@ -69,11 +79,17 @@ class RunAgentTests(unittest.TestCase):
                     },
                 ),
             ):
-                run_pipeline(SimpleNamespace(llm_limit=None, notify=False))
+                output = io.StringIO()
+                with redirect_stdout(output):
+                    run_pipeline(SimpleNamespace(llm_limit=None, notify=False))
 
             persisted = json.loads(jobs_file.read_text(encoding="utf-8"))
             self.assertEqual(persisted[0]["description_clean"], "Originalbeschreibung")
             self.assertEqual(score_jobs.call_count, 2)
+            self.assertIn("1/4 Quellen", output.getvalue())
+            self.assertIn("Vorfilter: 1 weiter · 0 ausgeschlossen", output.getvalue())
+            self.assertNotIn("Junior Developer", output.getvalue())
+            self.assertNotIn("https://", output.getvalue())
 
     def test_failed_source_does_not_stop_following_sources(self):
         failing = SimpleNamespace(
@@ -85,14 +101,18 @@ class RunAgentTests(unittest.TestCase):
             fetch_jobs=lambda: [make_job("working:1")],
         )
 
-        jobs, status, reports = collect_jobs([failing, working])
+        jobs, reports = collect_jobs([failing, working])
 
         self.assertEqual([job.id for job in jobs], ["working:1"])
-        self.assertEqual(status, {"broken": False, "working": True})
         self.assertEqual(
             reports,
             [
-                {"name": "broken", "status": "failed", "jobs": 0},
+                {
+                    "name": "broken",
+                    "status": "failed",
+                    "jobs": 0,
+                    "error": "RuntimeError",
+                },
                 {"name": "working", "status": "success", "jobs": 1},
             ],
         )
@@ -100,10 +120,9 @@ class RunAgentTests(unittest.TestCase):
     def test_empty_source_is_not_trusted_for_inactive_tracking(self):
         empty = SimpleNamespace(SOURCE_NAME="empty", fetch_jobs=lambda: [])
 
-        jobs, status, reports = collect_jobs([empty])
+        jobs, reports = collect_jobs([empty])
 
         self.assertEqual(jobs, [])
-        self.assertEqual(status, {"empty": False})
         self.assertEqual(reports, [{"name": "empty", "status": "empty", "jobs": 0}])
 
     def test_run_summary_tracks_source_counts_and_evaluation_outcomes(self):
@@ -126,7 +145,14 @@ class RunAgentTests(unittest.TestCase):
             jobs=[job],
             results=results,
             memory_stats={"new": 1, "known": 0},
-            llm_stats={"analyzed": 1, "cached": 1, "failed": 0},
+            llm_stats={
+                "analyzed": 1,
+                "cached": 1,
+                "failed": 0,
+                "blocked": 2,
+                "reasons": {"new_job": 1, "cache_hit": 1},
+                "model_calls": {"calls": 2},
+            },
             source_reports=[
                 {"name": "working", "status": "success", "jobs": 1},
                 {"name": "broken", "status": "failed", "jobs": 0},
@@ -136,9 +162,47 @@ class RunAgentTests(unittest.TestCase):
         self.assertEqual(summary["duration"], "2 Min. 05 Sek.")
         self.assertEqual(summary["recommended"], 1)
         self.assertEqual(summary["not_recommended"], 1)
+        self.assertEqual(summary["analysis_reason_summary"], "1 neu")
+        self.assertEqual(summary["analysis_blocked"], 2)
+        self.assertEqual(summary["model_usage"], ["KI-Nutzung: Modellaufrufe: 2"])
         self.assertEqual(summary["sources"][0]["new"], 1)
         self.assertEqual(summary["sources"][1]["status"], "failed")
         self.assertEqual(format_duration(5), "5 Sek.")
+
+    def test_compact_model_costs_and_understandable_errors(self):
+        output = io.StringIO()
+        with redirect_stdout(output):
+            usage = format_model_usage(
+                {
+                    "calls": 3,
+                    "failed": 1,
+                    "validation_repairs": 1,
+                    "input_tokens": 12345,
+                    "output_tokens": 678,
+                    "cached_input_tokens": 2345,
+                    "reasoning_tokens": 78,
+                    "usage_missing": 1,
+                }
+            )
+            print("\n".join(usage))
+            print_llm_errors(
+                [
+                    {
+                        "category": "Stellenanalyse",
+                        "message": "Ein KI-Beleg steht nicht wortgetreu in der Anzeige.",
+                    }
+                ]
+            )
+
+        text = output.getvalue()
+        self.assertIn(
+            "KI-Nutzung: Modellaufrufe: 3 · Korrekturversuche: 1",
+            text,
+        )
+        self.assertIn("12.345 Input", text)
+        self.assertIn("Modellaufrufe ohne Tokenangaben: 1", text)
+        self.assertIn("1× Stellenanalyse", text)
+        self.assertNotIn("Validierungsfehler", text)
 
     def test_canonical_url_keeps_jumo_job_offer_id(self):
         first = canonical_url(
@@ -151,6 +215,11 @@ class RunAgentTests(unittest.TestCase):
         )
 
         self.assertNotEqual(first, second)
+
+    def test_source_error_label_uses_http_status_without_printing_urls(self):
+        error = SimpleNamespace(code=429)
+
+        self.assertEqual(source_error_label(error), "HTTP 429")
 
 
 if __name__ == "__main__":

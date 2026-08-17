@@ -49,6 +49,8 @@ def fetch_jobs(cache_path=CACHE_FILE, now=None):
     cache = load_detail_cache(cache_file)
     jobs = []
     unsaved_details = 0
+    detail_errors = 0
+    stale_fallbacks = 0
 
     for url in links:
         cache_key = canonical_detail_url(url)
@@ -56,7 +58,6 @@ def fetch_jobs(cache_path=CACHE_FILE, now=None):
         if detail_is_fresh(cached_job, now):
             cached_job.content_changed = False
             jobs.append(cached_job)
-            print(f"CACHE: {url}")
             continue
 
         try:
@@ -68,17 +69,20 @@ def fetch_jobs(cache_path=CACHE_FILE, now=None):
             if unsaved_details >= DETAIL_CACHE_SAVE_INTERVAL:
                 save_detail_cache(cache_file, cache)
                 unsaved_details = 0
-            print(f"OK: {url}")
-        except Exception as error:
-            print(f"FEHLER: {url}")
-            print(f"       {error}")
+        except Exception:
+            detail_errors += 1
             if cached_job:
                 cached_job.content_changed = False
                 jobs.append(cached_job)
-                print(f"CACHE (veraltet): {url}")
+                stale_fallbacks += 1
 
     if unsaved_details:
         save_detail_cache(cache_file, cache)
+    if detail_errors:
+        print(
+            f"WARNUNG Arbeitsagentur: {detail_errors} Detailseite(n) "
+            f"nicht erreichbar, {stale_fallbacks} aus altem Cache übernommen"
+        )
     return jobs
 
 
@@ -98,16 +102,13 @@ def collect_links():
     )
 
     for term, location, radius in searches:
-        print(f"Suche: {term} / {location}")
         results = search(term, location=location, radius=radius)
-        print(f"  {len(results)} Treffer")
 
         for result in results:
             reference = result.get("referenznummer")
             if not reference:
                 continue
             if "/" in reference:
-                print(f"  Ueberspringe Sonder-Referenz: {reference}")
                 continue
 
             url = f"{DETAIL_BASE_URL}/{reference}"
@@ -145,10 +146,6 @@ def search(term, location=LOCAL_SEARCH_LOCATION, radius=LOCAL_SEARCH_RADIUS_KM):
             results.append(result)
 
         total = int(search_result.get("maxErgebnisse", 0) or 0)
-        print(
-            f"  Seite {page}: {len(new_results)} erstmals auf dieser Suche, "
-            f"{len(results)}/{total} Treffer bisher"
-        )
         if not page_results or not new_results or len(results) >= total:
             return results
 

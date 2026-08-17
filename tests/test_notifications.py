@@ -343,6 +343,8 @@ class NotificationTests(unittest.TestCase):
                 "analyzed": 2,
                 "cached": 3,
                 "analysis_failed": 0,
+                "analysis_blocked": 2,
+                "analysis_reason_summary": "2 neu, 1 Wiederholung nach Fehler",
                 "recommended": 2,
                 "not_recommended": 3,
                 "sources": [
@@ -364,8 +366,46 @@ class NotificationTests(unittest.TestCase):
 
         self.assertEqual(payload["allowed_mentions"], {"parse": []})
         self.assertIn("20 gesamt (3 neu, 17 bekannt)", payload["content"])
+        self.assertIn("2 Validierungsfehler pausiert", payload["content"])
+        self.assertIn(
+            "KI-Anlässe: 2 neu, 1 Wiederholung nach Fehler",
+            payload["content"],
+        )
         self.assertIn("Arbeitsagentur: 12 Stellen, 2 neu", payload["content"])
         self.assertIn("StepStone: Fehler", payload["content"])
+        self.assertNotIn("KI-Nutzung", payload["content"])
+
+        summary_with_costs = {
+            "duration": "2 Min. 05 Sek.",
+            "jobs_total": 20,
+            "jobs_new": 3,
+            "jobs_known": 17,
+            "included": 5,
+            "excluded": 15,
+            "analyzed": 2,
+            "cached": 3,
+            "analysis_failed": 0,
+            "recommended": 2,
+            "not_recommended": 3,
+            "sources": [],
+            "model_usage": [
+                "KI-Nutzung: Modellaufrufe: 5 · Korrekturversuche: 1 · "
+                "technisch fehlgeschlagen: 1",
+                "Tokens: 12.345 Input (2.345 davon Cache) · "
+                "678 Output (78 davon Reasoning)",
+                "WARNUNG: Modellaufrufe ohne Tokenangaben: 1",
+            ],
+        }
+        cost_payload = run_summary_payload(summary_with_costs)
+        self.assertIn(
+            "KI-Nutzung: Modellaufrufe: 5 · Korrekturversuche: 1",
+            cost_payload["content"],
+        )
+        self.assertIn(
+            "Tokens: 12.345 Input (2.345 davon Cache)",
+            cost_payload["content"],
+        )
+        self.assertIn("Modellaufrufe ohne Tokenangaben: 1", cost_payload["content"])
 
     def test_run_summary_reports_missing_webhook_without_sending(self):
         self.assertIn(

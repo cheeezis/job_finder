@@ -93,25 +93,27 @@ def fetch_jobs(
     try:
         links = search_links(client)
     except StepStoneBlockedError as error:
-        print(f"ABBRUCH: {error}")
-        print("StepStone wird spaeter erneut versucht; nutze letzten Cache-Stand")
+        print(
+            f"WARNUNG StepStone: HTTP {error.status_code}; "
+            "nutze letzten Cache-Stand"
+        )
         return cached_jobs(cache.get("last_links", []), cache)
 
     if not links:
-        print("Keine StepStone-Links gefunden")
         return []
 
     cache["last_links"] = links
     save_cache(cache_file, cache)
 
     jobs = []
+    detail_errors = 0
+    stale_fallbacks = 0
     for index, url in enumerate(links):
         cache_key = normalize_detail_url(url)
         cached_job = cache["jobs"].get(cache_key)
         if detail_is_fresh(cached_job, now):
             cached_job.content_changed = False
             jobs.append(cached_job)
-            print(f"CACHE: {url}")
             continue
 
         try:
@@ -120,22 +122,27 @@ def fetch_jobs(
             jobs.append(job)
             cache["jobs"][cache_key] = job
             save_cache(cache_file, cache)
-            print(f"OK: {url}")
         except StepStoneBlockedError as error:
-            print(f"ABBRUCH: {error}")
-            print("Keine weiteren StepStone-Requests in diesem Lauf")
+            print(
+                f"WARNUNG StepStone: HTTP {error.status_code}; "
+                "keine weiteren Detailanfragen"
+            )
             if cached_job:
                 cached_job.content_changed = False
                 jobs.append(cached_job)
             jobs.extend(cached_jobs(links[index + 1 :], cache))
             break
-        except Exception as error:
-            print(f"FEHLER: {url}")
-            print(f"       {error}")
+        except Exception:
+            detail_errors += 1
             if cached_job:
                 cached_job.content_changed = False
                 jobs.append(cached_job)
-                print(f"CACHE (veraltet): {url}")
+                stale_fallbacks += 1
+    if detail_errors:
+        print(
+            f"WARNUNG StepStone: {detail_errors} Detailseite(n) "
+            f"nicht erreichbar, {stale_fallbacks} aus altem Cache übernommen"
+        )
     return jobs
 
 
@@ -144,12 +151,12 @@ def search_links(client=None):
     client = client or StepStoneHttpClient()
     links = []
     seen = set()
+    search_errors = 0
 
     for query in iter_search_queries(
         STEPSTONE_SEARCH_TERMS,
         STEPSTONE_SEARCH_LOCATIONS,
     ):
-        print(f"Suche StepStone: {query.term} / {query.location}")
         page = 1
         query_seen = set()
 
@@ -159,8 +166,8 @@ def search_links(client=None):
                 html = client.get(search_url)
             except StepStoneBlockedError:
                 raise
-            except Exception as error:
-                print(f"  FEHLER Seite {page}: {error}")
+            except Exception:
+                search_errors += 1
                 break
 
             found_links = extract_detail_links(html)
@@ -168,20 +175,16 @@ def search_links(client=None):
             for url in page_links:
                 query_seen.add(url)
 
-            globally_new = 0
             for url in page_links:
-                if append_unique(url, links, seen):
-                    globally_new += 1
+                append_unique(url, links, seen)
 
-            print(
-                f"  Seite {page}: {len(found_links)} Link(s), "
-                f"{globally_new} in diesem Lauf erstmals"
-            )
             if not found_links or not page_links:
                 break
 
             page += 1
 
+    if search_errors:
+        print(f"WARNUNG StepStone: {search_errors} Suchseite(n) nicht erreichbar")
     return links
 
 

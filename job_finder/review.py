@@ -4,7 +4,7 @@ import argparse
 import json
 import threading
 import webbrowser
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 from job_finder.applications import (
@@ -39,15 +39,52 @@ def load_review_jobs(
     review_jobs = []
     for recommendation in recommendations:
         job = dict(recommendation)
-        entry = memory.get(job["id"], {})
+        memory_id, entry = memory_entry_for_job(job, memory)
+        job["id"] = memory_id
         job["workflow_status"] = entry.get(
             "workflow_status",
             WorkflowStatus.NEW.value,
         )
         job["application_tracked"] = is_application(entry)
         job["review_note"] = entry.get("review_note", "")
+        if not job.get("source_links"):
+            source_names = entry.get("source_names", [])
+            if not isinstance(source_names, list):
+                source_names = []
+            job["source_links"] = [
+                {
+                    "source": (
+                        source_names[index]
+                        if index < len(source_names)
+                        else "listing"
+                    ),
+                    "url": url,
+                }
+                for index, url in enumerate(entry.get("source_urls", []))
+                if isinstance(url, str) and url
+            ]
         review_jobs.append(job)
     return review_jobs
+
+
+def memory_entry_for_job(job, memory):
+    """Resolve stale recommendation IDs through an exact known source URL."""
+    job_id = job["id"]
+    if job_id in memory:
+        return job_id, memory[job_id]
+    urls = {
+        link.get("url")
+        for link in job.get("source_links", [])
+        if isinstance(link, dict) and link.get("url")
+    }
+    if job.get("url"):
+        urls.add(job["url"])
+    matches = [
+        (memory_id, entry)
+        for memory_id, entry in memory.items()
+        if urls.intersection(entry.get("source_urls", []))
+    ]
+    return matches[0] if len(matches) == 1 else (job_id, {})
 
 
 def update_workflow_status(
@@ -325,7 +362,7 @@ def main():
     """Start the review server on the local computer only."""
     args = parse_args()
     address = ("127.0.0.1", args.port)
-    server = ThreadingHTTPServer(address, ReviewRequestHandler)
+    server = HTTPServer(address, ReviewRequestHandler)
     url = f"http://{address[0]}:{address[1]}"
     if not args.no_browser:
         threading.Timer(0.3, webbrowser.open, args=(url,)).start()

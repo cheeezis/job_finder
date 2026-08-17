@@ -105,6 +105,88 @@ class MemoryTests(unittest.TestCase):
         self.assertEqual(memory["test:123"]["missed_runs"], 0)
         self.assertEqual(job.workflow_status, WorkflowStatus.INTERESTING)
 
+    def test_known_source_url_reuses_reviewed_canonical_job(self):
+        job = make_job()
+        old_id = "stepstone:456"
+        memory = {
+            old_id: {
+                "title": job.title,
+                "company": job.company,
+                "first_seen_at": "2026-07-01T08:00:00+00:00",
+                "last_seen_at": "2026-08-01T08:00:00+00:00",
+                "workflow_status": "applied",
+                "workflow_history": [
+                    {"status": "applied", "occurred_on": "2026-08-01"}
+                ],
+                "source_urls": [
+                    "https://stepstone.test/jobs/456",
+                    job.primary_url,
+                ],
+                "source_names": ["stepstone", "test"],
+                "missed_runs": 2,
+                "active": True,
+            },
+            job.id: {
+                "title": job.title,
+                "company": job.company,
+                "first_seen_at": "2026-08-10T08:00:00+00:00",
+                "last_seen_at": "2026-08-10T08:00:00+00:00",
+                "workflow_status": "new",
+                "source_urls": [job.primary_url],
+                "source_names": ["test"],
+                "missed_runs": 0,
+                "active": True,
+            },
+        }
+
+        stats = update_memory([job], memory, successful_sources={"test"})
+
+        self.assertEqual(
+            stats,
+            {"new": 0, "known": 1, "inactive": 0, "reactivated": 0},
+        )
+        self.assertEqual(job.id, old_id)
+        self.assertEqual(job.workflow_status, WorkflowStatus.APPLIED)
+        self.assertNotIn("test:123", memory)
+        self.assertEqual(
+            memory[old_id]["workflow_history"],
+            [{"status": "applied", "occurred_on": "2026-08-01"}],
+        )
+        self.assertEqual(
+            memory[old_id]["source_urls"],
+            ["https://stepstone.test/jobs/456", job.primary_url],
+        )
+
+    def test_conflicting_manual_entries_are_not_removed(self):
+        job = make_job()
+        memory = {
+            "stepstone:456": {
+                "first_seen_at": "2026-07-01T08:00:00+00:00",
+                "last_seen_at": "2026-08-01T08:00:00+00:00",
+                "workflow_status": "applied",
+                "source_urls": [job.primary_url],
+                "source_names": ["stepstone"],
+                "missed_runs": 0,
+                "active": True,
+            },
+            job.id: {
+                "first_seen_at": "2026-08-10T08:00:00+00:00",
+                "last_seen_at": "2026-08-10T08:00:00+00:00",
+                "workflow_status": "ignored",
+                "source_urls": [job.primary_url],
+                "source_names": ["test"],
+                "missed_runs": 0,
+                "active": True,
+            },
+        }
+
+        update_memory([job], memory)
+
+        self.assertEqual(job.id, "test:123")
+        self.assertEqual(job.workflow_status, WorkflowStatus.IGNORED)
+        self.assertIn("stepstone:456", memory)
+        self.assertIn("test:123", memory)
+
     def test_memory_file_has_an_explicit_version(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "seen_jobs.json"

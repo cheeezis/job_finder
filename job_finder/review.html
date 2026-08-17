@@ -42,6 +42,13 @@
     button, .button { border: 1px solid #c4cdd9; background: white; padding: 10px 15px; color: #172033; cursor: pointer; text-decoration: none; }
     button:hover, .button:hover { background: #f3f5f8; }
     button:disabled { cursor: wait; opacity: .65; }
+    #job-links { display: flex; }
+    .source-menu { position: relative; }
+    .source-menu summary { display: block; list-style: none; }
+    .source-menu summary::-webkit-details-marker { display: none; }
+    .source-options { position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 2; display: grid; min-width: 190px; padding: 6px; background: white; border: 1px solid #cbd3df; border-radius: 10px; box-shadow: 0 8px 24px rgba(28, 39, 58, .12); }
+    .source-options a { padding: 9px 10px; color: #176b54; text-decoration: none; border-radius: 7px; }
+    .source-options a:hover { background: #edf7f3; }
     button.primary { background: #176b54; color: white; border-color: #176b54; }
     button.ignore { color: #8a3840; }
     .note-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
@@ -111,7 +118,7 @@
       <button id="mark-ignored" class="ignore">Nicht interessant</button>
       <button id="mark-applied">Als beworben markieren</button>
       <a id="application-link" class="button" href="/applications" hidden>Bewerbung verwalten</a>
-      <a id="job-link" class="button" target="_blank" rel="noopener noreferrer">Anzeige öffnen</a>
+      <div id="job-links"></div>
     </div>
     <section class="section">
       <h3>Meine Notiz</h3>
@@ -137,6 +144,11 @@
     rejected: "Absage", no_response: "Keine Rückmeldung",
     offer: "Angebot", closed: "Abgeschlossen"
   };
+  const sourceLabels = {
+    original: "Originalanzeige", stepstone: "StepStone",
+    get_in_it: "get-in-IT", arbeitnow: "Arbeitnow",
+    arbeitsagentur: "Arbeitsagentur"
+  };
   const reviewStatuses = new Set(["review", "interesting", "ignored"]);
   let jobs = [];
   let visibleJobs = [];
@@ -155,6 +167,61 @@
 
   function setText(id, value) {
     element(id).textContent = value || "";
+  }
+
+  function safeUrl(value) {
+    try {
+      const url = new URL(value);
+      return ["http:", "https:"].includes(url.protocol) ? url.href : "";
+    } catch {
+      return "";
+    }
+  }
+
+  function renderSourceLinks(job) {
+    const container = element("job-links");
+    container.replaceChildren();
+    const candidates = (job.source_links || []).length
+      ? job.source_links
+      : [{source: "listing", url: job.url}];
+    const seen = new Set();
+    const links = candidates.flatMap((item, index) => {
+      const url = safeUrl(item.url);
+      if (!url || seen.has(url)) return [];
+      seen.add(url);
+      return [{
+        url,
+        label: sourceLabels[item.source] || `Anzeige ${index + 1}`
+      }];
+    });
+    if (!links.length) return;
+    if (links.length === 1) {
+      const link = document.createElement("a");
+      link.className = "button";
+      link.textContent = "Anzeige öffnen";
+      link.href = links[0].url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      container.append(link);
+      return;
+    }
+    const menu = document.createElement("details");
+    menu.className = "source-menu";
+    const summary = document.createElement("summary");
+    summary.className = "button";
+    summary.textContent = `Anzeigen öffnen (${links.length})`;
+    const options = document.createElement("div");
+    options.className = "source-options";
+    links.forEach(item => {
+      const link = document.createElement("a");
+      link.textContent = item.label;
+      link.href = item.url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      options.append(link);
+    });
+    menu.append(summary, options);
+    container.append(menu);
   }
 
   function addList(parent, heading, values) {
@@ -223,8 +290,7 @@
     element("application-link").hidden = !applicationTracked;
     element("review-note").value = job.review_note || "";
     setText("summary", job.summary);
-    element("job-link").href = job.url || "#";
-    element("job-link").hidden = !job.url;
+    renderSourceLinks(job);
 
     const details = element("details");
     details.replaceChildren();

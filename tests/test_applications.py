@@ -4,9 +4,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from job_agent.applications import load_application_overview
-from job_agent.memory import load_memory, save_memory
-from job_agent.review import (
+from job_finder.applications import load_application_overview
+from job_finder.memory import load_memory, save_memory
+from job_finder.review import (
     delete_workflow_history,
     update_workflow_history,
     update_workflow_status,

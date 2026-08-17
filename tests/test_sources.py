@@ -8,15 +8,15 @@ from pathlib import Path
 from unittest.mock import ANY, Mock, patch
 from urllib.error import HTTPError
 
-from job_agent.config import (
+from job_finder.config import (
     COMMUTER_SEARCH_RADIUS_KM,
     LOCAL_SEARCH_POSTAL_CODE,
     STEPSTONE_SEARCH_RADIUS_KM,
     STEPSTONE_SEARCH_LOCATIONS,
     STEPSTONE_SEARCH_TERMS,
 )
-from job_agent.models import Job, JobSource, WorkMode
-from job_agent.sources import (
+from job_finder.models import Job, JobSource, WorkMode
+from job_finder.sources import (
     arbeitnow,
     arbeitsagentur,
     bytewerk,
@@ -27,12 +27,12 @@ from job_agent.sources import (
     rhoenenergie,
     stepstone,
 )
-from job_agent.sources.common import (
+from job_finder.sources.common import (
     canonical_detail_url,
     load_detail_cache,
     save_detail_cache,
 )
-from job_agent.sources.stepstone import build_search_url
+from job_finder.sources.stepstone import build_search_url
 
 
 class CommuterSearchTests(unittest.TestCase):

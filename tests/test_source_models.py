@@ -5,9 +5,9 @@ import unittest
 from datetime import date
 from unittest.mock import Mock, patch
 
-from job_agent.models import Job, WorkMode
-from job_agent.sources import arbeitnow, arbeitsagentur, edag, get_in_it, stepstone
-from job_agent.sources.company_careers import job_from_json_ld
+from job_finder.models import Job, WorkMode
+from job_finder.sources import arbeitnow, arbeitsagentur, edag, get_in_it, stepstone
+from job_finder.sources.company_careers import job_from_json_ld
 
 
 def script_html(script_id, values, script_type="application/json"):

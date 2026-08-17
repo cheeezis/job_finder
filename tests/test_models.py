@@ -4,7 +4,7 @@ import json
 import unittest
 from datetime import date, datetime, timezone
 
-from job_agent.models import (
+from job_finder.models import (
     FilterStatus,
     Job,
     JobSource,

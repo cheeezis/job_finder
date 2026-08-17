@@ -3,8 +3,8 @@
 import json
 import unittest
 
-from job_agent.llm.profile_loader import LlmProfile
-from job_agent.llm.profile_match import (
+from job_finder.llm.profile_loader import LlmProfile
+from job_finder.llm.profile_match import (
     PROFILE_MATCH_SCHEMA,
     ProfileMatchValidationError,
     build_profile_match_messages,

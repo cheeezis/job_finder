@@ -3,7 +3,7 @@
 import json
 import unittest
 
-from job_agent.llm.job_analysis import (
+from job_finder.llm.job_analysis import (
     JOB_ANALYSIS_SCHEMA,
     SYSTEM_PROMPT,
     JobAnalysisValidationError,

@@ -5,7 +5,7 @@ import unittest
 
 import yaml
 
-from job_agent.llm.contract import RUBRIC_VERSION
+from job_finder.llm.contract import RUBRIC_VERSION
 from llm_evaluation.benchmark import EXPECTED_RESULTS_PATH, TEST_INPUTS_PATH
 
 

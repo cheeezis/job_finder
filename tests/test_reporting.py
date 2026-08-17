@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from job_agent.reporting import write_recommendations
+from job_finder.reporting import write_recommendations
 
 
 def analyzed_job():

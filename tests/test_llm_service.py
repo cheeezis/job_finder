@@ -6,10 +6,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from job_agent.llm.config import LlmSettings
-from job_agent.llm.errors import LLMError
-from job_agent.llm.fit_score import FIT_SCORE_VERSION
-from job_agent.llm.service import (
+from job_finder.llm.config import LlmSettings
+from job_finder.llm.errors import LLMError
+from job_finder.llm.fit_score import FIT_SCORE_VERSION
+from job_finder.llm.service import (
     analysis_configuration_key,
     analysis_cache_key,
     analyze_results,
@@ -103,7 +103,7 @@ class LlmServiceTests(unittest.TestCase):
                 return make_record(cache_key)
 
             with patch(
-                "job_agent.llm.service.analyze_job_record",
+                "job_finder.llm.service.analyze_job_record",
                 side_effect=fake_analysis,
             ) as analyze:
                 stats = analyze_results(results, settings, client=object())
@@ -160,7 +160,7 @@ class LlmServiceTests(unittest.TestCase):
                 return make_record(cache_key)
 
             with patch(
-                "job_agent.llm.service.analyze_job_record",
+                "job_finder.llm.service.analyze_job_record",
                 side_effect=fake_analysis,
             ):
                 analyze_results(first_results, settings, client=object())
@@ -169,7 +169,7 @@ class LlmServiceTests(unittest.TestCase):
                 "included": [make_job(is_new=False)],
                 "excluded": [],
             }
-            with patch("job_agent.llm.service.OpenAIClient") as client_class:
+            with patch("job_finder.llm.service.OpenAIClient") as client_class:
                 stats = analyze_results(known_results, settings)
 
         self.assertEqual(stats["analyzed"], 0)
@@ -185,7 +185,7 @@ class LlmServiceTests(unittest.TestCase):
             settings = self.settings(directory)
 
             with patch(
-                "job_agent.llm.service.analyze_job_record",
+                "job_finder.llm.service.analyze_job_record",
                 side_effect=lambda _job, _profile, _settings, _client, key: make_record(key),
             ):
                 analyze_results(first_results, settings, client=object())
@@ -199,7 +199,7 @@ class LlmServiceTests(unittest.TestCase):
                 "excluded": [],
             }
             with patch(
-                "job_agent.llm.service.analyze_job_record",
+                "job_finder.llm.service.analyze_job_record",
                 side_effect=lambda _job, _profile, _settings, _client, key: make_record(key),
             ) as analyze:
                 stats = analyze_results(
@@ -217,7 +217,7 @@ class LlmServiceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             settings = self.settings(directory)
             with patch(
-                "job_agent.llm.service.analyze_job_record",
+                "job_finder.llm.service.analyze_job_record",
                 side_effect=lambda _job, _profile, _settings, _client, key: make_record(key),
             ):
                 stats = analyze_results(results, settings, client=object())
@@ -240,12 +240,12 @@ class LlmServiceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             settings = self.settings(directory)
             with patch(
-                "job_agent.llm.service.analyze_job_record",
+                "job_finder.llm.service.analyze_job_record",
                 side_effect=lambda _job, _profile, _settings, _client, key: make_record(key),
             ):
                 analyze_results(first_results, settings, client=object())
             with patch(
-                "job_agent.llm.service.analyze_job_record",
+                "job_finder.llm.service.analyze_job_record",
                 side_effect=lambda _job, _profile, _settings, _client, key: make_record(key),
             ) as analyze:
                 stats = analyze_results(known_results, settings, client=object())
@@ -275,7 +275,7 @@ class LlmServiceTests(unittest.TestCase):
                 return make_record(cache_key)
 
             with patch(
-                "job_agent.llm.service.analyze_job_record",
+                "job_finder.llm.service.analyze_job_record",
                 side_effect=fake_analysis,
             ) as analyze:
                 stats = analyze_results(results, settings, client=object())
@@ -307,7 +307,7 @@ class LlmServiceTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with patch("job_agent.llm.service.analyze_job_record") as analyze:
+            with patch("job_finder.llm.service.analyze_job_record") as analyze:
                 stats = analyze_results(results, settings, client=object())
             cache = load_cache(settings.cache_path)
 
@@ -334,7 +334,7 @@ class LlmServiceTests(unittest.TestCase):
                 return make_record(cache_key)
 
             with patch(
-                "job_agent.llm.service.analyze_job_record",
+                "job_finder.llm.service.analyze_job_record",
                 side_effect=fake_analysis,
             ) as analyze:
                 stats = analyze_results(results, settings, client=object())
@@ -349,7 +349,7 @@ class LlmServiceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             settings = self.settings(directory)
             with patch(
-                "job_agent.llm.service.OpenAIClient",
+                "job_finder.llm.service.OpenAIClient",
                 side_effect=LLMError("API nicht erreichbar"),
             ):
                 stats = analyze_results(results, settings)
@@ -369,7 +369,7 @@ class LlmServiceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             settings = self.settings(directory)
             with patch(
-                "job_agent.llm.service.OpenAIClient",
+                "job_finder.llm.service.OpenAIClient",
                 side_effect=LLMError("API nicht erreichbar"),
             ):
                 analyze_results(results, settings)
@@ -383,7 +383,7 @@ class LlmServiceTests(unittest.TestCase):
                 return make_record(cache_key)
 
             with patch(
-                "job_agent.llm.service.analyze_job_record",
+                "job_finder.llm.service.analyze_job_record",
                 side_effect=fake_analysis,
             ):
                 stats = analyze_results(known_results, settings, client=object())
@@ -407,7 +407,7 @@ class LlmServiceTests(unittest.TestCase):
         }
 
         with patch(
-            "job_agent.llm.service.score_two_stage_result",
+            "job_finder.llm.service.score_two_stage_result",
             return_value=updated_fit,
         ) as score:
             changed = attach_result(job, record, "cached")

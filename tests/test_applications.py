@@ -104,6 +104,7 @@ class ApplicationTrackingTests(unittest.TestCase):
                     "workflow_status": "applied",
                     "active": False,
                     "source_urls": ["https://example.test/job"],
+                    "source_names": ["stepstone"],
                 }
             }
         )
@@ -116,6 +117,10 @@ class ApplicationTrackingTests(unittest.TestCase):
         self.assertFalse(application["active"])
         self.assertIsNone(application["applied_on"])
         self.assertEqual(application["workflow_history"], [])
+        self.assertEqual(
+            application["source_links"],
+            [{"source": "stepstone", "url": "https://example.test/job"}],
+        )
 
     def test_statistics_use_complete_history_and_response_dates(self):
         self.save_jobs(

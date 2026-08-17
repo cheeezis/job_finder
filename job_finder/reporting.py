@@ -46,8 +46,6 @@ def write_recommendations(
         render_recommendations(recommendations),
         encoding="utf-8",
     )
-    print(f"KI-Empfehlungen gespeichert in {json_file}")
-    print(f"Lesbare Empfehlungen gespeichert in {markdown_file}")
 
 
 def recommendation_for_job(job):
@@ -62,6 +60,7 @@ def recommendation_for_job(job):
         "career_levels": job.get("career_levels", []),
         "published_at": job.get("published_at"),
         "url": primary_url(job),
+        "source_links": source_links(job),
     }
     llm_result = job.get("llm_result")
     if llm_result:
@@ -152,6 +151,23 @@ def primary_url(job):
         None,
     )
     return application_url or (sources[0].get("url", "") if sources else "")
+
+
+def source_links(job):
+    """Return every distinct listing URL with its source identifier."""
+    links = []
+    seen_urls = set()
+    for source in job.get("sources", []):
+        candidates = []
+        if source.get("application_url"):
+            candidates.append(("original", source["application_url"]))
+        candidates.append((source.get("source", "listing"), source.get("url", "")))
+        for source_name, url in candidates:
+            if not url or url in seen_urls:
+                continue
+            seen_urls.add(url)
+            links.append({"source": source_name, "url": url})
+    return links
 
 
 def format_locations(job):

@@ -51,9 +51,11 @@ def update_memory(
     known_count = 0
     inactive_count = 0
     reactivated_count = 0
-    current_ids = {job.id for job in jobs}
+    current_ids = set()
 
     for job in jobs:
+        job.id = resolve_memory_id(job, memory)
+        current_ids.add(job.id)
         if job.id in memory:
             known_count += 1
             entry = memory[job.id]
@@ -66,8 +68,14 @@ def update_memory(
             entry["last_seen_at"] = now.isoformat()
             entry["title"] = job.title
             entry["company"] = job.company
-            entry["source_urls"] = [source.url for source in job.sources]
-            entry["source_names"] = job.source_names
+            entry["source_urls"] = unique_values(
+                entry.get("source_urls", []),
+                [source.url for source in job.sources],
+            )
+            entry["source_names"] = unique_values(
+                entry.get("source_names", []),
+                job.source_names,
+            )
             entry["missed_runs"] = 0
             entry["active"] = True
             continue
@@ -108,6 +116,79 @@ def update_memory(
         "inactive": inactive_count,
         "reactivated": reactivated_count,
     }
+
+
+def resolve_memory_id(job, memory):
+    """Reuse a known canonical ID when an exact source URL reappears."""
+    current_urls = {source.url for source in job.sources if source.url}
+    candidates = [
+        job_id
+        for job_id, entry in memory.items()
+        if job_id == job.id
+        or current_urls.intersection(entry.get("source_urls", []))
+    ]
+    if not candidates:
+        return job.id
+
+    manual_candidates = [
+        job_id for job_id in candidates if has_manual_state(memory[job_id])
+    ]
+    if len(manual_candidates) > 1 and job.id in manual_candidates:
+        canonical_id = job.id
+    else:
+        canonical_id = min(
+            candidates,
+            key=lambda job_id: memory_candidate_key(
+                job_id,
+                memory[job_id],
+                job.id,
+            ),
+        )
+    canonical = memory[canonical_id]
+    for candidate_id in candidates:
+        if candidate_id == canonical_id:
+            continue
+        candidate = memory[candidate_id]
+        if has_manual_state(candidate):
+            continue
+        canonical["source_urls"] = unique_values(
+            canonical.get("source_urls", []),
+            candidate.get("source_urls", []),
+        )
+        canonical["source_names"] = unique_values(
+            canonical.get("source_names", []),
+            candidate.get("source_names", []),
+        )
+        del memory[candidate_id]
+    return canonical_id
+
+
+def memory_candidate_key(job_id, entry, current_job_id):
+    """Prefer reviewed history, then the oldest stable memory entry."""
+    return (
+        not has_manual_state(entry),
+        entry.get("first_seen_at", "9999"),
+        job_id != current_job_id,
+        job_id,
+    )
+
+
+def has_manual_state(entry):
+    """Return whether removing an entry could discard a manual decision."""
+    return bool(
+        entry.get("workflow_status")
+        not in {None, WorkflowStatus.NEW.value, WorkflowStatus.REVIEW.value}
+        or entry.get("workflow_history")
+        or entry.get("review_note")
+        or entry.get("personal_rating")
+    )
+
+
+def unique_values(*groups):
+    """Combine ordered scalar lists without duplicates or empty values."""
+    return list(
+        dict.fromkeys(value for group in groups for value in group if value)
+    )
 
 
 def inferred_sources(job_id):

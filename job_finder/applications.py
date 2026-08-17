@@ -237,19 +237,27 @@ def application_row(job_id, entry):
     source_urls = entry.get("source_urls", [])
     if not isinstance(source_urls, list):
         source_urls = []
-    url = next(
-        (
-            source_url
-            for source_url in source_urls
-            if isinstance(source_url, str)
-        ),
-        "",
-    )
+    source_names = entry.get("source_names", [])
+    if not isinstance(source_names, list):
+        source_names = []
+    source_links = [
+        {
+            "source": (
+                source_names[index]
+                if index < len(source_names) and isinstance(source_names[index], str)
+                else "listing"
+            ),
+            "url": source_url,
+        }
+        for index, source_url in enumerate(source_urls)
+        if isinstance(source_url, str) and source_url
+    ]
     return {
         "id": job_id,
         "title": entry.get("title", "Unbekannte Stelle"),
         "company": entry.get("company", "Unbekanntes Unternehmen"),
-        "url": url,
+        "url": source_links[0]["url"] if source_links else "",
+        "source_links": source_links,
         "active": entry.get("active", True),
         "workflow_status": current_status,
         "review_note": entry.get("review_note", ""),

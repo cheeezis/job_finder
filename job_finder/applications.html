@@ -59,6 +59,12 @@
     button.danger { border-color: #b14d58; background: white; color: #9b3440; }
     button.danger:hover { background: #fff1f2; }
     button:disabled { cursor: wait; opacity: .65; }
+    details.source-menu { position: relative; border: 0; margin: 0; padding: 0; }
+    .source-menu summary { color: #176b54; font-weight: 400; list-style: none; }
+    .source-menu summary::-webkit-details-marker { display: none; }
+    .source-options { position: absolute; left: 0; top: calc(100% + 5px); z-index: 2; display: grid; min-width: 180px; padding: 6px; background: white; border: 1px solid #cbd3df; border-radius: 9px; box-shadow: 0 8px 24px rgba(28, 39, 58, .12); }
+    .source-options a { padding: 8px 9px; text-decoration: none; border-radius: 6px; }
+    .source-options a:hover { background: #edf7f3; }
     .empty, .error { padding: 36px; text-align: center; background: white; border-radius: 14px; }
     .error { color: #8a3840; }
     @media (max-width: 700px) {
@@ -112,6 +118,10 @@
     offer: "Zusage/Angebot",
     closed: "Abgeschlossen"
   };
+  const sourceLabels = {
+    stepstone: "StepStone", get_in_it: "get-in-IT",
+    arbeitnow: "Arbeitnow", arbeitsagentur: "Arbeitsagentur"
+  };
 
   const element = id => document.getElementById(id);
 
@@ -140,6 +150,40 @@
     if (text != null) node.textContent = text;
     if (className) node.className = className;
     return node;
+  }
+
+  function appendSourceLinks(parent, application) {
+    const candidates = (application.source_links || []).length
+      ? application.source_links
+      : [{source: "listing", url: application.url}];
+    const seen = new Set();
+    const links = candidates.flatMap((item, index) => {
+      const url = safeUrl(item.url);
+      if (!url || seen.has(url)) return [];
+      seen.add(url);
+      return [{url, label: sourceLabels[item.source] || `Anzeige ${index + 1}`}];
+    });
+    if (!links.length) return;
+    if (links.length === 1) {
+      const link = make("a", "Anzeige öffnen");
+      link.href = links[0].url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      parent.append(link);
+      return;
+    }
+    const menu = make("details", null, "source-menu");
+    const summary = make("summary", `Anzeigen öffnen (${links.length})`);
+    const options = make("div", null, "source-options");
+    links.forEach(item => {
+      const link = make("a", item.label);
+      link.href = item.url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      options.append(link);
+    });
+    menu.append(summary, options);
+    parent.append(menu);
   }
 
   function renderStats(stats) {
@@ -365,14 +409,7 @@
       meta.append(make("span", `Beworben: ${formatDate(application.applied_on)}`));
       if (application.response_on) meta.append(make("span", `Erste Antwort: ${formatDate(application.response_on)}`));
       if (application.days_to_response != null) meta.append(make("span", `${application.days_to_response} Tag(e) bis zur Antwort`));
-      const applicationUrl = safeUrl(application.url);
-      if (applicationUrl) {
-        const link = make("a", "Anzeige öffnen");
-        link.href = applicationUrl;
-        link.target = "_blank";
-        link.rel = "noopener noreferrer";
-        meta.append(link);
-      }
+      appendSourceLinks(meta, application);
       card.append(meta);
       if (application.review_note) card.append(make("p", application.review_note, "note"));
       renderTimeline(application, card);

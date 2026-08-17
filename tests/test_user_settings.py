@@ -2,7 +2,7 @@
 
 import unittest
 
-from job_agent.user_settings import EXAMPLE_SETTINGS_PATH, load_user_settings
+from job_finder.user_settings import EXAMPLE_SETTINGS_PATH, load_user_settings
 
 
 class UserSettingsTests(unittest.TestCase):

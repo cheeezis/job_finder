@@ -4,8 +4,7 @@ import json
 import unittest
 from datetime import date, datetime, timezone
 
-from job_agent.models import (
-    FilterStatus,
+from job_finder.models import (
     Job,
     JobSource,
     WorkflowStatus,
@@ -39,36 +38,20 @@ class JobModelTests(unittest.TestCase):
 
         self.assertEqual(job.workflow_status, WorkflowStatus.NEW)
         self.assertEqual(job.work_mode, WorkMode.UNKNOWN)
-        self.assertIsNone(job.filter_status)
-        self.assertIsNone(job.rule_score)
-        self.assertIsNone(job.llm_score)
-        self.assertIsNone(job.llm_result)
-        self.assertEqual(job.score_reasons, [])
 
-    def test_scoring_and_work_mode_use_separate_status_fields(self):
+    def test_workflow_and_work_mode_use_separate_status_fields(self):
         job = make_job(
             workflow_status=WorkflowStatus.INTERESTING,
-            filter_status=FilterStatus.INCLUDED,
-            rule_score=82,
-            llm_score=91,
             work_mode=WorkMode.REMOTE,
             remote_percentage=100,
         )
 
         self.assertEqual(job.workflow_status, WorkflowStatus.INTERESTING)
-        self.assertEqual(job.filter_status, FilterStatus.INCLUDED)
-        self.assertEqual(job.rule_score, 82)
-        self.assertEqual(job.llm_score, 91)
+        self.assertEqual(job.work_mode, WorkMode.REMOTE)
 
     def test_rejects_invalid_percentages(self):
         with self.assertRaises(ValueError):
             make_job(remote_percentage=120)
-
-        with self.assertRaises(ValueError):
-            make_job(rule_score=-1)
-
-        with self.assertRaises(ValueError):
-            make_job(llm_score=101)
 
     def test_rejects_invalid_salary_range(self):
         with self.assertRaises(ValueError):
@@ -86,11 +69,6 @@ class JobModelTests(unittest.TestCase):
             last_seen_at=datetime(2026, 7, 14, 10, 30, tzinfo=timezone.utc),
             fetched_at=datetime(2026, 7, 14, 10, 31, tzinfo=timezone.utc),
             workflow_status=WorkflowStatus.REVIEW,
-            filter_status=FilterStatus.INCLUDED,
-            rule_score=82,
-            llm_score=91,
-            llm_result={"recommendation": "strong_match"},
-            score_reasons=["Python gefunden"],
         )
 
         serialized = json.loads(json.dumps(job.to_dict()))

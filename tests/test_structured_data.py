@@ -2,7 +2,7 @@
 
 import unittest
 
-from job_agent.structured_data import extract_json_ld_job_posting
+from job_finder.structured_data import extract_json_ld_job_posting
 
 
 class StructuredDataTests(unittest.TestCase):

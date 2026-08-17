@@ -4,9 +4,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from job_agent.applications import load_application_overview
-from job_agent.memory import load_memory, save_memory
-from job_agent.review import (
+from job_finder.applications import load_application_overview
+from job_finder.memory import load_memory, save_memory
+from job_finder.review import (
     delete_workflow_history,
     update_workflow_history,
     update_workflow_status,
@@ -104,6 +104,7 @@ class ApplicationTrackingTests(unittest.TestCase):
                     "workflow_status": "applied",
                     "active": False,
                     "source_urls": ["https://example.test/job"],
+                    "source_names": ["stepstone"],
                 }
             }
         )
@@ -116,6 +117,10 @@ class ApplicationTrackingTests(unittest.TestCase):
         self.assertFalse(application["active"])
         self.assertIsNone(application["applied_on"])
         self.assertEqual(application["workflow_history"], [])
+        self.assertEqual(
+            application["source_links"],
+            [{"source": "stepstone", "url": "https://example.test/job"}],
+        )
 
     def test_statistics_use_complete_history_and_response_dates(self):
         self.save_jobs(

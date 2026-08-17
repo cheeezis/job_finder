@@ -3,7 +3,7 @@
 import json
 import unittest
 
-from job_agent.llm.contract import (
+from job_finder.llm.contract import (
     ANALYSIS_SCHEMA,
     RUBRIC,
     RUBRIC_VERSION,

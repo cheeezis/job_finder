@@ -126,7 +126,6 @@ def clone_job(job):
         job,
         locations=list(job.locations),
         sources=list(job.sources),
-        score_reasons=list(job.score_reasons),
     )
 
 

@@ -101,7 +101,6 @@ def score_job(job: Job):
     score = max(0, min(100, score))
     return {
         "filter_status": FilterStatus.INCLUDED.value,
-        "raw_score": score,
         "match_percent": score,
         "experience_rank": experience["rank"],
         "experience_level": experience["label"],
@@ -114,7 +113,6 @@ def score_job(job: Job):
 def excluded_result(reason):
     return {
         "filter_status": FilterStatus.EXCLUDED.value,
-        "raw_score": 0,
         "match_percent": 0,
         "experience_rank": 99,
         "experience_level": "ausgeschlossen",

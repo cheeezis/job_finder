@@ -16,7 +16,7 @@ def main():
     """Score an existing import file and write review output."""
     configure_utf8_output()
     jobs_file = sys.argv[1] if len(sys.argv) > 1 else JOBS_FILE
-    jobs = load_jobs(jobs_file)
+    jobs = deduplicate_jobs(load_jobs(jobs_file))
     results = score_jobs(jobs)
     print_results(results)
 
@@ -25,12 +25,8 @@ def score_jobs(jobs):
     """Score imported jobs and split them into included/excluded buckets."""
     results = []
 
-    # Quellenuebergreifende Duplikate sollen nur einmal im Review auftauchen.
-    for job in deduplicate_jobs(jobs):
+    for job in jobs:
         result = score_job(job)
-        job.filter_status = FilterStatus(result["filter_status"])
-        job.rule_score = result["match_percent"]
-        job.score_reasons = list(result["reasons"])
         results.append(
             {
                 **job.to_dict(),
@@ -77,7 +73,6 @@ def print_results(results):
         new_marker = "NEU | " if job.get("is_new") else ""
         summary = (
             f'{job["match_percent"]:>3}% | '
-            f'{job["raw_score"]:>3} Punkte | '
             f'{job["title"]} | {job["company"]} | '
             f'{format_locations(job)} | Remote: {format_remote(job)}'
         )

@@ -3,7 +3,7 @@
 import unittest
 from types import SimpleNamespace
 
-from job_agent.llm.openai import OpenAIClient, OpenAIProviderError
+from job_finder.llm.openai import OpenAIClient, OpenAIProviderError
 
 
 class FakeResponses:

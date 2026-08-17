@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock
 
-from job_agent.notifications import (
+from job_finder.notifications import (
     NotificationError,
     discord_embed,
     discord_payload,

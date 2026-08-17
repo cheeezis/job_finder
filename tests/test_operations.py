@@ -6,7 +6,7 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 
-from job_agent.operations import RunLog, create_backup
+from job_finder.operations import RunLog, create_backup
 
 
 class OperationsTests(unittest.TestCase):

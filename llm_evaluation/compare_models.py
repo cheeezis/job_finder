@@ -2,10 +2,10 @@
 
 import argparse
 
-from job_agent.console import configure_utf8_output
-from job_agent.llm.config import DEFAULT_LLM_SETTINGS
-from job_agent.llm.errors import LLMError
-from job_agent.llm.openai import OpenAIClient
+from job_finder.console import configure_utf8_output
+from job_finder.llm.config import DEFAULT_LLM_SETTINGS
+from job_finder.llm.errors import LLMError
+from job_finder.llm.openai import OpenAIClient
 from llm_evaluation.benchmark import (
     JOB_ANALYSIS_SPLITS,
     run_two_stage_evaluation,

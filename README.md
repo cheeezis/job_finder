@@ -1,11 +1,11 @@
-# Job Agent
+# Job Finder
 
-Ein kleiner, lokal betriebener Job-Agent für konfigurierbare IT-Rollen,
+Ein kleiner, lokal betriebener Job Finder für konfigurierbare IT-Rollen,
 einen persönlichen Suchradius oder vollständig remote angebotene Stellen.
 
 ## Aktueller Stand
 
-Der Agent kann:
+Der Job Finder kann:
 
 - Arbeitsagentur-Suchergebnisse für definierte Suchbegriffe abrufen
 - StepStone-Suchergebnisse für definierte Suchbegriffe abrufen
@@ -58,7 +58,7 @@ Copy-Item profile.example.yaml profile.local.yaml
 
 `user_settings.local.yaml`, `profile.local.yaml` und alle Dateien unter `data/`
 bleiben lokal und werden nicht von Git erfasst. Ohne lokale Dateien verwendet
-der Agent die anonymisierten Beispiele.
+der Job Finder die anonymisierten Beispiele.
 
 Die beiden lokalen Dateien danach an die eigene Suche und das belegbare Profil
 anpassen. Insbesondere dürfen Profilangaben keine nicht vorhandenen Kenntnisse,
@@ -78,10 +78,10 @@ Vor einem Fork oder einer Veröffentlichung sollte `git status --ignored`
 kontrolliert werden. Lokale Konfigurationen, der Ordner `data/` und echte
 Zugangsdaten dürfen nicht erzwungen zu Git hinzugefügt werden.
 
-Kompletter Agentenlauf mit Vorfilter und KI-Bewertung:
+Kompletter Finder-Lauf mit Vorfilter und KI-Bewertung:
 
 ```powershell
-python run_agent.py
+python run_finder.py
 ```
 
 Empfehlungen lokal im Browser durchsehen und ihren Status speichern:
@@ -109,7 +109,7 @@ Verlaufsereignisse lassen sich dort ändern oder löschen.
 Ein kostenbegrenzter Testlauf analysiert höchstens einen neuen passenden Job:
 
 ```powershell
-python run_agent.py --llm-limit 1
+python run_finder.py --llm-limit 1
 ```
 
 Passende und grenzwertige neue oder aktualisierte Empfehlungen für Discord
@@ -121,7 +121,7 @@ werden:
 
 ```powershell
 $env:DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/..."
-python run_agent.py --notify
+python run_finder.py --notify
 ```
 
 Der Webhook bleibt ausserhalb der gespeicherten Dateien. Erfolgreich gesendete
@@ -143,7 +143,7 @@ nicht als Verschwinden.
 
 ## Optionaler automatischer Betrieb
 
-`python run_agent.py --notify` kann beispielsweise über die Windows-
+`python run_finder.py --notify` kann beispielsweise über die Windows-
 Aufgabenplanung täglich gestartet werden. Die Aufgabe selbst ist nicht Teil
 des Repositorys und muss lokal eingerichtet werden. `OPENAI_API_KEY` und
 `DISCORD_WEBHOOK_URL` sollten dabei als lokale Umgebungsvariablen gesetzt und
@@ -152,7 +152,7 @@ nicht in Skripten oder versionierten Dateien gespeichert werden.
 Nur vorhandene interne Jobs regelbasiert prüfen, ohne Dateien zu erzeugen:
 
 ```powershell
-python -m job_agent.main
+python -m job_finder.main
 ```
 
 Scoring-, Filter- und Deduplizierungsregeln testen:
@@ -182,32 +182,32 @@ python -m llm_evaluation.compare_models --split development
 ## Struktur
 
 ```text
-job_agent/                  produktiver Agentencode
-job_agent/config.py         Suchbegriffe und Suchorte
-job_agent/console.py        gemeinsame Konsolenkonfiguration
-job_agent/http.py           gemeinsame HTTP-Helfer
-job_agent/llm/              wiederverwendbare LLM-Komponenten
-job_agent/llm/contract.py   Rubrik und strukturierter Antwortvertrag
-job_agent/llm/fit_score.py  Scoring für validierte Zwei-Stufen-Ergebnisse
-job_agent/llm/profile_loader.py Laden und Validieren des LLM-Profils
-job_agent/llm/openai.py     Client für strukturierte OpenAI-Antworten
-job_agent/llm/service.py    produktive Zwei-Stufen-Analyse und LLM-Cache
-job_agent/models.py         einheitliches Job- und Statusmodell
-job_agent/operations.py     Laufprotokolle und rotierende Datensicherungen
-job_agent/paths.py          gemeinsame interne und externe Datenpfade
-job_agent/profile.py        Profil-, Skill- und Scoring-Regeln
-job_agent/deduplication.py  quellenübergreifende Job-Deduplizierung
-job_agent/remote.py         gemeinsame Remote-Erkennung
-job_agent/reporting.py      JSON- und Markdown-Ausgaben
-job_agent/applications.py  Bewerbungsverlauf und daraus abgeleitete Kennzahlen
-job_agent/applications.html getrennte lokale Bewerbungsübersicht
-job_agent/landing.html      lokale Startseite der Browseroberfläche
-job_agent/review.py         lokaler Webserver für die Browseroberfläche
-job_agent/review.html       lokale Browseroberfläche für Entscheidungen
-job_agent/search_plan.py    gemeinsame Suchplan-Helfer
-job_agent/structured_data.py gemeinsame JSON-LD-Auswertung
-job_agent/text.py           gemeinsame Text-/HTML-Helfer
-job_agent/sources/          Quellenadapter
+job_finder/                  produktiver Anwendungscode
+job_finder/config.py         Suchbegriffe und Suchorte
+job_finder/console.py        gemeinsame Konsolenkonfiguration
+job_finder/http.py           gemeinsame HTTP-Helfer
+job_finder/llm/              wiederverwendbare LLM-Komponenten
+job_finder/llm/contract.py   Rubrik und strukturierter Antwortvertrag
+job_finder/llm/fit_score.py  Scoring für validierte Zwei-Stufen-Ergebnisse
+job_finder/llm/profile_loader.py Laden und Validieren des LLM-Profils
+job_finder/llm/openai.py     Client für strukturierte OpenAI-Antworten
+job_finder/llm/service.py    produktive Zwei-Stufen-Analyse und LLM-Cache
+job_finder/models.py         einheitliches Job- und Statusmodell
+job_finder/operations.py     Laufprotokolle und rotierende Datensicherungen
+job_finder/paths.py          gemeinsame interne und externe Datenpfade
+job_finder/profile.py        Profil-, Skill- und Scoring-Regeln
+job_finder/deduplication.py  quellenübergreifende Job-Deduplizierung
+job_finder/remote.py         gemeinsame Remote-Erkennung
+job_finder/reporting.py      JSON- und Markdown-Ausgaben
+job_finder/applications.py  Bewerbungsverlauf und daraus abgeleitete Kennzahlen
+job_finder/applications.html getrennte lokale Bewerbungsübersicht
+job_finder/landing.html      lokale Startseite der Browseroberfläche
+job_finder/review.py         lokaler Webserver für die Browseroberfläche
+job_finder/review.html       lokale Browseroberfläche für Entscheidungen
+job_finder/search_plan.py    gemeinsame Suchplan-Helfer
+job_finder/structured_data.py gemeinsame JSON-LD-Auswertung
+job_finder/text.py           gemeinsame Text-/HTML-Helfer
+job_finder/sources/          Quellenadapter
 data/internal/jobs.json     vollständige kanonische Jobdaten
 data/internal/seen_jobs.json lokales Job-Gedächtnis
 data/internal/stepstone_cache.json technischer StepStone-Cache
@@ -237,7 +237,7 @@ llm_evaluation/fixtures/    blinde Testeingaben und menschliche Bewertungen
 llm_evaluation/results/     lokale, nicht versionierte Modellergebnisse
 requirements.txt            Python-Abhängigkeiten
 tests/                      automatisierte Scoring- und Filtertests
-run_agent.py                kompletter Agentenlauf
+run_finder.py                kompletter Finder-Lauf
 review_jobs.bat             anklickbarer Start der Review-Oberfläche
 ```
 

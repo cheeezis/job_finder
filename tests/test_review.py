@@ -9,8 +9,8 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from urllib.request import Request, urlopen
 
-from job_agent.memory import load_memory, save_memory
-from job_agent.review import (
+from job_finder.memory import load_memory, save_memory
+from job_finder.review import (
     APPLICATIONS_PAGE,
     LANDING_PAGE,
     REVIEW_PAGE,

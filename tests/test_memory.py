@@ -5,8 +5,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from job_agent.memory import load_memory, save_memory, update_memory
-from job_agent.models import Job, JobSource, WorkflowStatus
+from job_finder.memory import load_memory, save_memory, update_memory
+from job_finder.models import Job, JobSource, WorkflowStatus
 
 
 def make_job():

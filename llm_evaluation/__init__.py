@@ -1,1 +1,1 @@
-"""Blind evaluation tools for the job agent's LLM pipeline."""
+"""Blind evaluation tools for the Job Finder's LLM pipeline."""

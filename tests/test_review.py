@@ -5,12 +5,12 @@ import json
 import tempfile
 import threading
 import unittest
-from http.server import ThreadingHTTPServer
+from http.server import HTTPServer
 from pathlib import Path
 from urllib.request import Request, urlopen
 
-from job_agent.memory import load_memory, save_memory
-from job_agent.review import (
+from job_finder.memory import load_memory, save_memory
+from job_finder.review import (
     APPLICATIONS_PAGE,
     LANDING_PAGE,
     REVIEW_PAGE,
@@ -63,6 +63,39 @@ class ReviewTests(unittest.TestCase):
 
         self.assertEqual(jobs[0]["workflow_status"], "interesting")
         self.assertFalse(jobs[0]["application_tracked"])
+
+    def test_stale_recommendation_id_resolves_through_known_url(self):
+        memory = load_memory(self.memory_path)
+        memory["job:1"]["workflow_status"] = "applied"
+        memory["job:1"]["source_urls"] = ["https://portal.test/job"]
+        memory["job:1"]["source_names"] = ["stepstone"]
+        save_memory(memory, self.memory_path)
+        self.recommendations_path.write_text(
+            json.dumps(
+                {
+                    "recommendations": [
+                        {
+                            "id": "portal:99",
+                            "url": "https://portal.test/job",
+                            "title": "Python Developer",
+                            "company": "Example GmbH",
+                            "llm_score": 90,
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        jobs = load_review_jobs(self.recommendations_path, self.memory_path)
+
+        self.assertEqual(jobs[0]["id"], "job:1")
+        self.assertEqual(jobs[0]["workflow_status"], "applied")
+        self.assertTrue(jobs[0]["application_tracked"])
+        self.assertEqual(
+            jobs[0]["source_links"],
+            [{"source": "stepstone", "url": "https://portal.test/job"}],
+        )
 
     def test_review_jobs_recognize_historical_application(self):
         memory = load_memory(self.memory_path)
@@ -195,7 +228,7 @@ class ReviewTests(unittest.TestCase):
                 "applications_page_path": APPLICATIONS_PAGE,
             },
         )
-        server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        server = HTTPServer(("127.0.0.1", 0), handler)
         thread = threading.Thread(target=server.serve_forever)
         thread.start()
         base_url = f"http://127.0.0.1:{server.server_port}"
@@ -217,6 +250,9 @@ class ReviewTests(unittest.TestCase):
         self.assertIn("Bewerbungen verwalten", landing_page)
         self.assertIn("Als beworben markieren", review_page)
         self.assertIn("Bewerbung verwalten", review_page)
+        self.assertIn("function safeUrl(value)", review_page)
+        self.assertIn("renderSourceLinks(job);", review_page)
+        self.assertIn("Anzeigen öffnen (${links.length})", review_page)
         self.assertNotIn("progress-select", review_page)
         self.assertIn('href="/">← Zur Startseite</a>', review_page)
         self.assertIn("Bewerbungsübersicht", applications_page)
@@ -239,7 +275,7 @@ class ReviewTests(unittest.TestCase):
                 "memory_path": self.memory_path,
             },
         )
-        server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        server = HTTPServer(("127.0.0.1", 0), handler)
         thread = threading.Thread(target=server.serve_forever)
         thread.start()
         base_url = f"http://127.0.0.1:{server.server_port}"
@@ -274,7 +310,7 @@ class ReviewTests(unittest.TestCase):
                 "page_path": REVIEW_PAGE,
             },
         )
-        server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        server = HTTPServer(("127.0.0.1", 0), handler)
         thread = threading.Thread(target=server.serve_forever)
         thread.start()
         base_url = f"http://127.0.0.1:{server.server_port}"
@@ -334,7 +370,7 @@ class ReviewTests(unittest.TestCase):
                 "applications_page_path": APPLICATIONS_PAGE,
             },
         )
-        server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        server = HTTPServer(("127.0.0.1", 0), handler)
         thread = threading.Thread(target=server.serve_forever)
         thread.start()
         base_url = f"http://127.0.0.1:{server.server_port}"

@@ -3,7 +3,9 @@
 import unittest
 from types import SimpleNamespace
 
-from job_agent.llm.openai import OpenAIClient, OpenAIProviderError
+from job_finder.llm.openai import OpenAIClient, OpenAIProviderError
+from job_finder.llm.service import model_call_stats
+from job_finder.llm.validation import chat_with_telemetry
 
 
 class FakeResponses:
@@ -68,8 +70,36 @@ class OpenAIClientTests(unittest.TestCase):
     def test_chat_rejects_non_json_output(self):
         client = OpenAIClient(sdk_client=self.make_sdk_client("not json"))
 
-        with self.assertRaises(OpenAIProviderError):
+        with self.assertRaises(OpenAIProviderError) as raised:
             client.chat("gpt-5.4-mini", [], {"type": "object"})
+
+        metadata = raised.exception.request_metadata
+        self.assertEqual(metadata["prompt_eval_count"], 120)
+        self.assertEqual(metadata["eval_count"], 30)
+        self.assertEqual(metadata["cached_input_tokens"], 20)
+        self.assertEqual(metadata["reasoning_tokens"], 5)
+
+    def test_invalid_json_usage_reaches_live_model_call_stats(self):
+        client = OpenAIClient(sdk_client=self.make_sdk_client("not json"))
+        request_log = []
+
+        with self.assertRaises(OpenAIProviderError):
+            chat_with_telemetry(
+                client,
+                stage="job_analysis",
+                validation_repair=False,
+                request_log=request_log,
+                model="gpt-5.4-mini",
+                messages=[],
+                output_schema={"type": "object"},
+            )
+
+        stats = model_call_stats(request_log)
+        self.assertEqual(stats["calls"], 1)
+        self.assertEqual(stats["failed"], 1)
+        self.assertEqual(stats["input_tokens"], 120)
+        self.assertEqual(stats["output_tokens"], 30)
+        self.assertEqual(stats["usage_missing"], 0)
 
 
 if __name__ == "__main__":

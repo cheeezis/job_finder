@@ -8,15 +8,15 @@ from pathlib import Path
 from unittest.mock import ANY, Mock, patch
 from urllib.error import HTTPError
 
-from job_agent.config import (
+from job_finder.config import (
     COMMUTER_SEARCH_RADIUS_KM,
     LOCAL_SEARCH_POSTAL_CODE,
     STEPSTONE_SEARCH_RADIUS_KM,
     STEPSTONE_SEARCH_LOCATIONS,
     STEPSTONE_SEARCH_TERMS,
 )
-from job_agent.models import Job, JobSource, WorkMode
-from job_agent.sources import (
+from job_finder.models import Job, JobSource, WorkMode
+from job_finder.sources import (
     arbeitnow,
     arbeitsagentur,
     bytewerk,
@@ -27,12 +27,12 @@ from job_agent.sources import (
     rhoenenergie,
     stepstone,
 )
-from job_agent.sources.common import (
+from job_finder.sources.common import (
     canonical_detail_url,
     load_detail_cache,
     save_detail_cache,
 )
-from job_agent.sources.stepstone import build_search_url
+from job_finder.sources.stepstone import build_search_url
 
 
 class CommuterSearchTests(unittest.TestCase):
@@ -226,6 +226,70 @@ class ArbeitnowTests(unittest.TestCase):
 
         self.assertEqual(len(jobs), 1)
         self.assertTrue(jobs[0].content_changed)
+        self.assertIn("Python und APIs", jobs[0].description_clean)
+        self.assertIsNone(jobs[0].sources[0].application_url)
+
+    def test_fetch_jobs_keeps_original_link_and_bridges_api_text_variants(self):
+        url = "https://www.arbeitnow.com/jobs/example/mediated"
+        placeholder = "Find Jobs in Germany on Arbeitnow"
+        original_text = "Original Python job " * 20
+        application_url = "https://company.test/jobs/mediated"
+        enriched = arbeitnow.job_from_record(
+            {
+                "slug": "mediated",
+                "company_name": "Example GmbH",
+                "title": "Junior Developer",
+                "description": placeholder,
+                "remote": True,
+                "url": url,
+                "location": "Example City",
+            }
+        )
+        enriched.description_raw = f"<main>{original_text}</main>"
+        enriched.description_clean = original_text
+        enriched.sources[0].application_url = application_url
+        portal_text = "Current Arbeitnow portal text with Python. " * 10
+        full_text_record = {
+            "slug": "mediated",
+            "company_name": "Example GmbH",
+            "title": "Junior Developer",
+            "description": f"<p>{portal_text}</p>",
+            "remote": True,
+            "url": url,
+            "location": "Example City",
+        }
+        placeholder_record = dict(full_text_record, description=placeholder)
+
+        with tempfile.TemporaryDirectory() as directory:
+            cache_path = Path(directory) / "arbeitnow.json"
+            save_detail_cache(cache_path, {url: enriched})
+            with patch.object(
+                arbeitnow,
+                "collect_records",
+                return_value=[full_text_record],
+            ):
+                full_text_jobs = arbeitnow.fetch_jobs(cache_path=cache_path)
+            with patch.object(
+                arbeitnow,
+                "collect_records",
+                return_value=[placeholder_record],
+            ):
+                placeholder_jobs = arbeitnow.fetch_jobs(cache_path=cache_path)
+            with patch.object(arbeitnow, "fetch_text_with_final_url") as fetch:
+                enriched_count = arbeitnow.enrich_candidate_jobs(
+                    placeholder_jobs,
+                    {placeholder_jobs[0].id},
+                    cache_path=cache_path,
+                )
+
+        self.assertEqual(full_text_jobs[0].description_clean, portal_text.strip())
+        self.assertTrue(full_text_jobs[0].content_changed)
+        self.assertEqual(placeholder_jobs[0].description_clean, portal_text.strip())
+        self.assertFalse(placeholder_jobs[0].content_changed)
+        for job in (full_text_jobs[0], placeholder_jobs[0]):
+            self.assertEqual(job.sources[0].application_url, application_url)
+        self.assertEqual(enriched_count, 0)
+        fetch.assert_not_called()
 
     def test_rate_limited_api_uses_recent_cache(self):
         url = "https://www.arbeitnow.com/jobs/example/cached"
@@ -502,7 +566,6 @@ class StepStoneCacheTests(unittest.TestCase):
     def test_saved_cache_contains_only_reusable_source_fields(self):
         url = "https://www.stepstone.de/stellenangebote--cached.html"
         job = self.make_job("Cached", url)
-        job.rule_score = 80
 
         with tempfile.TemporaryDirectory() as directory:
             cache_path = Path(directory) / "stepstone.json"
@@ -676,7 +739,6 @@ class SharedDetailCacheTests(unittest.TestCase):
         now = datetime(2026, 7, 17, 12, tzinfo=timezone.utc)
         url = "https://example.test/get-in-it/1"
         job = self.make_job(get_in_it.SOURCE_NAME, url, now)
-        job.llm_score = 90
 
         with tempfile.TemporaryDirectory() as directory:
             cache_path = Path(directory) / "details.json"

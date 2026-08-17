@@ -4,8 +4,8 @@ import unittest
 
 from jsonschema import validate
 
-from job_agent.llm.contract import ANALYSIS_SCHEMA
-from job_agent.llm.fit_score import score_location, score_two_stage_result
+from job_finder.llm.contract import ANALYSIS_SCHEMA
+from job_finder.llm.fit_score import score_location, score_two_stage_result
 
 
 def make_job_analysis(

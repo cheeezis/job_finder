@@ -3,8 +3,8 @@
 import json
 import unittest
 
-from job_agent.llm.profile_loader import LlmProfile
-from job_agent.llm.profile_match import (
+from job_finder.llm.profile_loader import LlmProfile
+from job_finder.llm.profile_match import (
     PROFILE_MATCH_SCHEMA,
     ProfileMatchValidationError,
     build_profile_match_messages,
@@ -235,12 +235,14 @@ class LlmProfileMatchTests(unittest.TestCase):
                 return match, {}
 
         client = RepairingClient()
+        request_log = []
 
         result, metadata = match_job_to_profile(
             self.job_analysis,
             self.profile,
             "test-model",
             client,
+            request_log=request_log,
         )
 
         self.assertEqual(result["match"]["matches"][0]["status"], "met")
@@ -248,6 +250,11 @@ class LlmProfileMatchTests(unittest.TestCase):
         self.assertEqual(len(client.calls), 2)
         retry_message = client.calls[1]["messages"][-1]["content"]
         self.assertIn("braucht Profilbeleg", retry_message)
+        self.assertEqual(
+            [(entry["stage"], entry["validation_repair"]) for entry in request_log],
+            [("profile_match", False), ("profile_match", True)],
+        )
+        self.assertTrue(all(entry["success"] for entry in request_log))
 
 
 if __name__ == "__main__":

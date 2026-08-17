@@ -3,7 +3,7 @@
 import json
 import unittest
 
-from job_agent.llm.job_analysis import (
+from job_finder.llm.job_analysis import (
     JOB_ANALYSIS_SCHEMA,
     SYSTEM_PROMPT,
     JobAnalysisValidationError,
@@ -109,7 +109,9 @@ class LlmJobAnalysisTests(unittest.TestCase):
                 return analysis, {}
 
         analysis = make_job_analysis()
-        analysis["seniority_evidence_quote"] = "Berufseinstieg/Trainee"
+        analysis["seniority_evidence_quote"] = (
+            "Karrierestufe (Portal-Metadatum): Berufseinstieg/Trainee"
+        )
         job = source_job() | {"career_levels": ["Berufseinstieg/Trainee"]}
         client = FakeClient()
 
@@ -272,14 +274,25 @@ class LlmJobAnalysisTests(unittest.TestCase):
                 return analysis, {}
 
         client = RepairingClient()
+        request_log = []
 
-        analysis, metadata = analyze_job(source_job(), "test-model", client)
+        analysis, metadata = analyze_job(
+            source_job(),
+            "test-model",
+            client,
+            request_log=request_log,
+        )
 
         self.assertEqual(analysis["seniority"], "junior_entry")
         self.assertEqual(metadata["validation_retries"], 1)
         self.assertEqual(len(client.calls), 2)
         retry_message = client.calls[1]["messages"][-1]["content"]
         self.assertIn("Beleg kommt nicht wortgetreu", retry_message)
+        self.assertEqual(
+            [(entry["stage"], entry["validation_repair"]) for entry in request_log],
+            [("job_analysis", False), ("job_analysis", True)],
+        )
+        self.assertTrue(all(entry["success"] for entry in request_log))
 
 
 if __name__ == "__main__":

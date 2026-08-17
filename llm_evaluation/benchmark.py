@@ -7,17 +7,17 @@ from time import perf_counter
 
 import yaml
 
-from job_agent.llm.contract import RUBRIC_VERSION
-from job_agent.llm.fit_score import FIT_SCORE_VERSION, score_two_stage_result
-from job_agent.llm.job_analysis import (
+from job_finder.llm.contract import RUBRIC_VERSION
+from job_finder.llm.fit_score import FIT_SCORE_VERSION, score_two_stage_result
+from job_finder.llm.job_analysis import (
     JOB_ANALYSIS_PROMPT_VERSION,
     JOB_ANALYSIS_SCHEMA_VERSION,
     JobAnalysisValidationError,
     analyze_job,
 )
-from job_agent.llm.errors import LLMError
-from job_agent.llm.profile_loader import load_llm_profile
-from job_agent.llm.profile_match import (
+from job_finder.llm.errors import LLMError
+from job_finder.llm.profile_loader import load_llm_profile
+from job_finder.llm.profile_match import (
     PROFILE_MATCH_PROMPT_VERSION,
     PROFILE_MATCH_SCHEMA_VERSION,
     ProfileMatchValidationError,

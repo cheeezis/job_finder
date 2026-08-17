@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from job_agent.reporting import write_recommendations
+from job_finder.reporting import write_recommendations
 
 
 def analyzed_job():
@@ -59,6 +59,14 @@ class ReportingTests(unittest.TestCase):
         recommendation = stored["recommendations"][0]
         self.assertEqual(recommendation["llm_score"], 90)
         self.assertEqual(recommendation["url"], "https://company.test/job")
+        self.assertEqual(
+            recommendation["source_links"],
+            [
+                {"source": "listing", "url": "https://portal.test/job"},
+                {"source": "original", "url": "https://company.test/job"},
+                {"source": "listing", "url": "https://arbeitnow.test/job"},
+            ],
+        )
         self.assertNotIn("description_clean", recommendation)
         self.assertNotIn("reasons", recommendation)
         self.assertIn("90% | Junior Python Developer", markdown)

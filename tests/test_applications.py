@@ -71,6 +71,106 @@ class ApplicationTrackingTests(unittest.TestCase):
             [],
         )
 
+    def test_interview_can_store_one_upcoming_appointment(self):
+        self.save_jobs(
+            {
+                "job:1": {
+                    "title": "IT Consultant",
+                    "company": "Example GmbH",
+                    "workflow_status": "applied",
+                    "workflow_history": [
+                        {"status": "applied", "occurred_on": "2026-08-01"}
+                    ],
+                }
+            }
+        )
+
+        update_workflow_status(
+            "job:1",
+            "interview",
+            memory_path=self.memory_path,
+            occurred_on="2026-08-17",
+            scheduled_for="2099-08-21T14:30",
+        )
+        overview = load_application_overview(self.memory_path)
+
+        self.assertEqual(
+            load_memory(self.memory_path)["job:1"]["workflow_history"][-1],
+            {
+                "status": "interview",
+                "occurred_on": "2026-08-17",
+                "scheduled_for": "2099-08-21T14:30",
+            },
+        )
+        self.assertEqual(
+            overview["applications"][0]["next_interview_at"],
+            "2099-08-21T14:30",
+        )
+
+    def test_interview_appointment_can_be_edited_and_snapshot_is_checked(self):
+        jobs = {
+            "job:1": {
+                "workflow_status": "interview",
+                "workflow_history": [
+                    {"status": "applied", "occurred_on": "2026-08-01"},
+                    {
+                        "status": "interview",
+                        "occurred_on": "2026-08-17",
+                        "scheduled_for": "2099-08-21T14:30",
+                    },
+                ],
+            }
+        }
+        self.save_jobs(jobs)
+
+        result = update_workflow_history(
+            "job:1",
+            1,
+            "interview",
+            "2026-08-17",
+            "interview",
+            "2026-08-17",
+            memory_path=self.memory_path,
+            scheduled_for="2099-08-22T09:15",
+            previous_scheduled_for="2099-08-21T14:30",
+        )
+
+        self.assertEqual(result["scheduled_for"], "2099-08-22T09:15")
+        with self.assertRaisesRegex(ValueError, "zwischenzeitlich geändert"):
+            update_workflow_history(
+                "job:1",
+                1,
+                "interview",
+                "2026-08-17",
+                "interview",
+                "2026-08-17",
+                memory_path=self.memory_path,
+                scheduled_for="2099-08-23T10:00",
+                previous_scheduled_for="2099-08-21T14:30",
+            )
+
+    def test_appointment_is_rejected_for_non_interview_status(self):
+        jobs = {
+            "job:1": {
+                "workflow_status": "applied",
+                "workflow_history": [
+                    {"status": "applied", "occurred_on": "2026-08-01"}
+                ],
+            }
+        }
+        self.save_jobs(jobs)
+
+        with self.assertRaisesRegex(ValueError, "nur beim Status Gespräch"):
+            update_workflow_status(
+                "job:1",
+                "response",
+                memory_path=self.memory_path,
+                occurred_on="2026-08-17",
+                scheduled_for="2026-08-21T14:30",
+            )
+
+        self.assertEqual(load_memory(self.memory_path), jobs)
+
     def test_invalid_date_does_not_change_current_status(self):
         self.save_jobs(
             {

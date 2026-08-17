@@ -52,18 +52,26 @@ def analyze_results(
     analyses = cache_state["analyses"]
     pending = cache_state["pending"]
     current_analysis_version = analysis_configuration_key(settings)
+    cached_analysis_version = cache_state.get("analysis_version")
     analysis_changed = (
-        cache_state.get("analysis_version") != current_analysis_version
+        cached_analysis_version != current_analysis_version
     )
     cached_profile_version = cache_state.get("profile_version")
     profile_changed = (
         cached_profile_version is not None
         and cached_profile_version != profile.version
     )
+    cache_reset = profile_changed or analysis_changed
+    cache_invalidated = cache_reset and bool(
+        analyses
+        or pending
+        or cached_profile_version is not None
+        or cached_analysis_version is not None
+    )
     previous_profile_analyses = {}
     if profile_changed and not analysis_changed:
         previous_profile_analyses = dict(analyses)
-    if profile_changed or analysis_changed:
+    if cache_reset:
         analyses.clear()
         pending.clear()
     cache_state["profile_version"] = profile.version
@@ -74,7 +82,8 @@ def analyze_results(
     ]
     eligible = []
     cached_count = 0
-    cache_changed = profile_changed or analysis_changed
+    blocked_count = 0
+    cache_changed = cache_reset
     for job, key in jobs_with_keys:
         cached = analyses.get(key)
         if (
@@ -100,20 +109,46 @@ def analyze_results(
             cache_changed |= pending.pop(key, None) is not None
             cached_count += 1
         else:
-            eligible.append((job, key))
+            pending_entry = pending.get(key)
+            if (
+                pending_failure_kind(pending_entry) == "validation"
+                and not cache_invalidated
+            ):
+                job["llm_status"] = "failed"
+                job["llm_error"] = pending_entry.get("error")
+                if pending_entry.get("error_kind") != "validation":
+                    pending_entry["error_kind"] = "validation"
+                    cache_changed = True
+                blocked_count += 1
+                continue
+            reason = analysis_reason(
+                job,
+                pending_entry,
+                cache_invalidated=cache_invalidated,
+            )
+            eligible.append((job, key, reason))
 
-    for job, key in eligible:
+    for job, key, _reason in eligible:
         if key not in pending:
             pending[key] = pending_record(job, "pending")
             cache_changed = True
     if limit is not None:
         eligible = eligible[:limit]
+    reasons = {"cache_hit": cached_count}
+    if blocked_count:
+        reasons["validation_blocked"] = blocked_count
     stats = {
         "eligible": len(eligible),
         "analyzed": 0,
         "cached": cached_count,
         "failed": 0,
+        "blocked": blocked_count,
+        "reasons": reasons,
+        "model_calls": model_call_stats(),
+        "errors": [],
     }
+    for _job, _key, reason in eligible:
+        stats["reasons"][reason] = stats["reasons"].get(reason, 0) + 1
 
     if eligible and client is None:
         try:
@@ -123,19 +158,29 @@ def analyze_results(
                 max_output_tokens=settings.max_output_tokens,
             )
         except LLMError as error:
-            for job, key in eligible:
+            for job, key, _reason in eligible:
                 job["llm_status"] = "failed"
                 job["llm_error"] = str(error)
                 pending[key] = pending_record(job, "failed", error)
             stats["failed"] = len(eligible)
+            stats["errors"].append(
+                llm_error_record(error, affected_jobs=len(eligible))
+            )
             save_cache(cache_state, settings.cache_path)
             sort_included_results(results["included"])
             return stats
 
-    for current, (job, key) in enumerate(eligible, start=1):
-        print(f"[{current}/{len(eligible)}] KI-Analyse: {job['title']}")
+    request_log = []
+    for job, key, _reason in eligible:
         try:
-            record = analyze_job_record(job, profile, settings, client, key)
+            record = analyze_job_record(
+                job,
+                profile,
+                settings,
+                client,
+                key,
+                request_log=request_log,
+            )
         except (
             LLMError,
             JobAnalysisValidationError,
@@ -146,6 +191,7 @@ def analyze_results(
             pending[key] = pending_record(job, "failed", error)
             cache_changed = True
             stats["failed"] += 1
+            stats["errors"].append(llm_error_record(error))
             continue
 
         analyses[key] = record
@@ -154,21 +200,144 @@ def analyze_results(
         cache_changed = True
         stats["analyzed"] += 1
 
+    stats["model_calls"] = model_call_stats(request_log)
     if cache_changed:
         save_cache(cache_state, settings.cache_path)
     sort_included_results(results["included"])
     return stats
 
 
-def analyze_job_record(job, profile, settings, client, cache_key):
+def model_call_stats(request_log=()):
+    """Summarize model calls made during the current run only."""
+    stats = {
+        "calls": 0,
+        "failed": 0,
+        "validation_repairs": 0,
+        "usage_missing": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cached_input_tokens": 0,
+        "reasoning_tokens": 0,
+    }
+    token_fields = {
+        "prompt_eval_count": "input_tokens",
+        "eval_count": "output_tokens",
+        "cached_input_tokens": "cached_input_tokens",
+        "reasoning_tokens": "reasoning_tokens",
+    }
+    for request in request_log:
+        stats["calls"] += 1
+        stats["failed"] += not request.get("success")
+        if request.get("validation_repair"):
+            stats["validation_repairs"] += 1
+
+        metadata = request.get("metadata") or {}
+        if (
+            token_count(metadata.get("prompt_eval_count")) is None
+            or token_count(metadata.get("eval_count")) is None
+        ):
+            stats["usage_missing"] += 1
+        for source_field, target_field in token_fields.items():
+            stats[target_field] += token_count(metadata.get(source_field)) or 0
+    return stats
+
+
+def token_count(value):
+    """Return a valid usage counter or None."""
+    return value if type(value) is int and value >= 0 else None
+
+
+def llm_error_record(error, affected_jobs=1):
+    """Translate internal LLM failures into concise user-facing diagnostics."""
+    lowered = str(error).casefold()
+    if isinstance(error, JobAnalysisValidationError):
+        category = "Stellenanalyse"
+        if "wortgetreu" in lowered or "beleg kommt nicht" in lowered:
+            message = "Ein KI-Beleg steht nicht wortgetreu in der Anzeige."
+        else:
+            message = "Die KI-Antwort widerspricht den extrahierten Stellendaten."
+    elif isinstance(error, ProfileMatchValidationError):
+        category = "Profilabgleich"
+        if "unbekannte profilbelege" in lowered:
+            message = "Die KI verweist auf einen nicht vorhandenen Profilbeleg."
+        else:
+            message = "Die KI-Antwort ordnet Anforderungen oder Profilbelege falsch zu."
+    else:
+        category = "OpenAI"
+        if "openai_api_key" in lowered or "client konnte nicht initialisiert" in lowered:
+            message = "Der OpenAI-Client kann ohne gültigen API-Key nicht starten."
+        elif any(
+            signal in lowered
+            for signal in (
+                "credit_balance_exhausted",
+                "insufficient_quota",
+                "no credits",
+                "billing quota",
+            )
+        ):
+            message = "Das OpenAI-Guthaben ist aufgebraucht."
+        elif "429" in lowered or "rate_limit" in lowered:
+            message = "OpenAI begrenzt die Anfragen vorübergehend."
+        elif (
+            "timeout" in lowered
+            or "timed out" in lowered
+            or "zeitüberschreitung" in lowered
+        ):
+            message = "Die OpenAI-Anfrage hat zu lange gedauert."
+        else:
+            message = "OpenAI lieferte keine nutzbare strukturierte Antwort."
+
+    if affected_jobs > 1:
+        message = f"{affected_jobs} Stellen nicht analysiert: {message}"
+    return {
+        "category": category,
+        "message": message,
+    }
+
+
+def analysis_reason(
+    job,
+    pending_entry,
+    *,
+    cache_invalidated,
+):
+    """Classify why a cache miss is eligible for a paid LLM analysis."""
+    pending_status = (pending_entry or {}).get("status")
+    if pending_status == "failed" and not cache_invalidated:
+        return "retry_after_failed"
+    if job.get("is_new"):
+        return "new_job"
+    if cache_invalidated:
+        return "profile_or_config_changed"
+    if job.get("content_changed"):
+        return "content_or_input_changed"
+    if pending_status == "pending":
+        return "deferred"
+    return "uncached_known_job"
+
+
+def analyze_job_record(
+    job,
+    profile,
+    settings,
+    client,
+    cache_key,
+    request_log=None,
+):
     """Run both LLM stages and build one auditable cache record."""
-    job_analysis, analysis_metadata = analyze_job(job, settings.model, client)
+    job_analysis, analysis_metadata = analyze_job(
+        job,
+        settings.model,
+        client,
+        request_log=request_log,
+    )
     profile_result, match_metadata = match_job_to_profile(
         job_analysis,
         profile,
         settings.model,
         client,
         job_context=job,
+        request_log=request_log,
     )
     fit = score_two_stage_result(job, job_analysis, profile_result["match"])
     analyzed_at = datetime.now(timezone.utc).isoformat()
@@ -323,8 +492,37 @@ def pending_record(job, status, error=None):
         "title": job["title"],
         "status": status,
         "error": str(error) if error else None,
+        "error_kind": failure_kind(error),
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+def failure_kind(error):
+    """Classify failures by whether an unchanged input should be retried."""
+    if isinstance(
+        error,
+        (JobAnalysisValidationError, ProfileMatchValidationError),
+    ):
+        return "validation"
+    return "provider" if error is not None else None
+
+
+def pending_failure_kind(entry):
+    """Read current and unambiguous legacy failure classifications."""
+    if not entry or entry.get("status") != "failed":
+        return None
+    if entry.get("error_kind") in {"validation", "provider"}:
+        return entry["error_kind"]
+    error = str(entry.get("error") or "").casefold()
+    if any(
+        signal in error
+        for signal in (
+            "beleg kommt nicht wortgetreu",
+            "unbekannte profilbelege",
+        )
+    ):
+        return "validation"
+    return "provider"
 
 
 def sort_included_results(jobs):
@@ -332,7 +530,11 @@ def sort_included_results(jobs):
     jobs.sort(
         key=lambda job: (
             job.get("llm_score") is None,
-            -(job.get("llm_score") or job.get("match_percent", 0)),
+            -(
+                job["llm_score"]
+                if job.get("llm_score") is not None
+                else job.get("match_percent", 0)
+            ),
             job.get("experience_rank", 0),
             job.get("title", "").casefold(),
         )

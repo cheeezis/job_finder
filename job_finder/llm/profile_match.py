@@ -5,7 +5,10 @@ import json
 from jsonschema import ValidationError, validate
 
 from job_finder.llm.contract import RATING_VALUES, RUBRIC
-from job_finder.llm.validation import build_validation_retry_messages
+from job_finder.llm.validation import (
+    build_validation_retry_messages,
+    chat_with_telemetry,
+)
 
 
 PROFILE_MATCH_SCHEMA_VERSION = 3
@@ -295,12 +298,17 @@ def match_job_to_profile(
     client,
     validation_retries=1,
     job_context=None,
+    request_log=None,
 ):
     """Match validated job facts to a profile through an injected LLM client."""
     messages = build_profile_match_messages(profile, job_analysis, job_context)
 
     for attempt in range(validation_retries + 1):
-        match, metadata = client.chat(
+        match, metadata = chat_with_telemetry(
+            client,
+            stage="profile_match",
+            validation_repair=attempt > 0,
+            request_log=request_log,
             model=model,
             messages=messages,
             output_schema=PROFILE_MATCH_SCHEMA,

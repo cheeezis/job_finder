@@ -74,27 +74,36 @@ class OpenAIClient:
                 f"OpenAI-Anfrage fehlgeschlagen: {error}"
             ) from error
 
+        metadata = response_metadata(response, self.provider)
         content = response.output_text
         if not isinstance(content, str) or not content.strip():
-            raise OpenAIProviderError("OpenAI-Antwort enthaelt keinen Inhalt")
+            error = OpenAIProviderError("OpenAI-Antwort enthaelt keinen Inhalt")
+            error.request_metadata = metadata
+            raise error
 
         try:
             result = json.loads(content)
-        except json.JSONDecodeError as error:
-            raise OpenAIProviderError(
+        except json.JSONDecodeError as parse_error:
+            error = OpenAIProviderError(
                 "OpenAI-Antwort ist kein gueltiges JSON"
-            ) from error
+            )
+            error.request_metadata = metadata
+            raise error from parse_error
 
-        usage = response.usage
-        input_details = getattr(usage, "input_tokens_details", None)
-        output_details = getattr(usage, "output_tokens_details", None)
-        metadata = {
-            "provider": self.provider,
-            "response_id": response.id,
-            "response_model": response.model,
-            "prompt_eval_count": getattr(usage, "input_tokens", None),
-            "eval_count": getattr(usage, "output_tokens", None),
-            "cached_input_tokens": getattr(input_details, "cached_tokens", None),
-            "reasoning_tokens": getattr(output_details, "reasoning_tokens", None),
-        }
         return result, metadata
+
+
+def response_metadata(response, provider):
+    """Extract usage before inspecting the response body."""
+    usage = getattr(response, "usage", None)
+    input_details = getattr(usage, "input_tokens_details", None)
+    output_details = getattr(usage, "output_tokens_details", None)
+    return {
+        "provider": provider,
+        "response_id": getattr(response, "id", None),
+        "response_model": getattr(response, "model", None),
+        "prompt_eval_count": getattr(usage, "input_tokens", None),
+        "eval_count": getattr(usage, "output_tokens", None),
+        "cached_input_tokens": getattr(input_details, "cached_tokens", None),
+        "reasoning_tokens": getattr(output_details, "reasoning_tokens", None),
+    }

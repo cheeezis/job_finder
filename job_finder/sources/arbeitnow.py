@@ -66,7 +66,7 @@ def fetch_jobs(cache_path=CACHE_FILE):
         if not jobs:
             raise
         print(
-            "Arbeitnow begrenzt Anfragen; nutze "
+            "WARNUNG Arbeitnow: API-Limit erreicht; nutze "
             f"{len(jobs)} aktuelle Stellen aus dem lokalen Cache"
         )
         return jobs
@@ -92,7 +92,6 @@ def collect_records():
     seen = set()
 
     for page in range(1, MAX_PAGES + 1):
-        print(f"Arbeitnow Seite {page}")
         payload = fetch_json(
             f"{API_URL}?{urlencode({'page': page})}",
             headers={"Accept": "application/json"},
@@ -118,10 +117,9 @@ def fresh_cached_jobs(cache):
 
 
 def reuse_cached_enrichment(job, previous):
-    """Keep a successful original ad while Arbeitnow still sends a placeholder."""
+    """Keep a confirmed original link and bridge later placeholder responses."""
     if (
         previous is None
-        or not is_placeholder_description(job.description_clean)
         or is_placeholder_description(previous.description_clean)
     ):
         return False
@@ -142,9 +140,10 @@ def reuse_cached_enrichment(job, previous):
     ):
         return False
 
-    job.description_raw = previous.description_raw
-    job.description_clean = previous.description_clean
     current_source.application_url = previous_source.application_url
+    if is_placeholder_description(job.description_clean):
+        job.description_raw = previous.description_raw
+        job.description_clean = previous.description_clean
     return True
 
 
@@ -153,6 +152,7 @@ def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE):
     cache_file = Path(cache_path)
     cache = load_detail_cache(cache_file)
     enriched = 0
+    enrichment_errors = 0
     for job in jobs:
         if job.id not in candidate_ids or not is_placeholder_description(job.description_clean):
             continue
@@ -173,11 +173,15 @@ def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE):
             mark_content_change(job, previous)
             cache[canonical_detail_url(source.url)] = job
             enriched += 1
-            print(f"Arbeitnow Originalanzeige: {job.title}")
-        except Exception as error:
-            print(f"Arbeitnow Originalanzeige nicht erreichbar: {job.title} ({type(error).__name__})")
+        except Exception:
+            enrichment_errors += 1
     if enriched:
         save_detail_cache(cache_file, cache)
+    if enrichment_errors:
+        print(
+            f"WARNUNG Arbeitnow: {enrichment_errors} Originalanzeige(n) "
+            "nicht erreichbar"
+        )
     return enriched
 
 

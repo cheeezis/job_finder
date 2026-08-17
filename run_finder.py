@@ -26,11 +26,14 @@ from job_finder.sources import css
 from job_finder.sources import compose_it
 from job_finder.sources import edag
 from job_finder.sources import get_in_it
+from job_finder.sources import himalayas
 from job_finder.sources import jumo
+from job_finder.sources import jobicy
 from job_finder.sources import nethinks
 from job_finder.sources import proemion
 from job_finder.sources import rhoenenergie
 from job_finder.sources import stepstone
+from job_finder.sources import startup_jobs
 from job_finder.sources.common import canonical_detail_url as canonical_url
 
 
@@ -39,6 +42,9 @@ SOURCES = [
     stepstone,
     get_in_it,
     arbeitnow,
+    himalayas,
+    jobicy,
+    *([startup_jobs] if startup_jobs.is_configured() else []),
     compose_it,
     bytewerk,
     rhoenenergie,
@@ -355,6 +361,9 @@ def source_label(name):
         "stepstone": "StepStone",
         "get_in_it": "get-in-IT",
         "arbeitnow": "Arbeitnow",
+        "himalayas": "Himalayas",
+        "jobicy": "Jobicy",
+        "startup_jobs": "Startup Jobs",
         "compose_it": "Compose IT",
         "bytewerk": "bytewerk",
         "rhoenenergie": "RhönEnergie",

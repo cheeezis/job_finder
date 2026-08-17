@@ -57,6 +57,19 @@ def make_job(
 
 
 class NotificationTests(unittest.TestCase):
+    def test_failed_llm_job_is_not_queued_for_discord(self):
+        job = make_job("job:failed", llm_status="failed")
+        job["llm_result"] = None
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "notifications.json"
+            stats = process_notifications(
+                {"included": [job], "excluded": []}, state_path=path
+            )
+
+        self.assertEqual(stats["queued"], 0)
+        self.assertEqual(stats["ready"], 0)
+
     def test_preview_queues_all_unsent_active_matches_and_borderline_jobs(self):
         results = {
             "included": [

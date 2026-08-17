@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import re
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -24,6 +25,18 @@ RELEVANT_CONTENT_FIELDS = (
     "salary_min_eur",
     "salary_max_eur",
 )
+
+GERMANY_LOCATION_LABELS = {"de", "deu", "deutschland", "germany"}
+GERMANY_REMOTE_REGION_LABELS = {
+    "anywhere",
+    "europe",
+    "european union",
+    "eu",
+    "global",
+    "remote",
+    "weltweit",
+    "worldwide",
+}
 DETAIL_CACHE_FIELDS = (
     "id",
     "title",
@@ -165,6 +178,27 @@ def normalize_employment_type(value):
         return ", ".join(values) or None
     text = str(value or "").strip()
     return text or None
+
+
+def remote_region_allows_germany(value, country_code=None):
+    """Interpret an explicit API location restriction for remote work."""
+    code = str(country_code or "").strip().casefold()
+    if code:
+        return code in GERMANY_LOCATION_LABELS
+
+    text = str(value or "").strip().casefold()
+    if not text:
+        return True
+
+    labels = {
+        label.strip()
+        for label in re.split(r"[,;/|]+", text)
+        if label.strip()
+    }
+    return bool(
+        labels.intersection(GERMANY_LOCATION_LABELS)
+        or labels.intersection(GERMANY_REMOTE_REGION_LABELS)
+    )
 
 
 def extract_annual_salary_eur(posting):

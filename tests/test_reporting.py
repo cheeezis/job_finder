@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from job_finder.reporting import write_recommendations
+from job_finder.reporting import is_international_listing, write_recommendations
 
 
 def analyzed_job():
@@ -50,10 +50,8 @@ class ReportingTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             json_path = Path(directory) / "recommendations.json"
-            markdown_path = Path(directory) / "recommendations.md"
-            write_recommendations(results, json_path, markdown_path)
+            write_recommendations(results, json_path)
             stored = json.loads(json_path.read_text(encoding="utf-8"))
-            markdown = markdown_path.read_text(encoding="utf-8")
 
         self.assertEqual(len(stored["recommendations"]), 1)
         recommendation = stored["recommendations"][0]
@@ -69,9 +67,59 @@ class ReportingTests(unittest.TestCase):
         )
         self.assertNotIn("description_clean", recommendation)
         self.assertNotIn("reasons", recommendation)
-        self.assertIn("90% | Junior Python Developer", markdown)
-        self.assertIn("Python-APIs entwickeln", markdown)
-        self.assertNotIn("rule-only", markdown)
+        self.assertEqual(recommendation["title"], "Junior Python Developer")
+        self.assertEqual(recommendation["tasks"], ["Python-APIs entwickeln"])
+        self.assertFalse(recommendation["international"])
+
+    def test_failed_llm_job_is_kept_for_manual_review(self):
+        failed = {
+            "id": "test:failed",
+            "title": "Junior Developer",
+            "company": "Example GmbH",
+            "locations": ["Europe"],
+            "sources": [{"url": "https://example.test/failed"}],
+            "llm_status": "failed",
+        }
+
+        with tempfile.TemporaryDirectory() as directory:
+            json_path = Path(directory) / "recommendations.json"
+            write_recommendations(
+                {"included": [failed, {"id": "rule-only"}], "excluded": []},
+                json_path,
+            )
+            stored = json.loads(json_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(len(stored["recommendations"]), 1)
+        self.assertTrue(stored["recommendations"][0]["llm_unavailable"])
+        self.assertTrue(stored["recommendations"][0]["international"])
+
+    def test_international_listing_requires_broad_location_without_germany(self):
+        international_locations = [["weltweit"], ["Europe"]]
+        domestic_locations = [["Germany"], ["Remote, Germany"], ["Fulda"]]
+
+        for locations in international_locations:
+            with self.subTest(locations=locations):
+                self.assertTrue(is_international_listing({"locations": locations}))
+        for locations in domestic_locations:
+            with self.subTest(locations=locations):
+                self.assertFalse(is_international_listing({"locations": locations}))
+
+        self.assertTrue(
+            is_international_listing(
+                {
+                    "locations": ["Remote"],
+                    "sources": [{"source": "startup_jobs"}],
+                }
+            )
+        )
+        self.assertFalse(
+            is_international_listing(
+                {
+                    "locations": ["Remote"],
+                    "sources": [{"source": "stepstone"}],
+                }
+            )
+        )
 
     def test_current_interesting_job_survives_missing_llm_result(self):
         interesting = {
@@ -98,18 +146,15 @@ class ReportingTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             json_path = Path(directory) / "recommendations.json"
-            markdown_path = Path(directory) / "recommendations.md"
-            write_recommendations(results, json_path, markdown_path)
+            write_recommendations(results, json_path)
             stored = json.loads(json_path.read_text(encoding="utf-8"))
-            markdown = markdown_path.read_text(encoding="utf-8")
 
         self.assertEqual(len(stored["recommendations"]), 1)
         recommendation = stored["recommendations"][0]
         self.assertTrue(recommendation["llm_unavailable"])
         self.assertIsNone(recommendation["llm_score"])
         self.assertEqual(recommendation["url"], "https://example.test/interesting")
-        self.assertIn("KI offen | AI Integration Engineer", markdown)
-        self.assertNotIn("Inactive Interesting Job", markdown)
+        self.assertEqual(recommendation["title"], "AI Integration Engineer")
 
 
 if __name__ == "__main__":

@@ -21,8 +21,10 @@
     .header-actions { display: grid; gap: 8px; justify-items: end; }
     .overview-link { color: #176b54; white-space: nowrap; }
     .filters, .card { background: white; border: 1px solid #dfe4eb; border-radius: 16px; box-shadow: 0 8px 24px rgba(28, 39, 58, .06); }
-    .filters { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 12px; padding: 16px; margin: 24px 0; }
+    .filters { display: grid; grid-template-columns: 1fr 1fr 2fr auto; gap: 12px; padding: 16px; margin: 24px 0; align-items: end; }
     label { display: grid; gap: 6px; font-size: .82rem; color: #607087; }
+    .toggle { display: flex; align-items: center; gap: 8px; min-height: 42px; color: #445269; white-space: nowrap; }
+    .toggle input { width: auto; margin: 0; }
     select, input, textarea, button, .button { font: inherit; border-radius: 9px; }
     select, input, textarea { width: 100%; padding: 10px 12px; border: 1px solid #cbd3df; background: white; color: #172033; }
     textarea { min-height: 92px; resize: vertical; }
@@ -95,6 +97,10 @@
     </label>
     <label>Suche
       <input id="search-filter" type="search" placeholder="Titel oder Firma">
+    </label>
+    <label class="toggle">
+      <input id="international-filter" type="checkbox">
+      Internationale anzeigen
     </label>
   </section>
 
@@ -240,16 +246,20 @@
     parent.append(section);
   }
 
-  function applyFilters() {
+  function applyFilters(resetPosition = true) {
     const status = element("status-filter").value;
     const recommendation = element("recommendation-filter").value;
     const query = element("search-filter").value.trim().toLocaleLowerCase("de");
+    const showInternational = element("international-filter").checked;
     visibleJobs = jobs.filter(job =>
       (!status || job.workflow_status === status) &&
       (!recommendation || job.recommendation === recommendation) &&
+      (showInternational || !job.international) &&
       (!query || `${job.title} ${job.company}`.toLocaleLowerCase("de").includes(query))
     );
-    currentIndex = 0;
+    currentIndex = resetPosition
+      ? 0
+      : Math.min(currentIndex, Math.max(visibleJobs.length - 1, 0));
     render();
   }
 
@@ -314,7 +324,7 @@
       original.application_tracked = job.application_tracked;
     }
     if (element("status-filter").value && element("status-filter").value !== result.workflow_status) {
-      applyFilters();
+      applyFilters(false);
     } else if (currentIndex < visibleJobs.length - 1) {
       currentIndex += 1;
       render();
@@ -391,9 +401,10 @@
     }
   }
 
-  element("status-filter").addEventListener("change", applyFilters);
-  element("recommendation-filter").addEventListener("change", applyFilters);
-  element("search-filter").addEventListener("input", applyFilters);
+  element("status-filter").addEventListener("change", () => applyFilters());
+  element("recommendation-filter").addEventListener("change", () => applyFilters());
+  element("search-filter").addEventListener("input", () => applyFilters());
+  element("international-filter").addEventListener("change", () => applyFilters());
   element("previous").addEventListener("click", () => { currentIndex -= 1; render(); });
   element("next").addEventListener("click", () => { currentIndex += 1; render(); });
   element("mark-interesting").addEventListener("click", () =>

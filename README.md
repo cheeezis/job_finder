@@ -13,6 +13,9 @@ Der Job Finder kann:
 - bekannte Detailseiten aller Quellen sieben Tage lokal wiederverwenden
 - get-in-IT-Suchergebnisse über die öffentliche JSON-API abrufen
 - Arbeitnow-Stellen über die kostenlose öffentliche API abrufen
+- Entry-Level-Remote-Stellen über die öffentliche Himalayas-API abrufen
+- aktuelle Engineering-Stellen über die offizielle Startup-Jobs-API abrufen
+- Remote-IT-Stellen über die öffentliche Jobicy-API abrufen
 - direkte Karriereseiten von JUMO, EDAG, CSS, Proemion, NETHINKS, Compose IT, bytewerk und RhönEnergie abrufen
 - Jobdetail-Seiten importieren
 - alle Quellen in ein verbindliches Jobmodell überführen
@@ -23,7 +26,7 @@ Der Job Finder kann:
 - bereits gesehene Jobs intern merken
 - nach drei erfolgreichen, vergeblichen Quellensuchen nicht mehr gefundene Jobs
   als inaktiv markieren
-- kompakte KI-Empfehlungen als JSON und Markdown ausgeben
+- kompakte KI-Empfehlungen als JSON ausgeben
 - Fehler einer Quelle isolieren und die übrigen Quellen weiterverarbeiten
 - jeden Lauf protokollieren und wichtige interne Daten rotierend sichern
 
@@ -73,6 +76,7 @@ Inhalte bleiben bewusst ausserhalb von Git:
 - gefundene Stellen, Detail-Caches und manuelle Review-Notizen
 - LLM-Ergebnisse und Benachrichtigungsstatus
 - `OPENAI_API_KEY` und `DISCORD_WEBHOOK_URL`
+- der optionale `STARTUP_JOBS_API_KEY`
 
 Vor einem Fork oder einer Veröffentlichung sollte `git status --ignored`
 kontrolliert werden. Lokale Konfigurationen, der Ordner `data/` und echte
@@ -93,9 +97,11 @@ review_jobs.bat doppelklicken
 Die Oberfläche läuft nur auf dem eigenen Computer. Beim Start führt eine
 schlichte Auswahl entweder zu `Stellen prüfen` oder zu `Bewerbungen verwalten`.
 Im Stellen-Review werden Empfehlungen als interessant, nicht interessant oder
-beworben markiert. Alle späteren Bewerbungsschritte werden ausschließlich in
-der Bewerbungsübersicht gepflegt. Beide Bereiche verwenden das bestehende
-Job-Gedächtnis unter `data/internal/seen_jobs.json`.
+beworben markiert. Internationale Treffer sind dort standardmäßig ausgeblendet
+und lassen sich bei Bedarf zuschalten. Auch Stellen ohne gültige KI-Bewertung
+bleiben für die manuelle Prüfung erhalten. Alle späteren Bewerbungsschritte
+werden ausschließlich in der Bewerbungsübersicht gepflegt. Beide Bereiche
+verwenden das bestehende Job-Gedächtnis unter `data/internal/seen_jobs.json`.
 
 Die Bewerbungsübersicht speichert datierte Statuswechsel, zeigt auch nicht mehr
 aktive Stellen und berechnet daraus lokale Kennzahlen. Für Gespräche kann
@@ -135,6 +141,15 @@ Endgültige lokale Validierungsfehler werden für unveränderte Stellen pausiert
 damit sie nicht täglich erneut kostenpflichtig analysiert werden. Änderungen an
 Stelle, Profil oder KI-Konfiguration geben die Analyse wieder frei; technische
 Provider- und Netzwerkfehler bleiben erneut versuchbar.
+
+Startup Jobs ist eine optionale Quelle. Nach dem Erstellen eines kostenlosen
+API-Keys unter `https://startup.jobs/account/api_keys` wird sie durch die
+Umgebungsvariable `STARTUP_JOBS_API_KEY` automatisch aktiviert:
+
+```powershell
+$env:STARTUP_JOBS_API_KEY = "sj_..."
+python run_finder.py
+```
 
 Jeder Lauf schreibt seine kompakte Terminalausgabe zusätzlich nach
 `data/logs/`. Vor dem Verändern persistenter Daten werden Job-Gedächtnis,
@@ -204,7 +219,7 @@ job_finder/paths.py          gemeinsame interne und externe Datenpfade
 job_finder/profile.py        Profil-, Skill- und Scoring-Regeln
 job_finder/deduplication.py  quellenübergreifende Job-Deduplizierung
 job_finder/remote.py         gemeinsame Remote-Erkennung
-job_finder/reporting.py      JSON- und Markdown-Ausgaben
+job_finder/reporting.py      kompakte JSON-Ausgabe der Empfehlungen
 job_finder/applications.py  Bewerbungsverlauf und daraus abgeleitete Kennzahlen
 job_finder/applications.html getrennte lokale Bewerbungsübersicht
 job_finder/landing.html      lokale Startseite der Browseroberfläche
@@ -231,7 +246,6 @@ data/internal/rhoenenergie_cache.json Detailcache der RhönEnergie-Gruppe
 data/internal/llm_cache.json LLM-Ergebnisse und ausstehende Analysen
 data/internal/notifications.json Versand- und Wiederholungsstatus
 data/output/recommendations.json kompakte finale KI-Ergebnisse
-data/output/recommendations.md lesbare KI-Empfehlungen
 data/logs/                  kompakte Protokolle einzelner Läufe
 data/backups/               sieben neueste Sicherungen persistenter Zustandsdaten
 profile.example.yaml        anonymisierte Vorlage für das LLM-Profil

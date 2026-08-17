@@ -63,6 +63,16 @@ class ReviewTests(unittest.TestCase):
 
         self.assertEqual(jobs[0]["workflow_status"], "interesting")
         self.assertFalse(jobs[0]["application_tracked"])
+        self.assertFalse(jobs[0]["international"])
+
+    def test_review_jobs_classify_legacy_international_recommendation(self):
+        document = json.loads(self.recommendations_path.read_text(encoding="utf-8"))
+        document["recommendations"][0]["locations"] = ["weltweit"]
+        self.recommendations_path.write_text(json.dumps(document), encoding="utf-8")
+
+        jobs = load_review_jobs(self.recommendations_path, self.memory_path)
+
+        self.assertTrue(jobs[0]["international"])
 
     def test_stale_recommendation_id_resolves_through_known_url(self):
         memory = load_memory(self.memory_path)
@@ -253,6 +263,10 @@ class ReviewTests(unittest.TestCase):
         self.assertIn("function safeUrl(value)", review_page)
         self.assertIn("renderSourceLinks(job);", review_page)
         self.assertIn("Anzeigen öffnen (${links.length})", review_page)
+        self.assertIn('id="international-filter" type="checkbox"', review_page)
+        self.assertIn("(showInternational || !job.international)", review_page)
+        self.assertIn("function applyFilters(resetPosition = true)", review_page)
+        self.assertIn("applyFilters(false);", review_page)
         self.assertNotIn("progress-select", review_page)
         self.assertIn('href="/">← Zur Startseite</a>', review_page)
         self.assertIn("Bewerbungsübersicht", applications_page)

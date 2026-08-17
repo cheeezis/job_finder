@@ -22,6 +22,7 @@ def make_job(**overrides):
         "source": "test",
         "salary_min_eur": None,
         "salary_max_eur": None,
+        "career_levels": [],
     }
     values.update(overrides)
     work_mode, remote_percentage = classify_remote(values["remote"])
@@ -40,6 +41,7 @@ def make_job(**overrides):
         description_clean=values["description"],
         work_mode=work_mode,
         remote_percentage=remote_percentage,
+        career_levels=values["career_levels"],
         salary_min_eur=values["salary_min_eur"],
         salary_max_eur=values["salary_max_eur"],
     )
@@ -358,6 +360,32 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(senior["filter_status"], "excluded")
         self.assertEqual(mixed["filter_status"], "included")
 
+    def test_sr_and_director_titles_are_excluded(self):
+        abbreviated = score_job(make_job(title="Sr. DevOps Engineer"))
+        director = score_job(make_job(title="Director Software Engineering"))
+
+        self.assertEqual(abbreviated["filter_status"], "excluded")
+        self.assertEqual(director["filter_status"], "excluded")
+
+    def test_structured_seniority_is_a_hard_filter_without_entry_signal(self):
+        senior = score_job(
+            make_job(
+                title="Software Engineer",
+                description="Python APIs.",
+                career_levels=["Senior"],
+            )
+        )
+        mixed = score_job(
+            make_job(
+                title="Junior Software Engineer",
+                career_levels=["Junior", "Senior"],
+            )
+        )
+
+        self.assertEqual(senior["filter_status"], "excluded")
+        self.assertIn("Portal-Karrierestufe", senior["reasons"][0])
+        self.assertEqual(mixed["filter_status"], "included")
+
     def test_expert_titles_are_excluded_as_experienced_roles(self):
         german = score_job(make_job(title="Digitalisierungs- und KI-Experte"))
         english = score_job(make_job(title="AI Platform Expert"))
@@ -371,6 +399,7 @@ class ScoringTests(unittest.TestCase):
             ("Founding Cloud Infrastructure Engineer", "founding"),
             ("Solutions Architect - DACH", "architect"),
             ("Software Architekt", "architekt"),
+            ("Do Not Apply - IT Infrastructure Engineer", "do not apply"),
             (
                 "Data Science & AI Weiterbildung mit IHK-Abschluss",
                 "weiterbildung",

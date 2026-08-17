@@ -72,6 +72,7 @@ def score_job(job: Job):
         remote=remote,
         full_text=full_text,
         role=role,
+        career_levels=job.career_levels,
     )
     if not allowed:
         return excluded_result(filter_reason)
@@ -143,13 +144,25 @@ def strip_platform_boilerplate(description):
     return description
 
 
-def passes_hard_filters(title, description, location, remote, full_text, role):
+def passes_hard_filters(
+    title,
+    description,
+    location,
+    remote,
+    full_text,
+    role,
+    career_levels,
+):
     blocked_word = find_blocked_title_word(title)
     if blocked_word:
         return False, f"Titel enthaelt Ausschlusswort: {blocked_word}"
 
     if not role:
         return False, "Titel ist keine erkennbare IT-Rolle"
+
+    advanced_level = structured_advanced_level(career_levels)
+    if advanced_level and not is_entry_level(title, description):
+        return False, f"Portal-Karrierestufe ist nicht fuer den Einstieg: {advanced_level}"
 
     years = extract_required_years(full_text)
     if years > 3:
@@ -218,6 +231,7 @@ def find_blocked_title_word(title):
         # Junior/Senior or Junior IT Project Manager.
         if word in {
             "senior",
+            "sr",
             "experte",
             "expert",
             "lead",
@@ -236,6 +250,26 @@ def find_blocked_title_word(title):
             continue
         if contains_keyword(title, word):
             return word
+    return None
+
+
+def structured_advanced_level(career_levels):
+    """Return the first explicitly advanced portal seniority label."""
+    advanced_words = (
+        "senior",
+        "sr",
+        "staff",
+        "lead",
+        "principal",
+        "manager",
+        "director",
+        "executive",
+    )
+    for level in career_levels or []:
+        normalized = normalize_text(str(level))
+        for word in advanced_words:
+            if contains_keyword(normalized, word):
+                return str(level).strip()
     return None
 
 

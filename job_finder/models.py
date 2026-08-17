@@ -88,19 +88,12 @@ class Job:
     last_seen_at: datetime | None = None
     fetched_at: datetime | None = None
     workflow_status: WorkflowStatus = WorkflowStatus.NEW
-    rule_score: int | None = None
-    llm_score: int | None = None
-    llm_result: dict | None = None
-    filter_status: FilterStatus | None = None
-    score_reasons: list[str] = field(default_factory=list)
     is_new: bool = False
     content_changed: bool = False
 
     def __post_init__(self):
         """Reject invalid percentages, scores, and salary ranges."""
         validate_percentage("remote_percentage", self.remote_percentage)
-        validate_percentage("rule_score", self.rule_score)
-        validate_percentage("llm_score", self.llm_score)
 
         salary_values = [self.salary_min_eur, self.salary_max_eur]
         if any(value is not None and value < 0 for value in salary_values):
@@ -162,19 +155,11 @@ class Job:
             "last_seen_at": format_temporal(self.last_seen_at),
             "fetched_at": format_temporal(self.fetched_at),
             "workflow_status": self.workflow_status.value,
-            "rule_score": self.rule_score,
-            "llm_score": self.llm_score,
-            "llm_result": self.llm_result,
-            "filter_status": (
-                self.filter_status.value if self.filter_status is not None else None
-            ),
-            "score_reasons": list(self.score_reasons),
         }
 
     @classmethod
     def from_dict(cls, values):
         """Restore a job from the current JSON representation."""
-        filter_status = values.get("filter_status")
         return cls(
             id=values["id"],
             title=values["title"],
@@ -196,13 +181,6 @@ class Job:
             workflow_status=WorkflowStatus(
                 values.get("workflow_status", WorkflowStatus.NEW.value)
             ),
-            rule_score=values.get("rule_score"),
-            llm_score=values.get("llm_score"),
-            llm_result=values.get("llm_result"),
-            filter_status=(
-                FilterStatus(filter_status) if filter_status is not None else None
-            ),
-            score_reasons=list(values.get("score_reasons", [])),
         )
 
 

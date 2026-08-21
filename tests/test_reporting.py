@@ -120,6 +120,20 @@ class ReportingTests(unittest.TestCase):
                 }
             )
         )
+        self.assertTrue(
+            is_international_listing(
+                {
+                    "locations": [
+                        "Canada",
+                        "Germany",
+                        "India",
+                        "United Kingdom",
+                        "United States",
+                    ],
+                    "sources": [{"source": "himalayas"}],
+                }
+            )
+        )
 
     def test_current_interesting_job_survives_missing_llm_result(self):
         interesting = {

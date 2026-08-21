@@ -334,7 +334,7 @@ def print_llm_errors(errors, limit=5):
     groups = list(grouped.items())
     for (category, message), count in groups[:limit]:
         print(f"  {count}× {category}: {message}")
-    remaining = len(groups) - limit
+    remaining = max(0, len(groups) - limit)
     if remaining:
         print(f"  … {remaining} weitere Fehlerarten")
 

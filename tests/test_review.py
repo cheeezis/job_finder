@@ -74,6 +74,23 @@ class ReviewTests(unittest.TestCase):
 
         self.assertTrue(jobs[0]["international"])
 
+    def test_review_jobs_reclassify_stale_multicountry_recommendation(self):
+        document = json.loads(self.recommendations_path.read_text(encoding="utf-8"))
+        document["recommendations"][0].update(
+            {
+                "locations": ["Canada", "Germany", "United States"],
+                "source_links": [
+                    {"source": "himalayas", "url": "https://example.test/job"}
+                ],
+                "international": False,
+            }
+        )
+        self.recommendations_path.write_text(json.dumps(document), encoding="utf-8")
+
+        jobs = load_review_jobs(self.recommendations_path, self.memory_path)
+
+        self.assertTrue(jobs[0]["international"])
+
     def test_stale_recommendation_id_resolves_through_known_url(self):
         memory = load_memory(self.memory_path)
         memory["job:1"]["workflow_status"] = "applied"
@@ -106,6 +123,40 @@ class ReviewTests(unittest.TestCase):
             jobs[0]["source_links"],
             [{"source": "stepstone", "url": "https://portal.test/job"}],
         )
+
+    def test_application_wins_over_exact_review_entry_with_same_url(self):
+        memory = load_memory(self.memory_path)
+        memory["job:1"].update(
+            {
+                "workflow_status": "interesting",
+                "source_urls": ["https://portal.test/job"],
+            }
+        )
+        memory["portal:applied"] = {
+            "workflow_status": "applied",
+            "workflow_history": [
+                {"status": "applied", "occurred_on": "2026-08-12"}
+            ],
+            "source_urls": ["https://portal.test/job"],
+            "source_names": ["arbeitsagentur", "test"],
+        }
+        save_memory(memory, self.memory_path)
+        document = json.loads(self.recommendations_path.read_text(encoding="utf-8"))
+        document["recommendations"][0].update(
+            {
+                "url": "https://portal.test/job",
+                "source_links": [
+                    {"source": "test", "url": "https://portal.test/job"}
+                ],
+            }
+        )
+        self.recommendations_path.write_text(json.dumps(document), encoding="utf-8")
+
+        jobs = load_review_jobs(self.recommendations_path, self.memory_path)
+
+        self.assertEqual(jobs[0]["id"], "portal:applied")
+        self.assertEqual(jobs[0]["workflow_status"], "applied")
+        self.assertTrue(jobs[0]["application_tracked"])
 
     def test_review_jobs_recognize_historical_application(self):
         memory = load_memory(self.memory_path)

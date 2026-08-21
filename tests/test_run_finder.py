@@ -203,6 +203,21 @@ class RunAgentTests(unittest.TestCase):
         self.assertIn("Modellaufrufe ohne Tokenangaben: 1", text)
         self.assertIn("1× Stellenanalyse", text)
         self.assertNotIn("Validierungsfehler", text)
+        self.assertNotIn("weitere Fehlerarten", text)
+
+    def test_llm_error_summary_counts_only_hidden_error_groups(self):
+        output = io.StringIO()
+        with redirect_stdout(output):
+            print_llm_errors(
+                [
+                    {"category": "A", "message": "eins"},
+                    {"category": "B", "message": "zwei"},
+                    {"category": "C", "message": "drei"},
+                ],
+                limit=2,
+            )
+
+        self.assertIn("… 1 weitere Fehlerarten", output.getvalue())
 
     def test_canonical_url_keeps_jumo_job_offer_id(self):
         first = canonical_url(

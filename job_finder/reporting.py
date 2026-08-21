@@ -85,22 +85,28 @@ def recommendation_for_job(job):
 
 
 def is_international_listing(job):
-    """Return whether a broad location label lacks an explicit Germany scope."""
-    location = " ".join(str(value) for value in job.get("locations", []))
+    """Return whether a listing has a broad or multi-country location scope."""
+    locations = [
+        str(value).strip()
+        for value in job.get("locations", [])
+        if str(value).strip()
+    ]
+    location = " ".join(locations)
     normalized = location.casefold()
-    if "deutschland" in normalized or "germany" in normalized:
-        return False
-    words = set(re.findall(r"[a-zäöüß]+", normalized))
-    if words & INTERNATIONAL_LOCATION_TERMS:
-        return True
     source_names = {
         source.get("source")
         for source in job.get("sources", job.get("source_links", []))
         if isinstance(source, dict)
     }
-    return words == {"remote"} and bool(
+    from_international_feed = bool(
         source_names and source_names <= INTERNATIONAL_REMOTE_SOURCES
     )
+    if "deutschland" in normalized or "germany" in normalized:
+        return from_international_feed and len(locations) > 1
+    words = set(re.findall(r"[a-zäöüß]+", normalized))
+    if words & INTERNATIONAL_LOCATION_TERMS:
+        return True
+    return words == {"remote"} and from_international_feed
 
 
 def primary_url(job):

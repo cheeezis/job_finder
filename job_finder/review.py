@@ -14,7 +14,7 @@ from job_finder.applications import (
     record_status_change,
     update_history_event,
 )
-from job_finder.memory import load_memory, save_memory
+from job_finder.memory import load_memory, preferred_memory_id, save_memory
 from job_finder.models import WorkflowStatus
 from job_finder.paths import MEMORY_FILE, RECOMMENDATIONS_JSON
 from job_finder.reporting import is_international_listing
@@ -40,7 +40,7 @@ def load_review_jobs(
     review_jobs = []
     for recommendation in recommendations:
         job = dict(recommendation)
-        job.setdefault("international", is_international_listing(job))
+        job["international"] = is_international_listing(job)
         memory_id, entry = memory_entry_for_job(job, memory)
         job["id"] = memory_id
         job["workflow_status"] = entry.get(
@@ -72,8 +72,6 @@ def load_review_jobs(
 def memory_entry_for_job(job, memory):
     """Resolve stale recommendation IDs through an exact known source URL."""
     job_id = job["id"]
-    if job_id in memory:
-        return job_id, memory[job_id]
     urls = {
         link.get("url")
         for link in job.get("source_links", [])
@@ -81,12 +79,16 @@ def memory_entry_for_job(job, memory):
     }
     if job.get("url"):
         urls.add(job["url"])
-    matches = [
-        (memory_id, entry)
+    candidates = [
+        memory_id
         for memory_id, entry in memory.items()
-        if urls.intersection(entry.get("source_urls", []))
+        if memory_id == job_id
+        or urls.intersection(entry.get("source_urls", []))
     ]
-    return matches[0] if len(matches) == 1 else (job_id, {})
+    if not candidates:
+        return job_id, {}
+    memory_id = preferred_memory_id(candidates, memory, job_id)
+    return memory_id, memory[memory_id]
 
 
 def update_workflow_status(

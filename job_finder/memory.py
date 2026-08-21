@@ -9,6 +9,15 @@ from job_finder.paths import MEMORY_FILE
 
 MEMORY_VERSION = 2
 INACTIVE_AFTER_MISSED_RUNS = 3
+APPLICATION_STATUSES = {
+    WorkflowStatus.APPLIED.value,
+    WorkflowStatus.RESPONSE.value,
+    WorkflowStatus.INTERVIEW.value,
+    WorkflowStatus.REJECTED.value,
+    WorkflowStatus.NO_RESPONSE.value,
+    WorkflowStatus.OFFER.value,
+    WorkflowStatus.CLOSED.value,
+}
 
 
 def load_memory(path=MEMORY_FILE):
@@ -130,20 +139,7 @@ def resolve_memory_id(job, memory):
     if not candidates:
         return job.id
 
-    manual_candidates = [
-        job_id for job_id in candidates if has_manual_state(memory[job_id])
-    ]
-    if len(manual_candidates) > 1 and job.id in manual_candidates:
-        canonical_id = job.id
-    else:
-        canonical_id = min(
-            candidates,
-            key=lambda job_id: memory_candidate_key(
-                job_id,
-                memory[job_id],
-                job.id,
-            ),
-        )
+    canonical_id = preferred_memory_id(candidates, memory, job.id)
     canonical = memory[canonical_id]
     for candidate_id in candidates:
         if candidate_id == canonical_id:
@@ -161,6 +157,27 @@ def resolve_memory_id(job, memory):
         )
         del memory[candidate_id]
     return canonical_id
+
+
+def preferred_memory_id(candidates, memory, current_job_id):
+    """Prefer application history, then reviewed and stable memory entries."""
+    application_candidates = [
+        job_id for job_id in candidates if has_application_state(memory[job_id])
+    ]
+    manual_candidates = [
+        job_id for job_id in candidates if has_manual_state(memory[job_id])
+    ]
+    preferred = application_candidates or manual_candidates or candidates
+    if len(preferred) > 1 and current_job_id in preferred:
+        return current_job_id
+    return min(
+        preferred,
+        key=lambda job_id: memory_candidate_key(
+            job_id,
+            memory[job_id],
+            current_job_id,
+        ),
+    )
 
 
 def memory_candidate_key(job_id, entry, current_job_id):
@@ -181,6 +198,17 @@ def has_manual_state(entry):
         or entry.get("workflow_history")
         or entry.get("review_note")
         or entry.get("personal_rating")
+    )
+
+
+def has_application_state(entry):
+    """Return whether an entry represents a current or past application."""
+    history = entry.get("workflow_history", [])
+    if not isinstance(history, list):
+        history = []
+    return entry.get("workflow_status") in APPLICATION_STATUSES or any(
+        isinstance(event, dict) and event.get("status") in APPLICATION_STATUSES
+        for event in history
     )
 
 

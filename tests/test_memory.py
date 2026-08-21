@@ -157,7 +157,7 @@ class MemoryTests(unittest.TestCase):
             ["https://stepstone.test/jobs/456", job.primary_url],
         )
 
-    def test_conflicting_manual_entries_are_not_removed(self):
+    def test_application_wins_over_conflicting_review_entry(self):
         job = make_job()
         memory = {
             "stepstone:456": {
@@ -182,8 +182,8 @@ class MemoryTests(unittest.TestCase):
 
         update_memory([job], memory)
 
-        self.assertEqual(job.id, "test:123")
-        self.assertEqual(job.workflow_status, WorkflowStatus.IGNORED)
+        self.assertEqual(job.id, "stepstone:456")
+        self.assertEqual(job.workflow_status, WorkflowStatus.APPLIED)
         self.assertIn("stepstone:456", memory)
         self.assertIn("test:123", memory)
 

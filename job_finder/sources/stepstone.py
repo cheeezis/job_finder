@@ -152,11 +152,19 @@ def search_links(client=None):
     links = []
     seen = set()
     search_errors = 0
+    processed_queries = 0
+    requested_pages = 0
+    empty_stops = 0
+    repeated_stops = 0
+    planned_queries = len(STEPSTONE_SEARCH_TERMS) * len(
+        STEPSTONE_SEARCH_LOCATIONS
+    )
 
     for query in iter_search_queries(
         STEPSTONE_SEARCH_TERMS,
         STEPSTONE_SEARCH_LOCATIONS,
     ):
+        processed_queries += 1
         page = 1
         query_seen = set()
 
@@ -164,6 +172,7 @@ def search_links(client=None):
             search_url = build_search_url(query.term, query.location, page)
             try:
                 html = client.get(search_url)
+                requested_pages += 1
             except StepStoneBlockedError:
                 raise
             except Exception:
@@ -178,10 +187,22 @@ def search_links(client=None):
             for url in page_links:
                 append_unique(url, links, seen)
 
-            if not found_links or not page_links:
+            if not found_links:
+                empty_stops += 1
+                break
+            if not page_links:
+                repeated_stops += 1
                 break
 
             page += 1
+
+    print(
+        f"StepStone-Suche: {processed_queries}/{planned_queries} "
+        f"Kombinationen · {requested_pages} Seiten · "
+        f"{len(links)} eindeutige Anzeigen · Stopps: "
+        f"{empty_stops} leer, {repeated_stops} Wiederholung, "
+        f"{search_errors} Fehler"
+    )
 
     if search_errors:
         print(f"WARNUNG StepStone: {search_errors} Suchseite(n) nicht erreichbar")

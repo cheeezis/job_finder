@@ -78,7 +78,12 @@ def score_job(job: Job):
         return excluded_result(filter_reason)
 
     experience = analyze_experience(title, full_text)
-    location_score = analyze_location(location, remote, description)
+    location_score = analyze_location_for_role(
+        title,
+        location,
+        remote,
+        description,
+    )
     skill_score, skill_labels = score_skills(f"{title} {description}")
     profile_score = score_profile_connection(full_text)
 
@@ -177,7 +182,12 @@ def passes_hard_filters(
     if contains_any(full_text, HIGH_TRAVEL_PHRASES):
         return False, "Hohe oder deutschlandweite Reisetatigkeit gefordert"
 
-    location_score = analyze_location(location, remote, description)
+    location_score = analyze_location_for_role(
+        title,
+        location,
+        remote,
+        description,
+    )
     if not location_score["allowed"]:
         return False, location_score["label"]
 
@@ -460,6 +470,24 @@ def analyze_location(location, remote, description):
             }
 
     return {"allowed": False, "points": 0, "label": "Ort/Remote passt nicht"}
+
+
+def analyze_location_for_role(title, location, remote, description):
+    """Allow explicit entry roles with hybrid work to reach manual review."""
+    result = analyze_location(location, remote, description)
+    if result["allowed"]:
+        return result
+    if (
+        is_entry_level(title, title)
+        and is_hybrid(remote)
+        and remote_possible_from_germany(location, description)
+    ):
+        return {
+            "allowed": True,
+            "points": 0,
+            "label": "Junior-Hybrid außerhalb des Suchgebiets; Präsenzumfang prüfen",
+        }
+    return result
 
 
 def is_local_area(location):

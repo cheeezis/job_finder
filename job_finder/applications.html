@@ -117,9 +117,10 @@
     interview: "Gespräch",
     rejected: "Absage",
     no_response: "Keine Rückmeldung",
-    offer: "Zusage/Angebot",
+    offer: "Zusage",
     closed: "Abgeschlossen"
   };
+  const terminalStatuses = new Set(["rejected", "no_response", "offer"]);
   const sourceLabels = {
     stepstone: "StepStone", get_in_it: "get-in-IT",
     arbeitnow: "Arbeitnow", arbeitsagentur: "Arbeitsagentur"
@@ -224,17 +225,32 @@
   }
 
   function renderTimeline(application, parent) {
+    const displayHistory = [...application.workflow_history];
+    if (application.automatic_no_response) {
+      displayHistory.push({status: "no_response", occurred_on: null});
+    }
     const details = document.createElement("details");
-    details.open = application.workflow_history.length === 0;
-    details.append(make("summary", `Verlauf (${application.workflow_history.length})`));
+    details.open = displayHistory.length === 0;
+    details.append(make("summary", `Verlauf (${displayHistory.length})`));
 
     const readOnly = document.createElement("div");
-    if (application.workflow_history.length) {
+    if (displayHistory.length) {
       const list = make("ol", null, "timeline");
-      application.workflow_history.forEach(event => {
-        let text = `${formatDate(event.occurred_on)} · ${statusLabels[event.status] || event.status}`;
-        if (event.scheduled_for) text += ` · Termin: ${formatDateTime(event.scheduled_for)}`;
-        list.append(make("li", text));
+      displayHistory.forEach(event => {
+        const item = document.createElement("li");
+        if (event.occurred_on && event.status !== "no_response") {
+          item.append(`${formatDate(event.occurred_on)} · `);
+        }
+        const label = statusLabels[event.status] || event.status;
+        item.append(
+          terminalStatuses.has(event.status)
+            ? make("strong", label)
+            : document.createTextNode(label)
+        );
+        if (event.scheduled_for) {
+          item.append(` · Termin: ${formatDateTime(event.scheduled_for)}`);
+        }
+        list.append(item);
       });
       readOnly.append(list);
     } else {

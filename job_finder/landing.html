@@ -39,9 +39,20 @@
     .choice-title { font-size: 1.45rem; font-weight: 750; }
     .choice-description { margin-top: 10px; color: #607087; line-height: 1.55; }
     .choice-action { align-self: end; margin-top: 30px; color: #176b54; font-weight: 700; }
+    .manual-import { margin-top: 24px; padding: 24px; background: white; border: 1px solid #dfe4eb; border-radius: 16px; box-shadow: 0 8px 24px rgba(28, 39, 58, .06); }
+    .manual-import h2 { margin: 0; font-size: 1.2rem; }
+    .manual-import p { margin: 7px 0 16px; color: #607087; line-height: 1.5; }
+    .manual-import form { display: flex; gap: 10px; }
+    .manual-import input, .manual-import button { font: inherit; border-radius: 9px; }
+    .manual-import input { flex: 1; min-width: 0; padding: 11px 13px; border: 1px solid #cbd3df; }
+    .manual-import button { padding: 11px 16px; border: 1px solid #176b54; background: #176b54; color: white; cursor: pointer; }
+    .manual-import button:disabled { cursor: wait; opacity: .65; }
+    #import-status { min-height: 1.5em; margin-bottom: 0; }
+    #import-status.error { color: #8a3840; }
     @media (max-width: 650px) {
       nav { grid-template-columns: 1fr; }
       .choice { min-height: 175px; }
+      .manual-import form { display: grid; }
     }
   </style>
 </head>
@@ -64,6 +75,41 @@
       <span class="choice-action">Öffnen →</span>
     </a>
   </nav>
+
+  <section class="manual-import">
+    <h2>Stelle per Link prüfen</h2>
+    <p>Eine einzelne Stellenanzeige einlesen und gezielt durch Vorfilter und KI-Bewertung schicken.</p>
+    <form id="manual-import-form">
+      <input id="manual-url" type="url" required placeholder="https://unternehmen.de/jobs/..." aria-label="Link zur Stellenanzeige">
+      <button id="manual-import-button" type="submit">Stelle prüfen</button>
+    </form>
+    <p id="import-status" role="status"></p>
+  </section>
 </main>
+<script>
+  const form = document.getElementById("manual-import-form");
+  const button = document.getElementById("manual-import-button");
+  const status = document.getElementById("import-status");
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    button.disabled = true;
+    status.className = "";
+    status.textContent = "Anzeige wird eingelesen und von der KI bewertet …";
+    try {
+      const response = await fetch("/api/manual-import", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({url: document.getElementById("manual-url").value})
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Die Stelle konnte nicht importiert werden");
+      window.location.href = `/review?job=${encodeURIComponent(result.job_id)}`;
+    } catch (error) {
+      status.className = "error";
+      status.textContent = error.message;
+      button.disabled = false;
+    }
+  });
+</script>
 </body>
 </html>

@@ -36,6 +36,7 @@
     .company { margin: 0; color: #607087; }
     .meta { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 18px 0; color: #445269; font-size: .92rem; }
     .summary { font-size: 1.08rem; line-height: 1.65; }
+    .prefilter-warning { margin: 18px 0; padding: 12px 14px; border-radius: 9px; background: #fff4dd; color: #704c0b; line-height: 1.45; }
     .details { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 28px; }
     .section { margin-top: 20px; }
     .section h3 { margin: 0 0 8px; font-size: 1rem; }
@@ -118,6 +119,7 @@
       <span id="current-status"></span>
     </div>
     <p id="summary" class="summary"></p>
+    <p id="prefilter-warning" class="prefilter-warning" hidden></p>
     <div id="details" class="details"></div>
     <div class="actions">
       <button id="mark-interesting" class="primary">Interessant</button>
@@ -125,6 +127,7 @@
       <button id="mark-applied">Als beworben markieren</button>
       <a id="application-link" class="button" href="/applications" hidden>Bewerbung verwalten</a>
       <div id="job-links"></div>
+      <a id="route-link" class="button" target="_blank" rel="noopener noreferrer" hidden>Entfernung &amp; Fahrtzeit</a>
     </div>
     <section class="section">
       <h3>Meine Notiz</h3>
@@ -153,12 +156,13 @@
   const sourceLabels = {
     original: "Originalanzeige", stepstone: "StepStone",
     get_in_it: "get-in-IT", arbeitnow: "Arbeitnow",
-    arbeitsagentur: "Arbeitsagentur"
+    arbeitsagentur: "Arbeitsagentur", manual: "Manuell hinzugefügt"
   };
   const reviewStatuses = new Set(["review", "interesting", "ignored"]);
   let jobs = [];
   let visibleJobs = [];
   let currentIndex = 0;
+  let routeOrigin = "";
 
   const element = id => document.getElementById(id);
 
@@ -228,6 +232,39 @@
     });
     menu.append(summary, options);
     container.append(menu);
+  }
+
+  function routeDestination(job) {
+    const ignored = new Set([
+      "deutschland", "germany", "bundesweit", "deutschlandweit",
+      "remote", "hybrid"
+    ]);
+    return (job.locations || [])
+      .flatMap(value => String(value).split(","))
+      .map(value => value.trim().replace(/^u\.\s*a\.\s*/i, ""))
+      .find(value => value && !ignored.has(value.toLocaleLowerCase("de"))) || "";
+  }
+
+  function renderRouteLink(job) {
+    const link = element("route-link");
+    const isJuniorHybridException = String(job.location_precheck || "")
+      .startsWith("Junior-Hybrid");
+    const isManualHybridConflict = job.prefilter_warning === "Ort/Remote passt nicht"
+      && job.work_mode === "hybrid";
+    const destination = routeDestination(job);
+    link.hidden = !(routeOrigin && destination && (
+      isJuniorHybridException || isManualHybridConflict
+    ));
+    if (link.hidden) {
+      link.removeAttribute("href");
+      return;
+    }
+    const parameters = new URLSearchParams({
+      api: "1",
+      origin: `${routeOrigin}, Deutschland`,
+      destination: `${destination}, Deutschland`
+    });
+    link.href = `https://www.google.com/maps/dir/?${parameters}`;
   }
 
   function addList(parent, heading, values) {
@@ -300,7 +337,13 @@
     element("application-link").hidden = !applicationTracked;
     element("review-note").value = job.review_note || "";
     setText("summary", job.summary);
+    const warning = element("prefilter-warning");
+    warning.hidden = !job.prefilter_warning;
+    warning.textContent = job.prefilter_warning
+      ? `Hinweis aus dem Vorfilter: ${job.prefilter_warning}`
+      : "";
     renderSourceLinks(job);
+    renderRouteLink(job);
 
     const details = element("details");
     details.replaceChildren();
@@ -386,6 +429,7 @@
       const response = await fetch("/api/recommendations");
       if (!response.ok) throw new Error("Empfehlungen konnten nicht geladen werden");
       const result = await response.json();
+      routeOrigin = result.route_origin || "";
       jobs = result.recommendations.sort(
         (a, b) => (b.llm_score ?? -1) - (a.llm_score ?? -1)
       );
@@ -394,7 +438,16 @@
         result.workflow_statuses.filter(status => reviewStatuses.has(status)),
         statusLabels
       );
+      const requestedJob = new URLSearchParams(window.location.search).get("job");
+      if (requestedJob) element("status-filter").value = "";
       applyFilters();
+      if (requestedJob) {
+        const requestedIndex = visibleJobs.findIndex(job => job.id === requestedJob);
+        if (requestedIndex >= 0) {
+          currentIndex = requestedIndex;
+          render();
+        }
+      }
     } catch (error) {
       element("message").className = "error";
       element("message").textContent = error.message;

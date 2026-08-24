@@ -14,9 +14,16 @@ from job_finder.applications import (
     record_status_change,
     update_history_event,
 )
+from job_finder.config import LOCAL_SEARCH_LOCATION
+from job_finder.manual_import import import_manual_url
 from job_finder.memory import load_memory, preferred_memory_id, save_memory
 from job_finder.models import WorkflowStatus
-from job_finder.paths import MEMORY_FILE, RECOMMENDATIONS_JSON
+from job_finder.paths import (
+    JOBS_FILE,
+    MANUAL_CACHE_FILE,
+    MEMORY_FILE,
+    RECOMMENDATIONS_JSON,
+)
 from job_finder.reporting import is_international_listing
 
 
@@ -238,6 +245,9 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
 
     recommendations_path = RECOMMENDATIONS_JSON
     memory_path = MEMORY_FILE
+    jobs_path = JOBS_FILE
+    manual_cache_path = MANUAL_CACHE_FILE
+    manual_importer = staticmethod(import_manual_url)
     landing_page_path = LANDING_PAGE
     page_path = REVIEW_PAGE
     applications_page_path = APPLICATIONS_PAGE
@@ -264,6 +274,7 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
                         self.memory_path,
                     ),
                     "workflow_statuses": [status.value for status in WorkflowStatus],
+                    "route_origin": LOCAL_SEARCH_LOCATION,
                 }
             )
             return
@@ -281,13 +292,22 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
             "/api/note",
             "/api/history",
             "/api/history/delete",
+            "/api/manual-import",
         }:
             self.send_error(404)
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-            if self.path == "/api/applications":
+            if self.path == "/api/manual-import":
+                result = type(self).manual_importer(
+                    payload.get("url"),
+                    cache_path=self.manual_cache_path,
+                    jobs_path=self.jobs_path,
+                    memory_path=self.memory_path,
+                    recommendations_path=self.recommendations_path,
+                )
+            elif self.path == "/api/applications":
                 result = start_application(
                     payload["job_id"],
                     self.memory_path,
@@ -339,7 +359,14 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
                         "previous_scheduled_for"
                     ),
                 )
-        except (TypeError, ValueError, KeyError, json.JSONDecodeError) as error:
+        except (
+            TypeError,
+            ValueError,
+            KeyError,
+            OSError,
+            RuntimeError,
+            json.JSONDecodeError,
+        ) as error:
             self.send_json({"error": str(error)}, status=400)
             return
         self.send_json(result)

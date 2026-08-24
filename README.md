@@ -17,7 +17,7 @@ Der Job Finder kann:
 - aktuelle Engineering-Stellen über die offizielle Startup-Jobs-API abrufen
 - Remote-IT-Stellen über die öffentliche Jobicy-API abrufen
 - direkte Karriereseiten von JUMO, EDAG, CSS, Proemion, NETHINKS, Compose IT, bytewerk und RhönEnergie abrufen
-- Jobdetail-Seiten importieren
+- einzelne Stellenanzeigen per Link gezielt importieren und bewerten
 - alle Quellen in ein verbindliches Jobmodell überführen
 - Rohbeschreibung, Klartext sowie Veröffentlichungs- und Abrufdaten speichern
 - Jobs kostenlos vorfiltern und passende neue Jobs per OpenAI bewerten
@@ -41,6 +41,10 @@ Die kostenlose Vorfilterung verwirft nur klare Konflikte wie unpassenden
 Standort, ausgeschlossene Beschäftigungsarten, eindeutige Führungs-/Seniorrollen,
 mehr als drei geforderte Erfahrungsjahre oder hohe Reisetätigkeit. Ungewohnte
 IT-Richtungen und Technologien erreichen dagegen die persönliche KI-Bewertung.
+Klar bezeichnete Junior-, Trainee-, Graduate- und Einstiegsrollen dürfen bei
+ausdrücklich möglichem Homeoffice auch außerhalb des Suchgebiets zur manuellen
+Prüfung weiterlaufen; der notwendige Präsenzumfang bleibt dabei als deutlicher
+Standorthinweis erhalten.
 Ein genanntes Gehalt unter dem konfigurierten Minimum wird als Warnung angezeigt, aber nicht
 vorab ausgeschlossen.
 
@@ -96,6 +100,10 @@ review_jobs.bat doppelklicken
 
 Die Oberfläche läuft nur auf dem eigenen Computer. Beim Start führt eine
 schlichte Auswahl entweder zu `Stellen prüfen` oder zu `Bewerbungen verwalten`.
+Auf der Startseite kann außerdem eine einzelne Stellenanzeige per Link
+eingereicht werden. Nur diese Anzeige durchläuft dann Vorfilter und beide
+KI-Stufen; ein Konflikt mit dem automatischen Vorfilter bleibt dabei als
+Warnung sichtbar.
 Im Stellen-Review werden Empfehlungen als interessant, nicht interessant oder
 beworben markiert. Internationale Treffer sind dort standardmäßig ausgeblendet
 und lassen sich bei Bedarf zuschalten. Auch Stellen ohne gültige KI-Bewertung
@@ -108,11 +116,13 @@ aktive Stellen und berechnet daraus lokale Kennzahlen. Für Gespräche kann
 zusätzlich ein optionaler Termin mit Datum und Uhrzeit hinterlegt werden. Bei
 älteren Bewerbungen
 ohne gespeichertes Datum bleibt das Datum bewusst unbekannt. Der finale Status
-`Keine Rückmeldung` wird manuell gesetzt; eine nicht mehr aktive Anzeige allein
-löst ihn nicht automatisch aus. Die Kartenliste zeigt standardmäßig nur
-laufende Bewerbungen. Abgeschlossene Bewerbungen bleiben in der Statistik und
-können bei Bedarf zur Korrektur eingeblendet werden; Status und Datum einzelner
-Verlaufsereignisse lassen sich dort ändern oder löschen.
+`Keine Rückmeldung` wird nach 14 Tagen ohne Reaktion aus dem gespeicherten
+Bewerbungsdatum abgeleitet, ohne dafür ein erfundenes Ereignisdatum in den
+Verlauf zu schreiben. Eine spätere Antwort öffnet die Bewerbung wieder. Die
+Kartenliste zeigt standardmäßig nur laufende Bewerbungen. Abgeschlossene
+Bewerbungen bleiben in der Statistik und können bei Bedarf zur Korrektur
+eingeblendet werden; Status und Datum einzelner Verlaufsereignisse lassen sich
+dort ändern oder löschen.
 
 Ein kostenbegrenzter Testlauf analysiert höchstens einen neuen passenden Job:
 

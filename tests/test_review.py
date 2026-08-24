@@ -309,19 +309,31 @@ class ReviewTests(unittest.TestCase):
         self.assertIn('href="/applications"', landing_page)
         self.assertIn("Stellen prüfen", landing_page)
         self.assertIn("Bewerbungen verwalten", landing_page)
+        self.assertIn('id="manual-import-form"', landing_page)
+        self.assertIn('fetch("/api/manual-import"', landing_page)
         self.assertIn("Als beworben markieren", review_page)
         self.assertIn("Bewerbung verwalten", review_page)
         self.assertIn("function safeUrl(value)", review_page)
         self.assertIn("renderSourceLinks(job);", review_page)
+        self.assertIn("renderRouteLink(job);", review_page)
+        self.assertIn("Entfernung &amp; Fahrtzeit", review_page)
+        self.assertIn("https://www.google.com/maps/dir/", review_page)
         self.assertIn("Anzeigen öffnen (${links.length})", review_page)
         self.assertIn('id="international-filter" type="checkbox"', review_page)
         self.assertIn("(showInternational || !job.international)", review_page)
         self.assertIn("function applyFilters(resetPosition = true)", review_page)
         self.assertIn("applyFilters(false);", review_page)
+        self.assertIn("prefilter-warning", review_page)
+        self.assertIn("new URLSearchParams(window.location.search)", review_page)
         self.assertNotIn("progress-select", review_page)
         self.assertIn('href="/">← Zur Startseite</a>', review_page)
         self.assertIn("Bewerbungsübersicht", applications_page)
         self.assertIn('href="/">← Zur Startseite</a>', applications_page)
+        self.assertIn("application.automatic_no_response", applications_page)
+        self.assertIn(
+            'new Set(["rejected", "no_response", "offer"])',
+            applications_page,
+        )
         self.assertLess(
             applications_page.index('["offers",'),
             applications_page.index('["rejections",'),
@@ -330,6 +342,47 @@ class ReviewTests(unittest.TestCase):
             applications_page.index('["rejections",'),
             applications_page.index('["no_responses",'),
         )
+
+    def test_manual_import_api_forwards_paths_and_url(self):
+        calls = []
+
+        def importer(url, **paths):
+            calls.append((url, paths))
+            return {"job_id": "manual:python", "analyzed": 1}
+
+        handler = type(
+            "TemporaryManualImportHandler",
+            (ReviewRequestHandler,),
+            {
+                "recommendations_path": self.recommendations_path,
+                "memory_path": self.memory_path,
+                "jobs_path": self.directory / "jobs.json",
+                "manual_cache_path": self.directory / "manual.json",
+                "manual_importer": staticmethod(importer),
+            },
+        )
+        server = HTTPServer(("127.0.0.1", 0), handler)
+        thread = threading.Thread(target=server.serve_forever)
+        thread.start()
+        try:
+            request = Request(
+                f"http://127.0.0.1:{server.server_port}/api/manual-import",
+                data=json.dumps(
+                    {"url": "https://example.com/jobs/python"}
+                ).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urlopen(request) as response:
+                result = json.load(response)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join()
+
+        self.assertEqual(result["job_id"], "manual:python")
+        self.assertEqual(calls[0][0], "https://example.com/jobs/python")
+        self.assertEqual(calls[0][1]["memory_path"], self.memory_path)
 
     def test_application_start_api_adds_job_to_overview(self):
         handler = type(

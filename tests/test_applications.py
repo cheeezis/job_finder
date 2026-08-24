@@ -2,6 +2,7 @@
 
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 
 from job_finder.applications import load_application_overview
@@ -256,7 +257,10 @@ class ApplicationTrackingTests(unittest.TestCase):
             }
         )
 
-        statistics = load_application_overview(self.memory_path)["statistics"]
+        statistics = load_application_overview(
+            self.memory_path,
+            as_of=date(2026, 8, 10),
+        )["statistics"]
 
         self.assertEqual(
             statistics,
@@ -415,6 +419,84 @@ class ApplicationTrackingTests(unittest.TestCase):
             after["completed_applications"][0]["workflow_status"],
             "no_response",
         )
+        self.assertFalse(
+            after["completed_applications"][0]["automatic_no_response"]
+        )
+
+    def test_no_response_is_derived_after_fourteen_days_without_event(self):
+        self.save_jobs(
+            {
+                "job:1": {
+                    "workflow_status": "applied",
+                    "workflow_history": [
+                        {"status": "applied", "occurred_on": "2026-08-01"}
+                    ],
+                }
+            }
+        )
+
+        before = load_application_overview(
+            self.memory_path,
+            as_of=date(2026, 8, 14),
+        )
+        after = load_application_overview(
+            self.memory_path,
+            as_of=date(2026, 8, 15),
+        )
+
+        self.assertEqual(before["statistics"]["open"], 1)
+        self.assertEqual(before["statistics"]["no_responses"], 0)
+        self.assertEqual(after["statistics"]["open"], 0)
+        self.assertEqual(after["statistics"]["no_responses"], 1)
+        application = after["completed_applications"][0]
+        self.assertEqual(application["workflow_status"], "no_response")
+        self.assertTrue(application["automatic_no_response"])
+        self.assertEqual(
+            application["workflow_history"],
+            [
+                {
+                    "status": "applied",
+                    "occurred_on": "2026-08-01",
+                    "event_index": 0,
+                }
+            ],
+        )
+        self.assertEqual(
+            load_memory(self.memory_path)["job:1"]["workflow_status"],
+            "applied",
+        )
+        self.assertNotIn("no_response", after["application_statuses"])
+
+    def test_response_reopens_automatically_derived_no_response(self):
+        self.save_jobs(
+            {
+                "job:1": {
+                    "workflow_status": "applied",
+                    "workflow_history": [
+                        {"status": "applied", "occurred_on": "2026-08-01"}
+                    ],
+                }
+            }
+        )
+
+        before = load_application_overview(
+            self.memory_path,
+            as_of=date(2026, 8, 20),
+        )
+        update_workflow_status(
+            "job:1",
+            "response",
+            self.memory_path,
+            "2026-08-21",
+        )
+        after = load_application_overview(
+            self.memory_path,
+            as_of=date(2026, 8, 21),
+        )
+
+        self.assertEqual(before["statistics"]["no_responses"], 1)
+        self.assertEqual(after["statistics"]["no_responses"], 0)
+        self.assertEqual(after["applications"][0]["workflow_status"], "response")
 
     def test_late_response_reopens_no_response_outcome(self):
         self.save_jobs(
@@ -497,7 +579,10 @@ class ApplicationTrackingTests(unittest.TestCase):
             "2026-08-20",
             self.memory_path,
         )
-        overview = load_application_overview(self.memory_path)
+        overview = load_application_overview(
+            self.memory_path,
+            as_of=date(2026, 8, 10),
+        )
 
         self.assertEqual(result["workflow_status"], "applied")
         self.assertEqual(overview["statistics"]["open"], 1)

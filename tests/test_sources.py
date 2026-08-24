@@ -175,6 +175,44 @@ class StepStoneSearchTests(unittest.TestCase):
             "https://www.stepstone.de/jobs/Python-Developer/in-Remote?page=1",
         )
 
+    def test_search_reads_pages_until_stepstone_returns_no_links(self):
+        first = "https://www.stepstone.de/stellenangebote--first.html"
+        second = "https://www.stepstone.de/stellenangebote--second.html"
+        client = Mock()
+        client.get.side_effect = [
+            f'<a href="{first}">Erste</a>',
+            f'<a href="{second}">Zweite</a>',
+            "<html>Keine weiteren Stellen</html>",
+        ]
+
+        with (
+            patch.object(stepstone, "STEPSTONE_SEARCH_TERMS", ["Python"]),
+            patch.object(stepstone, "STEPSTONE_SEARCH_LOCATIONS", ["Remote"]),
+        ):
+            links = stepstone.search_links(client)
+
+        self.assertEqual(links, [first, second])
+        self.assertEqual(client.get.call_count, 3)
+        self.assertIn("page=3", client.get.call_args.args[0])
+
+    def test_search_reports_repeated_page_as_stop_reason(self):
+        url = "https://www.stepstone.de/stellenangebote--same.html"
+        client = Mock()
+        client.get.side_effect = [
+            f'<a href="{url}">Stelle</a>',
+            f'<a href="{url}">Stelle</a>',
+        ]
+
+        with (
+            patch.object(stepstone, "STEPSTONE_SEARCH_TERMS", ["Python"]),
+            patch.object(stepstone, "STEPSTONE_SEARCH_LOCATIONS", ["Remote"]),
+            patch("builtins.print") as print_output,
+        ):
+            links = stepstone.search_links(client)
+
+        self.assertEqual(links, [url])
+        self.assertIn("1 Wiederholung", print_output.call_args.args[0])
+
 
 class HimalayasTests(unittest.TestCase):
     def test_build_search_url_limits_results_to_entry_level_remote_for_germany(self):

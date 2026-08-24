@@ -26,7 +26,7 @@ def score_jobs(jobs):
     results = []
 
     for job in jobs:
-        result = score_job(job)
+        result = score_for_pipeline(job)
         results.append(
             {
                 **job.to_dict(),
@@ -59,6 +59,31 @@ def score_jobs(jobs):
     return {
         "included": included,
         "excluded": excluded,
+    }
+
+
+def score_for_pipeline(job):
+    """Keep explicit manual submissions reviewable without weakening searches."""
+    result = score_job(job)
+    if (
+        result["filter_status"] != FilterStatus.EXCLUDED.value
+        or "manual" not in job.source_names
+    ):
+        return result
+
+    warning = result["reasons"][0]
+    location_conflict = "Ort/Remote" in warning
+    return {
+        "filter_status": FilterStatus.INCLUDED.value,
+        "match_percent": 0,
+        "experience_rank": 99,
+        "experience_level": "manuell zur Prüfung eingereicht",
+        "role_group": "manual_review",
+        "location_precheck": (
+            f"Konflikt: {warning}" if location_conflict else "Manuelle Prüfung"
+        ),
+        "reasons": [f"Manuell geprüft trotz Vorfilter: {warning}"],
+        "prefilter_warning": warning,
     }
 
 

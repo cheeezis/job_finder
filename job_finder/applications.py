@@ -1,6 +1,6 @@
 """Local application history and derived workflow statistics."""
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from job_finder.memory import load_memory
 from job_finder.models import WorkflowStatus
@@ -27,6 +27,12 @@ RESPONSE_STATUSES = {
     WorkflowStatus.REJECTED.value,
     WorkflowStatus.OFFER.value,
 }
+NO_RESPONSE_AFTER_DAYS = 14
+MANUAL_APPLICATION_STATUSES = tuple(
+    status
+    for status in APPLICATION_STATUSES
+    if status != WorkflowStatus.NO_RESPONSE.value
+)
 
 
 def record_status_change(
@@ -85,11 +91,12 @@ def validated_date(value):
         raise ValueError("Ungueltiges Datum; erwartet wird YYYY-MM-DD") from error
 
 
-def load_application_overview(memory_path=MEMORY_FILE):
+def load_application_overview(memory_path=MEMORY_FILE, as_of=None):
     """Return open and completed applications plus statistics for all."""
     memory = load_memory(memory_path)
+    reference_date = as_of or date.today()
     all_applications = [
-        application_row(job_id, entry)
+        application_row(job_id, entry, reference_date)
         for job_id, entry in memory.items()
         if is_application(entry)
     ]
@@ -111,7 +118,7 @@ def load_application_overview(memory_path=MEMORY_FILE):
         "applications": applications,
         "completed_applications": completed_applications,
         "statistics": application_statistics(all_applications),
-        "application_statuses": list(APPLICATION_STATUSES),
+        "application_statuses": list(MANUAL_APPLICATION_STATUSES),
         "workflow_statuses": [status.value for status in WorkflowStatus],
     }
 
@@ -238,7 +245,7 @@ def is_application(entry):
     )
 
 
-def application_row(job_id, entry):
+def application_row(job_id, entry, as_of=None):
     """Build one compact row with its complete manual timeline."""
     history = valid_history(entry.get("workflow_history", []))
     applied_on = first_event_date(history, {WorkflowStatus.APPLIED.value})
@@ -247,6 +254,16 @@ def application_row(job_id, entry):
     statuses = {event["status"] for event in history}
     if current_status in APPLICATION_STATUSES:
         statuses.add(current_status)
+    reference_date = as_of or date.today()
+    if (
+        current_status == WorkflowStatus.APPLIED.value
+        and applied_on is not None
+        and not statuses.intersection(RESPONSE_STATUSES)
+        and date.fromisoformat(applied_on)
+        + timedelta(days=NO_RESPONSE_AFTER_DAYS)
+        <= reference_date
+    ):
+        current_status = WorkflowStatus.NO_RESPONSE.value
     days_to_response = None
     if applied_on and response_on:
         difference = date.fromisoformat(response_on) - date.fromisoformat(
@@ -298,6 +315,10 @@ def application_row(job_id, entry):
             default=None,
         ),
         "workflow_history": history,
+        "automatic_no_response": (
+            current_status == WorkflowStatus.NO_RESPONSE.value
+            and WorkflowStatus.NO_RESPONSE.value not in statuses
+        ),
         "has_response": bool(statuses & RESPONSE_STATUSES),
         "has_interview": WorkflowStatus.INTERVIEW.value in statuses,
         "has_rejection": WorkflowStatus.REJECTED.value in statuses,

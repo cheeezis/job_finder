@@ -1,0 +1,113 @@
+"""Tests for targeted manual processing without a complete finder run."""
+
+import json
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+from job_finder.manual_import import import_manual_url
+from job_finder.memory import load_memory
+from job_finder.models import Job, JobSource, WorkMode
+
+
+class ManualImportTests(unittest.TestCase):
+    def test_import_runs_only_target_and_keeps_prefilter_warning(self):
+        job = Job(
+            id="manual:python",
+            title="Junior Python Entwickler (m/w/d)",
+            company="Example GmbH",
+            locations=["München"],
+            sources=[
+                JobSource(
+                    source="manual",
+                    source_id="python",
+                    url="https://example.com/jobs/python",
+                )
+            ],
+            description_raw="Python Junior Entwicklung " * 20,
+            description_clean="Python Junior Entwicklung " * 20,
+            work_mode=WorkMode.ONSITE,
+        )
+
+        def fake_analysis(results):
+            self.assertEqual(len(results["included"]), 1)
+            row = results["included"][0]
+            row.update(
+                llm_status="analyzed",
+                llm_score=35,
+                llm_result={
+                    "recommendation": "not_recommended",
+                    "confidence": "high",
+                    "summary": "Fachlich interessant, der Standort passt nicht.",
+                    "tasks": ["Python entwickeln"],
+                    "requirements": ["Erste Python-Kenntnisse"],
+                    "matching_evidence": [],
+                    "gaps": ["Standort"],
+                    "risks": ["Keine ausreichende Remote-Regelung"],
+                },
+            )
+            return {"analyzed": 1, "cached": 0}
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            paths = {
+                "cache_path": root / "manual.json",
+                "jobs_path": root / "jobs.json",
+                "memory_path": root / "seen.json",
+                "recommendations_path": root / "recommendations.json",
+            }
+            with (
+                patch(
+                    "job_finder.manual_import.manual.add_url",
+                    return_value=job,
+                ) as add_url,
+                patch(
+                    "job_finder.manual_import.analyze_results",
+                    side_effect=fake_analysis,
+                ) as analyze,
+            ):
+                result = import_manual_url(
+                    "https://example.com/jobs/python",
+                    **paths,
+                )
+
+            recommendations = json.loads(
+                paths["recommendations_path"].read_text(encoding="utf-8")
+            )["recommendations"]
+            saved_jobs = json.loads(paths["jobs_path"].read_text(encoding="utf-8"))
+            memory = load_memory(paths["memory_path"])
+
+        add_url.assert_called_once()
+        analyze.assert_called_once()
+        self.assertEqual(result["analyzed"], 1)
+        self.assertEqual(result["prefilter_warning"], "Ort/Remote passt nicht")
+        self.assertEqual(recommendations[0]["prefilter_warning"], "Ort/Remote passt nicht")
+        self.assertEqual(saved_jobs[0]["id"], "manual:python")
+        self.assertIn("manual:python", memory)
+
+    def test_manual_source_remains_reviewable_in_later_pipeline_runs(self):
+        from job_finder.main import score_jobs
+
+        job = Job(
+            id="manual:remote-conflict",
+            title="Junior Python Entwickler",
+            company="Example GmbH",
+            locations=["München"],
+            sources=[JobSource("manual", "https://example.com/job")],
+            description_raw="Python Entwicklung " * 20,
+            description_clean="Python Entwicklung " * 20,
+            work_mode=WorkMode.ONSITE,
+        )
+
+        results = score_jobs([job])
+
+        self.assertEqual(len(results["included"]), 1)
+        self.assertEqual(
+            results["included"][0]["prefilter_warning"],
+            "Ort/Remote passt nicht",
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

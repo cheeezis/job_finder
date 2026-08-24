@@ -57,8 +57,20 @@ class ScoringTests(unittest.TestCase):
             }
         ]
         with patch("job_finder.scoring.COMMUTER_LOCATIONS", locations):
-            accepted = score_job(make_job(location="Beispielstadt", remote="60%"))
-            rejected = score_job(make_job(location="Beispielstadt", remote="40%"))
+            accepted = score_job(
+                make_job(
+                    title="Python Developer",
+                    location="Beispielstadt",
+                    remote="60%",
+                )
+            )
+            rejected = score_job(
+                make_job(
+                    title="Python Developer",
+                    location="Beispielstadt",
+                    remote="40%",
+                )
+            )
 
         self.assertEqual(accepted["filter_status"], "included")
         self.assertIn("Pendelort Beispielstadt", accepted["reasons"][3])
@@ -185,10 +197,51 @@ class ScoringTests(unittest.TestCase):
 
     def test_homeoffice_outside_local_area_is_not_full_remote(self):
         result = score_job(
-            make_job(location="Muenchen, Home-Office", remote="homeoffice")
+            make_job(
+                title="Python Developer",
+                location="Muenchen, Home-Office",
+                remote="homeoffice",
+            )
         )
         self.assertEqual(result["filter_status"], "excluded")
         self.assertEqual(result["reasons"][0], "Ort/Remote passt nicht")
+
+    def test_distant_junior_hybrid_role_reaches_manual_review(self):
+        result = score_job(
+            make_job(
+                title="Junior Python Developer",
+                location="Berlin",
+                remote="homeoffice",
+            )
+        )
+
+        self.assertEqual(result["filter_status"], "included")
+        self.assertEqual(
+            result["location_precheck"],
+            "Junior-Hybrid außerhalb des Suchgebiets; Präsenzumfang prüfen",
+        )
+
+    def test_distant_junior_onsite_role_stays_excluded(self):
+        result = score_job(
+            make_job(
+                title="Junior Python Developer",
+                location="Berlin",
+                remote="0%",
+            )
+        )
+
+        self.assertEqual(result["filter_status"], "excluded")
+
+    def test_foreign_junior_hybrid_role_stays_excluded(self):
+        result = score_job(
+            make_job(
+                title="Junior Python Developer",
+                location="Portugal",
+                remote="hybrid",
+            )
+        )
+
+        self.assertEqual(result["filter_status"], "excluded")
 
     def test_full_remote_outside_local_area_is_allowed(self):
         result = score_job(make_job(location="Muenchen", remote="100%"))
@@ -209,9 +262,27 @@ class ScoringTests(unittest.TestCase):
             }
         ]
         with patch("job_finder.scoring.COMMUTER_LOCATIONS", locations):
-            accepted = score_job(make_job(location="Beispielstadt", remote="80%"))
-            rejected = score_job(make_job(location="Beispielstadt", remote="60%"))
-            wrong_city = score_job(make_job(location="Beispielstadt-West", remote="80%"))
+            accepted = score_job(
+                make_job(
+                    title="Python Developer",
+                    location="Beispielstadt",
+                    remote="80%",
+                )
+            )
+            rejected = score_job(
+                make_job(
+                    title="Python Developer",
+                    location="Beispielstadt",
+                    remote="60%",
+                )
+            )
+            wrong_city = score_job(
+                make_job(
+                    title="Python Developer",
+                    location="Beispielstadt-West",
+                    remote="80%",
+                )
+            )
 
         self.assertEqual(accepted["filter_status"], "included")
         self.assertEqual(rejected["filter_status"], "excluded")

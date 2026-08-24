@@ -61,6 +61,10 @@ def recommendation_for_job(job):
         "source_links": source_links(job),
         "international": is_international_listing(job),
     }
+    if job.get("location_precheck"):
+        recommendation["location_precheck"] = job["location_precheck"]
+    if job.get("prefilter_warning"):
+        recommendation["prefilter_warning"] = job["prefilter_warning"]
     llm_result = job.get("llm_result")
     if llm_result:
         return {

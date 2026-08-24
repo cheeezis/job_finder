@@ -29,6 +29,7 @@ from job_finder.sources import get_in_it
 from job_finder.sources import himalayas
 from job_finder.sources import jumo
 from job_finder.sources import jobicy
+from job_finder.sources import manual
 from job_finder.sources import nethinks
 from job_finder.sources import proemion
 from job_finder.sources import rhoenenergie
@@ -45,6 +46,7 @@ SOURCES = [
     himalayas,
     jobicy,
     *([startup_jobs] if startup_jobs.is_configured() else []),
+    manual,
     compose_it,
     bytewerk,
     rhoenenergie,
@@ -364,6 +366,7 @@ def source_label(name):
         "himalayas": "Himalayas",
         "jobicy": "Jobicy",
         "startup_jobs": "Startup Jobs",
+        "manual": "Manuell hinzugefügt",
         "compose_it": "Compose IT",
         "bytewerk": "bytewerk",
         "rhoenenergie": "RhönEnergie",

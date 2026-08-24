@@ -1,3 +1,3 @@
 @echo off
 cd /d "%~dp0"
-python -m job_finder.review
+".venv\Scripts\python.exe" -m job_finder.review

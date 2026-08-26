@@ -8,13 +8,11 @@ import time
 from job_finder.console import configure_utf8_output
 from job_finder.deduplication import deduplicate_jobs
 from job_finder.main import score_jobs
-from job_finder.llm.service import analyze_results
 from job_finder.memory import load_memory, save_memory, update_memory
 from job_finder.notifications import process_notifications, send_run_summary
 from job_finder.operations import RunLog, create_backup
 from job_finder.paths import (
     JOBS_FILE,
-    LLM_CACHE_FILE,
     MEMORY_FILE,
     NOTIFICATION_STATE_FILE,
 )
@@ -58,13 +56,8 @@ SOURCES = [
 ]
 
 def parse_args():
-    """Parse the optional cost limit for the productive LLM analysis."""
+    """Parse command-line options for one Job Finder run."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--llm-limit",
-        type=int,
-        help="Analyze at most N eligible jobs in this run",
-    )
     parser.add_argument(
         "--notify",
         action="store_true",
@@ -84,7 +77,7 @@ def main():
 def run_pipeline(args):
     """Execute one logged run of the complete job-finding pipeline."""
     started = time.monotonic()
-    create_backup([MEMORY_FILE, LLM_CACHE_FILE, NOTIFICATION_STATE_FILE])
+    create_backup([MEMORY_FILE, NOTIFICATION_STATE_FILE])
     print("1/4 Quellen")
     jobs, source_reports = collect_jobs()
     print_source_summary(source_reports, len(jobs))
@@ -108,7 +101,7 @@ def run_pipeline(args):
         f'{memory_stats["reactivated"]} reaktiviert'
     )
 
-    print("\n3/4 Filter und KI")
+    print("\n3/4 Vorfilter")
     results = score_jobs(jobs)
     candidate_ids = {job["id"] for job in results["included"]}
     enriched = arbeitnow.enrich_candidate_jobs(jobs, candidate_ids)
@@ -123,23 +116,6 @@ def run_pipeline(args):
         f"Vorfilter: {len(results['included'])} weiter · "
         f"{len(results['excluded'])} ausgeschlossen"
     )
-    llm_stats = analyze_results(results, limit=args.llm_limit)
-    llm_summary = (
-        f"KI: {llm_stats['analyzed']} erfolgreich · "
-        f"{llm_stats['cached']} aus Cache · "
-        f"{llm_stats['failed']} fehlgeschlagen"
-    )
-    if llm_stats.get("blocked"):
-        llm_summary += (
-            f" · {llm_stats['blocked']} Validierungsfehler pausiert"
-        )
-    print(llm_summary)
-    reason_summary = format_analysis_reason_summary(llm_stats.get("reasons", {}))
-    if reason_summary:
-        print(f"KI-Anlässe: {reason_summary}")
-    for line in format_model_usage(llm_stats.get("model_calls")):
-        print(line)
-    print_llm_errors(llm_stats.get("errors", []))
     write_recommendations(results)
 
     print("\n4/4 Benachrichtigungen")
@@ -168,7 +144,6 @@ def run_pipeline(args):
                 jobs=jobs,
                 results=results,
                 memory_stats=memory_stats,
-                llm_stats=llm_stats,
                 source_reports=source_reports,
             ),
             webhook_url=os.getenv("DISCORD_WEBHOOK_URL"),
@@ -232,7 +207,7 @@ def print_source_summary(source_reports, total_jobs):
 
 
 def build_run_summary(
-    *, duration_seconds, jobs, results, memory_stats, llm_stats, source_reports
+    *, duration_seconds, jobs, results, memory_stats, source_reports
 ):
     """Collect the reliable counts shown in Discord after one complete run."""
     new_by_source = {}
@@ -242,11 +217,9 @@ def build_run_summary(
         for source in job.sources:
             new_by_source[source.source] = new_by_source.get(source.source, 0) + 1
 
-    reviewed = [job for job in results["included"] if job.get("llm_result")]
-    recommended = sum(
-        job["llm_result"].get("recommendation")
-        in {"strong_match", "match", "borderline"}
-        for job in reviewed
+    review_updates = sum(
+        bool(job.get("is_new") or job.get("content_changed"))
+        for job in results["included"]
     )
     summary_sources = [
         {
@@ -264,81 +237,9 @@ def build_run_summary(
         "jobs_known": memory_stats["known"],
         "included": len(results["included"]),
         "excluded": len(results["excluded"]),
-        "analyzed": llm_stats["analyzed"],
-        "cached": llm_stats["cached"],
-        "analysis_failed": llm_stats["failed"],
-        "analysis_blocked": llm_stats.get("blocked", 0),
-        "analysis_reason_summary": format_analysis_reason_summary(
-            llm_stats.get("reasons", {})
-        ),
-        "model_usage": format_model_usage(llm_stats.get("model_calls")),
-        "recommended": recommended,
-        "not_recommended": len(reviewed) - recommended,
+        "review_updates": review_updates,
         "sources": summary_sources,
     }
-
-
-def format_analysis_reason_summary(reasons):
-    """Summarize paid-analysis causes without repeating cache hits."""
-    labels = (
-        ("new_job", "neu"),
-        ("content_or_input_changed", "Stelleninhalt geändert"),
-        ("retry_after_failed", "Wiederholung nach Fehler"),
-        ("profile_or_config_changed", "Profil/KI-Konfiguration geändert"),
-        ("deferred", "zuvor aufgeschoben"),
-        ("uncached_known_job", "bekannt ohne Cache"),
-    )
-    return ", ".join(
-        f"{reasons[key]} {label}"
-        for key, label in labels
-        if reasons.get(key)
-    )
-
-
-def format_model_usage(model_calls):
-    """Return compact lines shared by the console and Discord summary."""
-    if model_calls is None:
-        return []
-    calls = model_calls.get("calls", 0)
-    repairs = model_calls.get("validation_repairs", 0)
-    failures = model_calls.get("failed", 0)
-    parts = [f"Modellaufrufe: {calls}"]
-    if repairs:
-        parts.append(f"Korrekturversuche: {repairs}")
-    if failures:
-        parts.append(f"technisch fehlgeschlagen: {failures}")
-    lines = ["KI-Nutzung: " + " · ".join(parts)]
-
-    input_tokens = model_calls.get("input_tokens", 0)
-    output_tokens = model_calls.get("output_tokens", 0)
-    if input_tokens or output_tokens:
-        cached = model_calls.get("cached_input_tokens", 0)
-        reasoning = model_calls.get("reasoning_tokens", 0)
-        lines.append(
-            f"Tokens: {input_tokens:,} Input ({cached:,} davon Cache) · "
-            f"{output_tokens:,} Output ({reasoning:,} davon Reasoning)"
-        )
-    missing = model_calls.get("usage_missing", 0)
-    if missing:
-        lines.append(f"WARNUNG: Modellaufrufe ohne Tokenangaben: {missing}")
-    return [line.replace(",", ".") for line in lines]
-
-
-def print_llm_errors(errors, limit=5):
-    """Print bounded, grouped failure causes without untrusted job text."""
-    if not errors:
-        return
-    grouped = {}
-    for error in errors:
-        key = (error.get("category", "KI"), error["message"])
-        grouped[key] = grouped.get(key, 0) + 1
-    print("KI-Fehler:")
-    groups = list(grouped.items())
-    for (category, message), count in groups[:limit]:
-        print(f"  {count}× {category}: {message}")
-    remaining = max(0, len(groups) - limit)
-    if remaining:
-        print(f"  … {remaining} weitere Fehlerarten")
 
 
 def source_error_label(error):

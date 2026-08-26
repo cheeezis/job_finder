@@ -17,10 +17,10 @@ from job_finder.review import (
     ReviewRequestHandler,
     load_review_jobs,
     start_application,
-    update_review_note,
     update_review_decision,
     update_workflow_status,
 )
+from job_finder.config import LOCAL_SEARCH_LOCATION, LOCAL_SEARCH_POSTAL_CODE
 
 
 class ReviewTests(unittest.TestCase):
@@ -47,7 +47,10 @@ class ReviewTests(unittest.TestCase):
                             "id": "job:1",
                             "title": "Python Developer",
                             "company": "Example GmbH",
-                            "llm_score": 90,
+                            "match_percent": 80,
+                            "role_group": "software_development",
+                            "experience_level": "klare Einstiegsstelle",
+                            "location_precheck": "100% remote Deutschland",
                         }
                     ]
                 }
@@ -106,7 +109,10 @@ class ReviewTests(unittest.TestCase):
                             "url": "https://portal.test/job",
                             "title": "Python Developer",
                             "company": "Example GmbH",
-                            "llm_score": 90,
+                            "match_percent": 80,
+                            "role_group": "software_development",
+                            "experience_level": "klare Einstiegsstelle",
+                            "location_precheck": "100% remote Deutschland",
                         }
                     ]
                 }
@@ -248,23 +254,18 @@ class ReviewTests(unittest.TestCase):
         with self.assertRaisesRegex(KeyError, "Unbekannte Job-ID"):
             start_application("job:unknown", self.memory_path)
 
-    def test_note_is_persisted_with_workflow_status(self):
-        review = update_review_note(
+    def test_inquiry_is_persisted_as_review_decision(self):
+        result = update_review_decision(
             "job:1",
-            "Juniorrolle in Fulda und fachlich passend.",
+            "inquiry",
             self.memory_path,
         )
 
-        jobs = load_review_jobs(self.recommendations_path, self.memory_path)
-        self.assertEqual(jobs[0]["workflow_status"], "interesting")
+        self.assertEqual(result["workflow_status"], "inquiry")
         self.assertEqual(
-            jobs[0]["review_note"],
-            "Juniorrolle in Fulda und fachlich passend.",
+            load_memory(self.memory_path)["job:1"]["workflow_status"],
+            "inquiry",
         )
-
-    def test_invalid_note_is_rejected(self):
-        with self.assertRaises(ValueError):
-            update_review_note("job:1", 42, memory_path=self.memory_path)
 
     def test_invalid_status_is_rejected_without_changing_memory(self):
         with self.assertRaises(ValueError):
@@ -312,6 +313,16 @@ class ReviewTests(unittest.TestCase):
         self.assertIn('id="manual-import-form"', landing_page)
         self.assertIn('fetch("/api/manual-import"', landing_page)
         self.assertIn("Als beworben markieren", review_page)
+        self.assertIn("Rückfrage nötig", review_page)
+        self.assertIn('changeStatus("inquiry")', review_page)
+        self.assertNotIn("Meine Notiz", review_page)
+        self.assertNotIn('/api/note', review_page)
+        self.assertIn("Ergebnis des Vorfilters", review_page)
+        self.assertIn('id="role-filter"', review_page)
+        self.assertIn('id="experience-level"', review_page)
+        self.assertIn('id="location-precheck"', review_page)
+        self.assertNotIn("renderDecisionHints", review_page)
+        self.assertNotIn("llm_score", review_page)
         self.assertIn("Bewerbung verwalten", review_page)
         self.assertIn("function safeUrl(value)", review_page)
         self.assertIn("renderSourceLinks(job);", review_page)
@@ -321,6 +332,9 @@ class ReviewTests(unittest.TestCase):
         self.assertIn("Anzeigen öffnen (${links.length})", review_page)
         self.assertIn('id="international-filter" type="checkbox"', review_page)
         self.assertIn("(showInternational || !job.international)", review_page)
+        self.assertIn('id="junior-hybrid-filter" type="checkbox"', review_page)
+        self.assertIn("Junior-Sonderfälle anzeigen", review_page)
+        self.assertIn("showJuniorHybrid || !String(job.location_precheck", review_page)
         self.assertIn("function applyFilters(resetPosition = true)", review_page)
         self.assertIn("applyFilters(false);", review_page)
         self.assertIn("prefilter-warning", review_page)
@@ -328,6 +342,7 @@ class ReviewTests(unittest.TestCase):
         self.assertNotIn("progress-select", review_page)
         self.assertIn('href="/">← Zur Startseite</a>', review_page)
         self.assertIn("Bewerbungsübersicht", applications_page)
+        self.assertIn('inquiry: "Rückfrage offen"', applications_page)
         self.assertIn('href="/">← Zur Startseite</a>', applications_page)
         self.assertIn("application.automatic_no_response", applications_page)
         self.assertIn(
@@ -445,19 +460,6 @@ class ReviewTests(unittest.TestCase):
             )
             with urlopen(request) as response:
                 result = json.load(response)
-            note_request = Request(
-                f"{base_url}/api/note",
-                data=json.dumps(
-                    {
-                        "job_id": "job:1",
-                        "review_note": "Fachlich interessant, aber noch unsicher.",
-                    }
-                ).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
-            with urlopen(note_request) as response:
-                note_result = json.load(response)
         finally:
             server.shutdown()
             server.server_close()
@@ -467,17 +469,17 @@ class ReviewTests(unittest.TestCase):
             document["recommendations"][0]["workflow_status"],
             "interesting",
         )
+        self.assertEqual(
+            document["route_origin"],
+            f"{LOCAL_SEARCH_POSTAL_CODE} {LOCAL_SEARCH_LOCATION}",
+        )
         self.assertEqual(result["workflow_status"], "ignored")
         self.assertNotIn("personal_ratings", document)
-        self.assertEqual(
-            note_result["review_note"],
-            "Fachlich interessant, aber noch unsicher.",
-        )
         jobs = load_review_jobs(self.recommendations_path, self.memory_path)
         self.assertEqual(jobs[0]["workflow_status"], "ignored")
-        self.assertEqual(jobs[0]["review_note"], "Fachlich interessant, aber noch unsicher.")
 
     def test_application_page_records_dated_event_and_returns_statistics(self):
+        event_on = date.today().isoformat()
         handler = type(
             "TemporaryApplicationHandler",
             (ReviewRequestHandler,),
@@ -501,7 +503,7 @@ class ReviewTests(unittest.TestCase):
                     {
                         "job_id": "job:1",
                         "workflow_status": "applied",
-                        "occurred_on": "2026-08-11",
+                        "occurred_on": event_on,
                     }
                 ).encode("utf-8"),
                 headers={"Content-Type": "application/json"},
@@ -515,7 +517,7 @@ class ReviewTests(unittest.TestCase):
                     {
                         "job_id": "job:1",
                         "workflow_status": "no_response",
-                        "occurred_on": "2026-08-20",
+                        "occurred_on": event_on,
                     }
                 ).encode("utf-8"),
                 headers={"Content-Type": "application/json"},
@@ -539,9 +541,9 @@ class ReviewTests(unittest.TestCase):
                         "job_id": "job:1",
                         "event_index": no_response_event["event_index"],
                         "previous_status": "no_response",
-                        "previous_occurred_on": "2026-08-20",
+                        "previous_occurred_on": event_on,
                         "workflow_status": "response",
-                        "occurred_on": "2026-08-21",
+                        "occurred_on": event_on,
                     }
                 ).encode("utf-8"),
                 headers={"Content-Type": "application/json"},
@@ -556,7 +558,7 @@ class ReviewTests(unittest.TestCase):
                         "job_id": "job:1",
                         "event_index": no_response_event["event_index"],
                         "previous_status": "response",
-                        "previous_occurred_on": "2026-08-21",
+                        "previous_occurred_on": event_on,
                     }
                 ).encode("utf-8"),
                 headers={"Content-Type": "application/json"},
@@ -572,7 +574,7 @@ class ReviewTests(unittest.TestCase):
                     {
                         "job_id": "job:1",
                         "workflow_status": "interview",
-                        "occurred_on": "2026-08-22",
+                        "occurred_on": event_on,
                         "scheduled_for": "2099-08-25T10:30",
                     }
                 ).encode("utf-8"),
@@ -596,7 +598,7 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(overview["applications"], [])
         self.assertEqual(
             overview["completed_applications"][0]["applied_on"],
-            "2026-08-11",
+            event_on,
         )
         self.assertEqual(edit_result["workflow_status"], "response")
         self.assertEqual(delete_result["workflow_status"], "applied")

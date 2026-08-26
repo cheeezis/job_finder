@@ -66,7 +66,7 @@
   <nav aria-label="Bereich auswählen">
     <a class="choice" href="/review">
       <span class="choice-title">Stellen prüfen</span>
-      <span class="choice-description">Neue Empfehlungen ansehen und entscheiden.</span>
+      <span class="choice-description">Vorgefilterte Stellen ansehen und entscheiden.</span>
       <span class="choice-action">Öffnen →</span>
     </a>
     <a class="choice" href="/applications">
@@ -78,7 +78,7 @@
 
   <section class="manual-import">
     <h2>Stelle per Link prüfen</h2>
-    <p>Eine einzelne Stellenanzeige einlesen und gezielt durch Vorfilter und KI-Bewertung schicken.</p>
+    <p>Eine einzelne Stellenanzeige einlesen und gezielt durch den Vorfilter schicken.</p>
     <form id="manual-import-form">
       <input id="manual-url" type="url" required placeholder="https://unternehmen.de/jobs/..." aria-label="Link zur Stellenanzeige">
       <button id="manual-import-button" type="submit">Stelle prüfen</button>
@@ -94,7 +94,7 @@
     event.preventDefault();
     button.disabled = true;
     status.className = "";
-    status.textContent = "Anzeige wird eingelesen und von der KI bewertet …";
+    status.textContent = "Anzeige wird eingelesen und vorgefiltert …";
     try {
       const response = await fetch("/api/manual-import", {
         method: "POST",

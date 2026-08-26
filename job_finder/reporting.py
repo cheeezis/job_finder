@@ -18,21 +18,31 @@ INTERNATIONAL_LOCATION_TERMS = {
     "worldwide",
 }
 INTERNATIONAL_REMOTE_SOURCES = {"himalayas", "jobicy", "startup_jobs"}
+ROLE_LABELS = {
+    "general_it": "Allgemeine IT",
+    "software_development": "Softwareentwicklung",
+    "python_ai_data": "Python / KI / Daten",
+    "technical_consulting": "Technisches Consulting",
+    "infrastructure": "Infrastruktur",
+    "junior_sap": "SAP-Einstieg",
+    "testing": "Testing / QA",
+    "junior_administration": "IT-Administration",
+    "rpa_automation": "RPA / Automatisierung",
+    "trainee": "Trainee",
+    "junior_modern_workplace": "Modern Workplace",
+    "infrastructure_automation": "Infrastruktur-Automatisierung",
+    "manual_review": "Manuell hinzugefügt",
+}
 
 
 def write_recommendations(
     results,
     json_path=RECOMMENDATIONS_JSON,
 ):
-    """Write analyzed jobs plus jobs whose LLM result is unavailable."""
+    """Write every job that passed the rule-based prefilter."""
     recommendations = [
         recommendation_for_job(job)
         for job in results["included"]
-        if (
-            job.get("llm_result")
-            or job.get("llm_status") == "failed"
-            or job.get("workflow_status") == "interesting"
-        )
     ]
     json_file = Path(json_path)
     json_file.parent.mkdir(parents=True, exist_ok=True)
@@ -57,6 +67,11 @@ def recommendation_for_job(job):
         "remote_percentage": job.get("remote_percentage"),
         "career_levels": job.get("career_levels", []),
         "published_at": job.get("published_at"),
+        "first_seen_at": job.get("first_seen_at"),
+        "match_percent": job.get("match_percent"),
+        "role_group": job.get("role_group"),
+        "role_label": format_role_group(job),
+        "experience_level": job.get("experience_level"),
         "url": primary_url(job),
         "source_links": source_links(job),
         "international": is_international_listing(job),
@@ -65,27 +80,7 @@ def recommendation_for_job(job):
         recommendation["location_precheck"] = job["location_precheck"]
     if job.get("prefilter_warning"):
         recommendation["prefilter_warning"] = job["prefilter_warning"]
-    llm_result = job.get("llm_result")
-    if llm_result:
-        return {
-            **recommendation,
-            "llm_score": job["llm_score"],
-            "llm_unavailable": False,
-            **llm_result,
-        }
-    return {
-        **recommendation,
-        "llm_score": None,
-        "llm_unavailable": True,
-        "recommendation": None,
-        "confidence": None,
-        "summary": "KI-Bewertung derzeit nicht verfügbar.",
-        "tasks": [],
-        "requirements": [],
-        "matching_evidence": [],
-        "gaps": [],
-        "risks": [],
-    }
+    return recommendation
 
 
 def is_international_listing(job):
@@ -147,6 +142,12 @@ def source_links(job):
 def format_locations(job):
     """Return serialized job locations as display text."""
     return ", ".join(job.get("locations", [])) or "unbekannt"
+
+
+def format_role_group(job):
+    """Return a readable label for one rule-based role category."""
+    value = job.get("role_group")
+    return ROLE_LABELS.get(value, str(value or "Allgemeine IT").replace("_", " "))
 
 
 def format_remote(job):

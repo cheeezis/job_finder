@@ -1,4 +1,4 @@
-"""Small local web interface for reviewing job recommendations."""
+"""Small local web interface for reviewing prefiltered jobs."""
 
 import argparse
 import json
@@ -14,7 +14,7 @@ from job_finder.applications import (
     record_status_change,
     update_history_event,
 )
-from job_finder.config import LOCAL_SEARCH_LOCATION
+from job_finder.config import LOCAL_SEARCH_LOCATION, LOCAL_SEARCH_POSTAL_CODE
 from job_finder.manual_import import import_manual_url
 from job_finder.memory import load_memory, preferred_memory_id, save_memory
 from job_finder.models import WorkflowStatus
@@ -30,13 +30,14 @@ from job_finder.reporting import is_international_listing
 LANDING_PAGE = Path(__file__).with_name("landing.html")
 REVIEW_PAGE = Path(__file__).with_name("review.html")
 APPLICATIONS_PAGE = Path(__file__).with_name("applications.html")
+ROUTE_ORIGIN = f"{LOCAL_SEARCH_POSTAL_CODE} {LOCAL_SEARCH_LOCATION}".strip()
 
 
 def load_review_jobs(
     recommendations_path=RECOMMENDATIONS_JSON,
     memory_path=MEMORY_FILE,
 ):
-    """Combine compact recommendations with their persisted workflow status."""
+    """Combine compact review jobs with their persisted workflow status."""
     path = Path(recommendations_path)
     if not path.exists():
         return []
@@ -55,7 +56,6 @@ def load_review_jobs(
             WorkflowStatus.NEW.value,
         )
         job["application_tracked"] = is_application(entry)
-        job["review_note"] = entry.get("review_note", "")
         if not job.get("source_links"):
             source_names = entry.get("source_names", [])
             if not isinstance(source_names, list):
@@ -127,7 +127,11 @@ def update_review_decision(
 ):
     """Persist a review decision without changing an existing application."""
     status = WorkflowStatus(workflow_status)
-    if status not in {WorkflowStatus.INTERESTING, WorkflowStatus.IGNORED}:
+    if status not in {
+        WorkflowStatus.INTERESTING,
+        WorkflowStatus.INQUIRY,
+        WorkflowStatus.IGNORED,
+    }:
         raise ValueError("Ungueltiger Review-Status")
     memory = load_memory(memory_path)
     if job_id not in memory:
@@ -223,23 +227,6 @@ def delete_workflow_history(
     return {"workflow_status": status}
 
 
-def update_review_note(job_id, review_note, memory_path=MEMORY_FILE):
-    """Persist an optional note alongside one unified workflow status."""
-    memory = load_memory(memory_path)
-    if job_id not in memory:
-        raise KeyError(f"Unbekannte Job-ID: {job_id}")
-    entry = memory[job_id]
-    if not isinstance(review_note, str):
-        raise ValueError("Notiz muss Text sein")
-    if len(review_note) > 2000:
-        raise ValueError("Notiz darf maximal 2000 Zeichen lang sein")
-    entry["review_note"] = review_note.strip()
-    save_memory(memory, memory_path)
-    return {
-        "review_note": entry.get("review_note", ""),
-    }
-
-
 class ReviewRequestHandler(BaseHTTPRequestHandler):
     """Serve the review page and its small JSON API."""
 
@@ -274,7 +261,7 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
                         self.memory_path,
                     ),
                     "workflow_statuses": [status.value for status in WorkflowStatus],
-                    "route_origin": LOCAL_SEARCH_LOCATION,
+                    "route_origin": ROUTE_ORIGIN,
                 }
             )
             return
@@ -289,7 +276,6 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
             "/api/status",
             "/api/applications",
             "/api/review-status",
-            "/api/note",
             "/api/history",
             "/api/history/delete",
             "/api/manual-import",
@@ -328,12 +314,6 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
                         payload.get("scheduled_for"),
                     )
                 }
-            elif self.path == "/api/note":
-                result = update_review_note(
-                    payload["job_id"],
-                    payload.get("review_note"),
-                    self.memory_path,
-                )
             elif self.path == "/api/history":
                 result = update_workflow_history(
                     payload["job_id"],

@@ -23,11 +23,11 @@
     .filters, .card { background: white; border: 1px solid #dfe4eb; border-radius: 16px; box-shadow: 0 8px 24px rgba(28, 39, 58, .06); }
     .filters { display: grid; grid-template-columns: 1fr 1fr 2fr auto; gap: 12px; padding: 16px; margin: 24px 0; align-items: end; }
     label { display: grid; gap: 6px; font-size: .82rem; color: #607087; }
+    .filter-toggles { display: grid; gap: 4px; }
     .toggle { display: flex; align-items: center; gap: 8px; min-height: 42px; color: #445269; white-space: nowrap; }
     .toggle input { width: auto; margin: 0; }
-    select, input, textarea, button, .button { font: inherit; border-radius: 9px; }
-    select, input, textarea { width: 100%; padding: 10px 12px; border: 1px solid #cbd3df; background: white; color: #172033; }
-    textarea { min-height: 92px; resize: vertical; }
+    select, input, button, .button { font: inherit; border-radius: 9px; }
+    select, input { width: 100%; padding: 10px 12px; border: 1px solid #cbd3df; background: white; color: #172033; }
     .card { padding: clamp(20px, 4vw, 36px); }
     .score-row { display: flex; justify-content: space-between; gap: 16px; align-items: center; }
     .score { font-size: 1.7rem; font-weight: 750; color: #12664f; }
@@ -35,13 +35,13 @@
     h2 { margin: 16px 0 6px; font-size: clamp(1.35rem, 3vw, 2rem); }
     .company { margin: 0; color: #607087; }
     .meta { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 18px 0; color: #445269; font-size: .92rem; }
-    .summary { font-size: 1.08rem; line-height: 1.65; }
     .prefilter-warning { margin: 18px 0; padding: 12px 14px; border-radius: 9px; background: #fff4dd; color: #704c0b; line-height: 1.45; }
-    .details { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 28px; }
-    .section { margin-top: 20px; }
-    .section h3 { margin: 0 0 8px; font-size: 1rem; }
-    ul { margin: 0; padding-left: 20px; line-height: 1.55; }
-    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; padding-top: 22px; border-top: 1px solid #e5e9ef; }
+    .rule-facts { display: grid; gap: 8px; margin-top: 18px; padding: 14px 16px; border-radius: 10px; background: #f6f8fa; }
+    .rule-fact { line-height: 1.45; }
+    .rule-label { font-weight: 700; color: #33445d; }
+    .actions { display: grid; gap: 14px; margin-top: 28px; padding-top: 22px; border-top: 1px solid #e5e9ef; }
+    .decision-actions, .utility-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+    .utility-actions { padding-top: 14px; border-top: 1px solid #eef1f5; }
     button, .button { border: 1px solid #c4cdd9; background: white; padding: 10px 15px; color: #172033; cursor: pointer; text-decoration: none; }
     button:hover, .button:hover { background: #f3f5f8; }
     button:disabled { cursor: wait; opacity: .65; }
@@ -53,8 +53,9 @@
     .source-options a { padding: 9px 10px; color: #176b54; text-decoration: none; border-radius: 7px; }
     .source-options a:hover { background: #edf7f3; }
     button.primary { background: #176b54; color: white; border-color: #176b54; }
+    button.inquiry { color: #704c0b; border-color: #d5ad61; background: #fff8e8; }
+    button.inquiry:hover { background: #fff1cf; }
     button.ignore { color: #8a3840; }
-    .note-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
     .navigation { display: flex; justify-content: space-between; margin-top: 16px; }
     .empty, .error { padding: 36px; text-align: center; color: #607087; }
     .error { color: #8a3840; }
@@ -63,7 +64,8 @@
       header { display: block; }
       .counter { margin-top: 12px; }
       .header-actions { justify-items: start; }
-      .filters, .details { grid-template-columns: 1fr; }
+      .filters { grid-template-columns: 1fr; }
+      .decision-actions button { flex: 1 1 100%; }
     }
   </style>
 </head>
@@ -72,7 +74,7 @@
   <header>
     <div>
       <h1>Stellen prüfen</h1>
-      <p class="subtitle">Eine Empfehlung nach der anderen – du entscheidest.</p>
+      <p class="subtitle">Eine vorgefilterte Stelle nach der anderen – du entscheidest.</p>
     </div>
     <div class="header-actions">
       <div id="counter" class="counter"></div>
@@ -87,53 +89,59 @@
         <option value="">Alle Status</option>
       </select>
     </label>
-    <label>Empfehlung
-      <select id="recommendation-filter">
-        <option value="">Alle Empfehlungen</option>
-        <option value="strong_match">Sehr passend</option>
-        <option value="match">Passend</option>
-        <option value="borderline">Vielleicht passend</option>
-        <option value="not_recommended">Nicht empfohlen</option>
+    <label>IT-Bereich
+      <select id="role-filter">
+        <option value="">Alle Bereiche</option>
       </select>
     </label>
     <label>Suche
       <input id="search-filter" type="search" placeholder="Titel oder Firma">
     </label>
-    <label class="toggle">
-      <input id="international-filter" type="checkbox">
-      Internationale anzeigen
-    </label>
+    <div class="filter-toggles">
+      <label class="toggle">
+        <input id="international-filter" type="checkbox">
+        Internationale anzeigen
+      </label>
+      <label class="toggle">
+        <input id="junior-hybrid-filter" type="checkbox">
+        Junior-Sonderfälle anzeigen
+      </label>
+    </div>
   </section>
 
-  <section id="message" class="empty">Empfehlungen werden geladen …</section>
+  <section id="message" class="empty">Stellen werden geladen …</section>
   <article id="card" class="card" hidden>
     <div class="score-row">
       <span id="score" class="score"></span>
-      <span id="recommendation" class="badge"></span>
+      <span id="role-badge" class="badge"></span>
     </div>
     <h2 id="title"></h2>
     <p id="company" class="company"></p>
     <div class="meta">
       <span id="location"></span>
       <span id="remote"></span>
+      <span id="published"></span>
       <span id="current-status"></span>
     </div>
-    <p id="summary" class="summary"></p>
     <p id="prefilter-warning" class="prefilter-warning" hidden></p>
-    <div id="details" class="details"></div>
-    <div class="actions">
-      <button id="mark-interesting" class="primary">Interessant</button>
-      <button id="mark-ignored" class="ignore">Nicht interessant</button>
-      <button id="mark-applied">Als beworben markieren</button>
-      <a id="application-link" class="button" href="/applications" hidden>Bewerbung verwalten</a>
-      <div id="job-links"></div>
-      <a id="route-link" class="button" target="_blank" rel="noopener noreferrer" hidden>Entfernung &amp; Fahrtzeit</a>
-    </div>
-    <section class="section">
-      <h3>Meine Notiz</h3>
-      <textarea id="review-note" maxlength="2000" placeholder="Optional: Warum passt oder passt die Stelle nicht?"></textarea>
-      <div class="note-actions"><button id="save-note">Notiz speichern</button></div>
+    <section class="rule-facts" aria-label="Ergebnis des Vorfilters">
+      <div class="rule-fact"><span class="rule-label">Bereich:</span> <span id="role-group"></span></div>
+      <div class="rule-fact"><span class="rule-label">Einstieg:</span> <span id="experience-level"></span></div>
+      <div class="rule-fact"><span class="rule-label">Standortprüfung:</span> <span id="location-precheck"></span></div>
     </section>
+    <div class="actions">
+      <div class="decision-actions">
+        <button id="mark-interesting" class="primary">Interessant</button>
+        <button id="mark-inquiry" class="inquiry">Rückfrage nötig</button>
+        <button id="mark-ignored" class="ignore">Nicht interessant</button>
+      </div>
+      <div class="utility-actions">
+        <button id="mark-applied">Als beworben markieren</button>
+        <a id="application-link" class="button" href="/applications" hidden>Bewerbung verwalten</a>
+        <div id="job-links"></div>
+        <a id="route-link" class="button" target="_blank" rel="noopener noreferrer" hidden>Entfernung &amp; Fahrtzeit</a>
+      </div>
+    </div>
   </article>
 
   <nav id="navigation" class="navigation" hidden>
@@ -143,12 +151,18 @@
 </main>
 
 <script>
-  const recommendationLabels = {
-    strong_match: "Sehr passend", match: "Passend",
-    borderline: "Vielleicht passend", not_recommended: "Nicht empfohlen"
+  const roleLabels = {
+    general_it: "Allgemeine IT", software_development: "Softwareentwicklung",
+    python_ai_data: "Python / KI / Daten", technical_consulting: "Technisches Consulting",
+    infrastructure: "Infrastruktur", junior_sap: "SAP-Einstieg",
+    testing: "Testing / QA", junior_administration: "IT-Administration",
+    rpa_automation: "RPA / Automatisierung", trainee: "Trainee",
+    junior_modern_workplace: "Modern Workplace",
+    infrastructure_automation: "Infrastruktur-Automatisierung",
+    manual_review: "Manuell hinzugefügt"
   };
   const statusLabels = {
-    new: "Neu", review: "Prüfen", interesting: "Interessant",
+    new: "Neu", review: "Prüfen", interesting: "Interessant", inquiry: "Rückfrage offen",
     ignored: "Nicht interessant", applied: "Beworben", response: "Antwort erhalten", interview: "Interview",
     rejected: "Absage", no_response: "Keine Rückmeldung",
     offer: "Angebot", closed: "Abgeschlossen"
@@ -158,7 +172,7 @@
     get_in_it: "get-in-IT", arbeitnow: "Arbeitnow",
     arbeitsagentur: "Arbeitsagentur", manual: "Manuell hinzugefügt"
   };
-  const reviewStatuses = new Set(["review", "interesting", "ignored"]);
+  const reviewStatuses = new Set(["review", "interesting", "inquiry", "ignored"]);
   let jobs = [];
   let visibleJobs = [];
   let currentIndex = 0;
@@ -267,31 +281,25 @@
     link.href = `https://www.google.com/maps/dir/?${parameters}`;
   }
 
-  function addList(parent, heading, values) {
-    if (!values || !values.length) return;
-    const section = document.createElement("section");
-    section.className = "section";
-    const title = document.createElement("h3");
-    title.textContent = heading;
-    const list = document.createElement("ul");
-    values.forEach(value => {
-      const item = document.createElement("li");
-      item.textContent = value;
-      list.append(item);
-    });
-    section.append(title, list);
-    parent.append(section);
+  function displayDate(value) {
+    if (!value) return "nicht angegeben";
+    const date = new Date(`${String(value).slice(0, 10)}T00:00:00`);
+    return Number.isNaN(date.getTime())
+      ? String(value)
+      : date.toLocaleDateString("de-DE");
   }
 
   function applyFilters(resetPosition = true) {
     const status = element("status-filter").value;
-    const recommendation = element("recommendation-filter").value;
+    const role = element("role-filter").value;
     const query = element("search-filter").value.trim().toLocaleLowerCase("de");
     const showInternational = element("international-filter").checked;
+    const showJuniorHybrid = element("junior-hybrid-filter").checked;
     visibleJobs = jobs.filter(job =>
       (!status || job.workflow_status === status) &&
-      (!recommendation || job.recommendation === recommendation) &&
+      (!role || job.role_group === role) &&
       (showInternational || !job.international) &&
+      (showJuniorHybrid || !String(job.location_precheck || "").startsWith("Junior-Hybrid")) &&
       (!query || `${job.title} ${job.company}`.toLocaleLowerCase("de").includes(query))
     );
     currentIndex = resetPosition
@@ -307,21 +315,16 @@
     element("message").hidden = hasJobs;
     if (!hasJobs) {
       element("message").textContent = jobs.length
-        ? "Keine Empfehlungen passen zu diesen Filtern."
-        : "Noch keine KI-Empfehlungen vorhanden. Starte zuerst den Job Finder.";
-      setText("counter", "0 Empfehlungen");
+        ? "Keine Stellen passen zu diesen Filtern."
+        : "Noch keine Stellen vorhanden. Starte zuerst den Job Finder.";
+      setText("counter", "0 Stellen");
       return;
     }
 
     const job = visibleJobs[currentIndex];
     setText("counter", `${currentIndex + 1} von ${visibleJobs.length}`);
-    setText("score", job.llm_unavailable ? "KI offen" : `${job.llm_score}%`);
-    setText(
-      "recommendation",
-      job.llm_unavailable
-        ? "Bewertung nicht verfügbar"
-        : recommendationLabels[job.recommendation] || job.recommendation
-    );
+    setText("score", `Vorfilter: ${job.match_percent ?? 0}/100`);
+    setText("role-badge", roleLabels[job.role_group] || "Allgemeine IT");
     setText("title", job.title);
     setText("company", job.company);
     setText("location", `Ort: ${(job.locations || []).join(", ") || "unbekannt"}`);
@@ -329,14 +332,17 @@
       ? `${job.remote_percentage}%`
       : job.work_mode === "hybrid" ? "Homeoffice" : "nicht angegeben";
     setText("remote", `Remote: ${remote}`);
+    setText("published", `Veröffentlicht: ${displayDate(job.published_at)}`);
     setText("current-status", `Status: ${statusLabels[job.workflow_status] || job.workflow_status}`);
+    setText("role-group", roleLabels[job.role_group] || "Allgemeine IT");
+    setText("experience-level", job.experience_level || "keine Jahresanforderung erkannt");
+    setText("location-precheck", job.location_precheck || "passt zur Standortregel");
     const applicationTracked = Boolean(job.application_tracked);
     element("mark-interesting").hidden = applicationTracked;
+    element("mark-inquiry").hidden = applicationTracked;
     element("mark-ignored").hidden = applicationTracked;
     element("mark-applied").hidden = applicationTracked;
     element("application-link").hidden = !applicationTracked;
-    element("review-note").value = job.review_note || "";
-    setText("summary", job.summary);
     const warning = element("prefilter-warning");
     warning.hidden = !job.prefilter_warning;
     warning.textContent = job.prefilter_warning
@@ -344,14 +350,6 @@
       : "";
     renderSourceLinks(job);
     renderRouteLink(job);
-
-    const details = element("details");
-    details.replaceChildren();
-    addList(details, "Wichtigste Aufgaben", job.tasks);
-    addList(details, "Wichtigste Anforderungen", job.requirements);
-    addList(details, "Passende Erfahrungen", job.matching_evidence);
-    addList(details, "Lücken", job.gaps);
-    addList(details, "Risiken", job.risks);
     element("previous").disabled = currentIndex === 0;
     element("next").disabled = currentIndex === visibleJobs.length - 1;
   }
@@ -409,34 +407,27 @@
     }
   }
 
-  async function saveReviewNote() {
-    const job = visibleJobs[currentIndex];
-    const response = await fetch("/api/note", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({job_id: job.id, review_note: element("review-note").value})
-    });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || "Notiz konnte nicht gespeichert werden");
-    job.review_note = result.review_note;
-    const original = jobs.find(item => item.id === job.id);
-    if (original) original.review_note = result.review_note;
-    render();
-  }
-
   async function load() {
     try {
       const response = await fetch("/api/recommendations");
       if (!response.ok) throw new Error("Empfehlungen konnten nicht geladen werden");
       const result = await response.json();
       routeOrigin = result.route_origin || "";
-      jobs = result.recommendations.sort(
-        (a, b) => (b.llm_score ?? -1) - (a.llm_score ?? -1)
-      );
+      jobs = result.recommendations.sort((a, b) => {
+        const published = String(b.published_at || "").localeCompare(String(a.published_at || ""));
+        if (published) return published;
+        const firstSeen = String(b.first_seen_at || "").localeCompare(String(a.first_seen_at || ""));
+        return firstSeen || (b.match_percent ?? -1) - (a.match_percent ?? -1);
+      });
       addOptions(
         element("status-filter"),
         result.workflow_statuses.filter(status => reviewStatuses.has(status)),
         statusLabels
+      );
+      addOptions(
+        element("role-filter"),
+        [...new Set(jobs.map(job => job.role_group).filter(Boolean))].sort(),
+        roleLabels
       );
       const requestedJob = new URLSearchParams(window.location.search).get("job");
       if (requestedJob) element("status-filter").value = "";
@@ -455,22 +446,23 @@
   }
 
   element("status-filter").addEventListener("change", () => applyFilters());
-  element("recommendation-filter").addEventListener("change", () => applyFilters());
+  element("role-filter").addEventListener("change", () => applyFilters());
   element("search-filter").addEventListener("input", () => applyFilters());
   element("international-filter").addEventListener("change", () => applyFilters());
+  element("junior-hybrid-filter").addEventListener("change", () => applyFilters());
   element("previous").addEventListener("click", () => { currentIndex -= 1; render(); });
   element("next").addEventListener("click", () => { currentIndex += 1; render(); });
   element("mark-interesting").addEventListener("click", () =>
     changeStatus("interesting").catch(showError)
+  );
+  element("mark-inquiry").addEventListener("click", () =>
+    changeStatus("inquiry").catch(showError)
   );
   element("mark-ignored").addEventListener("click", () =>
     changeStatus("ignored").catch(showError)
   );
   element("mark-applied").addEventListener("click", () =>
     startApplication().catch(showError)
-  );
-  element("save-note").addEventListener("click", () =>
-    saveReviewNote().catch(showError)
   );
   function showError(error) { window.alert(error.message); }
   load();

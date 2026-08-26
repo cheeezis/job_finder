@@ -18,37 +18,11 @@ class ManualImportTests(unittest.TestCase):
             title="Junior Python Entwickler (m/w/d)",
             company="Example GmbH",
             locations=["München"],
-            sources=[
-                JobSource(
-                    source="manual",
-                    source_id="python",
-                    url="https://example.com/jobs/python",
-                )
-            ],
+            sources=[JobSource("manual", "https://example.com/jobs/python")],
             description_raw="Python Junior Entwicklung " * 20,
             description_clean="Python Junior Entwicklung " * 20,
             work_mode=WorkMode.ONSITE,
         )
-
-        def fake_analysis(results):
-            self.assertEqual(len(results["included"]), 1)
-            row = results["included"][0]
-            row.update(
-                llm_status="analyzed",
-                llm_score=35,
-                llm_result={
-                    "recommendation": "not_recommended",
-                    "confidence": "high",
-                    "summary": "Fachlich interessant, der Standort passt nicht.",
-                    "tasks": ["Python entwickeln"],
-                    "requirements": ["Erste Python-Kenntnisse"],
-                    "matching_evidence": [],
-                    "gaps": ["Standort"],
-                    "risks": ["Keine ausreichende Remote-Regelung"],
-                },
-            )
-            return {"analyzed": 1, "cached": 0}
-
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             paths = {
@@ -57,21 +31,8 @@ class ManualImportTests(unittest.TestCase):
                 "memory_path": root / "seen.json",
                 "recommendations_path": root / "recommendations.json",
             }
-            with (
-                patch(
-                    "job_finder.manual_import.manual.add_url",
-                    return_value=job,
-                ) as add_url,
-                patch(
-                    "job_finder.manual_import.analyze_results",
-                    side_effect=fake_analysis,
-                ) as analyze,
-            ):
-                result = import_manual_url(
-                    "https://example.com/jobs/python",
-                    **paths,
-                )
-
+            with patch("job_finder.manual_import.manual.add_url", return_value=job) as add_url:
+                result = import_manual_url("https://example.com/jobs/python", **paths)
             recommendations = json.loads(
                 paths["recommendations_path"].read_text(encoding="utf-8")
             )["recommendations"]
@@ -79,10 +40,10 @@ class ManualImportTests(unittest.TestCase):
             memory = load_memory(paths["memory_path"])
 
         add_url.assert_called_once()
-        analyze.assert_called_once()
-        self.assertEqual(result["analyzed"], 1)
         self.assertEqual(result["prefilter_warning"], "Ort/Remote passt nicht")
+        self.assertIsInstance(result["match_percent"], int)
         self.assertEqual(recommendations[0]["prefilter_warning"], "Ort/Remote passt nicht")
+        self.assertNotIn("llm_score", recommendations[0])
         self.assertEqual(saved_jobs[0]["id"], "manual:python")
         self.assertIn("manual:python", memory)
 
@@ -99,14 +60,9 @@ class ManualImportTests(unittest.TestCase):
             description_clean="Python Entwicklung " * 20,
             work_mode=WorkMode.ONSITE,
         )
-
         results = score_jobs([job])
-
         self.assertEqual(len(results["included"]), 1)
-        self.assertEqual(
-            results["included"][0]["prefilter_warning"],
-            "Ort/Remote passt nicht",
-        )
+        self.assertEqual(results["included"][0]["prefilter_warning"], "Ort/Remote passt nicht")
 
 
 if __name__ == "__main__":

@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 
 from job_finder.deduplication import deduplicate_jobs, merge_jobs
-from job_finder.llm.service import analyze_results
 from job_finder.main import load_jobs, score_for_pipeline
 from job_finder.memory import load_memory, save_memory, update_memory
 from job_finder.paths import JOBS_FILE, MEMORY_FILE, RECOMMENDATIONS_JSON
@@ -21,7 +20,7 @@ def import_manual_url(
     memory_path=MEMORY_FILE,
     recommendations_path=RECOMMENDATIONS_JSON,
 ):
-    """Import, remember, score, and analyze exactly one supplied listing."""
+    """Import, remember, and score exactly one supplied listing."""
     imported = manual.add_url(url, cache_path=cache_path)
     jobs = load_current_jobs(jobs_path)
     target = replace_or_add_job(jobs, imported)
@@ -42,17 +41,13 @@ def import_manual_url(
     }
     if warning:
         row["prefilter_warning"] = warning
-    stats = analyze_results({"included": [row], "excluded": []})
     save_recommendation(row, recommendations_path)
     return {
         "job_id": row["id"],
         "title": row["title"],
         "company": row["company"],
-        "llm_status": row.get("llm_status"),
-        "llm_score": row.get("llm_score"),
+        "match_percent": row.get("match_percent"),
         "prefilter_warning": warning,
-        "analyzed": stats.get("analyzed", 0),
-        "cached": stats.get("cached", 0),
     }
 
 
@@ -123,7 +118,7 @@ def save_recommendation(job, path):
     retained.append(recommendation)
     retained.sort(
         key=lambda item: (
-            -(item.get("llm_score") if item.get("llm_score") is not None else -1),
+            -(item.get("match_percent") if item.get("match_percent") is not None else -1),
             item.get("title", "").casefold(),
         )
     )

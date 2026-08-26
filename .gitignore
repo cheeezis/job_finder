@@ -3,7 +3,7 @@ __pycache__/
 .venv/
 tmp/
 data/
-llm_evaluation/results/
+llm_evaluation/
 profile.yaml
 profile.local.yaml
 user_settings.local.yaml

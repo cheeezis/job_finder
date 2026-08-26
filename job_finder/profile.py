@@ -287,7 +287,7 @@ ROLE_GROUPS = [
 ]
 
 # Broad fallback used only to keep clearly technical IT jobs in the inexpensive
-# prefilter. Personal interest and technology fit are decided by the LLM.
+# prefilter. Personal interest and technology fit are decided in the review UI.
 GENERAL_IT_TITLE_KEYWORDS = [
     "developer",
     "entwickler",

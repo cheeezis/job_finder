@@ -1,430 +1,136 @@
-"""Tests for durable Discord job notification summaries."""
+"""Tests for rule-based Discord notifications."""
 
 import json
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import Mock
 
-from job_finder.notifications import (
-    NotificationError,
-    discord_embed,
-    discord_payload,
-    load_notification_state,
-    notification_chunks,
-    process_notifications,
-    run_summary_payload,
-    send_run_summary,
-    webhook_url_with_confirmation,
-)
+from job_finder.notifications import NotificationError, discord_embed, process_notifications, run_summary_payload
 
 
-def make_job(
-    job_id="job:1",
-    *,
-    recommendation="strong_match",
-    status="new",
-    is_new=True,
-    content_changed=False,
-    llm_status="analyzed",
-):
+def make_job(job_id="job:1", *, is_new=True, content_changed=False, status="new"):
     return {
         "id": job_id,
         "title": "Junior Python Developer",
         "company": "Example GmbH",
         "locations": ["Fulda"],
-        "sources": [{"url": f"https://example.test/{job_id}"}],
-        "description_clean": "Python und APIs",
-        "work_mode": "hybrid",
-        "remote_percentage": None,
-        "employment_type": "FULL_TIME",
-        "salary_min_eur": None,
-        "salary_max_eur": None,
+        "sources": [{"source": "stepstone", "url": f"https://example.test/{job_id}"}],
+        "description_clean": "Python entwickeln",
+        "work_mode": "remote",
+        "remote_percentage": 100,
+        "match_percent": 82,
+        "role_group": "software_development",
+        "experience_level": "klare Einstiegsstelle",
+        "location_precheck": "100% remote Deutschland",
         "workflow_status": status,
         "is_new": is_new,
         "content_changed": content_changed,
-        "llm_status": llm_status,
-        "llm_score": 90,
-        "llm_result": {
-            "recommendation": recommendation,
-            "summary": "Sehr passende Einstiegsstelle.",
-            "seniority": "junior_entry",
-            "matching_evidence": ["Python-Projekte passen zur Stelle."],
-            "gaps": ["Docker ist nicht belegt."],
-            "risks": [],
-        },
     }
 
 
+class FakeClient:
+    def __init__(self, error=None):
+        self.payloads = []
+        self.error = error
+
+    def send(self, payload):
+        self.payloads.append(payload)
+        if self.error:
+            raise self.error
+
+
 class NotificationTests(unittest.TestCase):
-    def test_failed_llm_job_is_not_queued_for_discord(self):
-        job = make_job("job:failed", llm_status="failed")
-        job["llm_result"] = None
-
+    def test_legacy_pending_ai_backlog_is_discarded(self):
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "notifications.json"
-            stats = process_notifications(
-                {"included": [job], "excluded": []}, state_path=path
-            )
-
-        self.assertEqual(stats["queued"], 0)
-        self.assertEqual(stats["ready"], 0)
-
-    def test_preview_queues_all_unsent_active_matches_and_borderline_jobs(self):
-        results = {
-            "included": [
-                make_job("job:positive"),
-                make_job("job:borderline", recommendation="borderline"),
-                make_job("job:ignored", status="ignored"),
-                make_job(
-                    "job:known",
-                    is_new=False,
-                    llm_status="cached",
-                ),
-            ],
-            "excluded": [],
-        }
-
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "notifications.json"
-            stats = process_notifications(results, state_path=path)
-            state = load_notification_state(path)
-
-        self.assertEqual(stats["queued"], 3)
-        self.assertEqual(stats["ready"], 3)
-        self.assertEqual(len(state["pending"]), 3)
-        self.assertEqual(state["sent"], {})
-
-    def test_successful_delivery_is_not_sent_twice(self):
-        results = {"included": [make_job()], "excluded": []}
-        client = Mock()
-
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "notifications.json"
-            first = process_notifications(
-                results,
-                send=True,
-                webhook_url="https://discord.test/webhook",
-                state_path=path,
-                client=client,
-            )
-            second = process_notifications(
-                results,
-                send=True,
-                webhook_url="https://discord.test/webhook",
-                state_path=path,
-                client=client,
-            )
-            state = load_notification_state(path)
-
-        self.assertEqual(first["sent"], 1)
-        self.assertEqual(second["sent"], 0)
-        self.assertEqual(client.send.call_count, 1)
-        self.assertEqual(len(state["sent"]), 1)
-        self.assertEqual(state["pending"], {})
-
-    def test_failed_delivery_remains_pending_and_is_retried(self):
-        first_results = {"included": [make_job()], "excluded": []}
-        failed_client = Mock()
-        failed_client.send.side_effect = NotificationError("nicht erreichbar")
-
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "notifications.json"
-            failed = process_notifications(
-                first_results,
-                send=True,
-                webhook_url="https://discord.test/webhook",
-                state_path=path,
-                client=failed_client,
-            )
-            retry_results = {
-                "included": [
-                    make_job(is_new=False, llm_status="cached"),
-                ],
-                "excluded": [],
-            }
-            successful_client = Mock()
-            retried = process_notifications(
-                retry_results,
-                send=True,
-                webhook_url="https://discord.test/webhook",
-                state_path=path,
-                client=successful_client,
-            )
-            state = load_notification_state(path)
-
-        self.assertEqual(failed["failed"], 1)
-        self.assertEqual(retried["sent"], 1)
-        successful_client.send.assert_called_once()
-        self.assertEqual(len(state["sent"]), 1)
-        self.assertEqual(state["pending"], {})
-
-    def test_changed_known_job_creates_a_new_notification_version(self):
-        original = make_job()
-        client = Mock()
-
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "notifications.json"
-            process_notifications(
-                {"included": [original], "excluded": []},
-                send=True,
-                webhook_url="https://discord.test/webhook",
-                state_path=path,
-                client=client,
-            )
-            changed = make_job(
-                is_new=False,
-                content_changed=True,
-                llm_status="analyzed",
-            )
-            changed["description_clean"] = "Python, APIs und neue Cloud-Aufgaben"
-            stats = process_notifications(
-                {"included": [changed], "excluded": []},
-                send=True,
-                webhook_url="https://discord.test/webhook",
-                state_path=path,
-                client=client,
-            )
-
-        self.assertEqual(stats["sent"], 1)
-        self.assertEqual(client.send.call_count, 2)
-
-    def test_promoted_recommendation_is_sent_once_as_an_update(self):
-        original = make_job(recommendation="borderline")
-        client = Mock()
-
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "notifications.json"
-            process_notifications(
-                {"included": [original], "excluded": []},
-                send=True,
-                webhook_url="https://discord.test/webhook",
-                state_path=path,
-                client=client,
-            )
-            promoted = make_job(
-                recommendation="strong_match",
-                is_new=False,
-                llm_status="cached",
-            )
-            stats = process_notifications(
-                {"included": [promoted], "excluded": []},
-                send=True,
-                webhook_url="https://discord.test/webhook",
-                state_path=path,
-                client=client,
-            )
-            repeated = process_notifications(
-                {"included": [promoted], "excluded": []},
-                send=True,
-                webhook_url="https://discord.test/webhook",
-                state_path=path,
-                client=client,
-            )
-
-        self.assertEqual(stats["sent"], 1)
-        self.assertEqual(repeated["sent"], 0)
-        self.assertEqual(client.send.call_count, 2)
-
-    def test_legacy_notification_is_updated_when_a_score_correction_promotes_it(self):
-        original = make_job(recommendation="borderline")
-        client = Mock()
-
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "notifications.json"
-            process_notifications(
-                {"included": [original], "excluded": []},
-                send=True,
-                webhook_url="https://discord.test/webhook",
-                state_path=path,
-                client=client,
-            )
-            state = load_notification_state(path)
-            next(iter(state["sent"].values())).pop("recommendation")
+            path = Path(directory) / "state.json"
             path.write_text(
-                json.dumps({"version": 1, **state}),
+                json.dumps({"version": 1, "sent": {}, "pending": {"legacy": {}}}),
                 encoding="utf-8",
             )
-            corrected = make_job(
-                recommendation="strong_match",
-                is_new=False,
-                llm_status="cached",
-            )
-            corrected["llm_score_changed"] = True
             stats = process_notifications(
-                {"included": [corrected], "excluded": []},
-                send=True,
-                webhook_url="https://discord.test/webhook",
-                state_path=path,
-                client=client,
-            )
-
-        self.assertEqual(stats["sent"], 1)
-        self.assertEqual(client.send.call_count, 2)
-
-    def test_missing_webhook_keeps_ready_jobs_without_sending(self):
-        results = {"included": [make_job()], "excluded": []}
-
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "notifications.json"
-            stats = process_notifications(
-                results,
-                send=True,
+                {"included": [make_job(is_new=False)], "excluded": []},
                 state_path=path,
             )
-            state = load_notification_state(path)
-
-        self.assertIn("DISCORD_WEBHOOK_URL", stats["configuration_error"])
-        self.assertEqual(len(state["pending"]), 1)
-
-    def test_excluded_job_is_removed_from_pending_notifications(self):
-        job = make_job()
-
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "notifications.json"
-            process_notifications({"included": [job], "excluded": []}, state_path=path)
-            stats = process_notifications(
-                {"included": [], "excluded": [job]},
-                state_path=path,
-            )
-            state = load_notification_state(path)
-
+            state = json.loads(path.read_text(encoding="utf-8"))
         self.assertEqual(stats["ready"], 0)
+        self.assertEqual(state["version"], 2)
         self.assertEqual(state["pending"], {})
 
-    def test_payload_disables_mentions_and_chunks_within_discord_limits(self):
-        jobs = [make_job(f"job:{index}") for index in range(12)]
-        candidates = [(str(index), job) for index, job in enumerate(jobs)]
+    def test_only_new_or_changed_prefiltered_jobs_are_queued(self):
+        with tempfile.TemporaryDirectory() as directory:
+            stats = process_notifications(
+                {
+                    "included": [
+                        make_job("new"),
+                        make_job("changed", is_new=False, content_changed=True),
+                        make_job("known", is_new=False),
+                    ],
+                    "excluded": [],
+                },
+                state_path=Path(directory) / "state.json",
+            )
+        self.assertEqual(stats["queued"], 2)
+        self.assertEqual(stats["ready"], 2)
 
-        chunks = notification_chunks(candidates)
-        payload = discord_payload([job for _key, job in chunks[0]])
+    def test_reviewed_job_is_not_queued(self):
+        with tempfile.TemporaryDirectory() as directory:
+            stats = process_notifications(
+                {"included": [make_job(status="ignored")], "excluded": []},
+                state_path=Path(directory) / "state.json",
+            )
+        self.assertEqual(stats["queued"], 0)
 
-        self.assertGreaterEqual(len(chunks), 2)
-        self.assertLessEqual(len(chunks[0]), 10)
-        self.assertEqual(payload["allowed_mentions"], {"parse": []})
-        self.assertIn("Junior Python Developer", payload["embeds"][0]["title"])
-        fields = {
-            field["name"]: field["value"]
-            for field in payload["embeds"][0]["fields"]
-        }
-        self.assertEqual(fields["Level"], "Einsteiger / Junior")
-        self.assertIn("Python-Projekte", fields["Pro"])
-        self.assertIn("Docker", fields["Contra"])
-        self.assertEqual(
-            payload["embeds"][0]["url"],
-            "https://example.test/job:0",
-        )
+    def test_successful_delivery_is_sent_only_once(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.json"
+            client = FakeClient()
+            first = process_notifications(
+                {"included": [make_job()], "excluded": []}, send=True,
+                webhook_url="https://discord.test/webhook", client=client, state_path=path,
+            )
+            second = process_notifications(
+                {"included": [make_job()], "excluded": []}, send=True,
+                webhook_url="https://discord.test/webhook", client=client, state_path=path,
+            )
+        self.assertEqual(first["sent"], 1)
+        self.assertEqual(second["sent"], 0)
+        self.assertEqual(len(client.payloads), 1)
 
-    def test_explicit_portal_career_level_overrides_inferred_level(self):
-        job = make_job()
-        job["career_levels"] = ["Berufseinstieg/Trainee"]
-        fields = {
-            field["name"]: field["value"] for field in discord_embed(job)["fields"]
-        }
+    def test_failed_delivery_remains_pending(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.json"
+            stats = process_notifications(
+                {"included": [make_job()], "excluded": [],}, send=True,
+                webhook_url="https://discord.test/webhook",
+                client=FakeClient(NotificationError("nicht erreichbar")), state_path=path,
+            )
+            state = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(stats["failed"], 1)
+        self.assertEqual(len(state["pending"]), 1)
 
-        self.assertEqual(fields["Level"], "Berufseinstieg/Trainee")
+    def test_embed_contains_only_compact_rule_facts(self):
+        embed = discord_embed(make_job())
+        fields = {field["name"]: field["value"] for field in embed["fields"]}
+        self.assertEqual(embed["title"], "Junior Python Developer")
+        self.assertEqual(fields["Vorfilter"], "82/100")
+        self.assertEqual(fields["Einstieg"], "klare Einstiegsstelle")
+        self.assertEqual(fields["Standortprüfung"], "100% remote Deutschland")
+        self.assertNotIn("description", embed)
+        self.assertNotIn("Pro", fields)
 
-    def test_embed_prefers_application_url_from_any_source(self):
-        job = make_job()
-        job["sources"] = [
-            {"url": "https://portal.test/job"},
-            {
-                "url": "https://arbeitnow.test/job",
-                "application_url": "https://company.test/job",
-            },
-        ]
-
-        self.assertEqual(discord_embed(job)["url"], "https://company.test/job")
-
-    def test_webhook_requests_delivery_confirmation(self):
-        url = webhook_url_with_confirmation(
-            "https://discord.test/webhook?thread_id=123"
-        )
-
-        self.assertIn("thread_id=123", url)
-        self.assertIn("wait=true", url)
-
-    def test_run_summary_includes_source_breakdown_and_disables_mentions(self):
+    def test_run_summary_contains_no_ai_statistics(self):
         payload = run_summary_payload(
             {
-                "duration": "2 Min. 05 Sek.",
-                "jobs_total": 20,
-                "jobs_new": 3,
-                "jobs_known": 17,
-                "included": 5,
-                "excluded": 15,
-                "analyzed": 2,
-                "cached": 3,
-                "analysis_failed": 0,
-                "analysis_blocked": 2,
-                "analysis_reason_summary": "2 neu, 1 Wiederholung nach Fehler",
-                "recommended": 2,
-                "not_recommended": 3,
-                "sources": [
-                    {
-                        "label": "Arbeitsagentur",
-                        "status": "success",
-                        "jobs": 12,
-                        "new": 2,
-                    },
-                    {
-                        "label": "StepStone",
-                        "status": "failed",
-                        "jobs": 0,
-                        "new": 0,
-                    },
-                ],
+                "duration": "10 Sek.", "jobs_total": 100, "jobs_new": 3,
+                "jobs_known": 97, "included": 20, "excluded": 80,
+                "review_updates": 2,
+                "sources": [{"label": "StepStone", "status": "success", "jobs": 10, "new": 1}],
             }
         )
-
+        self.assertIn("20 zur Prüfung", payload["content"])
+        self.assertIn("Review: 2 neu oder aktualisiert", payload["content"])
+        self.assertNotIn("KI", payload["content"])
         self.assertEqual(payload["allowed_mentions"], {"parse": []})
-        self.assertIn("20 gesamt (3 neu, 17 bekannt)", payload["content"])
-        self.assertIn("2 Validierungsfehler pausiert", payload["content"])
-        self.assertIn(
-            "KI-Anlässe: 2 neu, 1 Wiederholung nach Fehler",
-            payload["content"],
-        )
-        self.assertIn("Arbeitsagentur: 12 Stellen, 2 neu", payload["content"])
-        self.assertIn("StepStone: Fehler", payload["content"])
-        self.assertNotIn("KI-Nutzung", payload["content"])
-
-        summary_with_costs = {
-            "duration": "2 Min. 05 Sek.",
-            "jobs_total": 20,
-            "jobs_new": 3,
-            "jobs_known": 17,
-            "included": 5,
-            "excluded": 15,
-            "analyzed": 2,
-            "cached": 3,
-            "analysis_failed": 0,
-            "recommended": 2,
-            "not_recommended": 3,
-            "sources": [],
-            "model_usage": [
-                "KI-Nutzung: Modellaufrufe: 5 · Korrekturversuche: 1 · "
-                "technisch fehlgeschlagen: 1",
-                "Tokens: 12.345 Input (2.345 davon Cache) · "
-                "678 Output (78 davon Reasoning)",
-                "WARNUNG: Modellaufrufe ohne Tokenangaben: 1",
-            ],
-        }
-        cost_payload = run_summary_payload(summary_with_costs)
-        self.assertIn(
-            "KI-Nutzung: Modellaufrufe: 5 · Korrekturversuche: 1",
-            cost_payload["content"],
-        )
-        self.assertIn(
-            "Tokens: 12.345 Input (2.345 davon Cache)",
-            cost_payload["content"],
-        )
-        self.assertIn("Modellaufrufe ohne Tokenangaben: 1", cost_payload["content"])
-
-    def test_run_summary_reports_missing_webhook_without_sending(self):
-        self.assertIn(
-            "DISCORD_WEBHOOK_URL",
-            send_run_summary({"sources": []}, webhook_url=None),
-        )
 
 
 if __name__ == "__main__":

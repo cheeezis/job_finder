@@ -1,276 +1,133 @@
 # Job Finder
 
-Ein kleiner, lokal betriebener Job Finder für konfigurierbare IT-Rollen,
-einen persönlichen Suchradius oder vollständig remote angebotene Stellen.
+Ein schlanker, lokal betriebener Job Finder für IT-Einstiegsstellen. Er sammelt
+Stellen aus mehreren Quellen, vereinheitlicht und dedupliziert sie, verwirft
+klare Fehlgriffe regelbasiert und legt die übrigen Stellen zur persönlichen
+Entscheidung vor.
 
-## Aktueller Stand
+## Funktionen
 
-Der Job Finder kann:
+- Quellen: Arbeitsagentur, StepStone, get-in-IT, Arbeitnow, Himalayas, Jobicy,
+  Startup Jobs sowie ausgewählte direkte Karriereseiten
+- ein einheitliches Jobmodell und quellenübergreifende Deduplizierung
+- lokale Detail-Caches und ein Gedächtnis für bekannte und inaktive Stellen
+- regelbasierter Vorfilter für Standort, Remote-Anteil, Erfahrungsniveau,
+  Beschäftigungsart, Reisetätigkeit und grobe IT-Eignung
+- sichtbare Junior-Hybrid-Sonderfälle und internationale Stellen, die sich im
+  Review bei Bedarf zuschalten lassen
+- manueller Import einer einzelnen Stellenanzeige per URL
+- lokale Review-Oberfläche mit Interessant-, Rückfrage-, Ignorieren- und
+  Bewerben-Workflow
+- Bewerbungsübersicht mit Verlauf, Gesprächsterminen und Statistik
+- Discord-Nachrichten für neue oder inhaltlich geänderte Stellen sowie eine
+  kompakte Laufstatistik
+- isolierte Quellenfehler, Laufprotokolle und rotierende Backups wichtiger
+  lokaler Zustände
 
-- Arbeitsagentur-Suchergebnisse für definierte Suchbegriffe abrufen
-- StepStone-Suchergebnisse für definierte Suchbegriffe abrufen
-- StepStone-Detailseiten lokal cachen und Zugriffsgrenzen respektieren
-- bekannte Detailseiten aller Quellen sieben Tage lokal wiederverwenden
-- get-in-IT-Suchergebnisse über die öffentliche JSON-API abrufen
-- Arbeitnow-Stellen über die kostenlose öffentliche API abrufen
-- Entry-Level-Remote-Stellen über die öffentliche Himalayas-API abrufen
-- aktuelle Engineering-Stellen über die offizielle Startup-Jobs-API abrufen
-- Remote-IT-Stellen über die öffentliche Jobicy-API abrufen
-- direkte Karriereseiten von JUMO, EDAG, CSS, Proemion, NETHINKS, Compose IT, bytewerk und RhönEnergie abrufen
-- einzelne Stellenanzeigen per Link gezielt importieren und bewerten
-- alle Quellen in ein verbindliches Jobmodell überführen
-- Rohbeschreibung, Klartext sowie Veröffentlichungs- und Abrufdaten speichern
-- Jobs kostenlos vorfiltern und passende neue Jobs per OpenAI bewerten
-- persönliche Match-Scores von 0 bis 100 nach klaren Jobsuch-Prioritäten erzeugen
-- quellenübergreifende Duplikate zusammenführen
-- bereits gesehene Jobs intern merken
-- nach drei erfolgreichen, vergeblichen Quellensuchen nicht mehr gefundene Jobs
-  als inaktiv markieren
-- kompakte KI-Empfehlungen als JSON ausgeben
-- Fehler einer Quelle isolieren und die übrigen Quellen weiterverarbeiten
-- jeden Lauf protokollieren und wichtige interne Daten rotierend sichern
+Der Vorfilter-Score ist keine persönliche Eignungsprognose. Er macht nur
+transparent, warum eine Stelle den regelbasierten Filter passiert hat. Die
+endgültige Bewertung bleibt bewusst beim Nutzer.
 
-Die persönliche Bewertung priorisiert zuerst einen realistischen Berufseinstieg
-(50 Punkte), danach Standort und Homeoffice (30 Punkte). Die grobe fachliche
-Richtung (15 Punkte) und bereits vorhandene Technologien (5 Punkte) sind
-nachgeordnet. Nur eine klar einstiegsfreundliche Stelle kann `strong_match`
-werden; ein unsicherer Einstieg oder eine vage Anzeige bleibt höchstens
-`borderline`.
+## Einrichtung
 
-Die kostenlose Vorfilterung verwirft nur klare Konflikte wie unpassenden
-Standort, ausgeschlossene Beschäftigungsarten, eindeutige Führungs-/Seniorrollen,
-mehr als drei geforderte Erfahrungsjahre oder hohe Reisetätigkeit. Ungewohnte
-IT-Richtungen und Technologien erreichen dagegen die persönliche KI-Bewertung.
-Klar bezeichnete Junior-, Trainee-, Graduate- und Einstiegsrollen dürfen bei
-ausdrücklich möglichem Homeoffice auch außerhalb des Suchgebiets zur manuellen
-Prüfung weiterlaufen; der notwendige Präsenzumfang bleibt dabei als deutlicher
-Standorthinweis erhalten.
-Ein genanntes Gehalt unter dem konfigurierten Minimum wird als Warnung angezeigt, aber nicht
-vorab ausgeschlossen.
-
-## Nutzung
-
-Abhängigkeiten installieren:
+Virtuelle Projektumgebung anlegen und Abhängigkeiten installieren:
 
 ```powershell
-python -m pip install -r requirements.txt
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-Persönliche Konfiguration einmalig aus den öffentlichen Beispielen anlegen:
+Persönliche Sucheinstellungen anlegen:
 
 ```powershell
 Copy-Item user_settings.example.yaml user_settings.local.yaml
-Copy-Item profile.example.yaml profile.local.yaml
 ```
 
-`user_settings.local.yaml`, `profile.local.yaml` und alle Dateien unter `data/`
-bleiben lokal und werden nicht von Git erfasst. Ohne lokale Dateien verwendet
-der Job Finder die anonymisierten Beispiele.
+`user_settings.local.yaml` enthält unter anderem Suchort, Suchradius,
+Pendlerorte und fachliche Stichwörter. Die Datei wird von Git ignoriert. Ohne
+lokale Datei wird die anonymisierte Beispielkonfiguration verwendet.
 
-Die beiden lokalen Dateien danach an die eigene Suche und das belegbare Profil
-anpassen. Insbesondere dürfen Profilangaben keine nicht vorhandenen Kenntnisse,
-Erfahrungen oder Abschlüsse enthalten.
+Für Discord kann `DISCORD_WEBHOOK_URL` als Umgebungsvariable gesetzt werden.
+Die Quelle Startup Jobs ist optional und wird nur mit gesetztem
+`STARTUP_JOBS_API_KEY` aktiviert.
+
+## Nutzung
+
+Finder ohne Discord-Versand starten:
+
+```powershell
+.\.venv\Scripts\python.exe run_finder.py
+```
+
+Finder mit Discord-Versand starten:
+
+```powershell
+.\.venv\Scripts\python.exe run_finder.py --notify
+```
+
+Lokale Oberfläche öffnen:
+
+```powershell
+review_jobs.bat
+```
+
+Danach stehen zur Verfügung:
+
+- `http://127.0.0.1:8765/` – Startseite und manueller Import
+- `http://127.0.0.1:8765/review` – Stellen prüfen
+- `http://127.0.0.1:8765/applications` – Bewerbungen und Statistik
+
+## Ablauf
+
+1. Die Quellen liefern Suchtreffer und Detaildaten.
+2. URLs und inhaltlich gleiche Stellen werden zusammengeführt.
+3. Das lokale Gedächtnis erkennt neue, bekannte, geänderte und inaktive Jobs.
+4. Der Vorfilter schließt klare Konflikte aus und versieht die übrigen Stellen
+   mit nachvollziehbaren Kategorien für IT-Bereich, Einstieg und Standort.
+5. Alle durchgelassenen Stellen erscheinen im Review. Neue oder geänderte
+   Stellen können zusätzlich an Discord gesendet werden.
+6. Bewerbungen werden getrennt vom Stellen-Review dauerhaft nachverfolgt.
+
+Direkte Arbeitnow-Anzeigen mit vollständigem Text bleiben unverändert. Nur bei
+dem bekannten Platzhaltertext wird nach bestandenem Vorfilter die verlinkte
+Originalanzeige geladen. Review und Discord verwenden anschließend bevorzugt
+deren URL.
 
 ## Lokale Daten und Datenschutz
 
-Das Repository enthält nur anonymisierte Konfigurationsbeispiele. Folgende
-Inhalte bleiben bewusst ausserhalb von Git:
+Persönliche Einstellungen, gefundene Stellen, Bewerbungsverläufe, Caches,
+Benachrichtigungsstatus und Laufprotokolle liegen unter ignorierten lokalen
+Dateien beziehungsweise unter `data/`. Sie gehören nicht ins Repository.
+Zugangsdaten werden ausschließlich über Umgebungsvariablen erwartet.
 
-- persönliche Profil- und Sucheinstellungen
-- gefundene Stellen, Detail-Caches und manuelle Review-Notizen
-- LLM-Ergebnisse und Benachrichtigungsstatus
-- `OPENAI_API_KEY` und `DISCORD_WEBHOOK_URL`
-- der optionale `STARTUP_JOBS_API_KEY`
-
-Vor einem Fork oder einer Veröffentlichung sollte `git status --ignored`
-kontrolliert werden. Lokale Konfigurationen, der Ordner `data/` und echte
-Zugangsdaten dürfen nicht erzwungen zu Git hinzugefügt werden.
-
-Kompletter Finder-Lauf mit Vorfilter und KI-Bewertung:
+Vor einer Veröffentlichung empfiehlt sich:
 
 ```powershell
-python run_finder.py
+git status --ignored
 ```
 
-Empfehlungen lokal im Browser durchsehen und ihren Status speichern:
+## Tests
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests
+```
+
+Die Tests bleiben absichtlich im Repository: Sie dokumentieren die Regeln und
+schützen insbesondere Deduplizierung, Quellenadapter, Review-Workflow und
+Bewerbungsverlauf vor Regressionen.
+
+## Projektstruktur
 
 ```text
-review_jobs.bat doppelklicken
-```
-
-Die Oberfläche läuft nur auf dem eigenen Computer. Beim Start führt eine
-schlichte Auswahl entweder zu `Stellen prüfen` oder zu `Bewerbungen verwalten`.
-Auf der Startseite kann außerdem eine einzelne Stellenanzeige per Link
-eingereicht werden. Nur diese Anzeige durchläuft dann Vorfilter und beide
-KI-Stufen; ein Konflikt mit dem automatischen Vorfilter bleibt dabei als
-Warnung sichtbar.
-Im Stellen-Review werden Empfehlungen als interessant, nicht interessant oder
-beworben markiert. Internationale Treffer sind dort standardmäßig ausgeblendet
-und lassen sich bei Bedarf zuschalten. Auch Stellen ohne gültige KI-Bewertung
-bleiben für die manuelle Prüfung erhalten. Alle späteren Bewerbungsschritte
-werden ausschließlich in der Bewerbungsübersicht gepflegt. Beide Bereiche
-verwenden das bestehende Job-Gedächtnis unter `data/internal/seen_jobs.json`.
-
-Die Bewerbungsübersicht speichert datierte Statuswechsel, zeigt auch nicht mehr
-aktive Stellen und berechnet daraus lokale Kennzahlen. Für Gespräche kann
-zusätzlich ein optionaler Termin mit Datum und Uhrzeit hinterlegt werden. Bei
-älteren Bewerbungen
-ohne gespeichertes Datum bleibt das Datum bewusst unbekannt. Der finale Status
-`Keine Rückmeldung` wird nach 14 Tagen ohne Reaktion aus dem gespeicherten
-Bewerbungsdatum abgeleitet, ohne dafür ein erfundenes Ereignisdatum in den
-Verlauf zu schreiben. Eine spätere Antwort öffnet die Bewerbung wieder. Die
-Kartenliste zeigt standardmäßig nur laufende Bewerbungen. Abgeschlossene
-Bewerbungen bleiben in der Statistik und können bei Bedarf zur Korrektur
-eingeblendet werden; Status und Datum einzelner Verlaufsereignisse lassen sich
-dort ändern oder löschen.
-
-Ein kostenbegrenzter Testlauf analysiert höchstens einen neuen passenden Job:
-
-```powershell
-python run_finder.py --llm-limit 1
-```
-
-Passende und grenzwertige neue oder aktualisierte Empfehlungen für Discord
-vormerken, ohne sie zu senden, geschieht automatisch bei jedem Lauf. Die
-Nachrichten enthalten Kurzbeschreibung, Erfahrungslevel sowie Pro und Contra.
-Für den echten Versand muss
-der Webhook als `DISCORD_WEBHOOK_URL` gesetzt und der Versand explizit aktiviert
-werden:
-
-```powershell
-$env:DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/..."
-python run_finder.py --notify
-```
-
-Der Webhook bleibt ausserhalb der gespeicherten Dateien. Erfolgreich gesendete
-Jobversionen werden nicht erneut gemeldet; Fehler bleiben für den nächsten
-Lauf vorgemerkt. Nach jedem Lauf mit `--notify` folgt eine kompakte
-Laufstatistik mit Laufzeit, Vorfilter- und KI-Zahlen, Modellaufrufen und
-Tokenverbrauch sowie einer Aufschlüsselung der gefundenen Stellen nach Quelle.
-Endgültige lokale Validierungsfehler werden für unveränderte Stellen pausiert,
-damit sie nicht täglich erneut kostenpflichtig analysiert werden. Änderungen an
-Stelle, Profil oder KI-Konfiguration geben die Analyse wieder frei; technische
-Provider- und Netzwerkfehler bleiben erneut versuchbar.
-
-Startup Jobs ist eine optionale Quelle. Nach dem Erstellen eines kostenlosen
-API-Keys unter `https://startup.jobs/account/api_keys` wird sie durch die
-Umgebungsvariable `STARTUP_JOBS_API_KEY` automatisch aktiviert:
-
-```powershell
-$env:STARTUP_JOBS_API_KEY = "sj_..."
-python run_finder.py
-```
-
-Jeder Lauf schreibt seine kompakte Terminalausgabe zusätzlich nach
-`data/logs/`. Vor dem Verändern persistenter Daten werden Job-Gedächtnis,
-LLM-Cache und Discord-Versandstatus als ZIP unter `data/backups/` gesichert.
-Es bleiben höchstens die sieben neuesten Sicherungen erhalten.
-
-Scheitert eine komplette Quelle unerwartet, wird der Fehler protokolliert und
-der Lauf mit den übrigen Quellen fortgesetzt. Eine Stelle gilt erst dann als
-inaktiv, wenn sie in drei erfolgreichen Läufen ihrer bekannten Quellen nicht
-mehr gefunden wurde. Fehlgeschlagene oder leere Quellensuchen zählen dabei
-nicht als Verschwinden.
-
-## Optionaler automatischer Betrieb
-
-`python run_finder.py --notify` kann beispielsweise über die Windows-
-Aufgabenplanung täglich gestartet werden. Die Aufgabe selbst ist nicht Teil
-des Repositorys und muss lokal eingerichtet werden. `OPENAI_API_KEY` und
-`DISCORD_WEBHOOK_URL` sollten dabei als lokale Umgebungsvariablen gesetzt und
-nicht in Skripten oder versionierten Dateien gespeichert werden.
-
-Nur vorhandene interne Jobs regelbasiert prüfen, ohne Dateien zu erzeugen:
-
-```powershell
-python -m job_finder.main
-```
-
-Scoring-, Filter- und Deduplizierungsregeln testen:
-
-```powershell
-python -m unittest discover -s tests -v
-```
-
-Die automatisierten Tests benötigen keine echten Zugangsdaten und führen
-keine kostenpflichtigen OpenAI-Aufrufe aus. Das LLM-Benchmark verwendet 26
-vollständig synthetische, manuell bewertete Stellenanzeigen. Firmen, URLs und
-Anzeigentexte darin sind erfunden.
-
-`gpt-5.4-mini` ist nach Development-, Holdout- und Reserve-Vergleich das
-Standardmodell. Die OpenAI-Anbindung verwendet `OPENAI_API_KEY`:
-
-```powershell
-python -m llm_evaluation.compare_models --limit 1
-```
-
-Die vollständige Zwei-Stufen-Pipeline gegen den Development-Split testen:
-
-```powershell
-python -m llm_evaluation.compare_models --split development
-```
-
-## Struktur
-
-```text
-job_finder/                  produktiver Anwendungscode
-job_finder/config.py         Suchbegriffe und Suchorte
-job_finder/console.py        gemeinsame Konsolenkonfiguration
-job_finder/http.py           gemeinsame HTTP-Helfer
-job_finder/llm/              wiederverwendbare LLM-Komponenten
-job_finder/llm/contract.py   Rubrik und strukturierter Antwortvertrag
-job_finder/llm/fit_score.py  Scoring für validierte Zwei-Stufen-Ergebnisse
-job_finder/llm/profile_loader.py Laden und Validieren des LLM-Profils
-job_finder/llm/openai.py     Client für strukturierte OpenAI-Antworten
-job_finder/llm/service.py    produktive Zwei-Stufen-Analyse und LLM-Cache
-job_finder/models.py         einheitliches Job- und Statusmodell
-job_finder/operations.py     Laufprotokolle und rotierende Datensicherungen
-job_finder/paths.py          gemeinsame interne und externe Datenpfade
-job_finder/profile.py        Profil-, Skill- und Scoring-Regeln
-job_finder/deduplication.py  quellenübergreifende Job-Deduplizierung
-job_finder/remote.py         gemeinsame Remote-Erkennung
-job_finder/reporting.py      kompakte JSON-Ausgabe der Empfehlungen
-job_finder/applications.py  Bewerbungsverlauf und daraus abgeleitete Kennzahlen
-job_finder/applications.html getrennte lokale Bewerbungsübersicht
-job_finder/landing.html      lokale Startseite der Browseroberfläche
-job_finder/review.py         lokaler Webserver für die Browseroberfläche
-job_finder/review.html       lokale Browseroberfläche für Entscheidungen
-job_finder/search_plan.py    gemeinsame Suchplan-Helfer
-job_finder/structured_data.py gemeinsame JSON-LD-Auswertung
-job_finder/text.py           gemeinsame Text-/HTML-Helfer
-job_finder/sources/          Quellenadapter
-data/internal/jobs.json     vollständige kanonische Jobdaten
-data/internal/seen_jobs.json lokales Job-Gedächtnis
-data/internal/stepstone_cache.json technischer StepStone-Cache
-data/internal/arbeitsagentur_cache.json Detailcache der Arbeitsagentur
-data/internal/get_in_it_cache.json Detailcache von get-in-IT
-data/internal/arbeitnow_cache.json Detailcache von Arbeitnow
-data/internal/jumo_cache.json       Detailcache von JUMO
-data/internal/edag_cache.json       Detailcache von EDAG
-data/internal/css_cache.json        Detailcache von CSS
-data/internal/proemion_cache.json   Detailcache von Proemion
-data/internal/nethinks_cache.json   Detailcache von NETHINKS
-data/internal/compose_it_cache.json Detailcache von Compose IT
-data/internal/bytewerk_cache.json   Detailcache von bytewerk
-data/internal/rhoenenergie_cache.json Detailcache der RhönEnergie-Gruppe
-data/internal/llm_cache.json LLM-Ergebnisse und ausstehende Analysen
-data/internal/notifications.json Versand- und Wiederholungsstatus
-data/output/recommendations.json kompakte finale KI-Ergebnisse
-data/logs/                  kompakte Protokolle einzelner Läufe
-data/backups/               sieben neueste Sicherungen persistenter Zustandsdaten
-profile.example.yaml        anonymisierte Vorlage für das LLM-Profil
-profile.local.yaml          lokale persönliche Faktenbasis (nicht versioniert)
-user_settings.example.yaml  anonymisierte Vorlage für Suche und Vorfilter
-user_settings.local.yaml    lokale Such- und Filterwerte (nicht versioniert)
-llm_evaluation/             getrenntes Labor für LLM-Vergleiche
-llm_evaluation/fixtures/    blinde Testeingaben und menschliche Bewertungen
-llm_evaluation/results/     lokale, nicht versionierte Modellergebnisse
-requirements.txt            Python-Abhängigkeiten
-tests/                      automatisierte Scoring- und Filtertests
-run_finder.py                kompletter Finder-Lauf
-review_jobs.bat             anklickbarer Start der Review-Oberfläche
+job_finder/             Kernlogik, Quellen, Review und Bewerbungsverwaltung
+job_finder/sources/     einzelne Quellenadapter
+tests/                  automatisierte Tests
+run_finder.py           produktiver Kommandozeilen-Einstieg
+review_jobs.bat         Start der lokalen Weboberfläche
+user_settings.example.yaml  anonymisierte Konfigurationsvorlage
+data/                   ausschließlich lokale Laufdaten (nicht versioniert)
 ```
 
 ## Lizenz
 
-Der Quellcode steht unter der [MIT-Lizenz](LICENSE).
+Dieses Projekt steht unter der MIT-Lizenz. Details enthält `LICENSE`.

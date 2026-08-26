@@ -1,4 +1,4 @@
-"""Integration test for the model-based offline pipeline."""
+"""Integration test for the rule-based offline pipeline."""
 
 import json
 import tempfile
@@ -42,17 +42,6 @@ class PipelineTests(unittest.TestCase):
 
             restored_jobs = load_jobs(jobs_path)
             results = score_jobs(restored_jobs)
-            results["included"][0]["llm_score"] = 90
-            results["included"][0]["llm_result"] = {
-                "recommendation": "strong_match",
-                "confidence": "high",
-                "summary": "Passende Einstiegsstelle.",
-                "tasks": [],
-                "requirements": [],
-                "matching_evidence": [],
-                "gaps": [],
-                "risks": [],
-            }
             write_recommendations(
                 results,
                 json_path=directory_path / "recommendations.json",
@@ -72,6 +61,7 @@ class PipelineTests(unittest.TestCase):
             review["recommendations"][0]["url"],
             "https://example.test/jobs/123",
         )
+        self.assertIn("match_percent", review["recommendations"][0])
 
 
 if __name__ == "__main__":

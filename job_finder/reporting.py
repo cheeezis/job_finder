@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 
 from job_finder.paths import RECOMMENDATIONS_JSON
+from job_finder.text import text_is_mainly_english
 
 
 INTERNATIONAL_LOCATION_TERMS = {
@@ -18,6 +19,24 @@ INTERNATIONAL_LOCATION_TERMS = {
     "worldwide",
 }
 INTERNATIONAL_REMOTE_SOURCES = {"himalayas", "jobicy", "startup_jobs"}
+FOREIGN_COUNTRY_TERMS = {
+    "australia",
+    "austria",
+    "belgium",
+    "canada",
+    "czechia",
+    "france",
+    "india",
+    "ireland",
+    "italy",
+    "netherlands",
+    "poland",
+    "spain",
+    "sweden",
+    "switzerland",
+    "united kingdom",
+    "united states",
+}
 ROLE_LABELS = {
     "general_it": "Allgemeine IT",
     "software_development": "Softwareentwicklung",
@@ -84,7 +103,7 @@ def recommendation_for_job(job):
 
 
 def is_international_listing(job):
-    """Return whether a listing has a broad or multi-country location scope."""
+    """Recognize broad scopes and clearly international feed listings."""
     locations = [
         str(value).strip()
         for value in job.get("locations", [])
@@ -97,15 +116,17 @@ def is_international_listing(job):
         for source in job.get("sources", job.get("source_links", []))
         if isinstance(source, dict)
     }
-    from_international_feed = bool(
+    exclusively_from_international_feeds = bool(
         source_names and source_names <= INTERNATIONAL_REMOTE_SOURCES
     )
-    if from_international_feed:
-        return True
-    if "deutschland" in normalized or "germany" in normalized:
-        return False
     words = set(re.findall(r"[a-zäöüß]+", normalized))
     if words & INTERNATIONAL_LOCATION_TERMS:
+        return True
+    if any(country in normalized for country in FOREIGN_COUNTRY_TERMS):
+        return True
+    if exclusively_from_international_feeds and text_is_mainly_english(
+        f"{job.get('title', '')} {job.get('description_clean', '')}"
+    ):
         return True
     return False
 

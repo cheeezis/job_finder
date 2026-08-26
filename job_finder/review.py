@@ -48,7 +48,7 @@ def load_review_jobs(
     review_jobs = []
     for recommendation in recommendations:
         job = dict(recommendation)
-        job["international"] = is_international_listing(job)
+        job["international"] = bool(job.get("international")) or is_international_listing(job)
         memory_id, entry = memory_entry_for_job(job, memory)
         job["id"] = memory_id
         job["workflow_status"] = entry.get(

@@ -94,6 +94,23 @@ class ReviewTests(unittest.TestCase):
 
         self.assertTrue(jobs[0]["international"])
 
+    def test_review_jobs_preserve_stored_international_language_classification(self):
+        document = json.loads(self.recommendations_path.read_text(encoding="utf-8"))
+        document["recommendations"][0].update(
+            {
+                "locations": ["Germany"],
+                "source_links": [
+                    {"source": "jobicy", "url": "https://example.test/job"}
+                ],
+                "international": True,
+            }
+        )
+        self.recommendations_path.write_text(json.dumps(document), encoding="utf-8")
+
+        jobs = load_review_jobs(self.recommendations_path, self.memory_path)
+
+        self.assertTrue(jobs[0]["international"])
+
     def test_stale_recommendation_id_resolves_through_known_url(self):
         memory = load_memory(self.memory_path)
         memory["job:1"]["workflow_status"] = "applied"

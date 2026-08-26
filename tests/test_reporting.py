@@ -59,7 +59,7 @@ class ReportingTests(unittest.TestCase):
         self.assertNotIn("reasons", recommendation)
         self.assertNotIn("llm_score", recommendation)
 
-    def test_international_listing_requires_broad_location_without_germany(self):
+    def test_international_listing_uses_scope_language_and_source(self):
         for locations in (["weltweit"], ["Europe"]):
             with self.subTest(locations=locations):
                 self.assertTrue(is_international_listing({"locations": locations}))
@@ -68,17 +68,44 @@ class ReportingTests(unittest.TestCase):
                 self.assertFalse(is_international_listing({"locations": locations}))
         self.assertTrue(
             is_international_listing(
-                {"locations": ["Remote"], "sources": [{"source": "startup_jobs"}]}
+                {
+                    "title": "Software Engineer",
+                    "description_clean": (
+                        "We build products and we need your experience. "
+                        "You own your work and communicate with customers."
+                    ),
+                    "locations": ["Griesheim", "Büttelborn", "Germany"],
+                    "sources": [{"source": "jobicy"}],
+                }
             )
         )
         self.assertFalse(
             is_international_listing(
-                {"locations": ["Remote"], "sources": [{"source": "stepstone"}]}
+                {
+                    "title": "Softwareentwickler",
+                    "description_clean": (
+                        "Wir entwickeln Software und suchen dich. Deine Aufgaben "
+                        "und Kenntnisse besprechen wir gemeinsam."
+                    ),
+                    "locations": ["Griesheim", "Büttelborn", "Germany"],
+                    "sources": [{"source": "himalayas"}],
+                }
             )
         )
-        self.assertTrue(
+        self.assertFalse(
             is_international_listing(
-                {"locations": ["Germany"], "sources": [{"source": "jobicy"}]}
+                {
+                    "title": "Software Engineer",
+                    "description_clean": (
+                        "We build products and we need your experience. "
+                        "You own your work and communicate with customers."
+                    ),
+                    "locations": ["Germany"],
+                    "sources": [
+                        {"source": "jobicy"},
+                        {"source": "stepstone"},
+                    ],
+                }
             )
         )
         self.assertTrue(

@@ -27,7 +27,7 @@ from job_finder.profile import (
     SKILL_GROUPS,
     STRONG_EXPERIENCE_PHRASES,
 )
-from job_finder.text import normalize_text
+from job_finder.text import normalize_text, text_is_mainly_english
 
 
 EXPERIENCE_TERM = (
@@ -592,14 +592,6 @@ def salary_number(value):
 
 def valid_salary(value):
     return 20_000 <= value <= 200_000
-
-
-def text_is_mainly_english(text):
-    german_words = ["und", "wir", "du", "sie", "deine", "ihre", "aufgaben", "kenntnisse"]
-    english_words = ["and", "we", "you", "your", "responsibilities", "requirements", "experience"]
-    german_count = sum(len(re.findall(keyword_pattern(word), text)) for word in german_words)
-    english_count = sum(len(re.findall(keyword_pattern(word), text)) for word in english_words)
-    return english_count >= 5 and english_count > german_count * 2
 
 
 def contains_any(text, words):

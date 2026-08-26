@@ -11,6 +11,7 @@ class WorkflowStatus(str, Enum):
     NEW = "new"
     REVIEW = "review"
     INTERESTING = "interesting"
+    INQUIRY = "inquiry"
     IGNORED = "ignored"
     APPLIED = "applied"
     RESPONSE = "response"

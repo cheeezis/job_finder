@@ -100,12 +100,14 @@ def is_international_listing(job):
     from_international_feed = bool(
         source_names and source_names <= INTERNATIONAL_REMOTE_SOURCES
     )
+    if from_international_feed:
+        return True
     if "deutschland" in normalized or "germany" in normalized:
-        return from_international_feed and len(locations) > 1
+        return False
     words = set(re.findall(r"[a-zäöüß]+", normalized))
     if words & INTERNATIONAL_LOCATION_TERMS:
         return True
-    return words == {"remote"} and from_international_feed
+    return False
 
 
 def primary_url(job):

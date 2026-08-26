@@ -78,6 +78,11 @@ class ReportingTests(unittest.TestCase):
         )
         self.assertTrue(
             is_international_listing(
+                {"locations": ["Germany"], "sources": [{"source": "jobicy"}]}
+            )
+        )
+        self.assertTrue(
+            is_international_listing(
                 {
                     "locations": ["Canada", "Germany", "India"],
                     "sources": [{"source": "himalayas"}],

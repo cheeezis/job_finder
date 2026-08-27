@@ -224,6 +224,36 @@ class StudySmarterTests(unittest.TestCase):
             )
         )
 
+    def test_current_search_metadata_replaces_stale_cached_prefilter_fields(self):
+        record = {
+            "id": 12345678,
+            "link": self.JOB_URL,
+            "title": "Junior Python Developer (m/w/d)",
+            "company_name": "Example GmbH",
+            "locations": ["Fulda"],
+            "is_remote_positions": "partly",
+            "job_types": [{"name": "Vollzeit"}],
+            "posted": "2026-08-20",
+        }
+        cached = studysmarter.job_from_record(record, self.JOB_HTML)
+        cached.title = "Senior Developer"
+        cached.locations = ["München"]
+        cached.work_mode = WorkMode.ONSITE
+        cached.remote_percentage = 0
+
+        with tempfile.TemporaryDirectory() as directory:
+            cache_path = Path(directory) / "studysmarter.json"
+            save_detail_cache(cache_path, {self.JOB_URL: cached})
+            with patch.object(studysmarter, "collect_records", return_value=[record]):
+                jobs = studysmarter.fetch_jobs(cache_path=cache_path)
+
+        self.assertEqual(jobs[0].title, "Junior Python Developer (m/w/d)")
+        self.assertEqual(jobs[0].locations, ["Fulda"])
+        self.assertEqual(jobs[0].work_mode, WorkMode.HYBRID)
+        self.assertIsNone(jobs[0].remote_percentage)
+        self.assertEqual(jobs[0].description_clean, cached.description_clean)
+        self.assertTrue(jobs[0].content_changed)
+
     def test_search_url_contains_filters_and_page(self):
         url = studysmarter.build_search_url(
             {

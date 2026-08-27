@@ -1,6 +1,7 @@
 """StudySmarter source adapter using its public read-only jobs API."""
 
 import time
+from dataclasses import replace
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -51,13 +52,42 @@ def fetch_jobs(cache_path=CACHE_FILE, now=None):
         url = canonical_detail_url(record.get("link", ""))
         if not url:
             continue
+        summary = summary_job_from_record(record)
         cached_job = cache.get(url)
         if cached_job:
-            cached_job.content_changed = False
-            jobs.append(cached_job)
+            jobs.append(with_current_summary(cached_job, summary))
         else:
-            jobs.append(summary_job_from_record(record))
+            jobs.append(summary)
     return jobs
+
+
+def with_current_summary(cached_job, summary):
+    """Keep cached detail text but refresh fields exposed by the search API."""
+    current = replace(
+        cached_job,
+        id=summary.id,
+        title=summary.title or cached_job.title,
+        company=summary.company or cached_job.company,
+        locations=(
+            summary.locations
+            if summary.locations != ["unbekannt"]
+            else cached_job.locations
+        ),
+        sources=summary.sources,
+        work_mode=(
+            summary.work_mode
+            if summary.work_mode is not WorkMode.UNKNOWN
+            else cached_job.work_mode
+        ),
+        remote_percentage=(
+            summary.remote_percentage
+            if summary.work_mode is not WorkMode.UNKNOWN
+            else cached_job.remote_percentage
+        ),
+        employment_type=summary.employment_type or cached_job.employment_type,
+        published_at=summary.published_at or cached_job.published_at,
+    )
+    return mark_content_change(current, cached_job)
 
 
 def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE, now=None):

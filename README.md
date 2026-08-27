@@ -7,8 +7,8 @@ Entscheidung vor.
 
 ## Funktionen
 
-- Quellen: Arbeitsagentur, StepStone, get-in-IT, Arbeitnow, Himalayas, Jobicy,
-  Startup Jobs sowie ausgewählte direkte Karriereseiten
+- Quellen: Arbeitsagentur, StepStone, get-in-IT, Arbeitnow, StudySmarter,
+  Himalayas, Jobicy, Startup Jobs sowie ausgewählte direkte Karriereseiten
 - ein einheitliches Jobmodell und quellenübergreifende Deduplizierung
 - lokale Detail-Caches und ein Gedächtnis für bekannte und inaktive Stellen
 - regelbasierter Vorfilter für Standort, Remote-Anteil, Erfahrungsniveau,
@@ -92,6 +92,10 @@ Direkte Arbeitnow-Anzeigen mit vollständigem Text bleiben unverändert. Nur bei
 dem bekannten Platzhaltertext wird nach bestandenem Vorfilter die verlinkte
 Originalanzeige geladen. Review und Discord verwenden anschließend bevorzugt
 deren URL.
+
+StudySmarter wird lokal im konfigurierten Radius und deutschlandweit nach
+vollständig remote möglichen Einstiegsrollen durchsucht. Detailseiten werden
+erst nach dem ersten Vorfilter geladen und anschließend sieben Tage gecacht.
 
 ## Lokale Daten und Datenschutz
 

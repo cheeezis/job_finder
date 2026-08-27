@@ -33,6 +33,7 @@ from job_finder.sources import proemion
 from job_finder.sources import rhoenenergie
 from job_finder.sources import stepstone
 from job_finder.sources import startup_jobs
+from job_finder.sources import studysmarter
 from job_finder.sources.common import canonical_detail_url as canonical_url
 
 
@@ -44,6 +45,7 @@ SOURCES = [
     himalayas,
     jobicy,
     *([startup_jobs] if startup_jobs.is_configured() else []),
+    studysmarter,
     manual,
     compose_it,
     bytewerk,
@@ -105,6 +107,7 @@ def run_pipeline(args):
     results = score_jobs(jobs)
     candidate_ids = {job["id"] for job in results["included"]}
     enriched = arbeitnow.enrich_candidate_jobs(jobs, candidate_ids)
+    enriched += studysmarter.enrich_candidate_jobs(jobs, candidate_ids)
     if enriched:
         results = score_jobs(jobs)
     JOBS_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -267,6 +270,7 @@ def source_label(name):
         "himalayas": "Himalayas",
         "jobicy": "Jobicy",
         "startup_jobs": "Startup Jobs",
+        "studysmarter": "StudySmarter",
         "manual": "Manuell hinzugefügt",
         "compose_it": "Compose IT",
         "bytewerk": "bytewerk",

@@ -316,6 +316,8 @@ class ReviewTests(unittest.TestCase):
                 landing_page = response.read().decode("utf-8")
             with urlopen(f"{base_url}/review") as response:
                 review_page = response.read().decode("utf-8")
+            with urlopen(f"{base_url}/review?job=job%3A1") as response:
+                targeted_review_page = response.read().decode("utf-8")
             with urlopen(f"{base_url}/applications") as response:
                 applications_page = response.read().decode("utf-8")
         finally:
@@ -324,6 +326,7 @@ class ReviewTests(unittest.TestCase):
             thread.join()
 
         self.assertIn('href="/review"', landing_page)
+        self.assertEqual(targeted_review_page, review_page)
         self.assertIn('href="/applications"', landing_page)
         self.assertIn("Stellen prüfen", landing_page)
         self.assertIn("Bewerbungen verwalten", landing_page)

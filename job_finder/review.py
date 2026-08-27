@@ -6,6 +6,7 @@ import threading
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from job_finder.applications import (
     delete_history_event,
@@ -241,19 +242,20 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         """Return the page or the current joined recommendation data."""
-        if self.path in {"/", "/index.html"}:
+        request_path = urlsplit(self.path).path
+        if request_path in {"/", "/index.html"}:
             self.send_file(self.landing_page_path, "text/html; charset=utf-8")
             return
-        if self.path in {"/review", "/review.html"}:
+        if request_path in {"/review", "/review.html"}:
             self.send_file(self.page_path, "text/html; charset=utf-8")
             return
-        if self.path in {"/applications", "/applications.html"}:
+        if request_path in {"/applications", "/applications.html"}:
             self.send_file(
                 self.applications_page_path,
                 "text/html; charset=utf-8",
             )
             return
-        if self.path == "/api/recommendations":
+        if request_path == "/api/recommendations":
             self.send_json(
                 {
                     "recommendations": load_review_jobs(
@@ -265,14 +267,15 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
                 }
             )
             return
-        if self.path == "/api/applications":
+        if request_path == "/api/applications":
             self.send_json(load_application_overview(self.memory_path))
             return
         self.send_error(404)
 
     def do_POST(self):
         """Persist a workflow status selected in the browser."""
-        if self.path not in {
+        request_path = urlsplit(self.path).path
+        if request_path not in {
             "/api/status",
             "/api/applications",
             "/api/review-status",
@@ -285,7 +288,7 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
         try:
             length = int(self.headers.get("Content-Length", "0"))
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-            if self.path == "/api/manual-import":
+            if request_path == "/api/manual-import":
                 result = type(self).manual_importer(
                     payload.get("url"),
                     cache_path=self.manual_cache_path,
@@ -293,18 +296,18 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
                     memory_path=self.memory_path,
                     recommendations_path=self.recommendations_path,
                 )
-            elif self.path == "/api/applications":
+            elif request_path == "/api/applications":
                 result = start_application(
                     payload["job_id"],
                     self.memory_path,
                 )
-            elif self.path == "/api/review-status":
+            elif request_path == "/api/review-status":
                 result = update_review_decision(
                     payload["job_id"],
                     payload["workflow_status"],
                     self.memory_path,
                 )
-            elif self.path == "/api/status":
+            elif request_path == "/api/status":
                 result = {
                     "workflow_status": update_workflow_status(
                         payload["job_id"],
@@ -314,7 +317,7 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
                         payload.get("scheduled_for"),
                     )
                 }
-            elif self.path == "/api/history":
+            elif request_path == "/api/history":
                 result = update_workflow_history(
                     payload["job_id"],
                     payload["event_index"],

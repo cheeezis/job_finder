@@ -106,8 +106,7 @@ def run_pipeline(args):
     print("\n3/4 Vorfilter")
     results = score_jobs(jobs)
     candidate_ids = {job["id"] for job in results["included"]}
-    enriched = arbeitnow.enrich_candidate_jobs(jobs, candidate_ids)
-    enriched += studysmarter.enrich_candidate_jobs(jobs, candidate_ids)
+    enriched = enrich_candidate_jobs(jobs, candidate_ids)
     if enriched:
         results = score_jobs(jobs)
     JOBS_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -192,6 +191,16 @@ def collect_jobs(sources=None):
             jobs.append(job)
 
     return deduplicate_jobs(jobs), source_reports
+
+
+def enrich_candidate_jobs(jobs, candidate_ids, sources=None):
+    """Run the optional second detail step offered by individual sources."""
+    enriched = 0
+    for source in sources or SOURCES:
+        enricher = getattr(source, "enrich_candidate_jobs", None)
+        if enricher is not None:
+            enriched += enricher(jobs, candidate_ids)
+    return enriched
 
 
 def print_source_summary(source_reports, total_jobs):

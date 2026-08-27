@@ -14,6 +14,7 @@ from run_finder import (
     build_run_summary,
     canonical_url,
     collect_jobs,
+    enrich_candidate_jobs,
     format_duration,
     run_pipeline,
     source_error_label,
@@ -33,6 +34,24 @@ def make_job(job_id):
 
 
 class RunFinderTests(unittest.TestCase):
+    def test_every_source_can_offer_optional_candidate_enrichment(self):
+        calls = []
+        plain_source = SimpleNamespace(SOURCE_NAME="plain")
+        detailed_source = SimpleNamespace(
+            SOURCE_NAME="detailed",
+            enrich_candidate_jobs=lambda jobs, ids: calls.append((jobs, ids)) or 2,
+        )
+        jobs = [make_job("detailed:1")]
+
+        enriched = enrich_candidate_jobs(
+            jobs,
+            {"detailed:1"},
+            [plain_source, detailed_source],
+        )
+
+        self.assertEqual(enriched, 2)
+        self.assertEqual(calls, [(jobs, {"detailed:1"})])
+
     def test_pipeline_persists_jobs_after_arbeitnow_enrichment(self):
         job = make_job("arbeitnow:1")
         results = {"included": [{"id": job.id}], "excluded": []}

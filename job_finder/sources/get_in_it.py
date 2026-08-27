@@ -8,7 +8,6 @@ can contain malformed escaping.
 import json
 import re
 from html import unescape
-from pathlib import Path
 from urllib.parse import urlencode, urljoin
 
 from job_finder.config import (
@@ -23,16 +22,11 @@ from job_finder.paths import GET_IN_IT_CACHE_FILE
 from job_finder.remote import classify_remote, detect_remote
 from job_finder.search_plan import append_unique, iter_search_queries, unique_in_order
 from job_finder.sources.common import (
-    DETAIL_CACHE_SAVE_INTERVAL,
-    canonical_detail_url,
-    detail_is_fresh,
     extract_annual_salary_eur,
     extract_schema_locations,
-    load_detail_cache,
-    mark_content_change,
+    fetch_cached_details,
     normalize_employment_type,
     parse_published_date,
-    save_detail_cache,
     source_job_id,
     utc_now,
 )
@@ -69,44 +63,13 @@ def fetch_jobs(cache_path=CACHE_FILE, now=None):
     links = collect_links()
     if not links:
         return []
-
-    cache_file = Path(cache_path)
-    cache = load_detail_cache(cache_file)
-    jobs = []
-    unsaved_details = 0
-    detail_errors = 0
-    stale_fallbacks = 0
-    for url in links:
-        cache_key = canonical_detail_url(url)
-        cached_job = cache.get(cache_key)
-        if detail_is_fresh(cached_job, now):
-            cached_job.content_changed = False
-            jobs.append(cached_job)
-            continue
-
-        try:
-            job = fetch_job(url)
-            mark_content_change(job, cached_job)
-            jobs.append(job)
-            cache[cache_key] = job
-            unsaved_details += 1
-            if unsaved_details >= DETAIL_CACHE_SAVE_INTERVAL:
-                save_detail_cache(cache_file, cache)
-                unsaved_details = 0
-        except Exception:
-            detail_errors += 1
-            if cached_job:
-                cached_job.content_changed = False
-                jobs.append(cached_job)
-                stale_fallbacks += 1
-    if unsaved_details:
-        save_detail_cache(cache_file, cache)
-    if detail_errors:
-        print(
-            f"WARNUNG get-in-IT: {detail_errors} Detailseite(n) "
-            f"nicht erreichbar, {stale_fallbacks} aus altem Cache übernommen"
-        )
-    return jobs
+    return fetch_cached_details(
+        links,
+        cache_path,
+        fetch_job,
+        "get-in-IT",
+        now=now,
+    )
 
 
 def collect_links():

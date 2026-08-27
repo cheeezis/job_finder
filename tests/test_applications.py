@@ -223,6 +223,42 @@ class ApplicationTrackingTests(unittest.TestCase):
             [{"source": "stepstone", "url": "https://example.test/job"}],
         )
 
+    def test_application_overview_exposes_only_public_document_metadata(self):
+        self.save_jobs(
+            {
+                "job:1": {
+                    "workflow_status": "applied",
+                    "workflow_history": [
+                        {"status": "applied", "occurred_on": "2026-08-01"}
+                    ],
+                    "application_documents": [
+                        {
+                            "id": "document-1",
+                            "kind": "cover_letter",
+                            "name": "Anschreiben.pdf",
+                            "stored_name": "private-name.pdf",
+                        }
+                    ],
+                }
+            }
+        )
+
+        documents = load_application_overview(
+            self.memory_path,
+            as_of=date(2026, 8, 2),
+        )["applications"][0]["documents"]
+
+        self.assertEqual(
+            documents,
+            [
+                {
+                    "id": "document-1",
+                    "kind": "cover_letter",
+                    "name": "Anschreiben.pdf",
+                }
+            ],
+        )
+
     def test_statistics_use_complete_history_and_response_dates(self):
         self.save_jobs(
             {

@@ -2,11 +2,19 @@
 
 import argparse
 import json
+import mimetypes
 import threading
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, quote, urlsplit
+
+from job_finder.application_documents import (
+    document_path,
+    find_document,
+    remove_documents,
+    store_documents,
+)
 
 from job_finder.applications import (
     delete_history_event,
@@ -21,6 +29,7 @@ from job_finder.manual_import import import_manual_url
 from job_finder.memory import load_memory, preferred_memory_id, save_memory
 from job_finder.models import WorkflowStatus
 from job_finder.paths import (
+    APPLICATION_DOCUMENTS_DIR,
     JOBS_FILE,
     MANUAL_CACHE_FILE,
     MEMORY_FILE,
@@ -33,6 +42,7 @@ LANDING_PAGE = Path(__file__).with_name("landing.html")
 REVIEW_PAGE = Path(__file__).with_name("review.html")
 APPLICATIONS_PAGE = Path(__file__).with_name("applications.html")
 ROUTE_ORIGIN = f"{LOCAL_SEARCH_POSTAL_CODE} {LOCAL_SEARCH_LOCATION}".strip()
+MAX_REQUEST_BYTES = 45 * 1024 * 1024
 
 
 def load_review_jobs(
@@ -186,7 +196,12 @@ def undo_ignored_decision(
     }
 
 
-def start_application(job_id, memory_path=MEMORY_FILE):
+def start_application(
+    job_id,
+    memory_path=MEMORY_FILE,
+    documents=None,
+    documents_dir=APPLICATION_DOCUMENTS_DIR,
+):
     """Record the first application without overwriting later progress."""
     memory = load_memory(memory_path)
     if job_id not in memory:
@@ -200,8 +215,15 @@ def start_application(job_id, memory_path=MEMORY_FILE):
             ),
             "application_tracked": True,
         }
+    stored_documents = store_documents(job_id, documents, documents_dir)
+    if stored_documents:
+        entry["application_documents"] = stored_documents
     status = record_status_change(entry, WorkflowStatus.APPLIED)
-    save_memory(memory, memory_path)
+    try:
+        save_memory(memory, memory_path)
+    except OSError:
+        remove_documents(job_id, stored_documents, documents_dir)
+        raise
     return {
         "workflow_status": status,
         "application_tracked": True,
@@ -267,6 +289,7 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
     memory_path = MEMORY_FILE
     jobs_path = JOBS_FILE
     manual_cache_path = MANUAL_CACHE_FILE
+    application_documents_dir = APPLICATION_DOCUMENTS_DIR
     manual_importer = staticmethod(import_manual_url)
     landing_page_path = LANDING_PAGE
     page_path = REVIEW_PAGE
@@ -302,6 +325,9 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
         if request_path == "/api/applications":
             self.send_json(load_application_overview(self.memory_path))
             return
+        if request_path == "/api/application-document":
+            self.send_application_document()
+            return
         self.send_error(404)
 
     def do_POST(self):
@@ -320,6 +346,8 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
+            if length > MAX_REQUEST_BYTES:
+                raise ValueError("Anfrage ist zu groß")
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
             if request_path == "/api/manual-import":
                 result = type(self).manual_importer(
@@ -333,6 +361,8 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
                 result = start_application(
                     payload["job_id"],
                     self.memory_path,
+                    payload.get("documents"),
+                    self.application_documents_dir,
                 )
             elif request_path == "/api/review-status":
                 result = update_review_decision(
@@ -393,6 +423,35 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
             return
         self.send_json(result)
 
+    def send_application_document(self):
+        """Return one document referenced by the matching memory entry."""
+        query = parse_qs(urlsplit(self.path).query)
+        try:
+            job_id = first_query_value(query, "job_id")
+            document_id = first_query_value(query, "document_id")
+            memory = load_memory(self.memory_path)
+            entry = memory[job_id]
+            metadata = find_document(entry, document_id)
+            path = document_path(
+                job_id,
+                metadata,
+                self.application_documents_dir,
+            )
+            content = path.read_bytes()
+        except (KeyError, ValueError, OSError):
+            self.send_error(404)
+            return
+        content_type = mimetypes.guess_type(metadata["name"])[0]
+        self.send_response(200)
+        self.send_header("Content-Type", content_type or "application/octet-stream")
+        self.send_header("Content-Length", str(len(content)))
+        self.send_header(
+            "Content-Disposition",
+            f"attachment; filename*=UTF-8''{quote(metadata['name'])}",
+        )
+        self.end_headers()
+        self.wfile.write(content)
+
     def send_file(self, path, content_type):
         """Return one UTF-8 page from disk."""
         try:
@@ -417,6 +476,14 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
 
     def log_message(self, format, *args):
         """Keep the launcher quiet during normal browser requests."""
+
+
+def first_query_value(query, name):
+    """Require one non-empty query parameter."""
+    values = query.get(name, [])
+    if len(values) != 1 or not values[0]:
+        raise ValueError(f"Fehlender Parameter: {name}")
+    return values[0]
 
 
 def parse_args():

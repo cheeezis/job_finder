@@ -48,6 +48,7 @@
     .new-event-title { margin: 18px 0 0; font-weight: 650; }
     .empty-history, .note, .empty, .error { color: #607087; }
     .note { padding: 10px 12px; background: #f7f8fa; border-radius: 9px; }
+    .documents { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 12px 0; font-size: .9rem; }
     .event-form { display: grid; grid-template-columns: 1fr 170px 210px auto; gap: 10px; align-items: end; margin-top: 14px; }
     .history-form { display: grid; grid-template-columns: 1fr 170px 210px auto; gap: 10px; align-items: end; }
     .form-actions { display: flex; gap: 7px; }
@@ -196,6 +197,27 @@
     });
     menu.append(summary, options);
     parent.append(menu);
+  }
+
+  function appendDocuments(parent, application) {
+    const documents = application.documents || [];
+    if (!documents.length) return;
+    const container = make("div", null, "documents");
+    container.append(make("strong", "Bewerbungsunterlagen:"));
+    documents.forEach(document => {
+      const link = make(
+        "a",
+        document.kind === "cover_letter" ? "Anschreiben" : "Lebenslauf"
+      );
+      const query = new URLSearchParams({
+        job_id: application.id,
+        document_id: document.id
+      });
+      link.href = `/api/application-document?${query}`;
+      link.title = document.name;
+      container.append(link);
+    });
+    parent.append(container);
   }
 
   function renderStats(stats) {
@@ -466,6 +488,7 @@
       appendSourceLinks(meta, application);
       card.append(meta);
       if (application.review_note) card.append(make("p", application.review_note, "note"));
+      appendDocuments(card, application);
       renderTimeline(application, card);
       container.append(card);
     });

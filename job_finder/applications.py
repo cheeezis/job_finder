@@ -2,6 +2,7 @@
 
 from datetime import date, datetime, timedelta
 
+from job_finder.application_documents import public_documents
 from job_finder.memory import load_memory
 from job_finder.models import WorkflowStatus
 from job_finder.paths import MEMORY_FILE
@@ -315,6 +316,7 @@ def application_row(job_id, entry, as_of=None):
             default=None,
         ),
         "workflow_history": history,
+        "documents": public_documents(entry),
         "automatic_no_response": (
             current_status == WorkflowStatus.NO_RESPONSE.value
             and WorkflowStatus.NO_RESPONSE.value not in statuses

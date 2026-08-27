@@ -1,5 +1,6 @@
 """Tests for the local recommendation review workflow."""
 
+import base64
 from datetime import date
 import json
 import tempfile
@@ -7,6 +8,7 @@ import threading
 import unittest
 from http.server import HTTPServer
 from pathlib import Path
+from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from job_finder.memory import load_memory, save_memory
@@ -223,6 +225,32 @@ class ReviewTests(unittest.TestCase):
             [{"status": "applied", "occurred_on": date.today().isoformat()}],
         )
 
+    def test_start_application_archives_supplied_documents(self):
+        documents_directory = self.directory / "application_documents"
+
+        start_application(
+            "job:1",
+            self.memory_path,
+            [
+                {
+                    "kind": "cover_letter",
+                    "name": "Anschreiben.pdf",
+                    "content": base64.b64encode(b"%PDF application").decode(
+                        "ascii"
+                    ),
+                }
+            ],
+            documents_directory,
+        )
+
+        document = load_memory(self.memory_path)["job:1"][
+            "application_documents"
+        ][0]
+        stored_files = list(documents_directory.rglob("*.pdf"))
+        self.assertEqual(document["name"], "Anschreiben.pdf")
+        self.assertEqual(len(stored_files), 1)
+        self.assertEqual(stored_files[0].read_bytes(), b"%PDF application")
+
     def test_start_application_does_not_overwrite_later_progress(self):
         memory = load_memory(self.memory_path)
         memory["job:1"].update(
@@ -362,6 +390,10 @@ class ReviewTests(unittest.TestCase):
         self.assertIn('id="manual-import-form"', landing_page)
         self.assertIn('fetch("/api/manual-import"', landing_page)
         self.assertIn("Als beworben markieren", review_page)
+        self.assertIn('id="application-dialog"', review_page)
+        self.assertIn('id="cover-letter-file"', review_page)
+        self.assertIn('id="resume-file"', review_page)
+        self.assertIn("selectedDocuments()", review_page)
         self.assertIn("Rückfrage nötig", review_page)
         self.assertIn('changeStatus("inquiry")', review_page)
         self.assertIn('id="undo-ignored"', review_page)
@@ -397,6 +429,8 @@ class ReviewTests(unittest.TestCase):
         self.assertNotIn("progress-select", review_page)
         self.assertIn('href="/">← Zur Startseite</a>', review_page)
         self.assertIn("Bewerbungsübersicht", applications_page)
+        self.assertIn("appendDocuments(card, application);", applications_page)
+        self.assertIn("/api/application-document?${query}", applications_page)
         self.assertIn('inquiry: "Rückfrage offen"', applications_page)
         self.assertIn('href="/">← Zur Startseite</a>', applications_page)
         self.assertIn("application.automatic_no_response", applications_page)
@@ -487,6 +521,50 @@ class ReviewTests(unittest.TestCase):
         self.assertTrue(result["application_tracked"])
         self.assertEqual(overview["statistics"]["total"], 1)
         self.assertEqual(overview["applications"][0]["id"], "job:1")
+
+    def test_application_document_can_be_downloaded_from_overview_link(self):
+        documents_directory = self.directory / "application_documents"
+        start_application(
+            "job:1",
+            self.memory_path,
+            [
+                {
+                    "kind": "resume",
+                    "name": "Lebenslauf.pdf",
+                    "content": base64.b64encode(b"%PDF resume").decode("ascii"),
+                }
+            ],
+            documents_directory,
+        )
+        document = load_memory(self.memory_path)["job:1"][
+            "application_documents"
+        ][0]
+        handler = type(
+            "TemporaryDocumentHandler",
+            (ReviewRequestHandler,),
+            {
+                "memory_path": self.memory_path,
+                "application_documents_dir": documents_directory,
+            },
+        )
+        server = HTTPServer(("127.0.0.1", 0), handler)
+        thread = threading.Thread(target=server.serve_forever)
+        thread.start()
+        query = urlencode({"job_id": "job:1", "document_id": document["id"]})
+        try:
+            with urlopen(
+                f"http://127.0.0.1:{server.server_port}"
+                f"/api/application-document?{query}"
+            ) as response:
+                content = response.read()
+                disposition = response.headers["Content-Disposition"]
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join()
+
+        self.assertEqual(content, b"%PDF resume")
+        self.assertIn("Lebenslauf.pdf", disposition)
 
     def test_local_api_loads_jobs_and_persists_status(self):
         handler = type(

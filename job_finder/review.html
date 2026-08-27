@@ -56,6 +56,12 @@
     button.inquiry { color: #704c0b; border-color: #d5ad61; background: #fff8e8; }
     button.inquiry:hover { background: #fff1cf; }
     button.ignore { color: #8a3840; }
+    dialog { width: min(560px, calc(100% - 32px)); padding: 0; border: 0; border-radius: 16px; box-shadow: 0 18px 60px rgba(28, 39, 58, .25); }
+    dialog::backdrop { background: rgba(23, 32, 51, .45); }
+    .application-form { display: grid; gap: 18px; padding: 26px; }
+    .application-form h2, .application-form p { margin: 0; }
+    .application-form p { color: #607087; line-height: 1.45; }
+    .dialog-actions { display: flex; justify-content: end; gap: 10px; }
     .navigation { display: flex; justify-content: space-between; margin-top: 16px; }
     .empty, .error { padding: 36px; text-align: center; color: #607087; }
     .error { color: #8a3840; }
@@ -149,6 +155,23 @@
     <button id="previous">← Zurück</button>
     <button id="next">Weiter →</button>
   </nav>
+
+  <dialog id="application-dialog">
+    <form id="application-form" class="application-form">
+      <h2>Bewerbung speichern</h2>
+      <p>Füge die tatsächlich versendeten Unterlagen hinzu. Beide Dateien sind optional und werden nur lokal gespeichert.</p>
+      <label>Anschreiben
+        <input id="cover-letter-file" type="file" accept=".pdf,.doc,.docx,.odt">
+      </label>
+      <label>Lebenslauf
+        <input id="resume-file" type="file" accept=".pdf,.doc,.docx,.odt">
+      </label>
+      <div class="dialog-actions">
+        <button id="application-cancel" type="button">Abbrechen</button>
+        <button id="application-save" class="primary" type="submit">Als beworben speichern</button>
+      </div>
+    </form>
+  </dialog>
 </main>
 
 <script>
@@ -422,7 +445,27 @@
     render();
   }
 
-  async function startApplication() {
+  async function filePayload(kind, file) {
+    if (!file) return null;
+    if (file.size > 15 * 1024 * 1024) throw new Error("Eine Datei darf höchstens 15 MB groß sein");
+    const content = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.addEventListener("load", () => resolve(String(reader.result).split(",", 2)[1] || ""));
+      reader.addEventListener("error", () => reject(new Error("Datei konnte nicht gelesen werden")));
+      reader.readAsDataURL(file);
+    });
+    return {kind, name: file.name, content};
+  }
+
+  async function selectedDocuments() {
+    const documents = await Promise.all([
+      filePayload("cover_letter", element("cover-letter-file").files[0]),
+      filePayload("resume", element("resume-file").files[0])
+    ]);
+    return documents.filter(Boolean);
+  }
+
+  async function startApplication(documents) {
     const job = visibleJobs[currentIndex];
     const button = element("mark-applied");
     button.disabled = true;
@@ -430,11 +473,12 @@
       const response = await fetch("/api/applications", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({job_id: job.id})
+        body: JSON.stringify({job_id: job.id, documents})
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Bewerbung konnte nicht gespeichert werden");
       applyWorkflowResult(job, result);
+      element("application-dialog").close();
     } finally {
       button.disabled = false;
     }
@@ -500,8 +544,24 @@
     undoIgnored().catch(showError)
   );
   element("mark-applied").addEventListener("click", () =>
-    startApplication().catch(showError)
+    element("application-dialog").showModal()
   );
+  element("application-cancel").addEventListener("click", () =>
+    element("application-dialog").close()
+  );
+  element("application-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const button = element("application-save");
+    button.disabled = true;
+    try {
+      await startApplication(await selectedDocuments());
+      event.target.reset();
+    } catch (error) {
+      showError(error);
+    } finally {
+      button.disabled = false;
+    }
+  });
   function showError(error) { window.alert(error.message); }
   load();
 </script>

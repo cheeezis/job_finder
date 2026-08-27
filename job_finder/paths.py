@@ -9,6 +9,7 @@ INTERNAL_DIR = DATA_DIR / "internal"
 OUTPUT_DIR = DATA_DIR / "output"
 LOG_DIR = DATA_DIR / "logs"
 BACKUP_DIR = DATA_DIR / "backups"
+APPLICATION_DOCUMENTS_DIR = INTERNAL_DIR / "application_documents"
 
 JOBS_FILE = INTERNAL_DIR / "jobs.json"
 MEMORY_FILE = INTERNAL_DIR / "seen_jobs.json"

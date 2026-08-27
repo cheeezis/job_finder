@@ -13,6 +13,7 @@ from job_finder.applications import (
     is_application,
     load_application_overview,
     record_status_change,
+    synchronize_current_status,
     update_history_event,
 )
 from job_finder.config import LOCAL_SEARCH_LOCATION, LOCAL_SEARCH_POSTAL_CODE
@@ -154,6 +155,37 @@ def update_review_decision(
     }
 
 
+def undo_ignored_decision(
+    job_id,
+    expected_status,
+    memory_path=MEMORY_FILE,
+):
+    """Remove the latest ignored transition and restore its prior status."""
+    memory = load_memory(memory_path)
+    if job_id not in memory:
+        raise KeyError(f"Unbekannte Job-ID: {job_id}")
+    entry = memory[job_id]
+    if is_application(entry):
+        raise ValueError("Bewerbungsstatus kann hier nicht rückgängig gemacht werden")
+    if entry.get("workflow_status") != WorkflowStatus(expected_status).value:
+        raise ValueError("Die Stelle wurde zwischenzeitlich geändert")
+    if expected_status != WorkflowStatus.IGNORED.value:
+        raise ValueError("Nur die letzte Nicht-interessant-Entscheidung ist rückgängig")
+    history = entry.get("workflow_history")
+    if not isinstance(history, list) or not history:
+        raise ValueError("Keine Entscheidung zum Rückgängigmachen gefunden")
+    last_event = history[-1]
+    if not isinstance(last_event, dict) or last_event.get("status") != expected_status:
+        raise ValueError("Die letzte Entscheidung hat sich zwischenzeitlich geändert")
+    history.pop()
+    status = synchronize_current_status(entry)
+    save_memory(memory, memory_path)
+    return {
+        "workflow_status": status,
+        "application_tracked": False,
+    }
+
+
 def start_application(job_id, memory_path=MEMORY_FILE):
     """Record the first application without overwriting later progress."""
     memory = load_memory(memory_path)
@@ -279,6 +311,7 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
             "/api/status",
             "/api/applications",
             "/api/review-status",
+            "/api/review-undo",
             "/api/history",
             "/api/history/delete",
             "/api/manual-import",
@@ -305,6 +338,12 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
                 result = update_review_decision(
                     payload["job_id"],
                     payload["workflow_status"],
+                    self.memory_path,
+                )
+            elif request_path == "/api/review-undo":
+                result = undo_ignored_decision(
+                    payload["job_id"],
+                    payload["expected_status"],
                     self.memory_path,
                 )
             elif request_path == "/api/status":

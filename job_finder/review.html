@@ -134,6 +134,7 @@
         <button id="mark-interesting" class="primary">Interessant</button>
         <button id="mark-inquiry" class="inquiry">Rückfrage nötig</button>
         <button id="mark-ignored" class="ignore">Nicht interessant</button>
+        <button id="undo-ignored" hidden>↶ Rückgängig</button>
       </div>
       <div class="utility-actions">
         <button id="mark-applied">Als beworben markieren</button>
@@ -178,6 +179,7 @@
   let visibleJobs = [];
   let currentIndex = 0;
   let routeOrigin = "";
+  let undoDecision = null;
 
   const element = id => document.getElementById(id);
 
@@ -310,6 +312,7 @@
   }
 
   function render() {
+    element("undo-ignored").hidden = !undoDecision;
     const hasJobs = visibleJobs.length > 0;
     element("card").hidden = !hasJobs;
     element("navigation").hidden = !hasJobs;
@@ -377,6 +380,7 @@
 
   async function changeStatus(workflowStatus) {
     const job = visibleJobs[currentIndex];
+    const previousStatus = job.workflow_status;
     const response = await fetch("/api/review-status", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
@@ -387,7 +391,35 @@
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || "Status konnte nicht gespeichert werden");
+    undoDecision = workflowStatus === "ignored"
+      ? {jobId: job.id, expectedStatus: result.workflow_status, previousStatus}
+      : null;
     applyWorkflowResult(job, result);
+  }
+
+  async function undoIgnored() {
+    if (!undoDecision) return;
+    const decision = undoDecision;
+    const response = await fetch("/api/review-undo", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        job_id: decision.jobId,
+        expected_status: decision.expectedStatus
+      })
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Entscheidung konnte nicht rückgängig gemacht werden");
+    const job = jobs.find(item => item.id === decision.jobId);
+    if (job) job.workflow_status = result.workflow_status;
+    undoDecision = null;
+    if ([...element("status-filter").options].some(option => option.value === result.workflow_status)) {
+      element("status-filter").value = result.workflow_status;
+    }
+    applyFilters();
+    const restoredIndex = visibleJobs.findIndex(item => item.id === decision.jobId);
+    if (restoredIndex >= 0) currentIndex = restoredIndex;
+    render();
   }
 
   async function startApplication() {
@@ -415,10 +447,12 @@
       const result = await response.json();
       routeOrigin = result.route_origin || "";
       jobs = result.recommendations.sort((a, b) => {
+        const score = (b.match_percent ?? -1) - (a.match_percent ?? -1);
+        if (score) return score;
         const published = String(b.published_at || "").localeCompare(String(a.published_at || ""));
         if (published) return published;
         const firstSeen = String(b.first_seen_at || "").localeCompare(String(a.first_seen_at || ""));
-        return firstSeen || (b.match_percent ?? -1) - (a.match_percent ?? -1);
+        return firstSeen;
       });
       addOptions(
         element("status-filter"),
@@ -461,6 +495,9 @@
   );
   element("mark-ignored").addEventListener("click", () =>
     changeStatus("ignored").catch(showError)
+  );
+  element("undo-ignored").addEventListener("click", () =>
+    undoIgnored().catch(showError)
   );
   element("mark-applied").addEventListener("click", () =>
     startApplication().catch(showError)

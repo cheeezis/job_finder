@@ -18,6 +18,7 @@ from job_finder.review import (
     load_review_jobs,
     start_application,
     update_review_decision,
+    undo_ignored_decision,
     update_workflow_status,
 )
 from job_finder.config import LOCAL_SEARCH_LOCATION, LOCAL_SEARCH_POSTAL_CODE
@@ -284,6 +285,34 @@ class ReviewTests(unittest.TestCase):
             "inquiry",
         )
 
+    def test_latest_ignored_decision_can_be_undone(self):
+        update_review_decision("job:1", "ignored", self.memory_path)
+
+        result = undo_ignored_decision(
+            "job:1",
+            "ignored",
+            self.memory_path,
+        )
+
+        entry = load_memory(self.memory_path)["job:1"]
+        self.assertEqual(result["workflow_status"], "interesting")
+        self.assertEqual(entry["workflow_status"], "interesting")
+        self.assertEqual(
+            entry["workflow_history"],
+            [{"status": "interesting", "occurred_on": None}],
+        )
+
+    def test_ignored_undo_rejects_a_changed_decision(self):
+        update_review_decision("job:1", "ignored", self.memory_path)
+        update_review_decision("job:1", "inquiry", self.memory_path)
+
+        with self.assertRaisesRegex(ValueError, "zwischenzeitlich"):
+            undo_ignored_decision(
+                "job:1",
+                "ignored",
+                self.memory_path,
+            )
+
     def test_invalid_status_is_rejected_without_changing_memory(self):
         with self.assertRaises(ValueError):
             update_workflow_status("job:1", "maybe", self.memory_path)
@@ -335,6 +364,12 @@ class ReviewTests(unittest.TestCase):
         self.assertIn("Als beworben markieren", review_page)
         self.assertIn("Rückfrage nötig", review_page)
         self.assertIn('changeStatus("inquiry")', review_page)
+        self.assertIn('id="undo-ignored"', review_page)
+        self.assertIn('fetch("/api/review-undo"', review_page)
+        self.assertLess(
+            review_page.index("const score ="),
+            review_page.index("const published ="),
+        )
         self.assertNotIn("Meine Notiz", review_page)
         self.assertNotIn('/api/note', review_page)
         self.assertIn("Ergebnis des Vorfilters", review_page)

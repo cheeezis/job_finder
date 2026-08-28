@@ -43,7 +43,11 @@ class CommuterSearchTests(unittest.TestCase):
             patch.object(get_in_it, "GET_IN_IT_SEARCH_TERMS", []),
             patch.object(get_in_it, "GET_IN_IT_SEARCH_LOCATIONS", []),
             patch.object(get_in_it, "COMMUTER_SEARCH_TERMS", ["Junior Developer"]),
-            patch.object(get_in_it, "COMMUTER_SEARCH_LOCATIONS", ["Beispielstadt"]),
+            patch.object(
+                get_in_it,
+                "COMMUTER_SEARCH_LOCATIONS",
+                ["Beispielstadt"],
+            ),
         ):
             searches = list(get_in_it.build_api_searches())
 

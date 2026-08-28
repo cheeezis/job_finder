@@ -720,28 +720,28 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(result["filter_status"], "excluded")
         self.assertIn("Master", result["reasons"][0])
 
-    @patch("job_finder.scoring.SALARY_TARGET", 83_000)
-    @patch("job_finder.scoring.SALARY_MINIMUM", 73_000)
+    @patch("job_finder.scoring.SALARY_TARGET", 99_000)
+    @patch("job_finder.scoring.SALARY_MINIMUM", 77_000)
     def test_salary_range_with_target_inside_is_allowed(self):
         result = score_job(
-            make_job(description="Jahresgehalt 42.000 - 50.000 EUR brutto.")
+            make_job(description="Jahresgehalt 80.000 - 105.000 EUR brutto.")
         )
         self.assertEqual(result["filter_status"], "included")
 
-    @patch("job_finder.scoring.SALARY_TARGET", 83_000)
-    @patch("job_finder.scoring.SALARY_MINIMUM", 73_000)
+    @patch("job_finder.scoring.SALARY_TARGET", 99_000)
+    @patch("job_finder.scoring.SALARY_MINIMUM", 77_000)
     def test_salary_below_minimum_is_a_warning_not_an_exclusion(self):
-        result = score_job(make_job(description="Jahresgehalt 44.000 EUR brutto."))
+        result = score_job(make_job(description="Jahresgehalt 70.000 EUR brutto."))
         self.assertEqual(result["filter_status"], "included")
         self.assertTrue(
             any("unter persoenlichem Minimum" in reason for reason in result["reasons"])
         )
 
-    @patch("job_finder.scoring.SALARY_TARGET", 83_000)
-    @patch("job_finder.scoring.SALARY_MINIMUM", 73_000)
+    @patch("job_finder.scoring.SALARY_TARGET", 99_000)
+    @patch("job_finder.scoring.SALARY_MINIMUM", 77_000)
     def test_structured_salary_below_minimum_is_a_warning(self):
         result = score_job(
-            make_job(salary_min_eur=40_000, salary_max_eur=44_000)
+            make_job(salary_min_eur=60_000, salary_max_eur=70_000)
         )
 
         self.assertEqual(result["filter_status"], "included")

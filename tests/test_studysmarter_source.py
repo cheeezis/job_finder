@@ -37,7 +37,7 @@ class StudySmarterTests(unittest.TestCase):
       "estimatedSalary": {
         "@type": "MonetaryAmount",
         "currency": "EUR",
-        "value": {"minValue": 91000, "maxValue": 60000, "unitText": "YEAR"}
+        "value": {"minValue": 50000, "maxValue": 60000, "unitText": "YEAR"}
       }
     }
     </script>

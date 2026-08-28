@@ -72,7 +72,7 @@ class HimalayasTests(unittest.TestCase):
             "currency": "EUR",
             "salaryPeriod": "annual",
             "minSalary": 73000,
-            "maxSalary": 101000,
+            "maxSalary": 91000,
             "pubDate": 1786838400000,
         }
 
@@ -84,7 +84,7 @@ class HimalayasTests(unittest.TestCase):
         self.assertIs(job.work_mode, WorkMode.REMOTE)
         self.assertEqual(job.remote_percentage, 100)
         self.assertEqual(job.career_levels, ["Entry-level"])
-        self.assertEqual((job.salary_min_eur, job.salary_max_eur), (73000, 101000))
+        self.assertEqual((job.salary_min_eur, job.salary_max_eur), (73000, 91000))
         self.assertEqual(job.published_at.isoformat(), "2026-08-16")
 
     def test_job_from_record_marks_unrestricted_non_euro_job_as_worldwide(self):
@@ -96,7 +96,7 @@ class HimalayasTests(unittest.TestCase):
                 "description": "Support",
                 "locationRestrictions": [],
                 "currency": "USD",
-                "minSalary": 91000,
+                "minSalary": 50000,
                 "maxSalary": 60000,
             }
         )
@@ -195,7 +195,7 @@ class StartupJobsTests(unittest.TestCase):
                 },
                 "salary_data": {
                     "min": 83000,
-                    "max": 103000,
+                    "max": 101000,
                     "currency": "EUR",
                     "interval": "year",
                 },
@@ -209,7 +209,7 @@ class StartupJobsTests(unittest.TestCase):
         self.assertEqual(job.description_clean, "Python und APIs")
         self.assertIs(job.work_mode, WorkMode.REMOTE)
         self.assertEqual(job.remote_percentage, 100)
-        self.assertEqual((job.salary_min_eur, job.salary_max_eur), (83000, 103000))
+        self.assertEqual((job.salary_min_eur, job.salary_max_eur), (83000, 101000))
         self.assertEqual(job.published_at.isoformat(), "2026-08-16")
         self.assertEqual(job.sources[0].url, "https://startup.jobs/example-job")
 
@@ -297,7 +297,7 @@ class JobicyTests(unittest.TestCase):
                 "jobDescription": "<p>Python und APIs</p>",
                 "pubDate": "2026-08-16 09:30:00",
                 "salaryMin": "73000",
-                "salaryMax": 101000,
+                "salaryMax": 91000,
                 "salaryCurrency": "EUR",
                 "salaryPeriod": "yearly",
             }
@@ -309,7 +309,7 @@ class JobicyTests(unittest.TestCase):
         self.assertIs(job.work_mode, WorkMode.REMOTE)
         self.assertEqual(job.remote_percentage, 100)
         self.assertEqual(job.career_levels, ["Entry-Level", "Junior"])
-        self.assertEqual((job.salary_min_eur, job.salary_max_eur), (73000, 101000))
+        self.assertEqual((job.salary_min_eur, job.salary_max_eur), (73000, 91000))
         self.assertEqual(job.published_at.isoformat(), "2026-08-16")
 
     def test_job_from_record_normalizes_anywhere_and_ignores_usd_salary(self):
@@ -321,7 +321,7 @@ class JobicyTests(unittest.TestCase):
                 "companyName": "Example",
                 "jobGeo": "Anywhere",
                 "jobDescription": "Support",
-                "salaryMin": 91000,
+                "salaryMin": 50000,
                 "salaryMax": 60000,
                 "salaryCurrency": "USD",
                 "salaryPeriod": "yearly",

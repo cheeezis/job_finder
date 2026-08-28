@@ -51,14 +51,14 @@ class SourceJobModelTests(unittest.TestCase):
     def test_stepstone_creates_job_model(self):
         url = (
             "https://www.stepstone.de/"
-            "stellenangebote--Junior-Python-Developer--14291000-inline.html"
+            "stellenangebote--Junior-Python-Developer--14250000-inline.html"
         )
         client = Mock()
         client.get.return_value = json_ld_html(self.posting())
 
         job = stepstone.fetch_job(url, client)
 
-        self.assert_common_job(job, "stepstone:14291000")
+        self.assert_common_job(job, "stepstone:14250000")
         self.assertEqual(job.work_mode, WorkMode.HYBRID)
         self.assertIsNone(job.remote_percentage)
 

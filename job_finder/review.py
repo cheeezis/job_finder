@@ -215,7 +215,13 @@ def start_application(
             ),
             "application_tracked": True,
         }
-    stored_documents = store_documents(job_id, documents, documents_dir)
+    stored_documents = store_documents(
+        job_id,
+        documents,
+        documents_dir,
+        company=entry.get("company", ""),
+        title=entry.get("title", ""),
+    )
     if stored_documents:
         entry["application_documents"] = stored_documents
     status = record_status_change(entry, WorkflowStatus.APPLIED)

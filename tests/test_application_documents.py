@@ -20,7 +20,7 @@ class ApplicationDocumentTests(unittest.TestCase):
     def tearDown(self):
         self.temporary_directory.cleanup()
 
-    def test_document_is_stored_below_opaque_job_directory(self):
+    def test_document_keeps_its_name_in_a_readable_application_folder(self):
         content = b"%PDF-1.7 test"
 
         documents = store_documents(
@@ -33,12 +33,18 @@ class ApplicationDocumentTests(unittest.TestCase):
                 }
             ],
             self.directory,
+            company="Example GmbH",
+            title="Junior Python Developer (m/w/d)",
         )
 
         path = document_path("portal:job/123", documents[0], self.directory)
         self.assertEqual(path.read_bytes(), content)
         self.assertEqual(documents[0]["name"], "Anschreiben.pdf")
-        self.assertNotIn("portal", str(path.relative_to(self.directory)))
+        self.assertEqual(path.name, "Anschreiben.pdf")
+        self.assertEqual(
+            path.parent.name,
+            "Example GmbH - Junior Python Developer (m_w_d)",
+        )
 
     def test_public_metadata_does_not_expose_storage_name(self):
         documents = store_documents(

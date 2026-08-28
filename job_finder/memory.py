@@ -1,9 +1,11 @@
 """Local memory for tracking jobs across Job Finder runs."""
 
 import json
+from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
+from job_finder.deduplication import normalize_company, normalize_title
 from job_finder.models import WorkflowStatus
 from job_finder.paths import MEMORY_FILE
 
@@ -61,9 +63,10 @@ def update_memory(
     inactive_count = 0
     reactivated_count = 0
     current_ids = set()
+    memory_index = build_memory_index(memory)
 
     for job in jobs:
-        job.id = resolve_memory_id(job, memory)
+        job.id = resolve_memory_id(job, memory, memory_index)
         current_ids.add(job.id)
         if job.id in memory:
             known_count += 1
@@ -87,6 +90,7 @@ def update_memory(
             )
             entry["missed_runs"] = 0
             entry["active"] = True
+            add_memory_index_entry(memory_index, job.id, entry)
             continue
 
         new_count += 1
@@ -105,6 +109,7 @@ def update_memory(
             "missed_runs": 0,
             "active": True,
         }
+        add_memory_index_entry(memory_index, job.id, memory[job.id])
 
     if successful_sources is not None:
         successful = set(successful_sources)
@@ -127,15 +132,23 @@ def update_memory(
     }
 
 
-def resolve_memory_id(job, memory):
-    """Reuse a known canonical ID when an exact source URL reappears."""
+def resolve_memory_id(job, memory, memory_index=None):
+    """Reuse a known canonical ID for the same URL or a decided repost."""
+    index = memory_index or build_memory_index(memory)
     current_urls = {source.url for source in job.sources if source.url}
-    candidates = [
-        job_id
-        for job_id, entry in memory.items()
-        if job_id == job.id
-        or current_urls.intersection(entry.get("source_urls", []))
-    ]
+    candidates = [job.id] if job.id in memory else []
+    candidates = unique_values(
+        candidates,
+        *[index["urls"].get(url, []) for url in current_urls],
+    )
+    candidates = [job_id for job_id in candidates if job_id in memory]
+    if not any(has_manual_state(memory[job_id]) for job_id in candidates):
+        fingerprint = repost_fingerprint(job.title, job.company)
+        candidates = unique_values(
+            candidates,
+            index["reposts"].get(fingerprint, []) if fingerprint else [],
+        )
+        candidates = [job_id for job_id in candidates if job_id in memory]
     if not candidates:
         return job.id
 
@@ -157,6 +170,43 @@ def resolve_memory_id(job, memory):
         )
         del memory[candidate_id]
     return canonical_id
+
+
+def build_memory_index(memory):
+    """Index URLs and decided repost fingerprints once per complete update."""
+    index = {"urls": defaultdict(list), "reposts": defaultdict(list)}
+    for job_id, entry in memory.items():
+        add_memory_index_entry(index, job_id, entry)
+    return index
+
+
+def add_memory_index_entry(index, job_id, entry):
+    """Add one current memory entry to the in-process lookup index."""
+    for url in entry.get("source_urls", []):
+        if job_id not in index["urls"][url]:
+            index["urls"][url].append(job_id)
+    if not repost_decision_is_reusable(entry):
+        return
+    fingerprint = repost_fingerprint(entry.get("title", ""), entry.get("company", ""))
+    if fingerprint and job_id not in index["reposts"][fingerprint]:
+        index["reposts"][fingerprint].append(job_id)
+
+
+def repost_fingerprint(title_value, company_value):
+    """Build the conservative title/company key used only for decided ads."""
+    title = normalize_title(title_value)
+    company = normalize_company(company_value)
+    if not title or not company:
+        return None
+    return title, company
+
+
+def repost_decision_is_reusable(entry):
+    """Limit fuzzy repost matching to explicit rejection or application state."""
+    return (
+        entry.get("workflow_status") == WorkflowStatus.IGNORED.value
+        or has_application_state(entry)
+    )
 
 
 def preferred_memory_id(candidates, memory, current_job_id):

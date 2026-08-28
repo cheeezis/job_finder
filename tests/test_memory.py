@@ -187,6 +187,119 @@ class MemoryTests(unittest.TestCase):
         self.assertIn("stepstone:456", memory)
         self.assertIn("test:123", memory)
 
+    def test_republished_job_with_new_url_reuses_ignored_decision(self):
+        job = make_job()
+        old_id = "stepstone:old"
+        memory = {
+            old_id: {
+                "title": "Junior Python Developer (m/w/d)",
+                "company": "Example GmbH & Co. KG",
+                "first_seen_at": "2026-07-01T08:00:00+00:00",
+                "last_seen_at": "2026-07-10T08:00:00+00:00",
+                "workflow_status": "ignored",
+                "source_urls": ["https://stepstone.test/jobs/old"],
+                "source_names": ["stepstone"],
+                "missed_runs": 3,
+                "active": False,
+            }
+        }
+
+        stats = update_memory([job], memory, successful_sources={"test"})
+
+        self.assertEqual(stats["known"], 1)
+        self.assertEqual(stats["new"], 0)
+        self.assertEqual(job.id, old_id)
+        self.assertEqual(job.workflow_status, WorkflowStatus.IGNORED)
+        self.assertEqual(
+            memory[old_id]["source_urls"],
+            ["https://stepstone.test/jobs/old", job.primary_url],
+        )
+
+    def test_existing_new_repost_is_folded_into_earlier_application(self):
+        job = make_job()
+        memory = {
+            "stepstone:applied": {
+                "title": job.title,
+                "company": job.company,
+                "first_seen_at": "2026-07-01T08:00:00+00:00",
+                "last_seen_at": "2026-07-10T08:00:00+00:00",
+                "workflow_status": "rejected",
+                "workflow_history": [
+                    {"status": "applied", "occurred_on": "2026-07-03"},
+                    {"status": "rejected", "occurred_on": "2026-07-10"},
+                ],
+                "source_urls": ["https://stepstone.test/jobs/applied"],
+                "source_names": ["stepstone"],
+                "missed_runs": 3,
+                "active": False,
+            },
+            job.id: {
+                "title": job.title,
+                "company": job.company,
+                "first_seen_at": "2026-08-20T08:00:00+00:00",
+                "last_seen_at": "2026-08-20T08:00:00+00:00",
+                "workflow_status": "new",
+                "source_urls": [job.primary_url],
+                "source_names": ["test"],
+                "missed_runs": 0,
+                "active": True,
+            },
+        }
+
+        update_memory([job], memory)
+
+        self.assertEqual(job.id, "stepstone:applied")
+        self.assertEqual(job.workflow_status, WorkflowStatus.REJECTED)
+        self.assertNotIn("test:123", memory)
+        self.assertEqual(len(memory["stepstone:applied"]["workflow_history"]), 2)
+
+    def test_existing_manual_decision_is_not_replaced_by_repost_matching(self):
+        job = make_job()
+        memory = {
+            "stepstone:ignored": {
+                "title": job.title,
+                "company": job.company,
+                "workflow_status": "ignored",
+                "source_urls": ["https://stepstone.test/jobs/ignored"],
+                "source_names": ["stepstone"],
+            },
+            job.id: {
+                "title": job.title,
+                "company": job.company,
+                "first_seen_at": "2026-08-20T08:00:00+00:00",
+                "last_seen_at": "2026-08-20T08:00:00+00:00",
+                "workflow_status": "interesting",
+                "source_urls": [job.primary_url],
+                "source_names": ["test"],
+                "missed_runs": 0,
+                "active": True,
+            },
+        }
+
+        update_memory([job], memory)
+
+        self.assertEqual(job.id, "test:123")
+        self.assertEqual(job.workflow_status, WorkflowStatus.INTERESTING)
+        self.assertIn("stepstone:ignored", memory)
+
+    def test_same_title_at_another_company_remains_new(self):
+        job = make_job()
+        memory = {
+            "stepstone:ignored": {
+                "title": job.title,
+                "company": "Another GmbH",
+                "workflow_status": "ignored",
+                "source_urls": ["https://stepstone.test/jobs/ignored"],
+                "source_names": ["stepstone"],
+            }
+        }
+
+        stats = update_memory([job], memory)
+
+        self.assertEqual(stats["new"], 1)
+        self.assertEqual(job.id, "test:123")
+        self.assertEqual(job.workflow_status, WorkflowStatus.NEW)
+
     def test_memory_file_has_an_explicit_version(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "seen_jobs.json"

@@ -7,8 +7,9 @@ Entscheidung vor.
 
 ## Funktionen
 
-- Quellen: Arbeitsagentur, StepStone, get-in-IT, Arbeitnow, StudySmarter,
-  Himalayas, Jobicy, Startup Jobs sowie ausgewählte direkte Karriereseiten
+- Quellen: Arbeitsagentur, StepStone, get-in-IT, Arbeitnow, Remotely,
+  StudySmarter, Himalayas, Jobicy, Startup Jobs sowie ausgewählte direkte
+  Karriereseiten
 - ein einheitliches Jobmodell und quellenübergreifende Deduplizierung
 - lokale Detail-Caches und ein Gedächtnis für bekannte und inaktive Stellen
 - regelbasierter Vorfilter für Standort, Remote-Anteil, Erfahrungsniveau,
@@ -18,11 +19,16 @@ Entscheidung vor.
 - manueller Import einer einzelnen Stellenanzeige per URL
 - lokale Review-Oberfläche mit Interessant-, Rückfrage-, Ignorieren- und
   Bewerben-Workflow
-- Bewerbungsübersicht mit Verlauf, Gesprächsterminen und Statistik
+- Bewerbungsübersicht mit Verlauf, Gesprächsterminen, optional gespeicherter
+  Gehaltsvorstellung und Statistik; die Antwortquote bezieht sich nur auf
+  abgeschlossene Bewerbungen
 - Discord-Nachrichten für neue oder inhaltlich geänderte Stellen sowie eine
   kompakte Laufstatistik
 - isolierte Quellenfehler, Laufprotokolle und rotierende Backups wichtiger
   lokaler Zustände
+- dynamische Fortschrittsanzeigen je Quelle und Detailabruf; im Terminal wird
+  eine tqdm-artige Zeile mit Prozent, Zähler, Laufzeit, Restzeit und Rate
+  aktualisiert, im Laufprotokoll bleibt nur der Endstand
 
 Der Vorfilter-Score ist keine persönliche Eignungsprognose. Er macht nur
 transparent, warum eine Stelle den regelbasierten Filter passiert hat. Die
@@ -92,6 +98,11 @@ Direkte Arbeitnow-Anzeigen mit vollständigem Text bleiben unverändert. Nur bei
 dem bekannten Platzhaltertext wird nach bestandenem Vorfilter die verlinkte
 Originalanzeige geladen. Review und Discord verwenden anschließend bevorzugt
 deren URL.
+
+Remotely übernimmt ausschließlich Anzeigen aus einem rollierenden
+Sieben-Tage-Fenster. Alte hervorgehobene Anzeigen und bereits vergebene Stellen
+werden verworfen; jeder Lauf liest die Listenansicht bis zur alten
+Trefferfront. Detailseiten werden einen Tag lokal gecacht.
 
 StudySmarter wird lokal im konfigurierten Radius und deutschlandweit nach
 vollständig remote möglichen Einstiegsrollen durchsucht. Detailseiten werden

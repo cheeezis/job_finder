@@ -41,6 +41,7 @@ from job_finder.reporting import is_international_listing
 LANDING_PAGE = Path(__file__).with_name("landing.html")
 REVIEW_PAGE = Path(__file__).with_name("review.html")
 APPLICATIONS_PAGE = Path(__file__).with_name("applications.html")
+APP_STYLES = Path(__file__).with_name("app.css")
 ROUTE_ORIGIN = f"{LOCAL_SEARCH_POSTAL_CODE} {LOCAL_SEARCH_LOCATION}".strip()
 MAX_REQUEST_BYTES = 45 * 1024 * 1024
 
@@ -201,6 +202,7 @@ def start_application(
     memory_path=MEMORY_FILE,
     documents=None,
     documents_dir=APPLICATION_DOCUMENTS_DIR,
+    salary_expectation=None,
 ):
     """Record the first application without overwriting later progress."""
     memory = load_memory(memory_path)
@@ -215,6 +217,7 @@ def start_application(
             ),
             "application_tracked": True,
         }
+    salary_note = validated_salary_expectation(salary_expectation)
     stored_documents = store_documents(
         job_id,
         documents,
@@ -224,6 +227,8 @@ def start_application(
     )
     if stored_documents:
         entry["application_documents"] = stored_documents
+    if salary_note:
+        entry["salary_expectation"] = salary_note
     status = record_status_change(entry, WorkflowStatus.APPLIED)
     try:
         save_memory(memory, memory_path)
@@ -234,6 +239,18 @@ def start_application(
         "workflow_status": status,
         "application_tracked": True,
     }
+
+
+def validated_salary_expectation(value):
+    """Return one optional, compact salary note exactly for this application."""
+    if value is None or value == "":
+        return ""
+    if not isinstance(value, str):
+        raise ValueError("Gehaltsvorstellung muss Text sein")
+    note = " ".join(value.split())
+    if len(note) > 500:
+        raise ValueError("Gehaltsvorstellung darf höchstens 500 Zeichen lang sein")
+    return note
 
 
 def update_workflow_history(
@@ -300,6 +317,7 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
     landing_page_path = LANDING_PAGE
     page_path = REVIEW_PAGE
     applications_page_path = APPLICATIONS_PAGE
+    styles_path = APP_STYLES
 
     def do_GET(self):
         """Return the page or the current joined recommendation data."""
@@ -315,6 +333,9 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
                 self.applications_page_path,
                 "text/html; charset=utf-8",
             )
+            return
+        if request_path == "/app.css":
+            self.send_file(self.styles_path, "text/css; charset=utf-8")
             return
         if request_path == "/api/recommendations":
             self.send_json(
@@ -369,6 +390,7 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
                     self.memory_path,
                     payload.get("documents"),
                     self.application_documents_dir,
+                    salary_expectation=payload.get("salary_expectation"),
                 )
             elif request_path == "/api/review-status":
                 result = update_review_decision(

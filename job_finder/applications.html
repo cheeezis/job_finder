@@ -82,11 +82,13 @@
       .stats { grid-template-columns: repeat(3, 1fr); }
     }
   </style>
+  <link rel="stylesheet" href="/app.css">
 </head>
-<body>
+<body class="applications-page">
 <main>
   <header>
     <div>
+      <p class="eyebrow">02 / Pipeline</p>
       <h1>Bewerbungsübersicht</h1>
       <p class="subtitle">Status, Verlauf und Kennzahlen deiner Bewerbungen.</p>
     </div>
@@ -125,7 +127,8 @@
   const terminalStatuses = new Set(["rejected", "no_response", "offer"]);
   const sourceLabels = {
     stepstone: "StepStone", get_in_it: "get-in-IT", studysmarter: "StudySmarter",
-    arbeitnow: "Arbeitnow", arbeitsagentur: "Arbeitsagentur"
+    arbeitnow: "Arbeitnow", arbeitsagentur: "Arbeitsagentur",
+    remotely: "Remotely"
   };
 
   const element = id => document.getElementById(id);
@@ -230,7 +233,7 @@
       ["offers", "Zusagen"],
       ["rejections", "Absagen"],
       ["no_responses", "Ohne Rückmeldung"],
-      ["response_rate_percent", "Antwortquote", "%"],
+      ["response_rate_percent", `Antwortquote · ${stats.completed} abgeschlossen`, "%"],
       [
         "average_response_days",
         `Ø Tage bis Antwort (${stats.response_time_samples} Fälle)`,
@@ -488,6 +491,14 @@
       appendSourceLinks(meta, application);
       card.append(meta);
       if (application.review_note) card.append(make("p", application.review_note, "note"));
+      if (application.salary_expectation) {
+        const salary = make("p", null, "salary-note");
+        salary.append(
+          make("span", "Gehaltsvorstellung", "salary-note-label"),
+          make("span", application.salary_expectation)
+        );
+        card.append(salary);
+      }
       appendDocuments(card, application);
       renderTimeline(application, card);
       container.append(card);

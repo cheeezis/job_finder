@@ -74,11 +74,13 @@
       .decision-actions button { flex: 1 1 100%; }
     }
   </style>
+  <link rel="stylesheet" href="/app.css">
 </head>
-<body>
+<body class="review-page">
 <main>
   <header>
     <div>
+      <p class="eyebrow">01 / Sichtung</p>
       <h1>Stellen prüfen</h1>
       <p class="subtitle">Eine vorgefilterte Stelle nach der anderen – du entscheidest.</p>
     </div>
@@ -166,6 +168,10 @@
       <label>Lebenslauf
         <input id="resume-file" type="file" accept=".pdf,.doc,.docx,.odt">
       </label>
+      <label>Gehaltsvorstellung <span class="optional">optional</span>
+        <input id="salary-expectation" type="text" maxlength="500" placeholder="z. B. 58.000 € brutto/Jahr">
+        <span class="field-hint">Eintragen, wenn im Bewerbungsprozess danach gefragt wurde.</span>
+      </label>
       <div class="dialog-actions">
         <button id="application-cancel" type="button">Abbrechen</button>
         <button id="application-save" class="primary" type="submit">Als beworben speichern</button>
@@ -195,6 +201,7 @@
     original: "Originalanzeige", stepstone: "StepStone",
     get_in_it: "get-in-IT", arbeitnow: "Arbeitnow",
     arbeitsagentur: "Arbeitsagentur", studysmarter: "StudySmarter",
+    remotely: "Remotely",
     manual: "Manuell hinzugefügt"
   };
   const reviewStatuses = new Set(["review", "interesting", "inquiry", "ignored"]);
@@ -473,7 +480,11 @@
       const response = await fetch("/api/applications", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({job_id: job.id, documents})
+        body: JSON.stringify({
+          job_id: job.id,
+          documents,
+          salary_expectation: element("salary-expectation").value
+        })
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Bewerbung konnte nicht gespeichert werden");

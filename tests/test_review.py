@@ -13,6 +13,7 @@ from urllib.request import Request, urlopen
 
 from job_finder.memory import load_memory, save_memory
 from job_finder.review import (
+    APP_STYLES,
     APPLICATIONS_PAGE,
     LANDING_PAGE,
     REVIEW_PAGE,
@@ -447,6 +448,29 @@ class ReviewTests(unittest.TestCase):
             applications_page.index('["no_responses",'),
         )
 
+    def test_shared_stylesheet_is_served(self):
+        handler = type(
+            "TemporaryStyleHandler",
+            (ReviewRequestHandler,),
+            {"styles_path": APP_STYLES},
+        )
+        server = HTTPServer(("127.0.0.1", 0), handler)
+        thread = threading.Thread(target=server.serve_forever)
+        thread.start()
+        try:
+            with urlopen(
+                f"http://127.0.0.1:{server.server_port}/app.css"
+            ) as response:
+                content_type = response.headers["Content-Type"]
+                stylesheet = response.read().decode("utf-8")
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join()
+
+        self.assertIn("text/css", content_type)
+        self.assertIn("--accent", stylesheet)
+
     def test_manual_import_api_forwards_paths_and_url(self):
         calls = []
 
@@ -565,6 +589,30 @@ class ReviewTests(unittest.TestCase):
 
         self.assertEqual(content, b"%PDF resume")
         self.assertIn("Lebenslauf.pdf", disposition)
+
+    def test_application_can_store_optional_salary_expectation(self):
+        result = start_application(
+            "job:1",
+            self.memory_path,
+            salary_expectation="  58.000 € brutto / Jahr  ",
+        )
+
+        entry = load_memory(self.memory_path)["job:1"]
+        self.assertTrue(result["application_tracked"])
+        self.assertEqual(entry["salary_expectation"], "58.000 € brutto / Jahr")
+
+    def test_salary_expectation_is_bounded(self):
+        with self.assertRaisesRegex(ValueError, "höchstens 500"):
+            start_application(
+                "job:1",
+                self.memory_path,
+                salary_expectation="x" * 501,
+            )
+
+        self.assertNotIn(
+            "salary_expectation",
+            load_memory(self.memory_path)["job:1"],
+        )
 
     def test_local_api_loads_jobs_and_persists_status(self):
         handler = type(

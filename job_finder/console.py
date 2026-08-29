@@ -78,8 +78,8 @@ def format_clock(seconds):
 
 
 def print_phase(current, total, label):
-    """Show one pipeline phase using the same visual language."""
-    print(f"\n{progress_bar(current, total)} {current}/{total} {label}")
+    """Show a plain heading for one coarse pipeline phase."""
+    print(f"\n{current}/{total} {label}")
 
 
 def progress_checkpoint(current, total, interval=10):

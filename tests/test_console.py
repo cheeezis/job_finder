@@ -32,6 +32,7 @@ class ConsoleProgressTests(unittest.TestCase):
 
         text = output.getvalue()
         self.assertIn("3/4 Vorfilter", text)
+        self.assertNotIn("[##################------] 3/4", text)
         self.assertIn("Remotely 100%|", text)
         self.assertIn("1/1", text)
         self.assertIn("42 Stellen", text)

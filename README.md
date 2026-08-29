@@ -102,7 +102,9 @@ deren URL.
 Remotely übernimmt ausschließlich Anzeigen aus einem rollierenden
 Sieben-Tage-Fenster. Alte hervorgehobene Anzeigen und bereits vergebene Stellen
 werden verworfen; jeder Lauf liest die Listenansicht bis zur alten
-Trefferfront. Detailseiten werden einen Tag lokal gecacht.
+Trefferfront. Detailseiten werden einen Tag lokal gecacht. Bei Kandidaten mit
+LinkedIn als Originalquelle wird zusätzlich geprüft, ob dort noch Bewerbungen
+angenommen werden; geschlossene Anzeigen gelangen nicht ins Review.
 
 StudySmarter wird lokal im konfigurierten Radius und deutschlandweit nach
 vollständig remote möglichen Einstiegsrollen durchsucht. Detailseiten werden

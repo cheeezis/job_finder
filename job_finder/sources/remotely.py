@@ -1,16 +1,18 @@
 """Remotely.de source adapter for recent remote and home-office jobs."""
 
+import json
 import re
 import time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit
 
-from job_finder.http import fetch_text
+from job_finder.console import print_progress, progress_checkpoint
+from job_finder.http import fetch_text, fetch_text_with_final_url
 from job_finder.models import Job, JobSource
-from job_finder.paths import REMOTELY_CACHE_FILE
+from job_finder.paths import REMOTELY_CACHE_FILE, REMOTELY_LINKEDIN_STATUS_FILE
 from job_finder.remote import classify_remote, detect_remote
 from job_finder.sources.common import (
     ListingUnavailableError,
@@ -25,12 +27,26 @@ SOURCE_NAME = "remotely"
 BASE_URL = "https://www.remotely.de"
 LIST_URL = f"{BASE_URL}/alle-jobs"
 CACHE_FILE = REMOTELY_CACHE_FILE
+LINKEDIN_STATUS_FILE = REMOTELY_LINKEDIN_STATUS_FILE
 MAX_LIST_PAGES = 100
 OLD_PAGE_STOP_COUNT = 2
 LOOKBACK_DAYS = 7
 BOUNDARY_BUFFER_DAYS = 2
 DETAIL_REFRESH_DAYS = 1
 REQUEST_DELAY_SECONDS = 1.0
+LINKEDIN_REQUEST_DELAY_SECONDS = 0.4
+LINKEDIN_STATUS_MAX_AGE = timedelta(days=1)
+LINKEDIN_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 Chrome/128 Safari/537.36"
+    ),
+    "Accept-Language": "de-DE,de;q=0.9,en;q=0.7",
+}
+LINKEDIN_CLOSED_MARKERS = (
+    "es werden keine bewerbungen mehr angenommen",
+    "no longer accepting applications",
+)
 
 
 class RemotelyHttpClient:
@@ -66,6 +82,157 @@ def fetch_jobs(cache_path=CACHE_FILE, client=None, now=None):
         max_age=timedelta(days=DETAIL_REFRESH_DAYS),
     )
     return jobs
+
+
+def enrich_candidate_jobs(
+    jobs,
+    candidate_ids,
+    status_cache_path=LINKEDIN_STATUS_FILE,
+    fetcher=fetch_text_with_final_url,
+    now=None,
+    sleeper=time.sleep,
+):
+    """Remove prefiltered candidates whose LinkedIn application is closed."""
+    targets = [
+        (index, linkedin_application_url(job))
+        for index, job in enumerate(jobs)
+        if job.id in candidate_ids and linkedin_application_url(job)
+    ]
+    if not targets:
+        return 0
+
+    checked_at = now or utc_now()
+    status_path = Path(status_cache_path)
+    checks = load_linkedin_status_cache(status_path)
+    cache_changed = False
+    closed_indices = set()
+    errors = 0
+    requests_made = 0
+
+    for position, (job_index, url) in enumerate(targets, 1):
+        key = linkedin_job_key(url)
+        cached = checks.get(key)
+        closed = fresh_linkedin_status(cached, checked_at)
+        if closed is None:
+            if requests_made:
+                sleeper(LINKEDIN_REQUEST_DELAY_SECONDS)
+            requests_made += 1
+            try:
+                final_url, html = fetcher(url, headers=LINKEDIN_HEADERS)
+                closed = linkedin_listing_is_closed(url, final_url, html)
+                checks[key] = {
+                    "closed": closed,
+                    "checked_at": checked_at.isoformat(),
+                }
+                cache_changed = True
+            except Exception:
+                errors += 1
+                closed = False
+        if closed:
+            closed_indices.add(job_index)
+        if progress_checkpoint(position, len(targets)):
+            print_progress(
+                "Remotely LinkedIn",
+                position,
+                len(targets),
+                f"{len(closed_indices)} geschlossen",
+            )
+
+    if cache_changed:
+        save_linkedin_status_cache(status_path, checks)
+    if closed_indices:
+        jobs[:] = [
+            job for index, job in enumerate(jobs) if index not in closed_indices
+        ]
+        print(
+            f"HINWEIS Remotely: {len(closed_indices)} geschlossene "
+            "LinkedIn-Bewerbung(en) aus dem Review entfernt"
+        )
+    if errors:
+        print(
+            f"WARNUNG Remotely: {errors} LinkedIn-Statusprüfung(en) "
+            "nicht erreichbar; Stellen vorsichtshalber behalten"
+        )
+    return len(closed_indices)
+
+
+def linkedin_application_url(job):
+    """Return the LinkedIn application URL contributed by Remotely."""
+    for source in job.sources:
+        if source.source != SOURCE_NAME:
+            continue
+        url = str(source.application_url or "").strip()
+        parts = urlsplit(url)
+        host = (parts.hostname or "").casefold()
+        if (
+            (host == "linkedin.com" or host.endswith(".linkedin.com"))
+            and "/jobs/view/" in parts.path.casefold()
+        ):
+            return url
+    return ""
+
+
+def linkedin_listing_is_closed(original_url, final_url, html):
+    """Recognize LinkedIn's closed message and expired-job redirects."""
+    original_id = linkedin_job_id(original_url)
+    final_id = linkedin_job_id(final_url)
+    if not final_id or (original_id and final_id != original_id):
+        return True
+    text = str(html or "").casefold()
+    return any(marker in text for marker in LINKEDIN_CLOSED_MARKERS)
+
+
+def linkedin_job_id(url):
+    path = urlsplit(str(url or "")).path.rstrip("/")
+    match = re.search(r"-(\d+)$", path)
+    return match.group(1) if match else ""
+
+
+def linkedin_job_key(url):
+    identifier = linkedin_job_id(url)
+    return identifier or normalize_detail_url(url)
+
+
+def load_linkedin_status_cache(path):
+    try:
+        document = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        return {}
+    if document.get("version") != 1:
+        return {}
+    return document.get("checks", {})
+
+
+def save_linkedin_status_cache(path, checks):
+    status_path = Path(path)
+    status_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = status_path.with_suffix(f"{status_path.suffix}.tmp")
+    temporary.write_text(
+        json.dumps(
+            {"version": 1, "checks": checks},
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    temporary.replace(status_path)
+
+
+def fresh_linkedin_status(entry, now):
+    if not isinstance(entry, dict) or not isinstance(entry.get("closed"), bool):
+        return None
+    try:
+        checked_at = datetime.fromisoformat(entry["checked_at"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if checked_at.tzinfo is None:
+        checked_at = checked_at.replace(tzinfo=timezone.utc)
+    current = now
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    if current - checked_at >= LINKEDIN_STATUS_MAX_AGE:
+        return None
+    return entry["closed"]
 
 
 def collect_links(

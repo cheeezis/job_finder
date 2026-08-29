@@ -39,6 +39,25 @@ DETAIL_HTML = """
 
 
 class RemotelySourceTests(unittest.TestCase):
+    def remotely_job(self, identifier, application_url):
+        return Job(
+            id=f"remotely:{identifier}",
+            title="Junior Python Developer",
+            company="Example GmbH",
+            locations=["Remote"],
+            sources=[
+                JobSource(
+                    source="remotely",
+                    url=f"https://www.remotely.de/job/{identifier}",
+                    application_url=application_url,
+                )
+            ],
+            description_raw="Python",
+            description_clean="Python",
+            work_mode=WorkMode.REMOTE,
+            remote_percentage=100,
+        )
+
     def test_extract_detail_links_normalizes_and_removes_duplicates(self):
         html = """
           <a href="/job/example-one">One</a>
@@ -236,6 +255,74 @@ class RemotelySourceTests(unittest.TestCase):
 
         self.assertEqual(jobs, [])
         self.assertEqual(remaining_cache, {})
+
+    def test_linkedin_check_removes_closed_and_redirected_candidates(self):
+        active_url = "https://de.linkedin.com/jobs/view/active-at-example-101"
+        closed_url = "https://de.linkedin.com/jobs/view/closed-at-example-102"
+        redirected_url = "https://de.linkedin.com/jobs/view/expired-at-example-103"
+        jobs = [
+            self.remotely_job("active", active_url),
+            self.remotely_job("closed", closed_url),
+            self.remotely_job("redirected", redirected_url),
+            self.remotely_job(
+                "not-prefiltered",
+                "https://de.linkedin.com/jobs/view/other-at-example-104",
+            ),
+        ]
+
+        def fetcher(url, headers=None):
+            if url == active_url:
+                return url, "<main>Jetzt bewerben</main>"
+            if url == closed_url:
+                return url, "<main>Es werden keine Bewerbungen mehr angenommen.</main>"
+            return "https://de.linkedin.com/jobs/entwickler-stellen", "search"
+
+        with tempfile.TemporaryDirectory() as directory:
+            removed = remotely.enrich_candidate_jobs(
+                jobs,
+                {"remotely:active", "remotely:closed", "remotely:redirected"},
+                status_cache_path=Path(directory) / "linkedin.json",
+                fetcher=fetcher,
+                now=datetime(2026, 8, 29, 12, tzinfo=timezone.utc),
+                sleeper=lambda _seconds: None,
+            )
+
+        self.assertEqual(removed, 2)
+        self.assertEqual(
+            [job.id for job in jobs],
+            ["remotely:active", "remotely:not-prefiltered"],
+        )
+
+    def test_linkedin_status_is_reused_for_one_day(self):
+        url = "https://de.linkedin.com/jobs/view/closed-at-example-105"
+        now = datetime(2026, 8, 29, 12, tzinfo=timezone.utc)
+        with tempfile.TemporaryDirectory() as directory:
+            status_path = Path(directory) / "linkedin.json"
+            first_jobs = [self.remotely_job("first", url)]
+            remotely.enrich_candidate_jobs(
+                first_jobs,
+                {"remotely:first"},
+                status_cache_path=status_path,
+                fetcher=lambda _url, headers=None: (
+                    url,
+                    "No longer accepting applications",
+                ),
+                now=now,
+                sleeper=lambda _seconds: None,
+            )
+            second_jobs = [self.remotely_job("second", url)]
+            fetcher = Mock(side_effect=AssertionError("must use status cache"))
+            removed = remotely.enrich_candidate_jobs(
+                second_jobs,
+                {"remotely:second"},
+                status_cache_path=status_path,
+                fetcher=fetcher,
+                now=now + timedelta(hours=12),
+                sleeper=lambda _seconds: None,
+            )
+
+        self.assertEqual(removed, 1)
+        fetcher.assert_not_called()
 
 
 if __name__ == "__main__":

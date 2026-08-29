@@ -309,11 +309,55 @@ class ApplicationTrackingTests(unittest.TestCase):
                 "rejections": 1,
                 "no_responses": 0,
                 "offers": 1,
-                "response_rate_percent": 67,
+                "response_rate_percent": 100,
                 "average_response_days": 3.5,
                 "response_time_samples": 2,
             },
         )
+
+    def test_application_overview_exposes_salary_expectation(self):
+        self.save_jobs(
+            {
+                "job:salary": {
+                    "workflow_status": "applied",
+                    "salary_expectation": "58.000 € brutto/Jahr",
+                }
+            }
+        )
+
+        application = load_application_overview(self.memory_path)["applications"][0]
+
+        self.assertEqual(
+            application["salary_expectation"],
+            "58.000 € brutto/Jahr",
+        )
+
+    def test_response_rate_ignores_open_applications(self):
+        self.save_jobs(
+            {
+                "job:completed": {
+                    "workflow_status": "no_response",
+                    "workflow_history": [
+                        {"status": "applied", "occurred_on": "2026-08-01"},
+                        {"status": "no_response", "occurred_on": "2026-08-20"},
+                    ],
+                },
+                "job:open-with-response": {
+                    "workflow_status": "interview",
+                    "workflow_history": [
+                        {"status": "applied", "occurred_on": "2026-08-02"},
+                        {"status": "response", "occurred_on": "2026-08-03"},
+                        {"status": "interview", "occurred_on": "2026-08-04"},
+                    ],
+                },
+            }
+        )
+
+        statistics = load_application_overview(self.memory_path)["statistics"]
+
+        self.assertEqual(statistics["completed"], 1)
+        self.assertEqual(statistics["responses"], 1)
+        self.assertEqual(statistics["response_rate_percent"], 0)
 
     def test_completed_application_leaves_the_default_list(self):
         self.save_jobs(

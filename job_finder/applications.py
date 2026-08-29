@@ -299,6 +299,11 @@ def application_row(job_id, entry, as_of=None):
         "active": entry.get("active", True),
         "workflow_status": current_status,
         "review_note": entry.get("review_note", ""),
+        "salary_expectation": (
+            entry.get("salary_expectation", "")
+            if isinstance(entry.get("salary_expectation", ""), str)
+            else ""
+        ),
         "applied_on": applied_on,
         "response_on": response_on,
         "days_to_response": days_to_response,
@@ -447,6 +452,12 @@ def application_statistics(applications):
         item["workflow_status"] in OPEN_APPLICATION_STATUSES
         for item in applications
     )
+    completed = [
+        item
+        for item in applications
+        if item["workflow_status"] not in OPEN_APPLICATION_STATUSES
+    ]
+    completed_responses = sum(item["has_response"] for item in completed)
     return {
         "total": total,
         "open": open_count,
@@ -459,7 +470,11 @@ def application_statistics(applications):
             for item in applications
         ),
         "offers": sum(item["has_offer"] for item in applications),
-        "response_rate_percent": round(responses / total * 100) if total else 0,
+        "response_rate_percent": (
+            round(completed_responses / len(completed) * 100)
+            if completed
+            else 0
+        ),
         "average_response_days": (
             round(sum(response_days) / len(response_days), 1)
             if response_days

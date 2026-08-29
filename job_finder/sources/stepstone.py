@@ -17,6 +17,7 @@ from job_finder.config import (
     STEPSTONE_SEARCH_RADIUS_KM,
     STEPSTONE_SEARCH_TERMS,
 )
+from job_finder.console import print_progress, progress_checkpoint
 from job_finder.http import fetch_text
 from job_finder.models import Job, JobSource
 from job_finder.paths import STEPSTONE_CACHE_FILE
@@ -114,6 +115,13 @@ def fetch_jobs(
         if detail_is_fresh(cached_job, now):
             cached_job.content_changed = False
             jobs.append(cached_job)
+            if progress_checkpoint(index + 1, len(links)):
+                print_progress(
+                    "StepStone Details",
+                    index + 1,
+                    len(links),
+                    f"{len(jobs)} übernommen",
+                )
             continue
 
         try:
@@ -138,6 +146,13 @@ def fetch_jobs(
                 cached_job.content_changed = False
                 jobs.append(cached_job)
                 stale_fallbacks += 1
+        if progress_checkpoint(index + 1, len(links)):
+            print_progress(
+                "StepStone Details",
+                index + 1,
+                len(links),
+                f"{len(jobs)} übernommen",
+            )
     if detail_errors:
         print(
             f"WARNUNG StepStone: {detail_errors} Detailseite(n) "
@@ -154,8 +169,6 @@ def search_links(client=None):
     search_errors = 0
     processed_queries = 0
     requested_pages = 0
-    empty_stops = 0
-    repeated_stops = 0
     planned_queries = len(STEPSTONE_SEARCH_TERMS) * len(
         STEPSTONE_SEARCH_LOCATIONS
     )
@@ -188,21 +201,17 @@ def search_links(client=None):
                 append_unique(url, links, seen)
 
             if not found_links:
-                empty_stops += 1
                 break
             if not page_links:
-                repeated_stops += 1
                 break
 
             page += 1
-
-    print(
-        f"StepStone-Suche: {processed_queries}/{planned_queries} "
-        f"Kombinationen · {requested_pages} Seiten · "
-        f"{len(links)} eindeutige Anzeigen · Stopps: "
-        f"{empty_stops} leer, {repeated_stops} Wiederholung, "
-        f"{search_errors} Fehler"
-    )
+        print_progress(
+            "StepStone Suche",
+            processed_queries,
+            planned_queries,
+            f"{requested_pages} Seiten · {len(links)} Anzeigen",
+        )
 
     if search_errors:
         print(f"WARNUNG StepStone: {search_errors} Suchseite(n) nicht erreichbar")

@@ -19,12 +19,41 @@ class TeeStream:
     def __init__(self, original, log_file):
         self.original = original
         self.log_file = log_file
+        self.progress_active = False
+        self.progress_width = 0
 
     def write(self, text):
+        if self.progress_active and text:
+            self.original.write(
+                "\r" + (" " * self.progress_width) + "\r"
+            )
+            self.progress_active = False
+            self.progress_width = 0
         self.original.write(text)
         self.log_file.write(text)
         self.log_file.flush()
         return len(text)
+
+    def write_progress(self, text, complete=False):
+        """Update one terminal line while keeping logs free of redraws."""
+        is_terminal = bool(
+            getattr(self.original, "isatty", lambda: False)()
+        )
+        if not is_terminal:
+            self.write(f"{text}\n")
+            return
+
+        width = max(self.progress_width, len(text))
+        self.original.write("\r" + text.ljust(width))
+        self.original.flush()
+        self.progress_width = width
+        self.progress_active = not complete
+        if complete:
+            self.original.write("\n")
+            self.original.flush()
+            self.log_file.write(f"{text}\n")
+            self.log_file.flush()
+            self.progress_width = 0
 
     def flush(self):
         self.original.flush()

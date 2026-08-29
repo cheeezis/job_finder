@@ -8,6 +8,7 @@ from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from job_finder.models import Job
+from job_finder.console import print_progress, progress_checkpoint
 
 
 DETAIL_CACHE_VERSION = 1
@@ -54,6 +55,10 @@ DETAIL_CACHE_FIELDS = (
     "published_at",
     "fetched_at",
 )
+
+
+class ListingUnavailableError(ValueError):
+    """Signal that a detail page exists but no longer represents an open job."""
 
 
 def utc_now():
@@ -125,6 +130,7 @@ def fetch_cached_details(
     fetch_detail,
     source_label,
     now=None,
+    max_age=DETAIL_REFRESH_AGE,
 ):
     """Load detail pages with the shared weekly cache and stale fallback."""
     cache_file = Path(cache_path)
@@ -133,11 +139,14 @@ def fetch_cached_details(
     unsaved = 0
     errors = 0
     stale_fallbacks = 0
+    unavailable = 0
+    cache_changed = False
 
-    for url in links:
+    total_links = len(links)
+    for link_index, url in enumerate(links, 1):
         cache_key = canonical_detail_url(url)
         cached_job = cache.get(cache_key)
-        if detail_is_fresh(cached_job, now):
+        if detail_is_fresh(cached_job, now, max_age=max_age):
             cached_job.content_changed = False
             jobs.append(cached_job)
             continue
@@ -148,22 +157,40 @@ def fetch_cached_details(
             jobs.append(job)
             cache[cache_key] = job
             unsaved += 1
+            cache_changed = True
             if unsaved >= DETAIL_CACHE_SAVE_INTERVAL:
                 save_detail_cache(cache_file, cache)
                 unsaved = 0
+                cache_changed = False
+        except ListingUnavailableError:
+            unavailable += 1
+            if cache.pop(cache_key, None) is not None:
+                cache_changed = True
         except Exception:
             errors += 1
             if cached_job:
                 cached_job.content_changed = False
                 jobs.append(cached_job)
                 stale_fallbacks += 1
+        if progress_checkpoint(link_index, total_links):
+            print_progress(
+                f"{source_label} Details",
+                link_index,
+                total_links,
+                f"{len(jobs)} übernommen",
+            )
 
-    if unsaved:
+    if cache_changed:
         save_detail_cache(cache_file, cache)
     if errors:
         print(
             f"WARNUNG {source_label}: {errors} Detailseite(n) "
             f"nicht erreichbar, {stale_fallbacks} aus altem Cache übernommen"
+        )
+    if unavailable:
+        print(
+            f"HINWEIS {source_label}: {unavailable} nicht mehr verfügbare "
+            "Anzeige(n) übersprungen"
         )
     return jobs
 
@@ -174,15 +201,15 @@ def detail_cache_job_dict(job):
     return {field: values[field] for field in DETAIL_CACHE_FIELDS}
 
 
-def detail_is_fresh(job, now=None):
-    """Return whether a cached detail page is younger than seven days."""
+def detail_is_fresh(job, now=None, max_age=DETAIL_REFRESH_AGE):
+    """Return whether a cached detail page is younger than the allowed age."""
     if job is None or job.fetched_at is None:
         return False
     current_time = now or utc_now()
     fetched_at = job.fetched_at
     if fetched_at.tzinfo is None:
         fetched_at = fetched_at.replace(tzinfo=timezone.utc)
-    return current_time - fetched_at < DETAIL_REFRESH_AGE
+    return current_time - fetched_at < max_age
 
 
 def mark_content_change(job, previous_job):

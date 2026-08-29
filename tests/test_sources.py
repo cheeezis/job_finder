@@ -103,7 +103,7 @@ class StepStonePaginationTests(unittest.TestCase):
         self.assertEqual(client.get.call_count, 3)
         self.assertIn("page=3", client.get.call_args.args[0])
 
-    def test_search_reports_repeated_page_as_stop_reason(self):
+    def test_search_progress_replaces_stop_reason_summary(self):
         url = "https://www.stepstone.de/stellenangebote--same.html"
         client = Mock()
         client.get.side_effect = [
@@ -119,7 +119,12 @@ class StepStonePaginationTests(unittest.TestCase):
             links = stepstone.search_links(client)
 
         self.assertEqual(links, [url])
-        self.assertIn("1 Wiederholung", print_output.call_args.args[0])
+        output = print_output.call_args.args[0]
+        self.assertIn("StepStone Suche 100%|", output)
+        self.assertIn("1/1", output)
+        self.assertIn("2 Seiten", output)
+        self.assertIn("1 Anzeigen", output)
+        self.assertNotIn("Stopps:", output)
 
 class StepStoneCacheTests(unittest.TestCase):
     def test_saved_cache_contains_only_reusable_source_fields(self):

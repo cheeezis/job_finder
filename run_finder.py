@@ -5,7 +5,7 @@ import json
 import os
 import time
 
-from job_finder.console import configure_utf8_output
+from job_finder.console import configure_utf8_output, print_phase, print_progress
 from job_finder.deduplication import deduplicate_jobs
 from job_finder.main import score_jobs
 from job_finder.memory import load_memory, save_memory, update_memory
@@ -30,6 +30,7 @@ from job_finder.sources import jobicy
 from job_finder.sources import manual
 from job_finder.sources import nethinks
 from job_finder.sources import proemion
+from job_finder.sources import remotely
 from job_finder.sources import rhoenenergie
 from job_finder.sources import stepstone
 from job_finder.sources import startup_jobs
@@ -44,6 +45,7 @@ SOURCES = [
     arbeitnow,
     himalayas,
     jobicy,
+    remotely,
     *([startup_jobs] if startup_jobs.is_configured() else []),
     studysmarter,
     manual,
@@ -80,11 +82,11 @@ def run_pipeline(args):
     """Execute one logged run of the complete job-finding pipeline."""
     started = time.monotonic()
     create_backup([MEMORY_FILE, NOTIFICATION_STATE_FILE])
-    print("1/4 Quellen")
+    print_phase(1, 4, "Quellen")
     jobs, source_reports = collect_jobs()
     print_source_summary(source_reports, len(jobs))
 
-    print("\n2/4 Gedächtnis")
+    print_phase(2, 4, "Gedächtnis")
     memory = load_memory(MEMORY_FILE)
     successful_sources = {
         report["name"]
@@ -103,7 +105,7 @@ def run_pipeline(args):
         f'{memory_stats["reactivated"]} reaktiviert'
     )
 
-    print("\n3/4 Vorfilter")
+    print_phase(3, 4, "Vorfilter")
     results = score_jobs(jobs)
     candidate_ids = {job["id"] for job in results["included"]}
     enriched = enrich_candidate_jobs(jobs, candidate_ids)
@@ -120,7 +122,7 @@ def run_pipeline(args):
     )
     write_recommendations(results)
 
-    print("\n4/4 Benachrichtigungen")
+    print_phase(4, 4, "Benachrichtigungen")
     notification_stats = process_notifications(
         results,
         send=args.notify,
@@ -162,7 +164,15 @@ def collect_jobs(sources=None):
     seen_urls = set()
     source_reports = []
 
-    for source in sources or SOURCES:
+    selected_sources = list(sources or SOURCES)
+    for source in selected_sources:
+        label = source_label(source.SOURCE_NAME)
+        print_progress(
+            label,
+            0,
+            1,
+            "wird geladen",
+        )
         try:
             source_jobs = source.fetch_jobs()
         except Exception as error:
@@ -174,6 +184,12 @@ def collect_jobs(sources=None):
                     "error": source_error_label(error),
                 }
             )
+            print_progress(
+                label,
+                1,
+                1,
+                "fehlgeschlagen",
+            )
             continue
         source_reports.append(
             {
@@ -181,6 +197,12 @@ def collect_jobs(sources=None):
                 "status": "success" if source_jobs else "empty",
                 "jobs": len(source_jobs),
             }
+        )
+        print_progress(
+            label,
+            1,
+            1,
+            f"{len(source_jobs)} Stellen",
         )
         for job in source_jobs:
             url = job.primary_url
@@ -278,6 +300,7 @@ def source_label(name):
         "arbeitnow": "Arbeitnow",
         "himalayas": "Himalayas",
         "jobicy": "Jobicy",
+        "remotely": "Remotely",
         "startup_jobs": "Startup Jobs",
         "studysmarter": "StudySmarter",
         "manual": "Manuell hinzugefügt",

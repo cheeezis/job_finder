@@ -125,9 +125,11 @@ class RunFinderTests(unittest.TestCase):
                 {"name": "working", "status": "success", "jobs": 1},
                 {"name": "broken", "status": "failed", "jobs": 0},
             ],
+            notification_stats={"sent": 1, "failed": 0},
         )
         self.assertEqual(summary["duration"], "2 Min. 05 Sek.")
         self.assertEqual(summary["review_updates"], 1)
+        self.assertEqual(summary["notifications"]["sent"], 1)
         self.assertEqual(summary["sources"][0]["new"], 1)
         self.assertEqual(format_duration(5), "5 Sek.")
 

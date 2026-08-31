@@ -5,7 +5,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from job_finder.notifications import NotificationError, discord_embed, process_notifications, run_summary_payload
+from job_finder.notifications import (
+    NotificationError,
+    discord_embed,
+    process_notifications,
+    run_summary_payload,
+)
 
 
 def make_job(job_id="job:1", *, is_new=True, content_changed=False, status="new"):
@@ -72,6 +77,9 @@ class NotificationTests(unittest.TestCase):
             )
         self.assertEqual(stats["queued"], 2)
         self.assertEqual(stats["ready"], 2)
+        self.assertEqual(stats["current_updates"], 2)
+        self.assertEqual(stats["eligible_updates"], 2)
+        self.assertEqual(stats["default_review_updates"], 2)
 
     def test_reviewed_job_is_not_queued(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -80,6 +88,25 @@ class NotificationTests(unittest.TestCase):
                 state_path=Path(directory) / "state.json",
             )
         self.assertEqual(stats["queued"], 0)
+
+    def test_default_review_count_excludes_hidden_special_cases(self):
+        junior_hybrid = make_job("junior-hybrid")
+        junior_hybrid["location_precheck"] = (
+            "Junior-Hybrid außerhalb des Suchgebiets; Präsenzumfang prüfen"
+        )
+        international = make_job("international")
+        international["locations"] = ["Europe"]
+        with tempfile.TemporaryDirectory() as directory:
+            stats = process_notifications(
+                {
+                    "included": [junior_hybrid, international, make_job("visible")],
+                    "excluded": [],
+                },
+                state_path=Path(directory) / "state.json",
+            )
+
+        self.assertEqual(stats["eligible_updates"], 3)
+        self.assertEqual(stats["default_review_updates"], 1)
 
     def test_successful_delivery_is_sent_only_once(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -113,11 +140,13 @@ class NotificationTests(unittest.TestCase):
         embed = discord_embed(make_job())
         fields = {field["name"]: field["value"] for field in embed["fields"]}
         self.assertEqual(embed["title"], "Junior Python Developer")
-        self.assertEqual(fields["Vorfilter"], "82/100")
-        self.assertEqual(fields["Änderung"], "Neu")
+        self.assertIn("Example GmbH", embed["description"])
+        self.assertEqual(
+            fields["Kurzcheck"],
+            "Neu · Softwareentwicklung · Vorfilter 82/100",
+        )
         self.assertEqual(fields["Einstieg"], "klare Einstiegsstelle")
         self.assertEqual(fields["Standortprüfung"], "100% remote Deutschland")
-        self.assertNotIn("description", embed)
         self.assertNotIn("Pro", fields)
 
     def test_embed_marks_persistent_update(self):
@@ -126,7 +155,7 @@ class NotificationTests(unittest.TestCase):
         )
         fields = {field["name"]: field["value"] for field in embed["fields"]}
 
-        self.assertEqual(fields["Änderung"], "Aktualisiert")
+        self.assertIn("Aktualisiert", fields["Kurzcheck"])
 
     def test_run_summary_contains_no_ai_statistics(self):
         payload = run_summary_payload(
@@ -134,12 +163,24 @@ class NotificationTests(unittest.TestCase):
                 "duration": "10 Sek.", "jobs_total": 100, "jobs_new": 3,
                 "jobs_known": 97, "included": 20, "excluded": 80,
                 "review_updates": 2,
+                "notifications": {
+                    "eligible_updates": 2,
+                    "default_review_updates": 1,
+                    "sent": 2,
+                    "failed": 0,
+                },
                 "sources": [{"label": "StepStone", "status": "success", "jobs": 10, "new": 1}],
             }
         )
-        self.assertIn("20 zur Prüfung", payload["content"])
-        self.assertIn("Review: 2 neu oder aktualisiert", payload["content"])
-        self.assertNotIn("KI", payload["content"])
+        embed = payload["embeds"][0]
+        description = embed["description"]
+        self.assertIn("20 im Vorfilter", description)
+        self.assertIn("2 zur Benachrichtigung · 2 gesendet", description)
+        self.assertIn("1 direkt im Standard-Review sichtbar", description)
+        self.assertIn("1 über Zusatzfilter", description)
+        self.assertNotIn("im Lauf neu/geändert", description)
+        self.assertNotIn("fields", embed)
+        self.assertNotIn("KI", json.dumps(payload, ensure_ascii=False))
         self.assertEqual(payload["allowed_mentions"], {"parse": []})
 
 

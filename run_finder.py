@@ -150,6 +150,7 @@ def run_pipeline(args):
                 results=results,
                 memory_stats=memory_stats,
                 source_reports=source_reports,
+                notification_stats=notification_stats,
             ),
             webhook_url=os.getenv("DISCORD_WEBHOOK_URL"),
         )
@@ -265,7 +266,13 @@ def print_source_summary(source_reports, total_jobs):
 
 
 def build_run_summary(
-    *, duration_seconds, jobs, results, memory_stats, source_reports
+    *,
+    duration_seconds,
+    jobs,
+    results,
+    memory_stats,
+    source_reports,
+    notification_stats=None,
 ):
     """Collect the reliable counts shown in Discord after one complete run."""
     new_by_source = {}
@@ -296,6 +303,7 @@ def build_run_summary(
         "included": len(results["included"]),
         "excluded": len(results["excluded"]),
         "review_updates": review_updates,
+        "notifications": dict(notification_stats or {}),
         "sources": summary_sources,
     }
 

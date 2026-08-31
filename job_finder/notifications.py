@@ -9,7 +9,12 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
 from job_finder.paths import NOTIFICATION_STATE_FILE
-from job_finder.reporting import format_remote, format_role_group, primary_url
+from job_finder.reporting import (
+    format_remote,
+    format_role_group,
+    is_international_listing,
+    primary_url,
+)
 
 
 STATE_VERSION = 2
@@ -68,6 +73,9 @@ def process_notifications(
     state = load_notification_state(state_path)
     jobs_by_key = {}
     queued = 0
+    current_updates = 0
+    eligible_updates = 0
+    default_review_updates = 0
 
     # A job may have been queued in an earlier run but be excluded after a
     # stricter general rule or an updated posting. It must not remain queued.
@@ -77,14 +85,20 @@ def process_notifications(
     for job in results["included"]:
         key = notification_key(job)
         jobs_by_key[key] = job
-        if not is_notifiable(job):
-            state["pending"].pop(key, None)
-            continue
         is_current_update = (
             job.get("is_new")
             or job.get("review_update_pending")
             or job.get("content_changed")
         )
+        if is_current_update:
+            current_updates += 1
+        if not is_notifiable(job):
+            state["pending"].pop(key, None)
+            continue
+        if is_current_update:
+            eligible_updates += 1
+            if is_visible_in_default_review(job):
+                default_review_updates += 1
         if (
             is_current_update
             and key not in state["sent"]
@@ -101,6 +115,10 @@ def process_notifications(
     stats = {
         "queued": queued,
         "ready": len(candidates),
+        "current_updates": current_updates,
+        "eligible_updates": eligible_updates,
+        "default_review_updates": default_review_updates,
+        "already_notified": max(eligible_updates - len(candidates), 0),
         "sent": 0,
         "failed": 0,
         "configuration_error": None,
@@ -150,31 +168,55 @@ def send_run_summary(summary, *, webhook_url, client=None):
 
 
 def run_summary_payload(summary):
-    """Render a compact, mention-safe summary that fits one Discord message."""
+    """Render one calm, vertically readable summary of the completed run."""
     sources = summary["sources"]
+    notifications = summary.get("notifications", {})
+    sent = notifications.get("sent", 0)
+    failed = notifications.get("failed", 0)
+    eligible = notifications.get("eligible_updates", summary["review_updates"])
+    default_review = notifications.get("default_review_updates", eligible)
+    hidden_by_default = max(eligible - default_review, 0)
+    source_warnings = exceptional_source_text(sources)
+    color = 0xD99A2B if failed or any(
+        source["status"] in {"failed", "partial"} for source in sources
+    ) else 0x2E8B57
     lines = [
-        "**📊 Job Finder – Lauf abgeschlossen**",
+        f"Laufzeit: **{summary['duration']}**",
         "",
-        f"Laufzeit: {summary['duration']}",
-        f"Jobs: {summary['jobs_total']} gesamt "
-        f"({summary['jobs_new']} neu, {summary['jobs_known']} bekannt)",
-        f"Vorfilter: {summary['included']} zur Prüfung, "
-        f"{summary['excluded']} ausgeschlossen",
-        f"Review: {summary['review_updates']} neu oder aktualisiert",
+        "**Ergebnis**",
+        (
+            f"{format_count(summary['jobs_total'])} Stellen erfasst · "
+            f"{format_count(summary['jobs_new'])} neu"
+        ),
+        (
+            f"{format_count(summary['included'])} im Vorfilter · "
+            f"{format_count(summary['excluded'])} ausgeschlossen"
+        ),
+        "",
+        "**Benachrichtigungen**",
+        (
+            f"{format_count(eligible)} zur Benachrichtigung · "
+            f"{format_count(sent)} gesendet · {format_count(failed)} fehlgeschlagen"
+        ),
+        (
+            f"{format_count(default_review)} direkt im Standard-Review sichtbar · "
+            f"{format_count(hidden_by_default)} über Zusatzfilter"
+        ),
+        "",
+        "**Quellen**",
+        source_health_text(sources),
     ]
-    lines.extend(["", "**Quellen**"])
-    for source in sources:
-        if source["status"] == "failed":
-            lines.append(f"• {source['label']}: Fehler")
-        elif source["jobs"]:
-            lines.append(
-                f"• {source['label']}: {source['jobs']} Stellen, "
-                f"{source['new']} neu"
-            )
-        else:
-            lines.append(f"• {source['label']}: keine Treffer")
+    if source_warnings:
+        lines.append(source_warnings)
+    lines.extend(["", "**Neue Treffer nach Quelle**", new_source_text(sources)])
     return {
-        "content": "\n".join(lines),
+        "embeds": [
+            {
+                "title": "Job Finder · Lauf abgeschlossen",
+                "description": "\n".join(lines),
+                "color": color,
+            }
+        ],
         "allowed_mentions": {"parse": []},
     }
 
@@ -182,6 +224,13 @@ def run_summary_payload(summary):
 def is_notifiable(job):
     """Return whether one prefiltered result belongs in Discord notifications."""
     return job.get("workflow_status", "new") in NOTIFIABLE_STATUSES
+
+
+def is_visible_in_default_review(job):
+    """Mirror the review page's default visibility for an updated job."""
+    return not is_international_listing(job) and not str(
+        job.get("location_precheck") or ""
+    ).startswith("Junior-Hybrid")
 
 
 def notification_key(job):
@@ -243,54 +292,39 @@ def notification_chunks(candidates):
 
 
 def discord_payload(jobs):
-    """Build one mention-safe Discord summary message."""
+    """Build one mention-safe message containing actionable job cards."""
     count = len(jobs)
     label = "Stelle" if count == 1 else "Stellen"
     return {
-        "content": f"**{count} neue oder aktualisierte {label} im Vorfilter**",
+        "content": f"**{count} {label} zur Sichtung**",
         "embeds": [discord_embed(job) for job in jobs],
         "allowed_mentions": {"parse": []},
     }
 
 
 def discord_embed(job):
-    """Render the compact fields needed to decide whether to open a job."""
+    """Render a quiet, compact card with the facts needed for a first look."""
     locations = ", ".join(job.get("locations", [])) or "unbekannt"
     role = format_role_group(job)
+    kind = notification_kind(job)
+    remote = format_remote(job)
     return {
         "title": truncate(job["title"], 256),
         "url": primary_url(job),
-        "color": 0x176B54,
+        "description": truncate(
+            f"**{job.get('company') or 'Unbekannte Firma'}**\n"
+            f"📍 {locations} · 🏠 {remote}",
+            4096,
+        ),
+        "color": 0x2E8B57 if kind == "Neu" else 0x3678C2,
         "fields": [
             {
-                "name": "Änderung",
-                "value": notification_kind(job),
-                "inline": True,
-            },
-            {
-                "name": "Firma",
-                "value": truncate(job.get("company") or "unbekannt", 1024),
-                "inline": True,
-            },
-            {
-                "name": "Ort",
-                "value": truncate(locations, 1024),
-                "inline": True,
-            },
-            {
-                "name": "Remote",
-                "value": format_remote(job),
-                "inline": True,
-            },
-            {
-                "name": "Vorfilter",
-                "value": f"{job.get('match_percent', 0)}/100",
-                "inline": True,
-            },
-            {
-                "name": "Bereich",
-                "value": truncate(role, 1024),
-                "inline": True,
+                "name": "Kurzcheck",
+                "value": truncate(
+                    f"{kind} · {role} · Vorfilter {job.get('match_percent', 0)}/100",
+                    1024,
+                ),
+                "inline": False,
             },
             {
                 "name": "Einstieg",
@@ -299,11 +333,61 @@ def discord_embed(job):
             },
             {
                 "name": "Standortprüfung",
-                "value": truncate(job.get("location_precheck") or "nicht erkannt", 1024),
+                "value": truncate(
+                    job.get("location_precheck") or "keine Auffälligkeit erkannt",
+                    1024,
+                ),
                 "inline": False,
             },
         ],
+        "footer": {"text": "Titel anklicken, um die Originalanzeige zu öffnen."},
     }
+
+
+def format_count(value):
+    """Format integer counters with German thousands separators."""
+    return f"{int(value):,}".replace(",", ".")
+
+
+def source_health_text(sources):
+    """Summarize source coverage while keeping failures visible."""
+    counts = {
+        status: sum(source["status"] == status for source in sources)
+        for status in ("success", "partial", "empty", "failed")
+    }
+    parts = [f"{len(sources)} geprüft", f"{counts['success']} erfolgreich"]
+    if counts["partial"]:
+        parts.append(f"{counts['partial']} teilweise")
+    if counts["empty"]:
+        parts.append(f"{counts['empty']} ohne Treffer")
+    if counts["failed"]:
+        parts.append(f"{counts['failed']} fehlgeschlagen")
+    return " · ".join(parts)
+
+
+def new_source_text(sources):
+    """List only sources that contributed new jobs."""
+    lines = [
+        f"**{source['label']}** {format_count(source['new'])}"
+        for source in sources
+        if source.get("new")
+    ]
+    return truncate(" · ".join(lines) or "Keine neuen Treffer", 1024)
+
+
+def exceptional_source_text(sources):
+    """Keep partial and failed sources separate from successful new results."""
+    warnings = [
+        f"{source['label']} {source_status_label(source['status'])}"
+        for source in sources
+        if source["status"] in {"partial", "failed"}
+    ]
+    return f"⚠️ {', '.join(warnings)}" if warnings else ""
+
+
+def source_status_label(status):
+    """Return a compact German label for an exceptional source state."""
+    return "nur teilweise geladen" if status == "partial" else "fehlgeschlagen"
 
 
 def notification_kind(job):

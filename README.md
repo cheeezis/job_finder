@@ -22,8 +22,9 @@ Entscheidung vor.
 - Bewerbungsübersicht mit Verlauf, Gesprächsterminen, optional gespeicherter
   Gehaltsvorstellung und Statistik; die Antwortquote bezieht sich nur auf
   abgeschlossene Bewerbungen
-- Discord-Nachrichten für neue oder inhaltlich geänderte Stellen sowie eine
-  kompakte Laufstatistik
+- kompakte Discord-Karten für neue oder inhaltlich geänderte Stellen sowie
+  eine strukturierte Laufstatistik, die Fundmenge, Vorfilter, tatsächlich
+  versendete Karten und die im Standard-Review sichtbare Anzahl trennt
 - isolierte Quellenfehler, Laufprotokolle und rotierende Backups wichtiger
   lokaler Zustände
 - dynamische Fortschrittsanzeigen je Quelle und Detailabruf; im Terminal wird
@@ -102,6 +103,9 @@ Danach stehen zur Verfügung:
    Stellen können zusätzlich an Discord gesendet werden. Der Standardfilter
    „Neu oder aktualisiert“ zeigt dieselbe Art von Stellen; eine erkannte
    Aktualisierung bleibt dort sichtbar, bis sie im Review entschieden wurde.
+   Die Discord-Laufstatistik weist separat aus, wie viele Stellen im Lauf neu
+   oder geändert, benachrichtigungsfähig, tatsächlich versendet und nach den
+   standardmäßigen Sichtbarkeitsfiltern direkt im Review sichtbar sind.
 6. Bewerbungen werden getrennt vom Stellen-Review dauerhaft nachverfolgt.
 
 Der veränderliche Stellen- und Bewerbungszustand liegt transaktional in

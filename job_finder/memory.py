@@ -1,15 +1,18 @@
 """Local memory for tracking jobs across Job Finder runs."""
 
 import json
+import sqlite3
 from collections import defaultdict
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
 from job_finder.deduplication import normalize_company, normalize_title
 from job_finder.models import WorkflowStatus
-from job_finder.paths import MEMORY_FILE
+from job_finder.paths import LEGACY_MEMORY_FILE, MEMORY_FILE
 
 MEMORY_VERSION = 2
+DATABASE_SCHEMA_VERSION = 1
 INACTIVE_AFTER_MISSED_RUNS = 3
 APPLICATION_STATUSES = {
     WorkflowStatus.APPLIED.value,
@@ -23,8 +26,17 @@ APPLICATION_STATUSES = {
 
 
 def load_memory(path=MEMORY_FILE):
-    """Load the current job memory format."""
+    """Load job state from SQLite or an explicitly requested legacy JSON file."""
     memory_path = Path(path)
+    if is_sqlite_path(memory_path):
+        migrate_legacy_memory(memory_path)
+        with database_connection(memory_path) as connection:
+            return load_sqlite_memory(connection)
+    return load_json_memory(memory_path)
+
+
+def load_json_memory(memory_path):
+    """Load the versioned JSON format retained for migration and isolated tests."""
     if not memory_path.exists():
         return {}
     values = json.loads(memory_path.read_text(encoding="utf-8"))
@@ -37,10 +49,20 @@ def load_memory(path=MEMORY_FILE):
 
 
 def save_memory(memory, path=MEMORY_FILE):
-    """Persist the local job memory as UTF-8 JSON."""
+    """Persist job state transactionally in SQLite or atomically in legacy JSON."""
     memory_path = Path(path)
+    if is_sqlite_path(memory_path):
+        with database_connection(memory_path) as connection:
+            replace_sqlite_memory(connection, memory)
+        return
+    save_json_memory(memory, memory_path)
+
+
+def save_json_memory(memory, memory_path):
+    """Atomically replace a versioned JSON state file."""
     memory_path.parent.mkdir(parents=True, exist_ok=True)
-    memory_path.write_text(
+    temporary = memory_path.with_suffix(f"{memory_path.suffix}.tmp")
+    temporary.write_text(
         json.dumps(
             {"version": MEMORY_VERSION, "jobs": memory},
             indent=2,
@@ -48,6 +70,131 @@ def save_memory(memory, path=MEMORY_FILE):
         ),
         encoding="utf-8",
     )
+    temporary.replace(memory_path)
+
+
+@contextmanager
+def edit_memory(path=MEMORY_FILE):
+    """Lock, expose, and commit one complete state mutation.
+
+    SQLite uses ``BEGIN IMMEDIATE`` so the read-modify-write sequence cannot
+    overwrite a concurrent review or collection update. Explicit JSON paths
+    remain available for backwards-compatible tests and manual recovery.
+    """
+    memory_path = Path(path)
+    if not is_sqlite_path(memory_path):
+        memory = load_json_memory(memory_path)
+        yield memory
+        save_json_memory(memory, memory_path)
+        return
+
+    migrate_legacy_memory(memory_path)
+    with database_connection(memory_path) as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        memory = load_sqlite_memory(connection)
+        try:
+            yield memory
+        except Exception:
+            connection.rollback()
+            raise
+        replace_sqlite_memory(connection, memory, commit=False)
+        connection.commit()
+
+
+def is_sqlite_path(path):
+    """Identify database paths without probing or exposing their contents."""
+    return Path(path).suffix.casefold() in {".sqlite", ".sqlite3", ".db"}
+
+
+@contextmanager
+def database_connection(path):
+    """Open the local state database with safe concurrency defaults."""
+    database_path = Path(path)
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(database_path, timeout=20, isolation_level=None)
+    try:
+        connection.execute("PRAGMA journal_mode=WAL")
+        connection.execute("PRAGMA foreign_keys=ON")
+        connection.execute("PRAGMA busy_timeout=20000")
+        initialize_database(connection)
+        yield connection
+    finally:
+        connection.close()
+
+
+def initialize_database(connection):
+    """Create the minimal versioned schema used for mutable job state."""
+    connection.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS metadata (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS job_state (
+            job_id TEXT PRIMARY KEY,
+            payload_json TEXT NOT NULL
+        );
+        """
+    )
+    connection.execute(
+        "INSERT OR IGNORE INTO metadata(key, value) VALUES('schema_version', ?)",
+        (str(DATABASE_SCHEMA_VERSION),),
+    )
+    version = connection.execute(
+        "SELECT value FROM metadata WHERE key='schema_version'"
+    ).fetchone()[0]
+    if version != str(DATABASE_SCHEMA_VERSION):
+        raise ValueError(f"Nicht unterstützte Datenbankversion: {version}")
+
+
+def load_sqlite_memory(connection):
+    """Decode every state row while rejecting malformed database content."""
+    memory = {}
+    for job_id, payload in connection.execute(
+        "SELECT job_id, payload_json FROM job_state"
+    ):
+        entry = json.loads(payload)
+        if not isinstance(entry, dict):
+            raise ValueError(f"Ungültiger Zustand für Job {job_id}")
+        memory[job_id] = entry
+    return memory
+
+
+def replace_sqlite_memory(connection, memory, *, commit=True):
+    """Replace all state rows inside one SQLite transaction."""
+    if commit:
+        connection.execute("BEGIN IMMEDIATE")
+    connection.execute("DELETE FROM job_state")
+    connection.executemany(
+        "INSERT INTO job_state(job_id, payload_json) VALUES(?, ?)",
+        [
+            (job_id, json.dumps(entry, ensure_ascii=False, separators=(",", ":")))
+            for job_id, entry in memory.items()
+        ],
+    )
+    if commit:
+        connection.commit()
+
+
+def migrate_legacy_memory(database_path, legacy_path=None):
+    """Import the old JSON state once, preserving that file as a fallback."""
+    database_path = Path(database_path)
+    if legacy_path is not None:
+        source = Path(legacy_path)
+    elif database_path.resolve() == Path(MEMORY_FILE).resolve():
+        source = Path(LEGACY_MEMORY_FILE)
+    else:
+        source = database_path.with_name("seen_jobs.json")
+    if database_path.exists() or not source.exists():
+        return False
+    memory = load_json_memory(source)
+    with database_connection(database_path) as connection:
+        replace_sqlite_memory(connection, memory)
+        connection.execute(
+            "INSERT OR REPLACE INTO metadata(key, value) VALUES('migrated_from', ?)",
+            (source.name,),
+        )
+    return True
 
 
 def update_memory(
@@ -77,9 +224,15 @@ def update_memory(
             job.first_seen_at = datetime.fromisoformat(entry["first_seen_at"])
             job.last_seen_at = now
             job.workflow_status = WorkflowStatus(entry["workflow_status"])
+            if job.content_changed:
+                entry["review_update_pending"] = True
+            job.review_update_pending = bool(
+                entry.get("review_update_pending", False)
+            )
             entry["last_seen_at"] = now.isoformat()
             entry["title"] = job.title
             entry["company"] = job.company
+            entry["locations"] = list(job.locations)
             entry["source_urls"] = unique_values(
                 entry.get("source_urls", []),
                 [source.url for source in job.sources],
@@ -101,6 +254,7 @@ def update_memory(
         memory[job.id] = {
             "title": job.title,
             "company": job.company,
+            "locations": list(job.locations),
             "first_seen_at": now.isoformat(),
             "last_seen_at": now.isoformat(),
             "workflow_status": WorkflowStatus.NEW.value,
@@ -108,6 +262,7 @@ def update_memory(
             "source_names": job.source_names,
             "missed_runs": 0,
             "active": True,
+            "review_update_pending": False,
         }
         add_memory_index_entry(memory_index, job.id, memory[job.id])
 
@@ -143,7 +298,7 @@ def resolve_memory_id(job, memory, memory_index=None):
     )
     candidates = [job_id for job_id in candidates if job_id in memory]
     if not any(has_manual_state(memory[job_id]) for job_id in candidates):
-        fingerprint = repost_fingerprint(job.title, job.company)
+        fingerprint = repost_fingerprint(job.title, job.company, job.locations)
         candidates = unique_values(
             candidates,
             index["reposts"].get(fingerprint, []) if fingerprint else [],
@@ -187,18 +342,27 @@ def add_memory_index_entry(index, job_id, entry):
             index["urls"][url].append(job_id)
     if not repost_decision_is_reusable(entry):
         return
-    fingerprint = repost_fingerprint(entry.get("title", ""), entry.get("company", ""))
+    fingerprint = repost_fingerprint(
+        entry.get("title", ""), entry.get("company", ""), entry.get("locations", [])
+    )
     if fingerprint and job_id not in index["reposts"][fingerprint]:
         index["reposts"][fingerprint].append(job_id)
 
 
-def repost_fingerprint(title_value, company_value):
-    """Build the conservative title/company key used only for decided ads."""
+def repost_fingerprint(title_value, company_value, locations=None):
+    """Build a conservative title/company/location key for decided ads."""
     title = normalize_title(title_value)
     company = normalize_company(company_value)
-    if not title or not company:
+    normalized_locations = sorted(
+        {
+            " ".join(normalize_title(value).split())
+            for value in (locations or [])
+            if value
+        }
+    )
+    if not title or not company or not normalized_locations:
         return None
-    return title, company
+    return title, company, tuple(normalized_locations)
 
 
 def repost_decision_is_reusable(entry):

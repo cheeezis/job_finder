@@ -1,6 +1,7 @@
 """Deterministic matching rules for one normalized job posting."""
 
 import re
+from datetime import date, timedelta
 
 from job_finder.config import LOCAL_SEARCH_RADIUS_KM
 from job_finder.models import FilterStatus, Job
@@ -51,8 +52,19 @@ REQUIRED_EXPERIENCE_PATTERNS = [
     r"\bexperience\s+(?:in|with|using|working|building|developing)\b",
     r"\bexperienced\s+(?:in|with)\b",
 ]
-def score_job(job: Job):
+MAX_JOB_AGE_DAYS = 60
+
+
+def score_job(job: Job, today=None):
     """Return a fixed 0-100 match score and explain every decision."""
+    reference_date = today or date.today()
+    cutoff = reference_date - timedelta(days=MAX_JOB_AGE_DAYS)
+    if job.published_at is not None and job.published_at < cutoff:
+        return excluded_result(
+            f"Veröffentlichung älter als {MAX_JOB_AGE_DAYS} Tage: "
+            f"{job.published_at.strftime('%d.%m.%Y')}"
+        )
+
     title = normalize_text(job.title)
     location = normalize_text(job.location_text)
     description = strip_platform_boilerplate(normalize_text(job.description_clean))
@@ -62,7 +74,12 @@ def score_job(job: Job):
             detect_remote(title, location, description, structured_remote=remote)
         )
     salary_text = structured_salary_text(job)
-    full_text = " ".join([title, location, remote, description, salary_text])
+    employment = normalize_text(job.employment_type or "")
+    # Structured employment data must influence preferences even when portals
+    # omit words such as "Teilzeit" from title and description.
+    full_text = " ".join(
+        [title, location, remote, employment, description, salary_text]
+    )
 
     role = find_role(title, description)
     allowed, filter_reason = passes_hard_filters(
@@ -541,6 +558,23 @@ def score_preferences(full_text):
 
     if "teilzeit" in full_text and "vollzeit" not in full_text:
         penalties.append({"points": 4, "label": "reine Teilzeitstelle"})
+
+    if contains_any(full_text, ["freelance", "freelancer", "freiberuflich"]):
+        penalties.append({"points": 8, "label": "freiberufliche Beschäftigung"})
+
+    if contains_any(full_text, ["werkstudent", "working student"]):
+        penalties.append({"points": 8, "label": "Werkstudentenstelle"})
+
+    if contains_any(
+        full_text,
+        [
+            "praktikum", "praktikant", "internship", "ausbildung",
+            "auszubildende", "auszubildender", "auszubildenden", "azubi",
+            "duales studium", "dual study", "abschlussarbeit", "bachelorarbeit",
+            "thesis", "weiterbildung",
+        ],
+    ):
+        penalties.append({"points": 12, "label": "Ausbildungs-/Studienformat"})
 
     if contains_any(full_text, ["arbeitnehmerueberlassung", "zeitarbeit", "personaldienstleister"]):
         penalties.append({"points": 3, "label": "Arbeitnehmerueberlassung/Zeitarbeit"})

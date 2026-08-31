@@ -43,6 +43,10 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
+Unterstützt wird Python 3.11 oder neuer. Die Projektmetadaten stehen zusätzlich
+in `pyproject.toml`; eine bearbeitbare Installation ist mit
+`.\.venv\Scripts\python.exe -m pip install -e .` möglich.
+
 Persönliche Sucheinstellungen anlegen:
 
 ```powershell
@@ -88,11 +92,23 @@ Danach stehen zur Verfügung:
 1. Die Quellen liefern Suchtreffer und Detaildaten.
 2. URLs und inhaltlich gleiche Stellen werden zusammengeführt.
 3. Das lokale Gedächtnis erkennt neue, bekannte, geänderte und inaktive Jobs.
-4. Der Vorfilter schließt klare Konflikte aus und versieht die übrigen Stellen
-   mit nachvollziehbaren Kategorien für IT-Bereich, Einstieg und Standort.
+4. Der Vorfilter schließt klare Konflikte sowie automatisch gefundene Anzeigen
+   aus, deren bekanntes Veröffentlichungsdatum mehr als 60 Tage zurückliegt.
+   Anzeigen ohne verlässliches Datum bleiben nach der Verfügbarkeitsprüfung
+   zulässig. Manuell eingereichte alte Anzeigen bleiben mit Warnung prüfbar.
+   Die übrigen Stellen erhalten nachvollziehbare Kategorien für IT-Bereich,
+   Einstieg und Standort.
 5. Alle durchgelassenen Stellen erscheinen im Review. Neue oder geänderte
-   Stellen können zusätzlich an Discord gesendet werden.
+   Stellen können zusätzlich an Discord gesendet werden. Der Standardfilter
+   „Neu oder aktualisiert“ zeigt dieselbe Art von Stellen; eine erkannte
+   Aktualisierung bleibt dort sichtbar, bis sie im Review entschieden wurde.
 6. Bewerbungen werden getrennt vom Stellen-Review dauerhaft nachverfolgt.
+
+Der veränderliche Stellen- und Bewerbungszustand liegt transaktional in
+`data/internal/job_finder.sqlite3`. Beim ersten Zugriff wird eine vorhandene
+`seen_jobs.json` einmalig importiert und als unveränderte Rückfallkopie
+beibehalten. `jobs.json` und `recommendations.json` bleiben bewusst lesbare,
+neu erzeugbare Ausgaben.
 
 Direkte Arbeitnow-Anzeigen mit vollständigem Text bleiben unverändert. Nur bei
 dem bekannten Platzhaltertext wird nach bestandenem Vorfilter die verlinkte
@@ -110,12 +126,29 @@ StudySmarter wird lokal im konfigurierten Radius und deutschlandweit nach
 vollständig remote möglichen Einstiegsrollen durchsucht. Detailseiten werden
 erst nach dem ersten Vorfilter geladen und anschließend sieben Tage gecacht.
 
+Detaildaten gelten sieben Tage als frisch. Bei einem vorübergehenden
+Netzwerkfehler darf ein höchstens 14 Tage alter Cache-Eintrag als sichtbar
+markierter Fallback erscheinen; ältere Einträge werden nicht mehr übernommen.
+Ein teilweise fehlgeschlagenes Suchsegment darf keine alten Stellen dieser
+Quelle automatisch inaktiv setzen.
+
 ## Lokale Daten und Datenschutz
 
 Persönliche Einstellungen, gefundene Stellen, Bewerbungsverläufe, Caches,
 Benachrichtigungsstatus und Laufprotokolle liegen unter ignorierten lokalen
 Dateien beziehungsweise unter `data/`. Sie gehören nicht ins Repository.
 Zugangsdaten werden ausschließlich über Umgebungsvariablen erwartet.
+
+Die Weboberfläche bindet ausschließlich an `127.0.0.1` und ist als persönliche
+Ein-Nutzer-Anwendung gedacht. Host-, Origin- und Inhaltstypprüfungen schützen
+die lokalen Schreib- und Dokumentendpunkte. Der manuelle Import akzeptiert nur
+öffentliche HTTP(S)-Ziele und prüft auch DNS-Auflösung sowie Weiterleitungen;
+interne Dienste und lokale Dateien sind nicht zulässig.
+
+Bewerbungsunterlagen werden pro Job in einem technisch eindeutigen lokalen
+Ordner gespeichert. Sie sind nicht Bestandteil der rotierenden Zustandsbackups
+und sollten bei Bedarf separat verschlüsselt gesichert und nach Ende der
+gewünschten Aufbewahrungsdauer gelöscht werden.
 
 Vor einer Veröffentlichung empfiehlt sich:
 

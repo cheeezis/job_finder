@@ -13,6 +13,7 @@ from job_finder.console import print_progress, progress_checkpoint
 
 DETAIL_CACHE_VERSION = 1
 DETAIL_REFRESH_AGE = timedelta(days=7)
+MAX_STALE_DETAIL_AGE = timedelta(days=14)
 DETAIL_CACHE_SAVE_INTERVAL = 25
 RELEVANT_CONTENT_FIELDS = (
     "title",
@@ -55,6 +56,22 @@ DETAIL_CACHE_FIELDS = (
     "published_at",
     "fetched_at",
 )
+_FETCH_DIAGNOSTICS = {"failed_segments": 0}
+
+
+def reset_fetch_diagnostics():
+    """Reset sequential per-source diagnostics before one adapter runs."""
+    _FETCH_DIAGNOSTICS["failed_segments"] = 0
+
+
+def record_partial_failure(count=1):
+    """Record internally handled failures that make a source result partial."""
+    _FETCH_DIAGNOSTICS["failed_segments"] += max(0, int(count))
+
+
+def fetch_diagnostics():
+    """Return a copy of diagnostics for the just-completed adapter run."""
+    return dict(_FETCH_DIAGNOSTICS)
 
 
 class ListingUnavailableError(ValueError):
@@ -67,12 +84,15 @@ def utc_now():
 
 
 def canonical_detail_url(url):
-    """Remove tracking parameters while preserving a source's stable job ID."""
+    """Remove known marketing parameters while preserving functional queries."""
     parts = urlsplit(url or "")
     stable_parameters = [
         (name, value)
         for name, value in parse_qsl(parts.query, keep_blank_values=True)
-        if name == "jobOfferId"
+        if not name.casefold().startswith("utm_")
+        and name.casefold() not in {
+            "fbclid", "gclid", "msclkid", "language", "j"
+        }
     ]
     return urlunsplit(
         (
@@ -148,11 +168,13 @@ def fetch_cached_details(
         cached_job = cache.get(cache_key)
         if detail_is_fresh(cached_job, now, max_age=max_age):
             cached_job.content_changed = False
+            cached_job.cache_stale = False
             jobs.append(cached_job)
             continue
 
         try:
             job = fetch_detail(url)
+            job.cache_stale = False
             mark_content_change(job, cached_job)
             jobs.append(job)
             cache[cache_key] = job
@@ -168,8 +190,9 @@ def fetch_cached_details(
                 cache_changed = True
         except Exception:
             errors += 1
-            if cached_job:
+            if cached_job and detail_within_age(cached_job, now):
                 cached_job.content_changed = False
+                cached_job.cache_stale = True
                 jobs.append(cached_job)
                 stale_fallbacks += 1
         if progress_checkpoint(link_index, total_links):
@@ -183,6 +206,7 @@ def fetch_cached_details(
     if cache_changed:
         save_detail_cache(cache_file, cache)
     if errors:
+        record_partial_failure(errors)
         print(
             f"WARNUNG {source_label}: {errors} Detailseite(n) "
             f"nicht erreichbar, {stale_fallbacks} aus altem Cache übernommen"
@@ -210,6 +234,11 @@ def detail_is_fresh(job, now=None, max_age=DETAIL_REFRESH_AGE):
     if fetched_at.tzinfo is None:
         fetched_at = fetched_at.replace(tzinfo=timezone.utc)
     return current_time - fetched_at < max_age
+
+
+def detail_within_age(job, now=None, max_age=MAX_STALE_DETAIL_AGE):
+    """Return whether cached data may still be shown as a marked fallback."""
+    return detail_is_fresh(job, now, max_age=max_age)
 
 
 def mark_content_change(job, previous_job):

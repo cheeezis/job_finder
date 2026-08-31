@@ -5,11 +5,12 @@ from pathlib import Path
 
 from job_finder.deduplication import deduplicate_jobs, merge_jobs
 from job_finder.main import load_jobs, score_for_pipeline
-from job_finder.memory import load_memory, save_memory, update_memory
+from job_finder.memory import edit_memory, update_memory
 from job_finder.paths import JOBS_FILE, MEMORY_FILE, RECOMMENDATIONS_JSON
 from job_finder.reporting import recommendation_for_job
 from job_finder.sources import manual
 from job_finder.sources.common import canonical_detail_url
+from job_finder.storage import write_json_atomic
 
 
 def import_manual_url(
@@ -25,9 +26,8 @@ def import_manual_url(
     jobs = load_current_jobs(jobs_path)
     target = replace_or_add_job(jobs, imported)
 
-    memory = load_memory(memory_path)
-    update_memory([target], memory, successful_sources=None)
-    save_memory(memory, memory_path)
+    with edit_memory(memory_path) as memory:
+        update_memory([target], memory, successful_sources=None)
     save_jobs(jobs, jobs_path)
 
     score = score_for_pipeline(target)
@@ -81,15 +81,7 @@ def replace_or_add_job(jobs, imported):
 
 def save_jobs(jobs, path):
     path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(
-            [job.to_dict() for job in jobs],
-            indent=2,
-            ensure_ascii=False,
-        ),
-        encoding="utf-8",
-    )
+    write_json_atomic(path, [job.to_dict() for job in jobs])
 
 
 def save_recommendation(job, path):
@@ -122,12 +114,4 @@ def save_recommendation(job, path):
             item.get("title", "").casefold(),
         )
     )
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(
-            {"recommendations": retained},
-            indent=2,
-            ensure_ascii=False,
-        ),
-        encoding="utf-8",
-    )
+    write_json_atomic(path, {"recommendations": retained})

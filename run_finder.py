@@ -1,14 +1,13 @@
 """Command-line entry point for collecting, remembering, and scoring jobs."""
 
 import argparse
-import json
 import os
 import time
 
 from job_finder.console import configure_utf8_output, print_phase, print_progress
 from job_finder.deduplication import deduplicate_jobs
 from job_finder.main import score_jobs
-from job_finder.memory import load_memory, save_memory, update_memory
+from job_finder.memory import edit_memory, update_memory
 from job_finder.notifications import process_notifications, send_run_summary
 from job_finder.operations import RunLog, create_backup
 from job_finder.paths import (
@@ -17,6 +16,7 @@ from job_finder.paths import (
     NOTIFICATION_STATE_FILE,
 )
 from job_finder.reporting import write_recommendations
+from job_finder.storage import write_json_atomic
 from job_finder.sources import arbeitnow
 from job_finder.sources import arbeitsagentur
 from job_finder.sources import bytewerk
@@ -35,7 +35,11 @@ from job_finder.sources import rhoenenergie
 from job_finder.sources import stepstone
 from job_finder.sources import startup_jobs
 from job_finder.sources import studysmarter
-from job_finder.sources.common import canonical_detail_url as canonical_url
+from job_finder.sources.common import (
+    canonical_detail_url as canonical_url,
+    fetch_diagnostics,
+    reset_fetch_diagnostics,
+)
 
 
 SOURCES = [
@@ -86,43 +90,40 @@ def run_pipeline(args):
     jobs, source_reports = collect_jobs()
     print_source_summary(source_reports, len(jobs))
 
-    print_phase(2, 4, "Gedächtnis")
-    memory = load_memory(MEMORY_FILE)
-    successful_sources = {
-        report["name"]
-        for report in source_reports
-        if report["status"] == "success"
-    }
-    memory_stats = update_memory(
-        jobs,
-        memory,
-        successful_sources=successful_sources,
-    )
-    save_memory(memory, MEMORY_FILE)
-    print(
-        f'{memory_stats["new"]} neu · {memory_stats["known"]} bekannt · '
-        f'{memory_stats["inactive"]} neu inaktiv · '
-        f'{memory_stats["reactivated"]} reaktiviert'
-    )
-
-    print_phase(3, 4, "Vorfilter")
+    print_phase(2, 4, "Vorfilter und Details")
     results = score_jobs(jobs)
     candidate_ids = {job["id"] for job in results["included"]}
     enriched = enrich_candidate_jobs(jobs, candidate_ids)
     if enriched:
         results = score_jobs(jobs)
-    JOBS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    JOBS_FILE.write_text(
-        json.dumps([job.to_dict() for job in jobs], indent=2, ensure_ascii=False),
-        encoding="utf-8",
+
+    # Persist only the final post-enrichment set; enrichers may remove closed ads.
+    print_phase(3, 4, "Gedächtnis")
+    complete_sources = {
+        report["name"]
+        for report in source_reports
+        if report["status"] in {"success", "empty"}
+    }
+    with edit_memory(MEMORY_FILE) as memory:
+        memory_stats = update_memory(
+            jobs,
+            memory,
+            successful_sources=complete_sources,
+        )
+    results = score_jobs(jobs)
+    print(
+        f'{memory_stats["new"]} neu · {memory_stats["known"]} bekannt · '
+        f'{memory_stats["inactive"]} neu inaktiv · '
+        f'{memory_stats["reactivated"]} reaktiviert'
     )
+    write_json_atomic(JOBS_FILE, [job.to_dict() for job in jobs])
     print(
         f"Vorfilter: {len(results['included'])} weiter · "
         f"{len(results['excluded'])} ausgeschlossen"
     )
     write_recommendations(results)
 
-    print_phase(4, 4, "Benachrichtigungen")
+    print_phase(4, 4, "Ausgabe und Benachrichtigungen")
     notification_stats = process_notifications(
         results,
         send=args.notify,
@@ -173,8 +174,25 @@ def collect_jobs(sources=None):
             1,
             "wird geladen",
         )
+        reset_fetch_diagnostics()
         try:
-            source_jobs = source.fetch_jobs()
+            report_fetcher = getattr(source, "fetch_jobs_with_report", None)
+            if report_fetcher is None:
+                source_jobs = source.fetch_jobs()
+                source_status = "success" if source_jobs else "empty"
+                report_details = {}
+            else:
+                source_result = report_fetcher()
+                source_jobs = source_result["jobs"]
+                source_status = source_result["status"]
+                report_details = source_result.get("details", {})
+            handled_failures = fetch_diagnostics()["failed_segments"]
+            if handled_failures and source_status != "partial":
+                source_status = "partial"
+                report_details = {
+                    **report_details,
+                    "failed_segments": handled_failures,
+                }
         except Exception as error:
             source_reports.append(
                 {
@@ -194,8 +212,9 @@ def collect_jobs(sources=None):
         source_reports.append(
             {
                 "name": source.SOURCE_NAME,
-                "status": "success" if source_jobs else "empty",
+                "status": source_status,
                 "jobs": len(source_jobs),
+                **report_details,
             }
         )
         print_progress(
@@ -238,6 +257,11 @@ def print_source_summary(source_reports, total_jobs):
             print(f"  WARNUNG {label}: {report.get('error', 'Fehler')}")
         elif report["status"] == "empty":
             print(f"  HINWEIS {label}: keine verwertbaren Treffer")
+        elif report["status"] == "partial":
+            print(
+                f"  WARNUNG {label}: Teilergebnis; "
+                f"{report.get('failed_segments', '?')} Segment(e) fehlgeschlagen"
+            )
 
 
 def build_run_summary(

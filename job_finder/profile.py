@@ -444,7 +444,7 @@ SKILL_GROUPS = [
     },
 ]
 
-# Roles and employment types that are incompatible with an entry-level search.
+# Seniority and non-vacancy titles that are incompatible with the target search.
 BLOCKED_TITLE_WORDS = [
     "senior",
     "sr",
@@ -469,25 +469,8 @@ BLOCKED_TITLE_WORDS = [
     "architect",
     "architekt",
     "weiterbildung",
-    "werkstudent",
-    "working student",
-    "praktikum",
-    "praktikant",
-    "thesis",
-    "abschlussarbeit",
-    "bachelorarbeit",
-    "ausbildung",
-    "auszubildende",
-    "auszubildender",
-    "auszubildenden",
-    "azubi",
-    "duales studium",
-    "dual study",
     "professur",
     "professor",
-    "freelance",
-    "freelancer",
-    "freiberuflich",
 ]
 
 LOCAL_PLACES = MATCHING_SETTINGS["local_places"]

@@ -2,6 +2,7 @@
 
 import ipaddress
 import re
+import socket
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -12,11 +13,13 @@ from job_finder.paths import MANUAL_CACHE_FILE
 from job_finder.remote import classify_remote, detect_remote
 from job_finder.sources.common import (
     canonical_detail_url,
+    detail_within_age,
     detail_is_fresh,
     load_detail_cache,
     mark_content_change,
     normalize_employment_type,
     parse_published_date,
+    record_partial_failure,
     save_detail_cache,
     source_job_id,
     utc_now,
@@ -37,8 +40,9 @@ _SKIP_TAGS = {"script", "style", "noscript", "nav", "footer", "form", "button"}
 def add_url(url, cache_path=MANUAL_CACHE_FILE):
     """Fetch and persist one explicitly supplied public job URL."""
     requested_url = validate_public_url(url)
-    final_url, html = fetch_text_with_final_url(requested_url)
-    final_url = validate_public_url(final_url)
+    final_url, html = fetch_text_with_final_url(
+        requested_url, url_validator=validate_public_url
+    )
     cache_file = Path(cache_path)
     cache = load_detail_cache(cache_file)
     cache_key = canonical_detail_url(final_url)
@@ -62,25 +66,31 @@ def fetch_jobs(cache_path=MANUAL_CACHE_FILE, now=None):
     for saved_url, cached_job in cache.items():
         if detail_is_fresh(cached_job, now):
             cached_job.content_changed = False
+            cached_job.cache_stale = False
             refreshed[saved_url] = cached_job
             jobs.append(cached_job)
             continue
         try:
-            final_url, html = fetch_text_with_final_url(saved_url)
-            final_url = validate_public_url(final_url)
+            final_url, html = fetch_text_with_final_url(
+                saved_url, url_validator=validate_public_url
+            )
             job = job_from_page(final_url, html)
+            job.cache_stale = False
             mark_content_change(job, cached_job)
             refreshed[canonical_detail_url(final_url)] = job
             jobs.append(job)
         except Exception:
             errors += 1
-            cached_job.content_changed = False
-            refreshed[saved_url] = cached_job
-            jobs.append(cached_job)
+            if detail_within_age(cached_job, now):
+                cached_job.content_changed = False
+                cached_job.cache_stale = True
+                refreshed[saved_url] = cached_job
+                jobs.append(cached_job)
 
     if refreshed != cache:
         save_detail_cache(cache_file, refreshed)
     if errors:
+        record_partial_failure(errors)
         print(
             f"WARNUNG Manuell: {errors} Detailseite(n) nicht erreichbar, "
             "aus lokalem Cache übernommen"
@@ -93,7 +103,7 @@ def job_from_page(url, html):
     posting = extract_json_ld_job_posting(html)
     if posting:
         job = job_from_json_ld(SOURCE_NAME, "", url, html)
-        if not job.locations:
+        if not job.locations or job.locations == ["unbekannt"]:
             remote_region = applicant_region(posting)
             if remote_region:
                 job.locations = [remote_region]
@@ -195,7 +205,7 @@ def first_labeled_value(lines, labels):
 
 
 def validate_public_url(value):
-    """Accept ordinary public HTTP(S) links, never local filesystem/network URLs."""
+    """Accept HTTP(S) URLs only when every resolved address is public."""
     text = str(value or "").strip()
     parts = urlsplit(text)
     if parts.scheme not in {"http", "https"} or not parts.hostname:
@@ -204,12 +214,13 @@ def validate_public_url(value):
     if hostname == "localhost" or hostname.endswith(".local"):
         raise ValueError("Lokale Adressen können nicht importiert werden")
     try:
-        address = ipaddress.ip_address(hostname)
-    except ValueError:
-        address = None
-    if address and not address.is_global:
+        addresses = {item[4][0] for item in socket.getaddrinfo(hostname, parts.port)}
+    except socket.gaierror as error:
+        raise ValueError("Adresse der Stellenanzeige konnte nicht aufgelöst werden") from error
+    if not addresses or any(not ipaddress.ip_address(item).is_global for item in addresses):
         raise ValueError("Private Netzwerkadressen können nicht importiert werden")
-    return canonical_detail_url(text)
+    # Preserve functional query parameters; canonicalization is only a cache concern.
+    return parts._replace(fragment="").geturl()
 
 
 class VisibleJobParser(HTMLParser):

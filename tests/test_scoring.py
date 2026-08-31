@@ -1,6 +1,7 @@
 """Regression tests for deterministic scoring and deduplication."""
 
 import unittest
+from datetime import date, timedelta
 from unittest.mock import patch
 
 from job_finder.deduplication import deduplicate_jobs
@@ -23,6 +24,8 @@ def make_job(**overrides):
         "salary_min_eur": None,
         "salary_max_eur": None,
         "career_levels": [],
+        "employment_type": None,
+        "published_at": None,
     }
     values.update(overrides)
     work_mode, remote_percentage = classify_remote(values["remote"])
@@ -42,12 +45,37 @@ def make_job(**overrides):
         work_mode=work_mode,
         remote_percentage=remote_percentage,
         career_levels=values["career_levels"],
+        employment_type=values["employment_type"],
         salary_min_eur=values["salary_min_eur"],
         salary_max_eur=values["salary_max_eur"],
+        published_at=values["published_at"],
     )
 
 
 class ScoringTests(unittest.TestCase):
+    def test_posting_older_than_sixty_days_is_excluded(self):
+        today = date(2026, 8, 31)
+
+        result = score_job(
+            make_job(published_at=today - timedelta(days=61)),
+            today=today,
+        )
+
+        self.assertEqual(result["filter_status"], "excluded")
+        self.assertIn("älter als 60 Tage", result["reasons"][0])
+
+    def test_sixty_day_boundary_and_unknown_date_remain_eligible(self):
+        today = date(2026, 8, 31)
+
+        boundary = score_job(
+            make_job(published_at=today - timedelta(days=60)),
+            today=today,
+        )
+        unknown = score_job(make_job(published_at=None), today=today)
+
+        self.assertEqual(boundary["filter_status"], "included")
+        self.assertEqual(unknown["filter_status"], "included")
+
     def test_commuter_location_uses_configured_remote_threshold(self):
         locations = [
             {
@@ -185,15 +213,17 @@ class ScoringTests(unittest.TestCase):
 
         self.assertEqual(result["filter_status"], "excluded")
 
-    def test_apprenticeships_are_excluded_from_a_post_degree_job_search(self):
+    def test_apprenticeships_are_warned_instead_of_hard_excluded(self):
         result = score_job(
             make_job(
                 title="Auszu\u00adbil\u00addende Fachinformatiker Anwendungsentwicklung (m/w/d)",
             )
         )
 
-        self.assertEqual(result["filter_status"], "excluded")
-        self.assertIn("auszubildende", result["reasons"][0])
+        self.assertEqual(result["filter_status"], "included")
+        self.assertTrue(
+            any("Ausbildungs-/Studienformat" in reason for reason in result["reasons"])
+        )
 
     def test_homeoffice_outside_local_area_is_not_full_remote(self):
         result = score_job(
@@ -728,6 +758,16 @@ class ScoringTests(unittest.TestCase):
         )
         self.assertEqual(result["filter_status"], "included")
 
+    def test_structured_part_time_is_scored_as_a_preference_warning(self):
+        full_time = score_job(make_job(employment_type="Vollzeit"))
+        part_time = score_job(make_job(employment_type="Teilzeit"))
+
+        self.assertEqual(part_time["filter_status"], "included")
+        self.assertEqual(
+            full_time["match_percent"] - part_time["match_percent"], 4
+        )
+        self.assertTrue(any("Teilzeit" in reason for reason in part_time["reasons"]))
+
     @patch("job_finder.scoring.SALARY_TARGET", 99_000)
     @patch("job_finder.scoring.SALARY_MINIMUM", 77_000)
     def test_salary_below_minimum_is_a_warning_not_an_exclusion(self):
@@ -782,6 +822,18 @@ class ScoringTests(unittest.TestCase):
 
 
 class DeduplicationTests(unittest.TestCase):
+    def test_equal_title_and_company_at_different_locations_stay_separate(self):
+        first = make_job(
+            company="Example GmbH", location="Fulda", source="stepstone",
+            url="https://stepstone.test/fulda",
+        )
+        second = make_job(
+            company="Example GmbH", location="Berlin", source="get_in_it",
+            url="https://get-in-it.test/berlin",
+        )
+
+        self.assertEqual(len(deduplicate_jobs([first, second])), 2)
+
     def test_cross_source_duplicate_is_merged(self):
         first = make_job(
             title="DevOps Engineer (m/w/d) - Junior/Senior [auch bis 100% remote moeglich]",

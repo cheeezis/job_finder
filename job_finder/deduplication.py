@@ -23,7 +23,7 @@ LEGAL_FORMS = [
 
 
 def deduplicate_jobs(jobs: list[Job]) -> list[Job]:
-    """Merge jobs with equal titles and compatible company names."""
+    """Merge cross-source jobs only when title, company, and location agree."""
     unique_jobs = []
     positions_by_title = defaultdict(list)
 
@@ -60,9 +60,34 @@ def find_duplicate_position(job, company_key, positions, unique_jobs):
         if set(job.source_names) & set(existing.source_names):
             continue
         existing_company = normalize_company(existing.company)
-        if companies_match(company_key, existing_company):
+        if companies_match(company_key, existing_company) and locations_match(
+            job.locations, existing.locations
+        ):
             return position
     return None
+
+
+def locations_match(first_locations, second_locations):
+    """Require a shared normalized place before merging ambiguous portal ads."""
+    first = {normalize_location(value) for value in first_locations}
+    second = {normalize_location(value) for value in second_locations}
+    first.discard("")
+    second.discard("")
+    if not first or not second:
+        return False
+    return any(
+        left == right
+        or (len(left) >= 5 and left in right)
+        or (len(right) >= 5 and right in left)
+        for left in first
+        for right in second
+    )
+
+
+def normalize_location(value):
+    """Normalize a location without erasing city-level identity."""
+    text = normalize_text(value)
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", text).split())
 
 
 def companies_match(first, second):

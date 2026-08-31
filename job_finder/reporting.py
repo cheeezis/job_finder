@@ -1,11 +1,11 @@
 """Compact recommendation output for review and notifications."""
 
-import json
 import re
 from pathlib import Path
 
 from job_finder.paths import RECOMMENDATIONS_JSON
 from job_finder.text import text_is_mainly_english
+from job_finder.storage import write_json_atomic
 
 
 INTERNATIONAL_LOCATION_TERMS = {
@@ -64,15 +64,7 @@ def write_recommendations(
         for job in results["included"]
     ]
     json_file = Path(json_path)
-    json_file.parent.mkdir(parents=True, exist_ok=True)
-    json_file.write_text(
-        json.dumps(
-            {"recommendations": recommendations},
-            indent=2,
-            ensure_ascii=False,
-        ),
-        encoding="utf-8",
-    )
+    write_json_atomic(json_file, {"recommendations": recommendations})
 
 
 def recommendation_for_job(job):
@@ -86,7 +78,12 @@ def recommendation_for_job(job):
         "remote_percentage": job.get("remote_percentage"),
         "career_levels": job.get("career_levels", []),
         "published_at": job.get("published_at"),
+        "fetched_at": job.get("fetched_at"),
+        "cache_stale": bool(job.get("cache_stale")),
         "first_seen_at": job.get("first_seen_at"),
+        "is_new": bool(job.get("is_new")),
+        "content_changed": bool(job.get("content_changed")),
+        "review_update_pending": bool(job.get("review_update_pending")),
         "match_percent": job.get("match_percent"),
         "role_group": job.get("role_group"),
         "role_label": format_role_group(job),

@@ -26,6 +26,7 @@ from job_finder.search_plan import append_unique, iter_search_queries
 from job_finder.sources.common import (
     detail_cache_job_dict,
     detail_is_fresh,
+    detail_within_age,
     extract_annual_salary_eur,
     extract_schema_locations,
     mark_content_change,
@@ -85,6 +86,7 @@ def fetch_jobs(
     cache_path=CACHE_FILE,
     client=None,
     now=None,
+    _coverage=None,
 ):
     """Search StepStone and return imported job details."""
     cache_file = Path(cache_path)
@@ -92,13 +94,17 @@ def fetch_jobs(
     client = client or StepStoneHttpClient()
 
     try:
-        links = search_links(client)
+        links = search_links(client, coverage=_coverage)
     except StepStoneBlockedError as error:
+        if _coverage is not None:
+            _coverage["failed_segments"] = max(
+                1, _coverage.get("failed_segments", 0)
+            )
         print(
             f"WARNUNG StepStone: HTTP {error.status_code}; "
             "nutze letzten Cache-Stand"
         )
-        return cached_jobs(cache.get("last_links", []), cache)
+        return cached_jobs(cache.get("last_links", []), cache, now)
 
     if not links:
         return []
@@ -114,6 +120,7 @@ def fetch_jobs(
         cached_job = cache["jobs"].get(cache_key)
         if detail_is_fresh(cached_job, now):
             cached_job.content_changed = False
+            cached_job.cache_stale = False
             jobs.append(cached_job)
             if progress_checkpoint(index + 1, len(links)):
                 print_progress(
@@ -126,24 +133,35 @@ def fetch_jobs(
 
         try:
             job = fetch_job(url, client)
+            job.cache_stale = False
             mark_content_change(job, cached_job)
             jobs.append(job)
             cache["jobs"][cache_key] = job
             save_cache(cache_file, cache)
         except StepStoneBlockedError as error:
+            if _coverage is not None:
+                _coverage["failed_segments"] = max(
+                    1, _coverage.get("failed_segments", 0)
+                )
             print(
                 f"WARNUNG StepStone: HTTP {error.status_code}; "
                 "keine weiteren Detailanfragen"
             )
-            if cached_job:
+            if cached_job and detail_within_age(cached_job, now):
                 cached_job.content_changed = False
+                cached_job.cache_stale = True
                 jobs.append(cached_job)
-            jobs.extend(cached_jobs(links[index + 1 :], cache))
+            jobs.extend(cached_jobs(links[index + 1 :], cache, now))
             break
         except Exception:
             detail_errors += 1
-            if cached_job:
+            if _coverage is not None:
+                _coverage["failed_segments"] = (
+                    _coverage.get("failed_segments", 0) + 1
+                )
+            if cached_job and detail_within_age(cached_job, now):
                 cached_job.content_changed = False
+                cached_job.cache_stale = True
                 jobs.append(cached_job)
                 stale_fallbacks += 1
         if progress_checkpoint(index + 1, len(links)):
@@ -161,7 +179,19 @@ def fetch_jobs(
     return jobs
 
 
-def search_links(client=None):
+def fetch_jobs_with_report(cache_path=CACHE_FILE, client=None, now=None):
+    """Return jobs and coverage metadata for safe inactivity tracking."""
+    coverage = {"failed_segments": 0, "total_segments": 0}
+    jobs = fetch_jobs(cache_path, client, now, _coverage=coverage)
+    failed = coverage["failed_segments"]
+    return {
+        "jobs": jobs,
+        "status": "partial" if failed else ("success" if jobs else "empty"),
+        "details": coverage,
+    }
+
+
+def search_links(client=None, *, coverage=None):
     """Collect unique detail links from all configured search pages."""
     client = client or StepStoneHttpClient()
     links = []
@@ -172,6 +202,8 @@ def search_links(client=None):
     planned_queries = len(STEPSTONE_SEARCH_TERMS) * len(
         STEPSTONE_SEARCH_LOCATIONS
     )
+    if coverage is not None:
+        coverage["total_segments"] = planned_queries
 
     for query in iter_search_queries(
         STEPSTONE_SEARCH_TERMS,
@@ -215,6 +247,8 @@ def search_links(client=None):
 
     if search_errors:
         print(f"WARNUNG StepStone: {search_errors} Suchseite(n) nicht erreichbar")
+    if coverage is not None:
+        coverage["failed_segments"] += search_errors
     return links
 
 
@@ -330,13 +364,14 @@ def save_cache(path, cache):
     temporary_path.replace(path)
 
 
-def cached_jobs(links, cache):
+def cached_jobs(links, cache, now=None):
     """Return cached jobs for links without making network requests."""
     jobs = []
     for url in links:
         job = cache.get("jobs", {}).get(normalize_detail_url(url))
-        if job:
+        if job and detail_within_age(job, now):
             job.content_changed = False
+            job.cache_stale = not detail_is_fresh(job, now)
             jobs.append(job)
     return jobs
 

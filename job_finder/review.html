@@ -24,7 +24,8 @@
     <label>Status
       <select id="status-filter">
         <option value="attention">Neu oder aktualisiert</option>
-        <option value="new">Nur neu</option>
+        <option value="fresh">Nur neu</option>
+        <option value="updated">Nur aktualisiert</option>
         <option value="">Alle Status</option>
       </select>
     </label>
@@ -266,10 +267,14 @@
     const showInternational = element("international-filter").checked;
     const showJuniorHybrid = element("junior-hybrid-filter").checked;
     visibleJobs = jobs.filter(job => {
+      const awaitsDecision = notificationStatuses.has(job.workflow_status);
       const statusMatches = status === "attention"
-        ? notificationStatuses.has(job.workflow_status) &&
-          (job.is_new || job.review_update_pending)
-        : (!status || job.workflow_status === status);
+        ? awaitsDecision && (job.is_new || job.review_update_pending)
+        : status === "fresh"
+          ? awaitsDecision && job.is_new
+          : status === "updated"
+            ? awaitsDecision && !job.is_new && job.review_update_pending
+            : (!status || job.workflow_status === status);
       return statusMatches &&
       (!role || job.role_group === role) &&
       (showInternational || !job.international) &&

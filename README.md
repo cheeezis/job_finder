@@ -99,7 +99,9 @@ Danach stehen zur Verfügung:
    Die übrigen Stellen erhalten nachvollziehbare Kategorien für IT-Bereich,
    Einstieg und Standort.
 5. Alle durchgelassenen Stellen erscheinen im Review. Neue oder geänderte
-   Stellen können zusätzlich an Discord gesendet werden.
+   Stellen können zusätzlich an Discord gesendet werden. Der Standardfilter
+   „Neu oder aktualisiert“ zeigt dieselbe Art von Stellen; eine erkannte
+   Aktualisierung bleibt dort sichtbar, bis sie im Review entschieden wurde.
 6. Bewerbungen werden getrennt vom Stellen-Review dauerhaft nachverfolgt.
 
 Der veränderliche Stellen- und Bewerbungszustand liegt transaktional in

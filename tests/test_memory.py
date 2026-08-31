@@ -67,6 +67,17 @@ class MemoryTests(unittest.TestCase):
             [{"status": "applied", "occurred_on": "2026-08-01"}],
         )
 
+    def test_changed_known_job_stays_pending_until_review(self):
+        memory = {}
+        update_memory([make_job()], memory)
+        changed = make_job()
+        changed.content_changed = True
+
+        update_memory([changed], memory)
+
+        self.assertTrue(changed.review_update_pending)
+        self.assertTrue(memory[changed.id]["review_update_pending"])
+
     def test_job_becomes_inactive_after_three_successful_missed_runs(self):
         memory = {}
         update_memory([make_job()], memory)

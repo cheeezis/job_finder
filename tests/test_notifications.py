@@ -25,6 +25,7 @@ def make_job(job_id="job:1", *, is_new=True, content_changed=False, status="new"
         "workflow_status": status,
         "is_new": is_new,
         "content_changed": content_changed,
+        "review_update_pending": content_changed,
     }
 
 
@@ -113,10 +114,19 @@ class NotificationTests(unittest.TestCase):
         fields = {field["name"]: field["value"] for field in embed["fields"]}
         self.assertEqual(embed["title"], "Junior Python Developer")
         self.assertEqual(fields["Vorfilter"], "82/100")
+        self.assertEqual(fields["Änderung"], "Neu")
         self.assertEqual(fields["Einstieg"], "klare Einstiegsstelle")
         self.assertEqual(fields["Standortprüfung"], "100% remote Deutschland")
         self.assertNotIn("description", embed)
         self.assertNotIn("Pro", fields)
+
+    def test_embed_marks_persistent_update(self):
+        embed = discord_embed(
+            make_job(is_new=False, content_changed=True, status="review")
+        )
+        fields = {field["name"]: field["value"] for field in embed["fields"]}
+
+        self.assertEqual(fields["Änderung"], "Aktualisiert")
 
     def test_run_summary_contains_no_ai_statistics(self):
         payload = run_summary_payload(

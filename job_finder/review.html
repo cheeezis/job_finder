@@ -23,7 +23,8 @@
   <section class="filters" aria-label="Filter">
     <label>Status
       <select id="status-filter">
-        <option value="new">Neu</option>
+        <option value="attention">Neu oder aktualisiert</option>
+        <option value="new">Nur neu</option>
         <option value="">Alle Status</option>
       </select>
     </label>
@@ -52,7 +53,10 @@
   <article id="card" class="card" hidden>
     <div class="score-row">
       <span id="score" class="score"></span>
-      <span id="role-badge" class="badge"></span>
+      <div class="review-badges">
+        <span id="change-badge" class="badge" hidden></span>
+        <span id="role-badge" class="badge"></span>
+      </div>
     </div>
     <h2 id="title"></h2>
     <p id="company" class="company"></p>
@@ -137,6 +141,7 @@
     manual: "Manuell hinzugefügt"
   };
   const reviewStatuses = new Set(["review", "interesting", "inquiry", "ignored"]);
+  const notificationStatuses = new Set(["new", "review", "interesting", "inquiry"]);
   let jobs = [];
   let visibleJobs = [];
   let currentIndex = 0;
@@ -260,13 +265,17 @@
     const query = element("search-filter").value.trim().toLocaleLowerCase("de");
     const showInternational = element("international-filter").checked;
     const showJuniorHybrid = element("junior-hybrid-filter").checked;
-    visibleJobs = jobs.filter(job =>
-      (!status || job.workflow_status === status) &&
+    visibleJobs = jobs.filter(job => {
+      const statusMatches = status === "attention"
+        ? notificationStatuses.has(job.workflow_status) &&
+          (job.is_new || job.review_update_pending)
+        : (!status || job.workflow_status === status);
+      return statusMatches &&
       (!role || job.role_group === role) &&
       (showInternational || !job.international) &&
       (showJuniorHybrid || !String(job.location_precheck || "").startsWith("Junior-Hybrid")) &&
-      (!query || `${job.title} ${job.company}`.toLocaleLowerCase("de").includes(query))
-    );
+      (!query || `${job.title} ${job.company}`.toLocaleLowerCase("de").includes(query));
+    });
     currentIndex = resetPosition
       ? 0
       : Math.min(currentIndex, Math.max(visibleJobs.length - 1, 0));
@@ -291,6 +300,10 @@
     setText("counter", `${currentIndex + 1} von ${visibleJobs.length}`);
     setText("score", `Vorfilter: ${job.match_percent ?? 0}/100`);
     setText("role-badge", roleLabels[job.role_group] || "Allgemeine IT");
+    const changeBadge = element("change-badge");
+    changeBadge.hidden = !(job.is_new || job.review_update_pending);
+    changeBadge.className = job.is_new ? "badge" : "badge updated";
+    changeBadge.textContent = job.is_new ? "Neu" : "Aktualisiert";
     setText("title", job.title);
     setText("company", job.company);
     setText("location", `Ort: ${(job.locations || []).join(", ") || "unbekannt"}`);
@@ -327,6 +340,8 @@
 
   function applyWorkflowResult(job, result) {
     job.workflow_status = result.workflow_status;
+    job.is_new = false;
+    job.review_update_pending = false;
     if (result.application_tracked != null) {
       job.application_tracked = result.application_tracked;
     }
@@ -334,6 +349,8 @@
     if (original) {
       original.workflow_status = result.workflow_status;
       original.application_tracked = job.application_tracked;
+      original.is_new = false;
+      original.review_update_pending = false;
     }
     if (element("status-filter").value && element("status-filter").value !== result.workflow_status) {
       applyFilters(false);

@@ -80,7 +80,11 @@ def process_notifications(
         if not is_notifiable(job):
             state["pending"].pop(key, None)
             continue
-        is_current_update = job.get("is_new") or job.get("content_changed")
+        is_current_update = (
+            job.get("is_new")
+            or job.get("review_update_pending")
+            or job.get("content_changed")
+        )
         if (
             is_current_update
             and key not in state["sent"]
@@ -259,6 +263,11 @@ def discord_embed(job):
         "color": 0x176B54,
         "fields": [
             {
+                "name": "Änderung",
+                "value": notification_kind(job),
+                "inline": True,
+            },
+            {
                 "name": "Firma",
                 "value": truncate(job.get("company") or "unbekannt", 1024),
                 "inline": True,
@@ -295,6 +304,11 @@ def discord_embed(job):
             },
         ],
     }
+
+
+def notification_kind(job):
+    """Distinguish first discoveries from persistent review updates."""
+    return "Neu" if job.get("is_new") else "Aktualisiert"
 
 
 def embed_character_count(embed):

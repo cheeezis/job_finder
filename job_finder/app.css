@@ -286,6 +286,8 @@ button.ignore { border-color: var(--line-strong); color: var(--danger); }
   background: var(--panel);
   box-shadow: 6px 6px 0 rgba(32, 33, 38, .14);
 }
+.review-badges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.badge.updated { border-color: #caa566; background: var(--warning-soft); color: #6d460d; }
 .source-menu { position: relative; }
 .source-menu summary { display: block; list-style: none; cursor: pointer; }
 .source-menu summary::-webkit-details-marker { display: none; }

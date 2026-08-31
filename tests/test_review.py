@@ -303,6 +303,10 @@ class ReviewTests(unittest.TestCase):
             start_application("job:unknown", self.memory_path)
 
     def test_inquiry_is_persisted_as_review_decision(self):
+        memory = load_memory(self.memory_path)
+        memory["job:1"]["review_update_pending"] = True
+        save_memory(memory, self.memory_path)
+
         result = update_review_decision(
             "job:1",
             "inquiry",
@@ -313,6 +317,9 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(
             load_memory(self.memory_path)["job:1"]["workflow_status"],
             "inquiry",
+        )
+        self.assertFalse(
+            load_memory(self.memory_path)["job:1"]["review_update_pending"]
         )
 
     def test_latest_ignored_decision_can_be_undone(self):
@@ -412,6 +419,9 @@ class ReviewTests(unittest.TestCase):
         self.assertNotIn('/api/note', review_page)
         self.assertIn("Ergebnis des Vorfilters", review_page)
         self.assertIn('id="role-filter"', review_page)
+        self.assertIn('<option value="attention">Neu oder aktualisiert</option>', review_page)
+        self.assertIn('job.is_new || job.review_update_pending', review_page)
+        self.assertIn('id="change-badge"', review_page)
         self.assertIn('id="experience-level"', review_page)
         self.assertIn('id="location-precheck"', review_page)
         self.assertNotIn("renderDecisionHints", review_page)

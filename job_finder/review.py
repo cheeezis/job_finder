@@ -70,6 +70,12 @@ def load_review_jobs(
             "workflow_status",
             WorkflowStatus.NEW.value,
         )
+        job["review_update_pending"] = bool(
+            entry.get(
+                "review_update_pending",
+                job.get("review_update_pending", False),
+            )
+        )
         job["application_tracked"] = is_application(entry)
         if not job.get("source_links"):
             source_names = entry.get("source_names", [])
@@ -128,6 +134,7 @@ def update_workflow_status(
         current_status = record_status_change(
             memory[job_id], status, occurred_on, scheduled_for
         )
+        memory[job_id]["review_update_pending"] = False
     return current_status
 
 
@@ -156,6 +163,7 @@ def update_review_decision(
                 "application_tracked": True,
             }
         current_status = record_status_change(entry, status)
+        entry["review_update_pending"] = False
     return {
         "workflow_status": current_status,
         "application_tracked": False,
@@ -226,6 +234,7 @@ def start_application(
             if salary_note:
                 entry["salary_expectation"] = salary_note
             status = record_status_change(entry, WorkflowStatus.APPLIED)
+            entry["review_update_pending"] = False
     except Exception:
         # Files are created before the database commit and must not survive a
         # failed transaction as unreferenced application documents.

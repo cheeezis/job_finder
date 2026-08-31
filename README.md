@@ -92,8 +92,12 @@ Danach stehen zur Verfügung:
 1. Die Quellen liefern Suchtreffer und Detaildaten.
 2. URLs und inhaltlich gleiche Stellen werden zusammengeführt.
 3. Das lokale Gedächtnis erkennt neue, bekannte, geänderte und inaktive Jobs.
-4. Der Vorfilter schließt klare Konflikte aus und versieht die übrigen Stellen
-   mit nachvollziehbaren Kategorien für IT-Bereich, Einstieg und Standort.
+4. Der Vorfilter schließt klare Konflikte sowie automatisch gefundene Anzeigen
+   aus, deren bekanntes Veröffentlichungsdatum mehr als 60 Tage zurückliegt.
+   Anzeigen ohne verlässliches Datum bleiben nach der Verfügbarkeitsprüfung
+   zulässig. Manuell eingereichte alte Anzeigen bleiben mit Warnung prüfbar.
+   Die übrigen Stellen erhalten nachvollziehbare Kategorien für IT-Bereich,
+   Einstieg und Standort.
 5. Alle durchgelassenen Stellen erscheinen im Review. Neue oder geänderte
    Stellen können zusätzlich an Discord gesendet werden.
 6. Bewerbungen werden getrennt vom Stellen-Review dauerhaft nachverfolgt.

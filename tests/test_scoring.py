@@ -1,6 +1,7 @@
 """Regression tests for deterministic scoring and deduplication."""
 
 import unittest
+from datetime import date, timedelta
 from unittest.mock import patch
 
 from job_finder.deduplication import deduplicate_jobs
@@ -24,6 +25,7 @@ def make_job(**overrides):
         "salary_max_eur": None,
         "career_levels": [],
         "employment_type": None,
+        "published_at": None,
     }
     values.update(overrides)
     work_mode, remote_percentage = classify_remote(values["remote"])
@@ -46,10 +48,34 @@ def make_job(**overrides):
         employment_type=values["employment_type"],
         salary_min_eur=values["salary_min_eur"],
         salary_max_eur=values["salary_max_eur"],
+        published_at=values["published_at"],
     )
 
 
 class ScoringTests(unittest.TestCase):
+    def test_posting_older_than_sixty_days_is_excluded(self):
+        today = date(2026, 8, 31)
+
+        result = score_job(
+            make_job(published_at=today - timedelta(days=61)),
+            today=today,
+        )
+
+        self.assertEqual(result["filter_status"], "excluded")
+        self.assertIn("älter als 60 Tage", result["reasons"][0])
+
+    def test_sixty_day_boundary_and_unknown_date_remain_eligible(self):
+        today = date(2026, 8, 31)
+
+        boundary = score_job(
+            make_job(published_at=today - timedelta(days=60)),
+            today=today,
+        )
+        unknown = score_job(make_job(published_at=None), today=today)
+
+        self.assertEqual(boundary["filter_status"], "included")
+        self.assertEqual(unknown["filter_status"], "included")
+
     def test_commuter_location_uses_configured_remote_threshold(self):
         locations = [
             {

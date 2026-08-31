@@ -3,6 +3,7 @@
 import json
 import tempfile
 import unittest
+from datetime import date, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -63,6 +64,25 @@ class ManualImportTests(unittest.TestCase):
         results = score_jobs([job])
         self.assertEqual(len(results["included"]), 1)
         self.assertEqual(results["included"][0]["prefilter_warning"], "Ort/Remote passt nicht")
+
+    def test_old_manual_job_remains_reviewable_with_warning(self):
+        from job_finder.main import score_jobs
+
+        job = Job(
+            id="manual:old",
+            title="Junior Python Entwickler",
+            company="Example GmbH",
+            locations=["Fulda"],
+            sources=[JobSource("manual", "https://example.com/old")],
+            description_raw="Python Entwicklung " * 20,
+            description_clean="Python Entwicklung " * 20,
+            published_at=date.today() - timedelta(days=61),
+        )
+
+        results = score_jobs([job])
+
+        self.assertEqual(len(results["included"]), 1)
+        self.assertIn("älter als 60 Tage", results["included"][0]["prefilter_warning"])
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 """Deterministic matching rules for one normalized job posting."""
 
 import re
+from datetime import date, timedelta
 
 from job_finder.config import LOCAL_SEARCH_RADIUS_KM
 from job_finder.models import FilterStatus, Job
@@ -51,8 +52,19 @@ REQUIRED_EXPERIENCE_PATTERNS = [
     r"\bexperience\s+(?:in|with|using|working|building|developing)\b",
     r"\bexperienced\s+(?:in|with)\b",
 ]
-def score_job(job: Job):
+MAX_JOB_AGE_DAYS = 60
+
+
+def score_job(job: Job, today=None):
     """Return a fixed 0-100 match score and explain every decision."""
+    reference_date = today or date.today()
+    cutoff = reference_date - timedelta(days=MAX_JOB_AGE_DAYS)
+    if job.published_at is not None and job.published_at < cutoff:
+        return excluded_result(
+            f"Veröffentlichung älter als {MAX_JOB_AGE_DAYS} Tage: "
+            f"{job.published_at.strftime('%d.%m.%Y')}"
+        )
+
     title = normalize_text(job.title)
     location = normalize_text(job.location_text)
     description = strip_platform_boilerplate(normalize_text(job.description_clean))

@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "local-job-finder"
+version = "0.2.0"
+description = "Local job collection and application review workflow"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {file = "LICENSE"}
+dependencies = ["PyYAML>=6.0,<7"]
+
+[tool.setuptools.package-data]
+job_finder = ["*.html", "*.css"]

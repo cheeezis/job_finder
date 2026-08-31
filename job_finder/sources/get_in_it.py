@@ -72,13 +72,27 @@ def fetch_jobs(cache_path=CACHE_FILE, now=None):
     )
 
 
-def collect_links():
+def fetch_jobs_with_report(cache_path=CACHE_FILE, now=None):
+    """Return jobs plus coverage so partial searches never age out old jobs."""
+    links, failed, total = collect_links(return_report=True)
+    jobs = fetch_cached_details(
+        links, cache_path, fetch_job, "get-in-IT", now=now
+    ) if links else []
+    return {
+        "jobs": jobs,
+        "status": "partial" if failed else ("success" if jobs else "empty"),
+        "details": {"failed_segments": failed, "total_segments": total},
+    }
+
+
+def collect_links(*, return_report=False):
     """Collect unique detail links from all generated API searches."""
     links = []
     seen = set()
     search_errors = 0
 
-    for search in build_api_searches():
+    searches = list(build_api_searches())
+    for search in searches:
         try:
             results = search_api(search["priority_id"], search["location"])
         except Exception:
@@ -91,7 +105,7 @@ def collect_links():
 
     if search_errors:
         print(f"WARNUNG get-in-IT: {search_errors} Suche(n) fehlgeschlagen")
-    return links
+    return (links, search_errors, len(searches)) if return_report else links
 
 
 def build_api_searches():

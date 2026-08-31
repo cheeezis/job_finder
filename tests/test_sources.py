@@ -385,8 +385,9 @@ class SharedDetailCacheTests(unittest.TestCase):
             ):
                 jobs = arbeitsagentur.fetch_jobs(cache_path=cache_path, now=now)
 
-        self.assertEqual(jobs, [cached_job])
+        self.assertEqual([job.id for job in jobs], [cached_job.id])
         self.assertFalse(jobs[0].content_changed)
+        self.assertTrue(jobs[0].cache_stale)
 
     @staticmethod
     def make_job(source, url, fetched_at):

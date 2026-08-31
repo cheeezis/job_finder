@@ -61,6 +61,24 @@ def fetch_jobs(cache_path=CACHE_FILE, now=None):
     return jobs
 
 
+def fetch_jobs_with_report(cache_path=CACHE_FILE, now=None):
+    """Return lightweight jobs and explicit search coverage metadata."""
+    records, failed, total = collect_records(return_report=True)
+    cache = load_detail_cache(Path(cache_path))
+    jobs = []
+    for record in records:
+        url = canonical_detail_url(record.get("link", ""))
+        if not url:
+            continue
+        summary = summary_job_from_record(record)
+        jobs.append(with_current_summary(cache[url], summary) if url in cache else summary)
+    return {
+        "jobs": jobs,
+        "status": "partial" if failed else ("success" if jobs else "empty"),
+        "details": {"failed_segments": failed, "total_segments": total},
+    }
+
+
 def with_current_summary(cached_job, summary):
     """Keep cached detail text but refresh fields exposed by the search API."""
     current = replace(
@@ -133,14 +151,15 @@ def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE, now=None):
     return enriched
 
 
-def collect_records(searches=None):
+def collect_records(searches=None, *, return_report=False):
     """Collect bounded local and remote searches without duplicate listings."""
     records = []
     seen = set()
     search_errors = 0
     first_request = True
 
-    for parameters in searches or build_searches():
+    selected_searches = list(searches or build_searches())
+    for parameters in selected_searches:
         try:
             for page in range(1, MAX_PAGES_PER_SEARCH + 1):
                 if not first_request:
@@ -161,7 +180,8 @@ def collect_records(searches=None):
 
     if search_errors:
         print(f"WARNUNG StudySmarter: {search_errors} Suche(n) fehlgeschlagen")
-    return records
+    result = (records, search_errors, len(selected_searches))
+    return result if return_report else records
 
 
 def build_searches():

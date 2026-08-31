@@ -16,6 +16,7 @@ from job_finder.sources.common import (
     load_detail_cache,
     mark_content_change,
     normalize_employment_type,
+    record_partial_failure,
     save_detail_cache,
     source_job_id,
     utc_now,
@@ -69,6 +70,7 @@ def fetch_jobs(cache_path=CACHE_FILE):
             "WARNUNG Arbeitnow: API-Limit erreicht; nutze "
             f"{len(jobs)} aktuelle Stellen aus dem lokalen Cache"
         )
+        record_partial_failure(1)
         return jobs
 
     current_cache = {}

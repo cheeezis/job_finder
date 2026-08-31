@@ -91,6 +91,7 @@ class Job:
     workflow_status: WorkflowStatus = WorkflowStatus.NEW
     is_new: bool = False
     content_changed: bool = False
+    cache_stale: bool = False
 
     def __post_init__(self):
         """Reject invalid percentages, scores, and salary ranges."""
@@ -156,6 +157,7 @@ class Job:
             "last_seen_at": format_temporal(self.last_seen_at),
             "fetched_at": format_temporal(self.fetched_at),
             "workflow_status": self.workflow_status.value,
+            "cache_stale": self.cache_stale,
         }
 
     @classmethod
@@ -182,6 +184,7 @@ class Job:
             workflow_status=WorkflowStatus(
                 values.get("workflow_status", WorkflowStatus.NEW.value)
             ),
+            cache_stale=bool(values.get("cache_stale", False)),
         )
 
 

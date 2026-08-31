@@ -147,11 +147,15 @@ def document_directory(job_id, root=APPLICATION_DOCUMENTS_DIR, folder_name=None)
 
 
 def application_folder_name(company, title, job_id):
-    """Create a readable, bounded folder name for one application."""
+    """Create a readable folder whose stable suffix prevents cross-job collisions."""
     label = " - ".join(
         value for value in [str(company or "").strip(), str(title or "").strip()] if value
     )
-    return safe_windows_name(label or str(job_id))[:MAX_FOLDER_NAME_LENGTH].rstrip(". ")
+    identifier = hashlib.sha256(str(job_id).encode("utf-8")).hexdigest()[:12]
+    suffix = f" [{identifier}]"
+    readable = safe_windows_name(label or "Bewerbung")
+    readable = readable[: MAX_FOLDER_NAME_LENGTH - len(suffix)].rstrip(". ")
+    return f"{readable}{suffix}"
 
 
 def safe_windows_name(value):

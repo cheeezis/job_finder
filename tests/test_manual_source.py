@@ -11,6 +11,23 @@ from job_finder.sources.common import load_detail_cache
 
 
 class ManualSourceTests(unittest.TestCase):
+    def test_remote_schema_uses_applicant_region_when_job_location_is_missing(self):
+        html = """
+        <script type="application/ld+json">{
+          "@context": "https://schema.org",
+          "@type": "JobPosting",
+          "title": "Junior Python Developer",
+          "description": "Python APIs und erste praktische Erfahrung.",
+          "jobLocationType": "TELECOMMUTE",
+          "applicantLocationRequirements": {"@type": "Country", "name": "Germany"},
+          "hiringOrganization": {"@type": "Organization", "name": "Example GmbH"}
+        }</script>
+        """
+
+        job = manual.job_from_page("https://example.com/jobs/remote", html)
+
+        self.assertEqual(job.locations, ["Germany"])
+
     def test_visible_career_page_is_parsed_without_form_or_footer(self):
         html = """
         <html><head>
@@ -55,11 +72,18 @@ class ManualSourceTests(unittest.TestCase):
         """
         with tempfile.TemporaryDirectory() as directory:
             cache_path = Path(directory) / "manual.json"
-            with patch.object(
-                manual,
-                "fetch_text_with_final_url",
-                return_value=("https://example.com/jobs/python", html),
-            ) as fetch:
+            with (
+                patch.object(
+                    manual.socket,
+                    "getaddrinfo",
+                    return_value=[(None, None, None, None, ("93.184.216.34", 443))],
+                ),
+                patch.object(
+                    manual,
+                    "fetch_text_with_final_url",
+                    return_value=("https://example.com/jobs/python", html),
+                ) as fetch,
+            ):
                 job = manual.add_url(
                     "https://example.com/jobs/python",
                     cache_path=cache_path,
@@ -67,7 +91,10 @@ class ManualSourceTests(unittest.TestCase):
 
             cache = load_detail_cache(cache_path)
 
-        fetch.assert_called_once_with("https://example.com/jobs/python")
+        fetch.assert_called_once_with(
+            "https://example.com/jobs/python",
+            url_validator=manual.validate_public_url,
+        )
         self.assertEqual(list(cache), ["https://example.com/jobs/python"])
         self.assertEqual(job.primary_source.source, "manual")
 
@@ -79,6 +106,15 @@ class ManualSourceTests(unittest.TestCase):
         ):
             with self.subTest(url=url), self.assertRaises(ValueError):
                 manual.validate_public_url(url)
+
+    def test_hostname_resolving_to_private_network_is_rejected(self):
+        with patch.object(
+            manual.socket,
+            "getaddrinfo",
+            return_value=[(None, None, None, None, ("192.168.1.10", 443))],
+        ):
+            with self.assertRaisesRegex(ValueError, "Private Netzwerk"):
+                manual.validate_public_url("https://public-name.example/job")
 
 
 if __name__ == "__main__":

@@ -62,7 +62,12 @@ def score_job(job: Job):
             detect_remote(title, location, description, structured_remote=remote)
         )
     salary_text = structured_salary_text(job)
-    full_text = " ".join([title, location, remote, description, salary_text])
+    employment = normalize_text(job.employment_type or "")
+    # Structured employment data must influence preferences even when portals
+    # omit words such as "Teilzeit" from title and description.
+    full_text = " ".join(
+        [title, location, remote, employment, description, salary_text]
+    )
 
     role = find_role(title, description)
     allowed, filter_reason = passes_hard_filters(
@@ -541,6 +546,23 @@ def score_preferences(full_text):
 
     if "teilzeit" in full_text and "vollzeit" not in full_text:
         penalties.append({"points": 4, "label": "reine Teilzeitstelle"})
+
+    if contains_any(full_text, ["freelance", "freelancer", "freiberuflich"]):
+        penalties.append({"points": 8, "label": "freiberufliche Beschäftigung"})
+
+    if contains_any(full_text, ["werkstudent", "working student"]):
+        penalties.append({"points": 8, "label": "Werkstudentenstelle"})
+
+    if contains_any(
+        full_text,
+        [
+            "praktikum", "praktikant", "internship", "ausbildung",
+            "auszubildende", "auszubildender", "auszubildenden", "azubi",
+            "duales studium", "dual study", "abschlussarbeit", "bachelorarbeit",
+            "thesis", "weiterbildung",
+        ],
+    ):
+        penalties.append({"points": 12, "label": "Ausbildungs-/Studienformat"})
 
     if contains_any(full_text, ["arbeitnehmerueberlassung", "zeitarbeit", "personaldienstleister"]):
         penalties.append({"points": 3, "label": "Arbeitnehmerueberlassung/Zeitarbeit"})

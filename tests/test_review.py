@@ -9,6 +9,7 @@ import unittest
 from http.server import HTTPServer
 from pathlib import Path
 from urllib.parse import urlencode
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from job_finder.memory import load_memory, save_memory
@@ -390,6 +391,10 @@ class ReviewTests(unittest.TestCase):
         self.assertIn("Bewerbungen verwalten", landing_page)
         self.assertIn('id="manual-import-form"', landing_page)
         self.assertIn('fetch("/api/manual-import"', landing_page)
+        for page in (landing_page, review_page, applications_page):
+            self.assertIn('href="/app.css?v=2"', page)
+            self.assertNotIn("<style", page)
+            self.assertNotIn("style=", page)
         self.assertIn("Als beworben markieren", review_page)
         self.assertIn('id="application-dialog"', review_page)
         self.assertIn('id="cover-letter-file"', review_page)
@@ -658,6 +663,31 @@ class ReviewTests(unittest.TestCase):
         self.assertNotIn("personal_ratings", document)
         jobs = load_review_jobs(self.recommendations_path, self.memory_path)
         self.assertEqual(jobs[0]["workflow_status"], "ignored")
+
+    def test_local_api_rejects_dns_rebinding_host(self):
+        handler = type(
+            "SecureReviewHandler",
+            (ReviewRequestHandler,),
+            {"recommendations_path": self.recommendations_path,
+             "memory_path": self.memory_path},
+        )
+        server = HTTPServer(("127.0.0.1", 0), handler)
+        thread = threading.Thread(target=server.serve_forever)
+        thread.start()
+        try:
+            request = Request(
+                f"http://127.0.0.1:{server.server_port}/api/recommendations",
+                headers={"Host": "attacker.example"},
+            )
+            with self.assertRaises(HTTPError) as caught:
+                urlopen(request)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join()
+
+        self.assertEqual(caught.exception.code, 403)
+        caught.exception.close()
 
     def test_application_page_records_dated_event_and_returns_statistics(self):
         event_on = date.today().isoformat()

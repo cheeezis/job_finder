@@ -12,12 +12,14 @@ from job_finder.sources.common import (
     DETAIL_CACHE_SAVE_INTERVAL,
     canonical_detail_url,
     detail_is_fresh,
+    detail_within_age,
     extract_annual_salary_eur,
     extract_schema_locations,
     load_detail_cache,
     mark_content_change,
     normalize_employment_type,
     parse_published_date,
+    record_partial_failure,
     save_detail_cache,
     source_job_id,
     utc_now,
@@ -50,12 +52,14 @@ def fetch_company_jobs(
         if detail_is_fresh(cached_job, now):
             cache_updated = ensure_url_identity(cached_job, source_name, url) or cache_updated
             cached_job.content_changed = False
+            cached_job.cache_stale = False
             jobs.append(cached_job)
             continue
 
         try:
             html = fetch_text(url)
             job = parser(source_name, company, url, html)
+            job.cache_stale = False
             ensure_url_identity(job, source_name, url)
             mark_content_change(job, cached_job)
             jobs.append(job)
@@ -66,15 +70,17 @@ def fetch_company_jobs(
                 unsaved = 0
         except Exception:
             detail_errors += 1
-            if cached_job:
+            if cached_job and detail_within_age(cached_job, now):
                 cache_updated = ensure_url_identity(cached_job, source_name, url) or cache_updated
                 cached_job.content_changed = False
+                cached_job.cache_stale = True
                 jobs.append(cached_job)
                 stale_fallbacks += 1
 
     if unsaved or cache_updated:
         save_detail_cache(cache_file, cache)
     if detail_errors:
+        record_partial_failure(detail_errors)
         print(
             f"WARNUNG {source_name}: {detail_errors} Detailseite(n) "
             f"nicht erreichbar, {stale_fallbacks} aus altem Cache übernommen"

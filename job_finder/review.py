@@ -3,6 +3,7 @@
 import argparse
 import json
 import mimetypes
+import re
 import threading
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -26,7 +27,7 @@ from job_finder.applications import (
 )
 from job_finder.config import LOCAL_SEARCH_LOCATION, LOCAL_SEARCH_POSTAL_CODE
 from job_finder.manual_import import import_manual_url
-from job_finder.memory import load_memory, preferred_memory_id, save_memory
+from job_finder.memory import edit_memory, load_memory, preferred_memory_id
 from job_finder.models import WorkflowStatus
 from job_finder.paths import (
     APPLICATION_DOCUMENTS_DIR,
@@ -44,6 +45,7 @@ APPLICATIONS_PAGE = Path(__file__).with_name("applications.html")
 APP_STYLES = Path(__file__).with_name("app.css")
 ROUTE_ORIGIN = f"{LOCAL_SEARCH_POSTAL_CODE} {LOCAL_SEARCH_LOCATION}".strip()
 MAX_REQUEST_BYTES = 45 * 1024 * 1024
+LOCAL_HOST_PATTERN = re.compile(r"^(?:127\.0\.0\.1|localhost)(?::\d{1,5})?$")
 
 
 def load_review_jobs(
@@ -120,16 +122,12 @@ def update_workflow_status(
 ):
     """Validate and persist one manual workflow decision."""
     status = WorkflowStatus(workflow_status)
-    memory = load_memory(memory_path)
-    if job_id not in memory:
-        raise KeyError(f"Unbekannte Job-ID: {job_id}")
-    current_status = record_status_change(
-        memory[job_id],
-        status,
-        occurred_on,
-        scheduled_for,
-    )
-    save_memory(memory, memory_path)
+    with edit_memory(memory_path) as memory:
+        if job_id not in memory:
+            raise KeyError(f"Unbekannte Job-ID: {job_id}")
+        current_status = record_status_change(
+            memory[job_id], status, occurred_on, scheduled_for
+        )
     return current_status
 
 
@@ -146,20 +144,18 @@ def update_review_decision(
         WorkflowStatus.IGNORED,
     }:
         raise ValueError("Ungueltiger Review-Status")
-    memory = load_memory(memory_path)
-    if job_id not in memory:
-        raise KeyError(f"Unbekannte Job-ID: {job_id}")
-    entry = memory[job_id]
-    if is_application(entry):
-        return {
-            "workflow_status": entry.get(
-                "workflow_status",
-                WorkflowStatus.APPLIED.value,
-            ),
-            "application_tracked": True,
-        }
-    current_status = record_status_change(entry, status)
-    save_memory(memory, memory_path)
+    with edit_memory(memory_path) as memory:
+        if job_id not in memory:
+            raise KeyError(f"Unbekannte Job-ID: {job_id}")
+        entry = memory[job_id]
+        if is_application(entry):
+            return {
+                "workflow_status": entry.get(
+                    "workflow_status", WorkflowStatus.APPLIED.value
+                ),
+                "application_tracked": True,
+            }
+        current_status = record_status_change(entry, status)
     return {
         "workflow_status": current_status,
         "application_tracked": False,
@@ -172,25 +168,24 @@ def undo_ignored_decision(
     memory_path=MEMORY_FILE,
 ):
     """Remove the latest ignored transition and restore its prior status."""
-    memory = load_memory(memory_path)
-    if job_id not in memory:
-        raise KeyError(f"Unbekannte Job-ID: {job_id}")
-    entry = memory[job_id]
-    if is_application(entry):
-        raise ValueError("Bewerbungsstatus kann hier nicht rückgängig gemacht werden")
-    if entry.get("workflow_status") != WorkflowStatus(expected_status).value:
-        raise ValueError("Die Stelle wurde zwischenzeitlich geändert")
-    if expected_status != WorkflowStatus.IGNORED.value:
-        raise ValueError("Nur die letzte Nicht-interessant-Entscheidung ist rückgängig")
-    history = entry.get("workflow_history")
-    if not isinstance(history, list) or not history:
-        raise ValueError("Keine Entscheidung zum Rückgängigmachen gefunden")
-    last_event = history[-1]
-    if not isinstance(last_event, dict) or last_event.get("status") != expected_status:
-        raise ValueError("Die letzte Entscheidung hat sich zwischenzeitlich geändert")
-    history.pop()
-    status = synchronize_current_status(entry)
-    save_memory(memory, memory_path)
+    with edit_memory(memory_path) as memory:
+        if job_id not in memory:
+            raise KeyError(f"Unbekannte Job-ID: {job_id}")
+        entry = memory[job_id]
+        if is_application(entry):
+            raise ValueError("Bewerbungsstatus kann hier nicht rückgängig gemacht werden")
+        if entry.get("workflow_status") != WorkflowStatus(expected_status).value:
+            raise ValueError("Die Stelle wurde zwischenzeitlich geändert")
+        if expected_status != WorkflowStatus.IGNORED.value:
+            raise ValueError("Nur die letzte Nicht-interessant-Entscheidung ist rückgängig")
+        history = entry.get("workflow_history")
+        if not isinstance(history, list) or not history:
+            raise ValueError("Keine Entscheidung zum Rückgängigmachen gefunden")
+        last_event = history[-1]
+        if not isinstance(last_event, dict) or last_event.get("status") != expected_status:
+            raise ValueError("Die letzte Entscheidung hat sich zwischenzeitlich geändert")
+        history.pop()
+        status = synchronize_current_status(entry)
     return {
         "workflow_status": status,
         "application_tracked": False,
@@ -205,34 +200,35 @@ def start_application(
     salary_expectation=None,
 ):
     """Record the first application without overwriting later progress."""
-    memory = load_memory(memory_path)
-    if job_id not in memory:
-        raise KeyError(f"Unbekannte Job-ID: {job_id}")
-    entry = memory[job_id]
-    if is_application(entry):
-        return {
-            "workflow_status": entry.get(
-                "workflow_status",
-                WorkflowStatus.APPLIED.value,
-            ),
-            "application_tracked": True,
-        }
-    salary_note = validated_salary_expectation(salary_expectation)
-    stored_documents = store_documents(
-        job_id,
-        documents,
-        documents_dir,
-        company=entry.get("company", ""),
-        title=entry.get("title", ""),
-    )
-    if stored_documents:
-        entry["application_documents"] = stored_documents
-    if salary_note:
-        entry["salary_expectation"] = salary_note
-    status = record_status_change(entry, WorkflowStatus.APPLIED)
+    stored_documents = []
     try:
-        save_memory(memory, memory_path)
-    except OSError:
+        with edit_memory(memory_path) as memory:
+            if job_id not in memory:
+                raise KeyError(f"Unbekannte Job-ID: {job_id}")
+            entry = memory[job_id]
+            if is_application(entry):
+                return {
+                    "workflow_status": entry.get(
+                        "workflow_status", WorkflowStatus.APPLIED.value
+                    ),
+                    "application_tracked": True,
+                }
+            salary_note = validated_salary_expectation(salary_expectation)
+            stored_documents = store_documents(
+                job_id,
+                documents,
+                documents_dir,
+                company=entry.get("company", ""),
+                title=entry.get("title", ""),
+            )
+            if stored_documents:
+                entry["application_documents"] = stored_documents
+            if salary_note:
+                entry["salary_expectation"] = salary_note
+            status = record_status_change(entry, WorkflowStatus.APPLIED)
+    except Exception:
+        # Files are created before the database commit and must not survive a
+        # failed transaction as unreferenced application documents.
         remove_documents(job_id, stored_documents, documents_dir)
         raise
     return {
@@ -265,20 +261,13 @@ def update_workflow_history(
     previous_scheduled_for=None,
 ):
     """Edit one manual workflow event."""
-    memory = load_memory(memory_path)
-    if job_id not in memory:
-        raise KeyError(f"Unbekannte Job-ID: {job_id}")
-    result = update_history_event(
-        memory[job_id],
-        event_index,
-        previous_status,
-        previous_occurred_on,
-        workflow_status,
-        occurred_on,
-        scheduled_for,
-        previous_scheduled_for,
-    )
-    save_memory(memory, memory_path)
+    with edit_memory(memory_path) as memory:
+        if job_id not in memory:
+            raise KeyError(f"Unbekannte Job-ID: {job_id}")
+        result = update_history_event(
+            memory[job_id], event_index, previous_status, previous_occurred_on,
+            workflow_status, occurred_on, scheduled_for, previous_scheduled_for,
+        )
     return result
 
 
@@ -291,17 +280,13 @@ def delete_workflow_history(
     previous_scheduled_for=None,
 ):
     """Delete one manual workflow event."""
-    memory = load_memory(memory_path)
-    if job_id not in memory:
-        raise KeyError(f"Unbekannte Job-ID: {job_id}")
-    status = delete_history_event(
-        memory[job_id],
-        event_index,
-        previous_status,
-        previous_occurred_on,
-        previous_scheduled_for,
-    )
-    save_memory(memory, memory_path)
+    with edit_memory(memory_path) as memory:
+        if job_id not in memory:
+            raise KeyError(f"Unbekannte Job-ID: {job_id}")
+        status = delete_history_event(
+            memory[job_id], event_index, previous_status, previous_occurred_on,
+            previous_scheduled_for,
+        )
     return {"workflow_status": status}
 
 
@@ -321,6 +306,8 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         """Return the page or the current joined recommendation data."""
+        if not self.accept_local_request():
+            return
         request_path = urlsplit(self.path).path
         if request_path in {"/", "/index.html"}:
             self.send_file(self.landing_page_path, "text/html; charset=utf-8")
@@ -359,6 +346,8 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         """Persist a workflow status selected in the browser."""
+        if not self.accept_local_request(require_json=True):
+            return
         request_path = urlsplit(self.path).path
         if request_path not in {
             "/api/status",
@@ -373,8 +362,8 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            if length > MAX_REQUEST_BYTES:
-                raise ValueError("Anfrage ist zu groß")
+            if length <= 0 or length > MAX_REQUEST_BYTES:
+                raise ValueError("Anfrage ist leer oder zu groß")
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
             if request_path == "/api/manual-import":
                 result = type(self).manual_importer(
@@ -479,6 +468,41 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
         )
         self.end_headers()
         self.wfile.write(content)
+
+    def accept_local_request(self, *, require_json=False):
+        """Reject DNS rebinding and cross-site mutation attempts.
+
+        Browsers cannot send an ``application/json`` cross-origin POST without
+        a preflight. This server deliberately emits no CORS permission.
+        """
+        host = self.headers.get("Host", "").casefold()
+        if not LOCAL_HOST_PATTERN.fullmatch(host):
+            self.send_error(403, "Ungültiger lokaler Host")
+            return False
+        origin = self.headers.get("Origin")
+        if origin and origin.casefold() != f"http://{host}":
+            self.send_error(403, "Ungültiger Ursprung")
+            return False
+        if require_json:
+            content_type = self.headers.get("Content-Type", "")
+            if content_type.partition(";")[0].strip().casefold() != "application/json":
+                self.send_error(415, "JSON-Inhalt erforderlich")
+                return False
+        return True
+
+    def end_headers(self):
+        """Apply privacy and browser-hardening headers to every response."""
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "same-origin")
+        self.send_header(
+            "Content-Security-Policy",
+            "default-src 'self'; script-src 'self' 'unsafe-inline'; "
+            "style-src 'self'; img-src 'self' data:; "
+            "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'",
+        )
+        super().end_headers()
 
     def send_file(self, path, content_type):
         """Return one UTF-8 page from disk."""

@@ -4,85 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Bewerbungsübersicht</title>
-  <style>
-    :root {
-      color-scheme: light;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      color: #172033;
-      background: #f3f5f8;
-    }
-    * { box-sizing: border-box; }
-    [hidden] { display: none !important; }
-    body { margin: 0; }
-    main { width: min(1100px, calc(100% - 32px)); margin: 36px auto 72px; }
-    header { display: flex; justify-content: space-between; gap: 24px; align-items: end; }
-    h1 { margin: 0; font-size: clamp(1.8rem, 4vw, 2.8rem); }
-    .subtitle { margin: 8px 0 0; color: #607087; }
-    a { color: #176b54; }
-    .nav-link { white-space: nowrap; }
-    .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin: 24px 0; }
-    .stat, .application { background: white; border: 1px solid #dfe4eb; border-radius: 14px; box-shadow: 0 8px 24px rgba(28, 39, 58, .06); }
-    .stat { padding: 16px; }
-    .stat-value { display: block; font-size: 1.7rem; font-weight: 750; color: #12664f; }
-    .stat-label { color: #607087; font-size: .84rem; }
-    .applications { display: grid; gap: 16px; }
-    .section-header { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin: 28px 0 14px; }
-    .section-title { margin: 0; font-size: 1.25rem; }
-    .archive { margin-top: 34px; }
-    .archive-note { color: #607087; margin: 6px 0 16px; }
-    .application { padding: 22px; }
-    .application-header { display: flex; justify-content: space-between; gap: 18px; align-items: start; }
-    h2 { margin: 0 0 5px; font-size: 1.25rem; }
-    .company { margin: 0; color: #607087; }
-    .badges { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
-    .badge { padding: 5px 9px; border-radius: 999px; background: #e7f5ef; color: #12664f; font-size: .8rem; font-weight: 650; white-space: nowrap; }
-    .badge.inactive { background: #f2f3f5; color: #657084; }
-    .meta { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 15px 0; color: #445269; font-size: .9rem; }
-    .appointment { color: #12664f; font-weight: 700; }
-    details { border-top: 1px solid #e5e9ef; margin-top: 18px; padding-top: 15px; }
-    summary { cursor: pointer; font-weight: 650; }
-    .timeline { display: grid; gap: 10px; margin: 15px 0; padding-left: 22px; }
-    .timeline-item { padding-left: 4px; }
-    .timeline-edit-toggle { margin-top: 12px; }
-    .timeline-editor { margin-top: 14px; }
-    .new-event-title { margin: 18px 0 0; font-weight: 650; }
-    .empty-history, .note, .empty, .error { color: #607087; }
-    .note { padding: 10px 12px; background: #f7f8fa; border-radius: 9px; }
-    .documents { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 12px 0; font-size: .9rem; }
-    .event-form { display: grid; grid-template-columns: 1fr 170px 210px auto; gap: 10px; align-items: end; margin-top: 14px; }
-    .history-form { display: grid; grid-template-columns: 1fr 170px 210px auto; gap: 10px; align-items: end; }
-    .form-actions { display: flex; gap: 7px; }
-    label { display: grid; gap: 6px; color: #607087; font-size: .82rem; }
-    select, input, button { font: inherit; border-radius: 9px; }
-    select, input { width: 100%; padding: 9px 11px; border: 1px solid #cbd3df; background: white; color: #172033; }
-    button { border: 1px solid #176b54; background: #176b54; color: white; padding: 9px 14px; cursor: pointer; }
-    button:hover { background: #105541; }
-    button.secondary { background: white; color: #176b54; }
-    button.secondary:hover { background: #edf7f3; }
-    button.danger { border-color: #b14d58; background: white; color: #9b3440; }
-    button.danger:hover { background: #fff1f2; }
-    button:disabled { cursor: wait; opacity: .65; }
-    details.source-menu { position: relative; border: 0; margin: 0; padding: 0; }
-    .source-menu summary { color: #176b54; font-weight: 400; list-style: none; }
-    .source-menu summary::-webkit-details-marker { display: none; }
-    .source-options { position: absolute; left: 0; top: calc(100% + 5px); z-index: 2; display: grid; min-width: 180px; padding: 6px; background: white; border: 1px solid #cbd3df; border-radius: 9px; box-shadow: 0 8px 24px rgba(28, 39, 58, .12); }
-    .source-options a { padding: 8px 9px; text-decoration: none; border-radius: 6px; }
-    .source-options a:hover { background: #edf7f3; }
-    .empty, .error { padding: 36px; text-align: center; background: white; border-radius: 14px; }
-    .error { color: #8a3840; }
-    @media (max-width: 700px) {
-      header, .application-header { display: block; }
-      .nav-link { display: inline-block; margin-top: 12px; }
-      .badges { justify-content: flex-start; margin-top: 12px; }
-      .stats { grid-template-columns: repeat(2, 1fr); }
-      .section-header { align-items: start; flex-direction: column; }
-      .event-form, .history-form { grid-template-columns: 1fr; }
-    }
-    @media (min-width: 701px) and (max-width: 900px) {
-      .stats { grid-template-columns: repeat(3, 1fr); }
-    }
-  </style>
-  <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/app.css?v=2">
 </head>
 <body class="applications-page">
 <main>
@@ -100,7 +22,8 @@
     <h2 class="section-title">Laufende Bewerbungen</h2>
     <button id="archive-toggle" class="secondary" type="button" hidden></button>
   </div>
-  <section id="message" class="empty">Bewerbungen werden geladen …</section>
+  <section id="message" class="empty" role="status" aria-live="polite">Bewerbungen werden geladen …</section>
+  <p id="action-message" class="feedback" role="status" aria-live="polite" hidden></p>
   <section id="applications" class="applications" aria-label="Laufende Bewerbungen"></section>
   <section id="archive" class="archive" hidden>
     <h2 class="section-title">Abgeschlossene Bewerbungen bearbeiten</h2>
@@ -347,6 +270,12 @@
     return result;
   }
 
+  function showError(error) {
+    const message = element("action-message");
+    message.textContent = error.message;
+    message.hidden = false;
+  }
+
   function eventForm(jobId) {
     const form = make("form", null, "event-form");
     const statusLabel = make("label", "Ereignis");
@@ -382,7 +311,7 @@
         );
         await load();
       } catch (error) {
-        window.alert(error.message);
+        showError(error);
       } finally {
         button.disabled = false;
       }
@@ -433,7 +362,7 @@
         );
         await load();
       } catch (error) {
-        window.alert(error.message);
+        showError(error);
       } finally {
         saveButton.disabled = false;
         deleteButton.disabled = false;
@@ -458,7 +387,7 @@
         );
         await load();
       } catch (error) {
-        window.alert(error.message);
+        showError(error);
       } finally {
         saveButton.disabled = false;
         deleteButton.disabled = false;

@@ -41,10 +41,31 @@ class ApplicationDocumentTests(unittest.TestCase):
         self.assertEqual(path.read_bytes(), content)
         self.assertEqual(documents[0]["name"], "Anschreiben.pdf")
         self.assertEqual(path.name, "Anschreiben.pdf")
-        self.assertEqual(
-            path.parent.name,
-            "Example GmbH - Junior Python Developer (m_w_d)",
+        self.assertTrue(
+            path.parent.name.startswith(
+                "Example GmbH - Junior Python Developer (m_w_d) ["
+            )
         )
+
+    def test_equal_titles_for_different_jobs_use_distinct_folders(self):
+        payload = [{
+            "kind": "resume",
+            "name": "Lebenslauf.pdf",
+            "content": base64.b64encode(b"first").decode("ascii"),
+        }]
+        first = store_documents(
+            "source:1", payload, self.directory, company="Example", title="Developer"
+        )
+        payload[0]["content"] = base64.b64encode(b"second").decode("ascii")
+        second = store_documents(
+            "source:2", payload, self.directory, company="Example", title="Developer"
+        )
+
+        first_path = document_path("source:1", first[0], self.directory)
+        second_path = document_path("source:2", second[0], self.directory)
+        self.assertNotEqual(first_path.parent, second_path.parent)
+        self.assertEqual(first_path.read_bytes(), b"first")
+        self.assertEqual(second_path.read_bytes(), b"second")
 
     def test_public_metadata_does_not_expose_storage_name(self):
         documents = store_documents(

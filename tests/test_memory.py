@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from job_finder.memory import load_memory, save_memory, update_memory
+from job_finder.memory import edit_memory, load_memory, migrate_legacy_memory, save_memory, update_memory
 from job_finder.models import Job, JobSource, WorkflowStatus
 
 
@@ -194,6 +194,7 @@ class MemoryTests(unittest.TestCase):
             old_id: {
                 "title": "Junior Python Developer (m/w/d)",
                 "company": "Example GmbH & Co. KG",
+                "locations": list(job.locations),
                 "first_seen_at": "2026-07-01T08:00:00+00:00",
                 "last_seen_at": "2026-07-10T08:00:00+00:00",
                 "workflow_status": "ignored",
@@ -221,6 +222,7 @@ class MemoryTests(unittest.TestCase):
             "stepstone:applied": {
                 "title": job.title,
                 "company": job.company,
+                "locations": list(job.locations),
                 "first_seen_at": "2026-07-01T08:00:00+00:00",
                 "last_seen_at": "2026-07-10T08:00:00+00:00",
                 "workflow_status": "rejected",
@@ -318,6 +320,30 @@ class MemoryTests(unittest.TestCase):
 
             with self.assertRaisesRegex(ValueError, "alte Format"):
                 load_memory(path)
+
+    def test_sqlite_state_round_trip_and_transactional_edit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.sqlite3"
+            save_memory({"test:1": {"workflow_status": "new"}}, path)
+            with edit_memory(path) as memory:
+                memory["test:1"]["workflow_status"] = "interesting"
+
+            restored = load_memory(path)
+
+        self.assertEqual(restored["test:1"]["workflow_status"], "interesting")
+
+    def test_legacy_json_is_migrated_without_deleting_source(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            legacy = root / "seen_jobs.json"
+            database = root / "state.sqlite3"
+            save_memory({"test:1": {"workflow_status": "new"}}, legacy)
+
+            migrated = migrate_legacy_memory(database, legacy)
+
+            self.assertTrue(migrated)
+            self.assertTrue(legacy.exists())
+            self.assertIn("test:1", load_memory(database))
 
 
 if __name__ == "__main__":

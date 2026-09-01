@@ -175,30 +175,6 @@ Einträge gleichzeitig aktualisiert werden, können gelegentlich längere
 Netzwerkphasen entstehen. SQLite ist dabei nur der kurze lokale
 Persistenzschritt.
 
-## Lokale Daten und Datenschutz
-
-Persönliche Einstellungen, gefundene Stellen, Bewerbungsverläufe, Caches,
-Benachrichtigungsstatus und Laufprotokolle liegen unter ignorierten lokalen
-Dateien beziehungsweise unter `data/`. Sie gehören nicht ins Repository.
-Zugangsdaten werden ausschließlich über Umgebungsvariablen erwartet.
-
-Die Weboberfläche bindet ausschließlich an `127.0.0.1` und ist als persönliche
-Ein-Nutzer-Anwendung gedacht. Host-, Origin- und Inhaltstypprüfungen schützen
-die lokalen Schreib- und Dokumentendpunkte. Der manuelle Import akzeptiert nur
-öffentliche HTTP(S)-Ziele und prüft auch DNS-Auflösung sowie Weiterleitungen;
-interne Dienste und lokale Dateien sind nicht zulässig.
-
-Bewerbungsunterlagen werden pro Job in einem technisch eindeutigen lokalen
-Ordner gespeichert. Sie sind nicht Bestandteil der rotierenden Zustandsbackups
-und sollten bei Bedarf separat verschlüsselt gesichert und nach Ende der
-gewünschten Aufbewahrungsdauer gelöscht werden.
-
-Vor einer Veröffentlichung empfiehlt sich:
-
-```powershell
-git status --ignored
-```
-
 ## Tests
 
 ```powershell

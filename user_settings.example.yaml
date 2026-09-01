@@ -1,13 +1,25 @@
+# Diese Datei nach user_settings.local.yaml kopieren und nur die Beispieldaten
+# ersetzen. Die lokale Datei wird von Git ignoriert.
 search:
   local_location: Musterstadt
   local_postal_code: "00000"
   local_radius_km: 25
 
 matching:
+  # Lesbare Ortsbezeichnung für Review und StudySmarter-Suche.
   preferred_location_label: Musterstadt
+  # Kleingeschriebene Ortsnamen, die im Anzeigentext als lokal gelten.
   local_places:
     - musterstadt
+  # Optionale Pendlersuchen. Beispiel:
+  # commuter_locations:
+  #   - search_location: Beispielstadt
+  #     aliases: [beispielstadt]
+  #     excluded_aliases: []
+  #     minimum_remote_percentage: 60
   commuter_locations: []
+  # Zusätzliche Fachbegriffe, die zum transparenten Score beitragen sollen.
   profile_domain_keywords: []
+  # Optionale Jahresbrutto-Präferenzen in Euro.
   salary_target_eur: null
   salary_minimum_eur: null

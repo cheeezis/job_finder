@@ -1,15 +1,14 @@
 # Job Finder
 
-Ein schlanker, lokal betriebener Job Finder für IT-Einstiegsstellen. Er sammelt
-Stellen aus mehreren Quellen, vereinheitlicht und dedupliziert sie, verwirft
-klare Fehlgriffe regelbasiert und legt die übrigen Stellen zur persönlichen
-Entscheidung vor.
+Ein lokal betriebener Python-Job-Finder für IT-Einstiegsstellen. Er sammelt
+Anzeigen aus mehreren Quellen, vereinheitlicht und dedupliziert sie, verwirft
+klare Fehlgriffe regelbasiert und unterstützt die persönliche Sichtung bis zur
+Bewerbungsnachverfolgung. Stellen-, Bewerbungs- und Dokumentdaten verbleiben
+auf dem eigenen Rechner.
 
 ## Funktionen
 
-- Quellen: Arbeitsagentur, StepStone, get-in-IT, Arbeitnow, Remotely,
-  StudySmarter, Himalayas, Jobicy, Startup Jobs sowie ausgewählte direkte
-  Karriereseiten
+- öffentliche Jobportale, offene Feeds und ausgewählte direkte Karriereseiten
 - ein einheitliches Jobmodell und quellenübergreifende Deduplizierung
 - lokale Detail-Caches und ein Gedächtnis für bekannte und inaktive Stellen
 - regelbasierter Vorfilter für Standort, Remote-Anteil, Erfahrungsniveau,
@@ -35,6 +34,20 @@ Der Vorfilter-Score ist keine persönliche Eignungsprognose. Er macht nur
 transparent, warum eine Stelle den regelbasierten Filter passiert hat. Die
 endgültige Bewertung bleibt bewusst beim Nutzer.
 
+## Quellen
+
+| Gruppe | Quellen |
+| --- | --- |
+| Jobportale | Arbeitsagentur, StepStone, get-in-IT |
+| Feeds und Aggregatoren | Arbeitnow, Himalayas, Jobicy, Remotely, Startup Jobs, StudySmarter |
+| Direkte Karriereseiten | Compose IT, bytewerk, RhönEnergie, JUMO, EDAG, CSS, Proemion, NETHINKS |
+| Eigene Einträge | manueller Import einer öffentlichen Stellen-URL |
+
+Startup Jobs ist optional und wird nur mit `STARTUP_JOBS_API_KEY` aktiviert.
+Einzelne Quellen können vorübergehend nur Teilergebnisse liefern, etwa bei
+Rate-Limits oder nicht erreichbaren Detailseiten. Der Lauf isoliert solche
+Fehler und kennzeichnet sie in Konsole, Log und Discord-Zusammenfassung.
+
 ## Einrichtung
 
 Virtuelle Projektumgebung anlegen und Abhängigkeiten installieren:
@@ -59,8 +72,7 @@ Pendlerorte und fachliche Stichwörter. Die Datei wird von Git ignoriert. Ohne
 lokale Datei wird die anonymisierte Beispielkonfiguration verwendet.
 
 Für Discord kann `DISCORD_WEBHOOK_URL` als Umgebungsvariable gesetzt werden.
-Die Quelle Startup Jobs ist optional und wird nur mit gesetztem
-`STARTUP_JOBS_API_KEY` aktiviert.
+Lokale Geheimnisse gehören nicht in YAML-Dateien oder ins Repository.
 
 ## Nutzung
 
@@ -82,11 +94,22 @@ Lokale Oberfläche öffnen:
 review_jobs.bat
 ```
 
+Alternativ kann die Oberfläche direkt als Python-Modul gestartet werden:
+
+```powershell
+.\.venv\Scripts\python.exe -m job_finder.review
+```
+
 Danach stehen zur Verfügung:
 
 - `http://127.0.0.1:8765/` – Startseite und manueller Import
 - `http://127.0.0.1:8765/review` – Stellen prüfen
 - `http://127.0.0.1:8765/applications` – Bewerbungen und Statistik
+
+Der Review startet mit „Neu oder aktualisiert“. „Nur neu“ zeigt ausschließlich
+erstmals erkannte Stellen; „Nur aktualisiert“ zeigt bekannte Stellen mit einer
+noch ausstehenden inhaltlichen Änderung. Internationale Anzeigen und
+Junior-Hybrid-Sonderfälle sind eigene, standardmäßig deaktivierte Filter.
 
 ## Ablauf
 
@@ -103,9 +126,9 @@ Danach stehen zur Verfügung:
    Stellen können zusätzlich an Discord gesendet werden. Der Standardfilter
    „Neu oder aktualisiert“ zeigt dieselbe Art von Stellen; eine erkannte
    Aktualisierung bleibt dort sichtbar, bis sie im Review entschieden wurde.
-   Die Discord-Laufstatistik weist separat aus, wie viele Stellen im Lauf neu
-   oder geändert, benachrichtigungsfähig, tatsächlich versendet und nach den
-   standardmäßigen Sichtbarkeitsfiltern direkt im Review sichtbar sind.
+   Die Discord-Laufstatistik trennt Fundmenge, Vorfilter,
+   benachrichtigungsfähige Stellen, tatsächlich versendete Karten und die nach
+   den Standardfiltern direkt im Review sichtbare Anzahl.
 6. Bewerbungen werden getrennt vom Stellen-Review dauerhaft nachverfolgt.
 
 Der veränderliche Stellen- und Bewerbungszustand liegt transaktional in
@@ -113,6 +136,16 @@ Der veränderliche Stellen- und Bewerbungszustand liegt transaktional in
 `seen_jobs.json` einmalig importiert und als unveränderte Rückfallkopie
 beibehalten. `jobs.json` und `recommendations.json` bleiben bewusst lesbare,
 neu erzeugbare Ausgaben.
+
+```text
+data/internal/job_finder.sqlite3  Status, Entscheidungen und Bewerbungsverlauf
+data/internal/jobs.json          letzter deduplizierter Quellensnapshot
+data/internal/*_cache.json       lokale Quellencaches
+data/internal/notifications.json Discord-Versandstatus
+data/output/recommendations.json aktuelle Ausgabe für die Review-Oberfläche
+data/logs/                        Laufprotokolle
+data/backups/                     rotierende Zustandsbackups
+```
 
 Direkte Arbeitnow-Anzeigen mit vollständigem Text bleiben unverändert. Nur bei
 dem bekannten Platzhaltertext wird nach bestandenem Vorfilter die verlinkte
@@ -135,6 +168,12 @@ Netzwerkfehler darf ein höchstens 14 Tage alter Cache-Eintrag als sichtbar
 markierter Fallback erscheinen; ältere Einträge werden nicht mehr übernommen.
 Ein teilweise fehlgeschlagenes Suchsegment darf keine alten Stellen dieser
 Quelle automatisch inaktiv setzen.
+
+Die Laufzeit wird fast vollständig von den externen Quellen bestimmt. Läufe mit
+frischen Detail-Caches sind deutlich schneller; wenn viele sieben Tage alte
+Einträge gleichzeitig aktualisiert werden, können gelegentlich längere
+Netzwerkphasen entstehen. SQLite ist dabei nur der kurze lokale
+Persistenzschritt.
 
 ## Lokale Daten und Datenschutz
 
@@ -178,7 +217,7 @@ job_finder/sources/     einzelne Quellenadapter
 tests/                  automatisierte Tests
 run_finder.py           produktiver Kommandozeilen-Einstieg
 review_jobs.bat         Start der lokalen Weboberfläche
-user_settings.example.yaml  anonymisierte Konfigurationsvorlage
+user_settings.example.yaml  dokumentierte, anonymisierte Konfigurationsvorlage
 data/                   ausschließlich lokale Laufdaten (nicht versioniert)
 ```
 

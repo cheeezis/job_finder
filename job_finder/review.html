@@ -24,8 +24,6 @@
     <label>Status
       <select id="status-filter">
         <option value="attention">Neu oder aktualisiert</option>
-        <option value="fresh">Nur neu</option>
-        <option value="updated">Nur aktualisiert</option>
         <option value="">Alle Status</option>
       </select>
     </label>
@@ -270,11 +268,7 @@
       const awaitsDecision = notificationStatuses.has(job.workflow_status);
       const statusMatches = status === "attention"
         ? awaitsDecision && (job.is_new || job.review_update_pending)
-        : status === "fresh"
-          ? awaitsDecision && job.is_new
-          : status === "updated"
-            ? awaitsDecision && !job.is_new && job.review_update_pending
-            : (!status || job.workflow_status === status);
+        : (!status || job.workflow_status === status);
       return statusMatches &&
       (!role || job.role_group === role) &&
       (showInternational || !job.international) &&

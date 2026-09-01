@@ -106,9 +106,7 @@ Danach stehen zur Verfügung:
 - `http://127.0.0.1:8765/review` – Stellen prüfen
 - `http://127.0.0.1:8765/applications` – Bewerbungen und Statistik
 
-Der Review startet mit „Neu oder aktualisiert“. „Nur neu“ zeigt ausschließlich
-erstmals erkannte Stellen; „Nur aktualisiert“ zeigt bekannte Stellen mit einer
-noch ausstehenden inhaltlichen Änderung. Internationale Anzeigen und
+Der Review startet mit „Neu oder aktualisiert“. Internationale Anzeigen und
 Junior-Hybrid-Sonderfälle sind eigene, standardmäßig deaktivierte Filter.
 
 ## Ablauf

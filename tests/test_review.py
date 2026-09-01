@@ -420,14 +420,9 @@ class ReviewTests(unittest.TestCase):
         self.assertIn("Ergebnis des Vorfilters", review_page)
         self.assertIn('id="role-filter"', review_page)
         self.assertIn('<option value="attention">Neu oder aktualisiert</option>', review_page)
-        self.assertIn('<option value="fresh">Nur neu</option>', review_page)
-        self.assertIn('<option value="updated">Nur aktualisiert</option>', review_page)
         self.assertIn('job.is_new || job.review_update_pending', review_page)
-        self.assertIn('awaitsDecision && job.is_new', review_page)
-        self.assertIn(
-            'awaitsDecision && !job.is_new && job.review_update_pending',
-            review_page,
-        )
+        self.assertNotIn('<option value="fresh">Nur neu</option>', review_page)
+        self.assertNotIn('<option value="updated">Nur aktualisiert</option>', review_page)
         self.assertIn('id="change-badge"', review_page)
         self.assertIn('id="experience-level"', review_page)
         self.assertIn('id="location-precheck"', review_page)

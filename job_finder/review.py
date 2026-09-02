@@ -70,6 +70,12 @@ def load_review_jobs(
             "workflow_status",
             WorkflowStatus.NEW.value,
         )
+        # ``is_new`` describes the collection run, while a persisted workflow
+        # status records that the user has already decided on the job. Never
+        # resurrect that transient run marker after the review page reloads.
+        job["is_new"] = bool(job.get("is_new")) and (
+            job["workflow_status"] == WorkflowStatus.NEW.value
+        )
         job["review_update_pending"] = bool(
             entry.get(
                 "review_update_pending",

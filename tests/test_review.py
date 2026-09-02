@@ -73,6 +73,28 @@ class ReviewTests(unittest.TestCase):
         self.assertFalse(jobs[0]["application_tracked"])
         self.assertFalse(jobs[0]["international"])
 
+    def test_reviewed_new_job_does_not_reappear_after_reload(self):
+        document = json.loads(self.recommendations_path.read_text(encoding="utf-8"))
+        document["recommendations"][0]["is_new"] = True
+        self.recommendations_path.write_text(json.dumps(document), encoding="utf-8")
+
+        jobs = load_review_jobs(self.recommendations_path, self.memory_path)
+
+        self.assertEqual(jobs[0]["workflow_status"], "interesting")
+        self.assertFalse(jobs[0]["is_new"])
+
+    def test_unreviewed_new_job_remains_visible_after_reload(self):
+        memory = load_memory(self.memory_path)
+        memory["job:1"]["workflow_status"] = "new"
+        save_memory(memory, self.memory_path)
+        document = json.loads(self.recommendations_path.read_text(encoding="utf-8"))
+        document["recommendations"][0]["is_new"] = True
+        self.recommendations_path.write_text(json.dumps(document), encoding="utf-8")
+
+        jobs = load_review_jobs(self.recommendations_path, self.memory_path)
+
+        self.assertTrue(jobs[0]["is_new"])
+
     def test_review_jobs_classify_legacy_international_recommendation(self):
         document = json.loads(self.recommendations_path.read_text(encoding="utf-8"))
         document["recommendations"][0]["locations"] = ["weltweit"]

@@ -320,7 +320,7 @@ class ApplicationTrackingTests(unittest.TestCase):
             {
                 "job:salary": {
                     "workflow_status": "applied",
-                    "salary_expectation": "58.000 € brutto/Jahr",
+                    "salary_expectation_eur": 58_000,
                 }
             }
         )
@@ -328,9 +328,23 @@ class ApplicationTrackingTests(unittest.TestCase):
         application = load_application_overview(self.memory_path)["applications"][0]
 
         self.assertEqual(
-            application["salary_expectation"],
-            "58.000 € brutto/Jahr",
+            application["salary_expectation_eur"],
+            58_000,
         )
+
+    def test_application_overview_normalizes_legacy_salary_text(self):
+        self.save_jobs(
+            {
+                "job:salary": {
+                    "workflow_status": "applied",
+                    "salary_expectation": "58.000 € brutto/Jahr",
+                }
+            }
+        )
+
+        application = load_application_overview(self.memory_path)["applications"][0]
+
+        self.assertEqual(application["salary_expectation_eur"], 58_000)
 
     def test_response_rate_ignores_open_applications(self):
         self.save_jobs(

@@ -104,8 +104,11 @@
         <input id="resume-file" type="file" accept=".pdf,.doc,.docx,.odt">
       </label>
       <label>Gehaltsvorstellung <span class="optional">optional</span>
-        <input id="salary-expectation" type="text" maxlength="500" placeholder="z. B. 58.000 € brutto/Jahr">
-        <span class="field-hint">Eintragen, wenn im Bewerbungsprozess danach gefragt wurde.</span>
+        <span class="salary-input">
+          <input id="salary-expectation" type="number" min="1" max="10000000" step="1" inputmode="numeric" placeholder="58000" aria-describedby="salary-unit salary-hint">
+          <span id="salary-unit" class="salary-unit">€ Brutto/Jahr</span>
+        </span>
+        <span id="salary-hint" class="field-hint">Nur den Jahresbruttobetrag als ganze Zahl eingeben.</span>
       </label>
       <div class="dialog-actions">
         <button id="application-cancel" type="button">Abbrechen</button>
@@ -428,6 +431,7 @@
   async function startApplication(documents) {
     const job = visibleJobs[currentIndex];
     const button = element("mark-applied");
+    const salaryValue = element("salary-expectation").value;
     button.disabled = true;
     try {
       const response = await fetch("/api/applications", {
@@ -436,7 +440,7 @@
         body: JSON.stringify({
           job_id: job.id,
           documents,
-          salary_expectation: element("salary-expectation").value
+          salary_expectation_eur: salaryValue ? Number(salaryValue) : null
         })
       });
       const result = await response.json();

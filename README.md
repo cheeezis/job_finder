@@ -19,8 +19,8 @@ auf dem eigenen Rechner.
 - lokale Review-Oberfläche mit Interessant-, Rückfrage-, Ignorieren- und
   Bewerben-Workflow
 - Bewerbungsübersicht mit Verlauf, Gesprächsterminen, optional gespeicherter
-  Gehaltsvorstellung und Statistik; die Antwortquote bezieht sich nur auf
-  abgeschlossene Bewerbungen
+  Gehaltsvorstellung in Euro brutto pro Jahr und Statistik; die Antwortquote
+  bezieht sich nur auf abgeschlossene Bewerbungen
 - kompakte Discord-Karten für neue oder inhaltlich geänderte Stellen sowie
   eine strukturierte Laufstatistik, die Fundmenge, Vorfilter, tatsächlich
   versendete Karten und die im Standard-Review sichtbare Anzahl trennt

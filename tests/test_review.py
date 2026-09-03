@@ -428,6 +428,10 @@ class ReviewTests(unittest.TestCase):
         self.assertIn('id="application-dialog"', review_page)
         self.assertIn('id="cover-letter-file"', review_page)
         self.assertIn('id="resume-file"', review_page)
+        self.assertIn('id="salary-expectation" type="number"', review_page)
+        self.assertIn('class="salary-unit">€ Brutto/Jahr</span>', review_page)
+        self.assertIn("salary_expectation_eur", review_page)
+        self.assertIn("formatSalaryExpectation", applications_page)
         self.assertIn("selectedDocuments()", review_page)
         self.assertIn("Rückfrage nötig", review_page)
         self.assertIn('changeStatus("inquiry")', review_page)
@@ -567,7 +571,9 @@ class ReviewTests(unittest.TestCase):
         try:
             request = Request(
                 f"{base_url}/api/applications",
-                data=json.dumps({"job_id": "job:1"}).encode("utf-8"),
+                data=json.dumps(
+                    {"job_id": "job:1", "salary_expectation_eur": 58_000}
+                ).encode("utf-8"),
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
@@ -584,6 +590,10 @@ class ReviewTests(unittest.TestCase):
         self.assertTrue(result["application_tracked"])
         self.assertEqual(overview["statistics"]["total"], 1)
         self.assertEqual(overview["applications"][0]["id"], "job:1")
+        self.assertEqual(
+            overview["applications"][0]["salary_expectation_eur"],
+            58_000,
+        )
 
     def test_application_document_can_be_downloaded_from_overview_link(self):
         documents_directory = self.directory / "application_documents"
@@ -633,25 +643,34 @@ class ReviewTests(unittest.TestCase):
         result = start_application(
             "job:1",
             self.memory_path,
-            salary_expectation="  58.000 € brutto / Jahr  ",
+            salary_expectation_eur=58_000,
         )
 
         entry = load_memory(self.memory_path)["job:1"]
         self.assertTrue(result["application_tracked"])
-        self.assertEqual(entry["salary_expectation"], "58.000 € brutto / Jahr")
+        self.assertEqual(entry["salary_expectation_eur"], 58_000)
+        self.assertNotIn("salary_expectation", entry)
 
-    def test_salary_expectation_is_bounded(self):
-        with self.assertRaisesRegex(ValueError, "höchstens 500"):
+    def test_salary_expectation_rejects_non_numeric_input(self):
+        with self.assertRaisesRegex(ValueError, "ganze Zahl"):
             start_application(
                 "job:1",
                 self.memory_path,
-                salary_expectation="x" * 501,
+                salary_expectation_eur="58.000 Euro",
             )
 
         self.assertNotIn(
-            "salary_expectation",
+            "salary_expectation_eur",
             load_memory(self.memory_path)["job:1"],
         )
+
+    def test_salary_expectation_rejects_non_positive_input(self):
+        with self.assertRaisesRegex(ValueError, "gültigen Bereich"):
+            start_application(
+                "job:1",
+                self.memory_path,
+                salary_expectation_eur=0,
+            )
 
     def test_local_api_loads_jobs_and_persists_status(self):
         handler = type(

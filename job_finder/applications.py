@@ -1,5 +1,6 @@
 """Local application history and derived workflow statistics."""
 
+import re
 from datetime import date, datetime, timedelta
 
 from job_finder.application_documents import public_documents
@@ -299,11 +300,7 @@ def application_row(job_id, entry, as_of=None):
         "active": entry.get("active", True),
         "workflow_status": current_status,
         "review_note": entry.get("review_note", ""),
-        "salary_expectation": (
-            entry.get("salary_expectation", "")
-            if isinstance(entry.get("salary_expectation", ""), str)
-            else ""
-        ),
+        "salary_expectation_eur": application_salary_expectation_eur(entry),
         "applied_on": applied_on,
         "response_on": response_on,
         "days_to_response": days_to_response,
@@ -338,6 +335,20 @@ def application_row(job_id, entry, as_of=None):
         ),
         "has_offer": WorkflowStatus.OFFER.value in statuses,
     }
+
+
+def application_salary_expectation_eur(entry):
+    """Return the numeric salary, accepting one legacy formatted text value."""
+    value = entry.get("salary_expectation_eur")
+    if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+        return value
+    legacy = entry.get("salary_expectation")
+    if not isinstance(legacy, str):
+        return None
+    match = re.search(r"\b(\d{2,3}(?:[.\s]\d{3})+|\d{4,7})\b", legacy)
+    if not match:
+        return None
+    return int(re.sub(r"\D", "", match.group(1)))
 
 
 def valid_history(history):

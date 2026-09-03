@@ -69,6 +69,11 @@
     });
   }
 
+  function formatSalaryExpectation(value) {
+    if (!Number.isInteger(value) || value <= 0) return "";
+    return `${new Intl.NumberFormat("de-DE").format(value)} € Brutto/Jahr`;
+  }
+
   function safeUrl(value) {
     try {
       const url = new URL(value);
@@ -420,11 +425,12 @@
       appendSourceLinks(meta, application);
       card.append(meta);
       if (application.review_note) card.append(make("p", application.review_note, "note"));
-      if (application.salary_expectation) {
+      const salaryExpectation = formatSalaryExpectation(application.salary_expectation_eur);
+      if (salaryExpectation) {
         const salary = make("p", null, "salary-note");
         salary.append(
           make("span", "Gehaltsvorstellung", "salary-note-label"),
-          make("span", application.salary_expectation)
+          make("span", salaryExpectation)
         );
         card.append(salary);
       }

@@ -211,7 +211,7 @@ def start_application(
     memory_path=MEMORY_FILE,
     documents=None,
     documents_dir=APPLICATION_DOCUMENTS_DIR,
-    salary_expectation=None,
+    salary_expectation_eur=None,
 ):
     """Record the first application without overwriting later progress."""
     stored_documents = []
@@ -227,7 +227,7 @@ def start_application(
                     ),
                     "application_tracked": True,
                 }
-            salary_note = validated_salary_expectation(salary_expectation)
+            salary_eur = validated_salary_expectation_eur(salary_expectation_eur)
             stored_documents = store_documents(
                 job_id,
                 documents,
@@ -237,8 +237,9 @@ def start_application(
             )
             if stored_documents:
                 entry["application_documents"] = stored_documents
-            if salary_note:
-                entry["salary_expectation"] = salary_note
+            if salary_eur is not None:
+                entry["salary_expectation_eur"] = salary_eur
+                entry.pop("salary_expectation", None)
             status = record_status_change(entry, WorkflowStatus.APPLIED)
             entry["review_update_pending"] = False
     except Exception:
@@ -252,16 +253,24 @@ def start_application(
     }
 
 
-def validated_salary_expectation(value):
-    """Return one optional, compact salary note exactly for this application."""
+def validated_salary_expectation_eur(value):
+    """Return one optional positive annual gross salary in whole euros."""
     if value is None or value == "":
-        return ""
-    if not isinstance(value, str):
-        raise ValueError("Gehaltsvorstellung muss Text sein")
-    note = " ".join(value.split())
-    if len(note) > 500:
-        raise ValueError("Gehaltsvorstellung darf höchstens 500 Zeichen lang sein")
-    return note
+        return None
+    if isinstance(value, bool):
+        raise ValueError("Gehaltsvorstellung muss eine ganze Zahl sein")
+    if isinstance(value, str):
+        normalized = value.strip()
+        if not normalized.isdecimal():
+            raise ValueError("Gehaltsvorstellung muss eine ganze Zahl sein")
+        salary = int(normalized)
+    elif isinstance(value, int):
+        salary = value
+    else:
+        raise ValueError("Gehaltsvorstellung muss eine ganze Zahl sein")
+    if salary <= 0 or salary > 10_000_000:
+        raise ValueError("Gehaltsvorstellung liegt außerhalb des gültigen Bereichs")
+    return salary
 
 
 def update_workflow_history(
@@ -394,7 +403,10 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
                     self.memory_path,
                     payload.get("documents"),
                     self.application_documents_dir,
-                    salary_expectation=payload.get("salary_expectation"),
+                    salary_expectation_eur=payload.get(
+                        "salary_expectation_eur",
+                        payload.get("salary_expectation"),
+                    ),
                 )
             elif request_path == "/api/review-status":
                 result = update_review_decision(

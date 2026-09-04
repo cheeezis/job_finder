@@ -4,7 +4,7 @@ import re
 from collections import defaultdict
 from dataclasses import replace
 
-from job_finder.models import Job
+from job_finder.models import Job, WorkMode
 from job_finder.text import normalize_text
 
 
@@ -60,8 +60,9 @@ def find_duplicate_position(job, company_key, positions, unique_jobs):
         if set(job.source_names) & set(existing.source_names):
             continue
         existing_company = normalize_company(existing.company)
-        if companies_match(company_key, existing_company) and locations_match(
-            job.locations, existing.locations
+        if companies_match(company_key, existing_company) and (
+            locations_match(job.locations, existing.locations)
+            or both_fully_remote(job, existing)
         ):
             return position
     return None
@@ -84,6 +85,14 @@ def locations_match(first_locations, second_locations):
     )
 
 
+def both_fully_remote(first, second):
+    """Ignore conflicting display locations for two fully remote postings."""
+    return all(
+        job.remote_percentage == 100 or job.work_mode is WorkMode.REMOTE
+        for job in (first, second)
+    )
+
+
 def normalize_location(value):
     """Normalize a location without erasing city-level identity."""
     text = normalize_text(value)
@@ -103,6 +112,7 @@ def companies_match(first, second):
 def normalize_company(company):
     text = normalize_text(company)
     text = re.sub(r"[^a-z0-9]+", " ", text)
+    text = re.sub(r"^bei\s+", "", text)
     words = [word for word in text.split() if word not in LEGAL_FORMS]
     return " ".join(words)
 

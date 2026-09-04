@@ -879,6 +879,49 @@ class DeduplicationTests(unittest.TestCase):
             ["stepstone", "get_in_it"],
         )
 
+    def test_remote_duplicate_with_portal_company_prefix_is_merged(self):
+        first = make_job(
+            title="Full Stack Product Engineer (m/w/d) – Bling Schule",
+            company="Bling",
+            location="Berlin",
+            remote="100%",
+            source="arbeitnow",
+            url="https://arbeitnow.test/bling",
+        )
+        second = make_job(
+            title="Full Stack Product Engineer (m/w/d) – Bling Schule",
+            company="bei Bling Services GmbH",
+            location="Remote",
+            remote="100%",
+            source="startup_jobs",
+            url="https://startup-jobs.test/bling",
+        )
+
+        result = deduplicate_jobs([first, second])
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(
+            [source.source for source in result[0].sources],
+            ["arbeitnow", "startup_jobs"],
+        )
+
+    def test_remote_and_onsite_postings_at_different_places_stay_separate(self):
+        remote = make_job(
+            company="Example GmbH",
+            location="Remote",
+            remote="100%",
+            source="arbeitnow",
+            url="https://arbeitnow.test/remote",
+        )
+        onsite = make_job(
+            company="Example GmbH",
+            location="Berlin",
+            source="startup_jobs",
+            url="https://startup-jobs.test/berlin",
+        )
+
+        self.assertEqual(len(deduplicate_jobs([remote, onsite])), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

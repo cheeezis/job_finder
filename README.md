@@ -3,8 +3,10 @@
 Ein lokal betriebener Python-Job-Finder für IT-Einstiegsstellen. Er sammelt
 Anzeigen aus mehreren Quellen, vereinheitlicht und dedupliziert sie, verwirft
 klare Fehlgriffe regelbasiert und unterstützt die persönliche Sichtung bis zur
-Bewerbungsnachverfolgung. Stellen-, Bewerbungs- und Dokumentdaten verbleiben
-auf dem eigenen Rechner.
+Bewerbungsnachverfolgung. Der vollständige Stellenbestand sowie Bewerbungs-
+und Dokumentdaten verbleiben auf dem eigenen Rechner. Bei aktiviertem
+Discord-Versand werden ausschließlich die dafür vorgesehenen kompakten
+Stellenkarten und Laufstatistiken an Discord übertragen.
 
 ## Funktionen
 

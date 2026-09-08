@@ -24,6 +24,7 @@ from job_finder.sources import css
 from job_finder.sources import compose_it
 from job_finder.sources import edag
 from job_finder.sources import get_in_it
+from job_finder.sources import german_tech_jobs
 from job_finder.sources import himalayas
 from job_finder.sources import jumo
 from job_finder.sources import jobicy
@@ -49,6 +50,7 @@ SOURCES = [
     arbeitnow,
     himalayas,
     jobicy,
+    german_tech_jobs,
     remotely,
     *([startup_jobs] if startup_jobs.is_configured() else []),
     studysmarter,
@@ -332,6 +334,7 @@ def source_label(name):
         "arbeitnow": "Arbeitnow",
         "himalayas": "Himalayas",
         "jobicy": "Jobicy",
+        "german_tech_jobs": "GermanTechJobs",
         "remotely": "Remotely",
         "startup_jobs": "Startup Jobs",
         "studysmarter": "StudySmarter",

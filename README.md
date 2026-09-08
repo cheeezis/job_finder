@@ -41,11 +41,15 @@ endgültige Bewertung bleibt bewusst beim Nutzer.
 | Gruppe | Quellen |
 | --- | --- |
 | Jobportale | Arbeitsagentur, StepStone, get-in-IT |
-| Feeds und Aggregatoren | Arbeitnow, Himalayas, Jobicy, Remotely, Startup Jobs, StudySmarter |
+| Feeds und Aggregatoren | Arbeitnow, GermanTechJobs, Himalayas, Jobicy, Remotely, Startup Jobs, StudySmarter |
 | Direkte Karriereseiten | Compose IT, bytewerk, RhönEnergie, JUMO, EDAG, CSS, Proemion, NETHINKS |
 | Eigene Einträge | manueller Import einer öffentlichen Stellen-URL |
 
 Startup Jobs ist optional und wird nur mit `STARTUP_JOBS_API_KEY` aktiviert.
+GermanTechJobs wird über den öffentlichen XML-Feed eingelesen. Die dort
+angegebenen Gehaltsspannen werden als Euro brutto pro Jahr übernommen; wie bei
+allen automatisch gefundenen Quellen greift der 60-Tage-Filter auf das im Feed
+ausgewiesene Veröffentlichungsdatum.
 Einzelne Quellen können vorübergehend nur Teilergebnisse liefern, etwa bei
 Rate-Limits oder nicht erreichbaren Detailseiten. Der Lauf isoliert solche
 Fehler und kennzeichnet sie in Konsole, Log und Discord-Zusammenfassung.

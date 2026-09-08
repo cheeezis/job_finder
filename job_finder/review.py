@@ -46,6 +46,10 @@ APP_STYLES = Path(__file__).with_name("app.css")
 ROUTE_ORIGIN = f"{LOCAL_SEARCH_POSTAL_CODE} {LOCAL_SEARCH_LOCATION}".strip()
 MAX_REQUEST_BYTES = 45 * 1024 * 1024
 LOCAL_HOST_PATTERN = re.compile(r"^(?:127\.0\.0\.1|localhost)(?::\d{1,5})?$")
+PERSISTED_REVIEW_STATUSES = {
+    WorkflowStatus.INTERESTING.value,
+    WorkflowStatus.INQUIRY.value,
+}
 
 
 def load_review_jobs(
@@ -54,16 +58,15 @@ def load_review_jobs(
 ):
     """Combine compact review jobs with their persisted workflow status."""
     path = Path(recommendations_path)
-    if not path.exists():
-        return []
-
-    document = json.loads(path.read_text(encoding="utf-8"))
+    document = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
     recommendations = document.get("recommendations", [])
     memory = load_memory(memory_path)
     review_jobs = []
+    represented_memory_ids = set()
     for recommendation in recommendations:
         job = dict(recommendation)
         job["international"] = bool(job.get("international")) or is_international_listing(job)
+        represented_memory_ids.update(memory_ids_for_job(job, memory))
         memory_id, entry = memory_entry_for_job(job, memory)
         job["id"] = memory_id
         job["workflow_status"] = entry.get(
@@ -100,11 +103,71 @@ def load_review_jobs(
                 if isinstance(url, str) and url
             ]
         review_jobs.append(job)
+
+    for job_id, entry in memory.items():
+        if (
+            job_id in represented_memory_ids
+            or entry.get("workflow_status") not in PERSISTED_REVIEW_STATUSES
+        ):
+            continue
+        review_jobs.append(remembered_review_job(job_id, entry))
     return review_jobs
+
+
+def remembered_review_job(job_id, entry):
+    """Keep a manual shortlist entry until the user changes its status."""
+    source_names = entry.get("source_names", [])
+    if not isinstance(source_names, list):
+        source_names = []
+    source_links = [
+        {
+            "source": (
+                source_names[index] if index < len(source_names) else "listing"
+            ),
+            "url": url,
+        }
+        for index, url in enumerate(entry.get("source_urls", []))
+        if isinstance(url, str) and url
+    ]
+    if entry.get("active", True):
+        availability_warning = (
+            "Im aktuellen Lauf nicht gefunden; Verfügbarkeit bitte über die "
+            "Anzeige prüfen."
+        )
+    else:
+        availability_warning = (
+            "Seit mehreren vollständigen Läufen nicht gefunden; die Stelle ist "
+            "möglicherweise nicht mehr verfügbar."
+        )
+    job = {
+        "id": job_id,
+        "title": entry.get("title", "Unbekannte Stelle"),
+        "company": entry.get("company", "Unbekanntes Unternehmen"),
+        "locations": list(entry.get("locations") or []),
+        "source_links": source_links,
+        "url": source_links[0]["url"] if source_links else "",
+        "workflow_status": entry["workflow_status"],
+        "is_new": False,
+        "review_update_pending": bool(entry.get("review_update_pending", False)),
+        "application_tracked": is_application(entry),
+        "current_snapshot_missing": True,
+        "prefilter_warning": availability_warning,
+    }
+    job["international"] = is_international_listing(job)
+    return job
 
 
 def memory_entry_for_job(job, memory):
     """Resolve stale recommendation IDs through an exact known source URL."""
+    candidates = memory_ids_for_job(job, memory)
+    if not candidates:
+        return job["id"], {}
+    memory_id = preferred_memory_id(candidates, memory, job["id"])
+    return memory_id, memory[memory_id]
+
+
+def memory_ids_for_job(job, memory):
+    """Return every memory row represented by one merged recommendation."""
     job_id = job["id"]
     urls = {
         link.get("url")
@@ -113,16 +176,12 @@ def memory_entry_for_job(job, memory):
     }
     if job.get("url"):
         urls.add(job["url"])
-    candidates = [
+    return [
         memory_id
         for memory_id, entry in memory.items()
         if memory_id == job_id
         or urls.intersection(entry.get("source_urls", []))
     ]
-    if not candidates:
-        return job_id, {}
-    memory_id = preferred_memory_id(candidates, memory, job_id)
-    return memory_id, memory[memory_id]
 
 
 def update_workflow_status(

@@ -300,8 +300,12 @@
 
     const job = visibleJobs[currentIndex];
     setText("counter", `${currentIndex + 1} von ${visibleJobs.length}`);
-    setText("score", `Vorfilter: ${job.match_percent ?? 0}/100`);
-    setText("role-badge", roleLabels[job.role_group] || "Allgemeine IT");
+    setText("score", job.current_snapshot_missing
+      ? "Vorfilter: aktuell nicht verfügbar"
+      : `Vorfilter: ${job.match_percent ?? 0}/100`);
+    setText("role-badge", job.current_snapshot_missing
+      ? "Vorgemerkt"
+      : roleLabels[job.role_group] || "Allgemeine IT");
     const changeBadge = element("change-badge");
     changeBadge.hidden = !(job.is_new || job.review_update_pending);
     changeBadge.className = job.is_new ? "badge" : "badge updated";
@@ -320,9 +324,15 @@
       ? `Cache-Fallback · Stand: ${displayDate(job.fetched_at)}`
       : "";
     setText("current-status", `Status: ${statusLabels[job.workflow_status] || job.workflow_status}`);
-    setText("role-group", roleLabels[job.role_group] || "Allgemeine IT");
-    setText("experience-level", job.experience_level || "keine Jahresanforderung erkannt");
-    setText("location-precheck", job.location_precheck || "passt zur Standortregel");
+    setText("role-group", job.current_snapshot_missing
+      ? "aktuell nicht verfügbar"
+      : roleLabels[job.role_group] || "Allgemeine IT");
+    setText("experience-level", job.current_snapshot_missing
+      ? "aktuell nicht verfügbar"
+      : job.experience_level || "keine Jahresanforderung erkannt");
+    setText("location-precheck", job.current_snapshot_missing
+      ? "Quelle hat die Stelle im aktuellen Lauf nicht geliefert"
+      : job.location_precheck || "passt zur Standortregel");
     const applicationTracked = Boolean(job.application_tracked);
     element("mark-interesting").hidden = applicationTracked;
     element("mark-inquiry").hidden = applicationTracked;

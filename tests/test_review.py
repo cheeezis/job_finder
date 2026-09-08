@@ -95,6 +95,69 @@ class ReviewTests(unittest.TestCase):
 
         self.assertTrue(jobs[0]["is_new"])
 
+    def test_active_interesting_job_survives_one_missed_source_run(self):
+        self.recommendations_path.write_text(
+            json.dumps({"recommendations": []}), encoding="utf-8"
+        )
+        memory = load_memory(self.memory_path)
+        memory["job:1"].update(
+            {
+                "active": True,
+                "missed_runs": 1,
+                "locations": ["Hamburg"],
+                "source_names": ["studysmarter"],
+                "source_urls": ["https://example.test/job"],
+            }
+        )
+        save_memory(memory, self.memory_path)
+
+        jobs = load_review_jobs(self.recommendations_path, self.memory_path)
+
+        self.assertEqual(len(jobs), 1)
+        self.assertEqual(jobs[0]["id"], "job:1")
+        self.assertEqual(jobs[0]["workflow_status"], "interesting")
+        self.assertTrue(jobs[0]["current_snapshot_missing"])
+        self.assertIn("aktuellen Lauf nicht gefunden", jobs[0]["prefilter_warning"])
+        self.assertEqual(
+            jobs[0]["source_links"],
+            [{"source": "studysmarter", "url": "https://example.test/job"}],
+        )
+
+    def test_inactive_interesting_job_remains_with_availability_warning(self):
+        self.recommendations_path.write_text(
+            json.dumps({"recommendations": []}), encoding="utf-8"
+        )
+        memory = load_memory(self.memory_path)
+        memory["job:1"]["active"] = False
+        save_memory(memory, self.memory_path)
+
+        jobs = load_review_jobs(self.recommendations_path, self.memory_path)
+
+        self.assertEqual(len(jobs), 1)
+        self.assertIn("mehreren vollständigen Läufen", jobs[0]["prefilter_warning"])
+
+    def test_merged_recommendation_does_not_restore_a_source_alias(self):
+        document = json.loads(self.recommendations_path.read_text(encoding="utf-8"))
+        document["recommendations"][0]["source_links"] = [
+            {"source": "first", "url": "https://example.test/first"},
+            {"source": "second", "url": "https://example.test/second"},
+        ]
+        self.recommendations_path.write_text(json.dumps(document), encoding="utf-8")
+        memory = load_memory(self.memory_path)
+        memory["job:1"]["source_urls"] = ["https://example.test/first"]
+        memory["job:alias"] = {
+            "title": "Python Developer",
+            "company": "Example GmbH",
+            "workflow_status": "interesting",
+            "active": True,
+            "source_urls": ["https://example.test/second"],
+        }
+        save_memory(memory, self.memory_path)
+
+        jobs = load_review_jobs(self.recommendations_path, self.memory_path)
+
+        self.assertEqual(len(jobs), 1)
+
     def test_review_jobs_classify_legacy_international_recommendation(self):
         document = json.loads(self.recommendations_path.read_text(encoding="utf-8"))
         document["recommendations"][0]["locations"] = ["weltweit"]

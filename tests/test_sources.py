@@ -247,7 +247,7 @@ class StepStoneCacheTests(unittest.TestCase):
         self.assertEqual(jobs, [cached_job])
         fetch_job.assert_called_once_with(blocked_url, ANY)
 
-    def test_stale_cached_detail_is_refreshed_and_marked_changed(self):
+    def test_stale_cached_detail_is_refreshed(self):
         url = "https://www.stepstone.de/stellenangebote--cached.html"
         cached_job = self.make_job("Cached", url)
         cached_job.fetched_at = datetime.now(timezone.utc) - timedelta(days=8)
@@ -279,7 +279,6 @@ class StepStoneCacheTests(unittest.TestCase):
                 )
 
         self.assertEqual(jobs, [refreshed_job])
-        self.assertTrue(jobs[0].content_changed)
         fetch_job.assert_called_once_with(url, ANY)
 
     @staticmethod
@@ -331,10 +330,9 @@ class SharedDetailCacheTests(unittest.TestCase):
                         jobs = source.fetch_jobs(cache_path=cache_path, now=now)
 
                 self.assertEqual(jobs, [cached_job])
-                self.assertFalse(jobs[0].content_changed)
                 fetch_job.assert_not_called()
 
-    def test_stale_changed_detail_is_downloaded_and_marked(self):
+    def test_stale_detail_is_downloaded(self):
         now = datetime(2026, 7, 17, 12, tzinfo=timezone.utc)
         url = "https://www.get-in-it.de/jobsuche/p1"
         cached_job = self.make_job(
@@ -379,7 +377,6 @@ class SharedDetailCacheTests(unittest.TestCase):
 
         self.assertEqual(jobs, [refreshed_job])
         self.assertEqual(enriched, 1)
-        self.assertTrue(jobs[0].content_changed)
         fetch_job.assert_called_once_with("https://www.get-in-it.de/jobsuche/p1")
 
     def test_failed_refresh_falls_back_to_stale_detail(self):
@@ -405,7 +402,6 @@ class SharedDetailCacheTests(unittest.TestCase):
                 jobs = arbeitsagentur.fetch_jobs(cache_path=cache_path, now=now)
 
         self.assertEqual([job.id for job in jobs], [cached_job.id])
-        self.assertFalse(jobs[0].content_changed)
         self.assertTrue(jobs[0].cache_stale)
 
     @staticmethod

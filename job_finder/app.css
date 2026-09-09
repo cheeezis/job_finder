@@ -266,8 +266,6 @@ label { display: grid; gap: 6px; color: var(--muted); font-size: .79rem; font-we
 #job-links { display: flex; }
 button.inquiry { border-color: #9b6d24; background: transparent; color: #714b10; }
 button.inquiry:hover { background: var(--warning); color: white; }
-button.updated { border-color: #c28a2b; background: var(--warning-soft); color: #6d460d; }
-button.updated:hover { background: var(--warning); color: white; }
 button.ignore { border-color: var(--line-strong); color: var(--danger); }
 
 .navigation { display: flex; justify-content: space-between; margin-top: 12px; }
@@ -285,7 +283,6 @@ button.ignore { border-color: var(--line-strong); color: var(--danger); }
   box-shadow: 6px 6px 0 rgba(32, 33, 38, .14);
 }
 .review-badges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
-.badge.updated { border-color: #caa566; background: var(--warning-soft); color: #6d460d; }
 .source-menu { position: relative; }
 .source-menu summary { display: block; list-style: none; cursor: pointer; }
 .source-menu summary::-webkit-details-marker { display: none; }

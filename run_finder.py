@@ -324,8 +324,8 @@ def build_run_summary(
         for source in job.sources:
             new_by_source[source.source] = new_by_source.get(source.source, 0) + 1
 
-    review_updates = sum(
-        bool(job.get("is_new") or job.get("content_changed"))
+    review_new = sum(
+        bool(job.get("is_new"))
         for job in results["included"]
     )
     summary_sources = [
@@ -344,7 +344,7 @@ def build_run_summary(
         "jobs_known": memory_stats["known"],
         "included": len(results["included"]),
         "excluded": len(results["excluded"]),
-        "review_updates": review_updates,
+        "review_new": review_new,
         "notifications": dict(notification_stats or {}),
         "sources": summary_sources,
     }

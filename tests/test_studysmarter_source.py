@@ -89,7 +89,6 @@ class StudySmarterTests(unittest.TestCase):
         self.assertEqual(jobs[0].work_mode, WorkMode.HYBRID)
         self.assertIsNone(jobs[0].remote_percentage)
         self.assertEqual(jobs[0].description_clean, cached.description_clean)
-        self.assertTrue(jobs[0].content_changed)
 
     def test_search_url_contains_filters_and_page(self):
         url = studysmarter.build_search_url(

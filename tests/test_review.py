@@ -21,7 +21,6 @@ from job_finder.review import (
     LocalReviewServer,
     REVIEW_PAGE,
     ReviewRequestHandler,
-    acknowledge_review_update,
     address_is_in_use,
     load_review_jobs,
     start_application,
@@ -434,7 +433,6 @@ class ReviewTests(unittest.TestCase):
 
     def test_inquiry_is_persisted_as_review_decision(self):
         memory = load_memory(self.memory_path)
-        memory["job:1"]["review_update_pending"] = True
         save_memory(memory, self.memory_path)
 
         result = update_review_decision(
@@ -448,22 +446,7 @@ class ReviewTests(unittest.TestCase):
             load_memory(self.memory_path)["job:1"]["workflow_status"],
             "inquiry",
         )
-        self.assertFalse(
-            load_memory(self.memory_path)["job:1"]["review_update_pending"]
-        )
 
-    def test_update_can_be_acknowledged_without_changing_workflow_status(self):
-        memory = load_memory(self.memory_path)
-        memory["job:1"]["review_update_pending"] = True
-        save_memory(memory, self.memory_path)
-
-        result = acknowledge_review_update("job:1", self.memory_path)
-        entry = load_memory(self.memory_path)["job:1"]
-
-        self.assertEqual(result["workflow_status"], "interesting")
-        self.assertFalse(result["review_update_pending"])
-        self.assertEqual(entry["workflow_status"], "interesting")
-        self.assertFalse(entry["review_update_pending"])
 
     def test_latest_ignored_decision_can_be_undone(self):
         update_review_decision("job:1", "ignored", self.memory_path)

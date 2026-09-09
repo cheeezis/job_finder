@@ -163,7 +163,6 @@ def merge_jobs(existing, duplicate):
         locations=locations,
         sources=sources,
         is_new=existing.is_new or duplicate.is_new,
-        content_changed=existing.content_changed or duplicate.content_changed,
     )
 
 

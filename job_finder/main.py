@@ -39,7 +39,6 @@ def build_score_results(evaluated_jobs):
             {
                 **job.to_dict(),
                 "is_new": job.is_new,
-                "content_changed": job.content_changed,
                 **result,
             }
         )

@@ -30,7 +30,6 @@ from job_finder.sources.common import (
     extract_annual_salary_eur,
     extract_schema_locations,
     load_detail_cache,
-    mark_content_change,
     normalize_employment_type,
     parse_published_date,
     source_job_id,
@@ -160,7 +159,7 @@ def with_current_summary(cached_job, summary):
         ),
         sources=summary.sources,
     )
-    return mark_content_change(current, cached_job)
+    return current
 
 
 def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE, now=None):

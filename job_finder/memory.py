@@ -128,7 +128,6 @@ def first_seen_date(entry):
     return timestamp.astimezone().date().isoformat()
 
 
-
 def replace_sqlite_memory(connection, memory, *, commit=True):
     """Replace all state rows inside one SQLite transaction."""
     if commit:
@@ -193,11 +192,6 @@ def update_memory(
             job.first_seen_at = datetime.fromisoformat(entry["first_seen_at"])
             job.last_seen_at = now
             job.workflow_status = WorkflowStatus(entry["workflow_status"])
-            if job.content_changed:
-                entry["review_update_pending"] = True
-            job.review_update_pending = bool(
-                entry.get("review_update_pending", False)
-            )
             entry["last_seen_at"] = now.isoformat()
             entry["title"] = job.title
             entry["company"] = job.company
@@ -231,7 +225,6 @@ def update_memory(
             "source_names": job.source_names,
             "missed_runs": 0,
             "active": True,
-            "review_update_pending": False,
         }
         add_memory_index_entry(memory_index, job.id, memory[job.id])
 

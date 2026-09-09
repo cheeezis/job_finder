@@ -36,7 +36,6 @@ def import_manual_url(
     row = {
         **target.to_dict(),
         "is_new": target.is_new,
-        "content_changed": target.content_changed,
         **score,
     }
     save_recommendation(row, recommendations_path)

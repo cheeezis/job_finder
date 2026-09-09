@@ -17,18 +17,6 @@ DETAIL_CACHE_VERSION = 1
 DETAIL_REFRESH_AGE = timedelta(days=7)
 MAX_STALE_DETAIL_AGE = timedelta(days=14)
 DETAIL_CACHE_SAVE_INTERVAL = 25
-RELEVANT_CONTENT_FIELDS = (
-    "title",
-    "company",
-    "locations",
-    "description_clean",
-    "work_mode",
-    "remote_percentage",
-    "employment_type",
-    "career_levels",
-    "salary_min_eur",
-    "salary_max_eur",
-)
 
 GERMANY_LOCATION_LABELS = {"de", "deu", "deutschland", "germany"}
 GERMANY_REMOTE_REGION_LABELS = {
@@ -158,7 +146,6 @@ def fetch_cached_details(
         if detail_is_fresh(cached_job, now, max_age=max_age):
             if normalize_cached:
                 cache_changed = normalize_cached(cached_job, url) or cache_changed
-            cached_job.content_changed = False
             cached_job.cache_stale = False
             jobs.append(cached_job)
             continue
@@ -166,7 +153,6 @@ def fetch_cached_details(
         try:
             job = fetch_detail(url)
             job.cache_stale = False
-            mark_content_change(job, cached_job)
             jobs.append(job)
             cache[cache_key] = job
             unsaved += 1
@@ -184,7 +170,6 @@ def fetch_cached_details(
             if cached_job and detail_within_age(cached_job, now):
                 if normalize_cached:
                     cache_changed = normalize_cached(cached_job, url) or cache_changed
-                cached_job.content_changed = False
                 cached_job.cache_stale = True
                 jobs.append(cached_job)
                 stale_fallbacks += 1
@@ -232,15 +217,6 @@ def detail_is_fresh(job, now=None, max_age=DETAIL_REFRESH_AGE):
 def detail_within_age(job, now=None, max_age=MAX_STALE_DETAIL_AGE):
     """Return whether cached data may still be shown as a marked fallback."""
     return detail_is_fresh(job, now, max_age=max_age)
-
-
-def mark_content_change(job, previous_job):
-    """Mark a refreshed job when fields relevant to filtering or review changed."""
-    job.content_changed = previous_job is not None and any(
-        getattr(job, field) != getattr(previous_job, field)
-        for field in RELEVANT_CONTENT_FIELDS
-    )
-    return job
 
 
 def source_job_id(source, external_id, url):
@@ -374,7 +350,6 @@ def enrich_cached_candidates(
             continue
         try:
             detailed = fetch_detail(job, url)
-            mark_content_change(detailed, cached_job)
             detailed.first_seen_at = job.first_seen_at
             detailed.last_seen_at = job.last_seen_at
             detailed.workflow_status = job.workflow_status

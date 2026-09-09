@@ -193,13 +193,13 @@ class RunFinderTests(unittest.TestCase):
         self.assertEqual(reports[0]["status"], "partial")
         self.assertEqual(reports[0]["failed_segments"], 2)
 
-    def test_run_summary_tracks_source_counts_and_review_updates(self):
+    def test_run_summary_tracks_source_counts_and_review_new(self):
         job = make_job("working:1")
         job.is_new = True
         summary = build_run_summary(
             duration_seconds=125.4,
             jobs=[job],
-            results={"included": [{"is_new": True}, {"content_changed": False}], "excluded": [{}]},
+            results={"included": [{"is_new": True}, {"is_new": False}], "excluded": [{}]},
             memory_stats={"new": 1, "known": 0},
             source_reports=[
                 {"name": "working", "status": "success", "jobs": 1},
@@ -208,7 +208,7 @@ class RunFinderTests(unittest.TestCase):
             notification_stats={"sent": 1, "failed": 0},
         )
         self.assertEqual(summary["duration"], "2 Min. 05 Sek.")
-        self.assertEqual(summary["review_updates"], 1)
+        self.assertEqual(summary["review_new"], 1)
         self.assertEqual(summary["notifications"]["sent"], 1)
         self.assertEqual(summary["sources"][0]["new"], 1)
         self.assertEqual(format_duration(5), "5 Sek.")

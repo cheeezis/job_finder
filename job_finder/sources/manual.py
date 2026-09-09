@@ -16,7 +16,6 @@ from job_finder.sources.common import (
     detail_within_age,
     detail_is_fresh,
     load_detail_cache,
-    mark_content_change,
     normalize_employment_type,
     parse_published_date,
     record_partial_failure,
@@ -46,9 +45,7 @@ def add_url(url, cache_path=MANUAL_CACHE_FILE):
     cache_file = Path(cache_path)
     cache = load_detail_cache(cache_file)
     cache_key = canonical_detail_url(final_url)
-    previous = cache.get(cache_key) or cache.get(canonical_detail_url(requested_url))
     job = job_from_page(final_url, html)
-    mark_content_change(job, previous)
     cache.pop(canonical_detail_url(requested_url), None)
     cache[cache_key] = job
     save_detail_cache(cache_file, cache)
@@ -65,7 +62,6 @@ def fetch_jobs(cache_path=MANUAL_CACHE_FILE, now=None):
 
     for saved_url, cached_job in cache.items():
         if detail_is_fresh(cached_job, now):
-            cached_job.content_changed = False
             cached_job.cache_stale = False
             refreshed[saved_url] = cached_job
             jobs.append(cached_job)
@@ -76,13 +72,11 @@ def fetch_jobs(cache_path=MANUAL_CACHE_FILE, now=None):
             )
             job = job_from_page(final_url, html)
             job.cache_stale = False
-            mark_content_change(job, cached_job)
             refreshed[canonical_detail_url(final_url)] = job
             jobs.append(job)
         except Exception:
             errors += 1
             if detail_within_age(cached_job, now):
-                cached_job.content_changed = False
                 cached_job.cache_stale = True
                 refreshed[saved_url] = cached_job
                 jobs.append(cached_job)

@@ -23,7 +23,7 @@
   <section class="filters" aria-label="Filter">
     <label>Status
       <select id="status-filter">
-        <option value="attention">Neu oder Änderung offen</option>
+        <option value="attention">Neu</option>
         <option value="">Alle Status</option>
       </select>
     </label>
@@ -53,7 +53,7 @@
     <div class="score-row">
       <span id="score" class="score"></span>
       <div class="review-badges">
-        <span id="change-badge" class="badge" hidden></span>
+        <span id="new-badge" class="badge" hidden></span>
         <span id="role-badge" class="badge"></span>
       </div>
     </div>
@@ -77,7 +77,6 @@
         <button id="mark-interesting" class="primary">Interessant</button>
         <button id="mark-inquiry" class="inquiry">Rückfrage nötig</button>
         <button id="mark-ignored" class="ignore">Nicht interessant</button>
-        <button id="acknowledge-update" class="updated" hidden>Änderung geprüft</button>
       </div>
       <div class="utility-actions">
         <button id="mark-applied">Als beworben markieren</button>
@@ -148,7 +147,7 @@
   let routeOrigin = "";
   let undoDecision = null;
 
-  const {element, make, appendSourceLinks, postJson, showError, showFeedback} = JobFinder;
+  const {element, make, appendSourceLinks, postJson, showError} = JobFinder;
 
   function addOptions(select, values, labels) {
     values.forEach(value => {
@@ -219,7 +218,7 @@
     visibleJobs = jobs.filter(job => {
       const awaitsDecision = notificationStatuses.has(job.workflow_status);
       const statusMatches = status === "attention"
-        ? awaitsDecision && (job.is_new || job.review_update_pending)
+        ? awaitsDecision && job.is_new
         : (!status || job.workflow_status === status);
       return statusMatches &&
       (!role || job.role_group === role) &&
@@ -255,10 +254,10 @@
     setText("role-badge", job.current_snapshot_missing
       ? "Vorgemerkt"
       : roleLabels[job.role_group] || "Allgemeine IT");
-    const changeBadge = element("change-badge");
-    changeBadge.hidden = !(job.is_new || job.review_update_pending);
-    changeBadge.className = job.is_new ? "badge" : "badge updated";
-    changeBadge.textContent = job.is_new ? "Neu" : "Änderung offen";
+    const newBadge = element("new-badge");
+    newBadge.hidden = !job.is_new;
+    newBadge.className = "badge";
+    newBadge.textContent = "Neu";
     setText("title", job.title);
     setText("company", job.company);
     setText("location", `Ort: ${(job.locations || []).join(", ") || "unbekannt"}`);
@@ -286,9 +285,6 @@
     element("mark-interesting").hidden = applicationTracked;
     element("mark-inquiry").hidden = applicationTracked;
     element("mark-ignored").hidden = applicationTracked;
-    element("acknowledge-update").hidden = (
-      job.is_new || !job.review_update_pending
-    );
     element("mark-applied").hidden = applicationTracked;
     element("application-link").hidden = !applicationTracked;
     const warning = element("prefilter-warning");
@@ -305,7 +301,6 @@
   function applyWorkflowResult(job, result) {
     job.workflow_status = result.workflow_status;
     job.is_new = false;
-    job.review_update_pending = false;
     if (result.application_tracked != null) {
       job.application_tracked = result.application_tracked;
     }
@@ -314,7 +309,6 @@
       original.workflow_status = result.workflow_status;
       original.application_tracked = job.application_tracked;
       original.is_new = false;
-      original.review_update_pending = false;
     }
     if (element("status-filter").value && element("status-filter").value !== result.workflow_status) {
       applyFilters(false);
@@ -334,27 +328,6 @@
     undoDecision = workflowStatus === "ignored"
       ? {jobId: job.id, expectedStatus: result.workflow_status} : null;
     applyWorkflowResult(job, result);
-  }
-
-  async function acknowledgeUpdate() {
-    const job = visibleJobs[currentIndex];
-    const button = element("acknowledge-update");
-    button.disabled = true;
-    try {
-      await postJson("/api/review-update", {job_id: job.id},
-        "Änderung konnte nicht bestätigt werden");
-      job.review_update_pending = false;
-      const original = jobs.find(item => item.id === job.id);
-      if (original) original.review_update_pending = false;
-      if (element("status-filter").value === "attention") {
-        applyFilters(false);
-      } else {
-        render();
-      }
-      showFeedback("Änderung als geprüft markiert.");
-    } finally {
-      button.disabled = false;
-    }
   }
 
   async function undoIgnored() {
@@ -470,9 +443,6 @@
   );
   element("mark-ignored").addEventListener("click", () =>
     changeStatus("ignored").catch(showError)
-  );
-  element("acknowledge-update").addEventListener("click", () =>
-    acknowledgeUpdate().catch(showError)
   );
   element("undo-ignored").addEventListener("click", () =>
     undoIgnored().catch(showError)

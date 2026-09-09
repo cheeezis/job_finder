@@ -37,7 +37,7 @@ class ArbeitnowTests(unittest.TestCase):
         self.assertEqual(fetch.call_count, 2)
         sleep.assert_called_once_with(arbeitnow.REQUEST_PAUSE_SECONDS)
 
-    def test_fetch_jobs_marks_changed_api_records(self):
+    def test_fetch_jobs_refreshes_api_records(self):
         url = "https://www.arbeitnow.com/jobs/example/one"
         old = arbeitnow.job_from_record(
             {
@@ -67,7 +67,6 @@ class ArbeitnowTests(unittest.TestCase):
                 jobs = arbeitnow.fetch_jobs(cache_path=cache_path)
 
         self.assertEqual(len(jobs), 1)
-        self.assertTrue(jobs[0].content_changed)
         self.assertIn("Python und APIs", jobs[0].description_clean)
         self.assertIsNone(jobs[0].sources[0].application_url)
 
@@ -125,9 +124,7 @@ class ArbeitnowTests(unittest.TestCase):
                 )
 
         self.assertEqual(full_text_jobs[0].description_clean, portal_text.strip())
-        self.assertTrue(full_text_jobs[0].content_changed)
         self.assertEqual(placeholder_jobs[0].description_clean, portal_text.strip())
-        self.assertFalse(placeholder_jobs[0].content_changed)
         for job in (full_text_jobs[0], placeholder_jobs[0]):
             self.assertEqual(job.sources[0].application_url, application_url)
         self.assertEqual(enriched_count, 0)
@@ -155,7 +152,6 @@ class ArbeitnowTests(unittest.TestCase):
                 jobs = arbeitnow.fetch_jobs(cache_path=cache_path)
 
         self.assertEqual([job.id for job in jobs], ["arbeitnow:cached"])
-        self.assertFalse(jobs[0].content_changed)
 
     def test_fetch_jobs_reuses_enrichment_and_keeps_only_current_snapshot(self):
         current_url = "https://www.arbeitnow.com/jobs/example/current"
@@ -217,7 +213,6 @@ class ArbeitnowTests(unittest.TestCase):
             "https://company.test/jobs/current",
         )
         self.assertEqual(list(saved), [current_url])
-        self.assertFalse(jobs[0].content_changed)
 
     def test_direct_description_never_requests_original_page(self):
         job = arbeitnow.job_from_record(

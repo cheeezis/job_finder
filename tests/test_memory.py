@@ -70,16 +70,17 @@ class MemoryTests(unittest.TestCase):
             [{"status": "applied", "occurred_on": "2026-08-01"}],
         )
 
-    def test_changed_known_job_stays_pending_until_review(self):
+    def test_changed_known_job_keeps_its_decision_and_is_not_new(self):
         memory = {}
         update_memory([make_job()], memory)
         changed = make_job()
-        changed.content_changed = True
+        memory[changed.id]["workflow_status"] = "interesting"
+        changed.title = "An updated title"
 
         update_memory([changed], memory)
 
-        self.assertTrue(changed.review_update_pending)
-        self.assertTrue(memory[changed.id]["review_update_pending"])
+        self.assertFalse(changed.is_new)
+        self.assertEqual(changed.workflow_status, WorkflowStatus.INTERESTING)
 
     def test_job_becomes_inactive_after_three_successful_missed_runs(self):
         memory = {}

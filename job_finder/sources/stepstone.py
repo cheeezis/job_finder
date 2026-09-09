@@ -31,7 +31,6 @@ from job_finder.sources.common import (
     detail_within_age,
     extract_annual_salary_eur,
     extract_schema_locations,
-    mark_content_change,
     normalize_employment_type,
     parse_published_date,
     source_job_id,
@@ -121,7 +120,6 @@ def fetch_jobs(
         cache_key = normalize_detail_url(url)
         cached_job = cache["jobs"].get(cache_key)
         if detail_is_fresh(cached_job, now):
-            cached_job.content_changed = False
             cached_job.cache_stale = False
             jobs.append(cached_job)
             if progress_checkpoint(index + 1, len(links)):
@@ -136,7 +134,6 @@ def fetch_jobs(
         try:
             job = fetch_job(url, client)
             job.cache_stale = False
-            mark_content_change(job, cached_job)
             jobs.append(job)
             cache["jobs"][cache_key] = job
             save_cache(cache_file, cache)
@@ -150,7 +147,6 @@ def fetch_jobs(
                 "keine weiteren Detailanfragen"
             )
             if cached_job and detail_within_age(cached_job, now):
-                cached_job.content_changed = False
                 cached_job.cache_stale = True
                 jobs.append(cached_job)
             jobs.extend(cached_jobs(links[index + 1 :], cache, now))
@@ -162,7 +158,6 @@ def fetch_jobs(
                     _coverage.get("failed_segments", 0) + 1
                 )
             if cached_job and detail_within_age(cached_job, now):
-                cached_job.content_changed = False
                 cached_job.cache_stale = True
                 jobs.append(cached_job)
                 stale_fallbacks += 1
@@ -365,7 +360,6 @@ def cached_jobs(links, cache, now=None):
     for url in links:
         job = cache.get("jobs", {}).get(normalize_detail_url(url))
         if job and detail_within_age(job, now):
-            job.content_changed = False
             job.cache_stale = not detail_is_fresh(job, now)
             jobs.append(job)
     return jobs

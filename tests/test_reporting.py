@@ -24,8 +24,6 @@ def included_job(job_id="test:1"):
         "experience_level": "klare Einstiegsstelle",
         "location_precheck": "100% remote Deutschland",
         "is_new": True,
-        "content_changed": False,
-        "review_update_pending": False,
         "description_clean": "Nicht für die Review-Ausgabe bestimmt",
         "reasons": ["interne Bewertungsdetails"],
     }
@@ -57,7 +55,6 @@ class ReportingTests(unittest.TestCase):
         self.assertEqual(recommendation["match_percent"], 80)
         self.assertEqual(recommendation["role_group"], "software_development")
         self.assertTrue(recommendation["is_new"])
-        self.assertFalse(recommendation["review_update_pending"])
         self.assertEqual(recommendation["url"], "https://company.test/job")
         self.assertEqual(len(recommendation["source_links"]), 3)
         self.assertNotIn("description_clean", recommendation)

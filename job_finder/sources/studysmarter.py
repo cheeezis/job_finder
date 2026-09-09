@@ -15,7 +15,6 @@ from job_finder.sources.common import (
     enrich_cached_candidates,
     canonical_detail_url,
     load_detail_cache,
-    mark_content_change,
     integer,
     normalize_employment_type,
     parse_published_date,
@@ -93,7 +92,7 @@ def with_current_summary(cached_job, summary):
         employment_type=summary.employment_type or cached_job.employment_type,
         published_at=summary.published_at or cached_job.published_at,
     )
-    return mark_content_change(current, cached_job)
+    return current
 
 
 def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE, now=None):

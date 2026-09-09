@@ -1,6 +1,5 @@
 """Queue and send compact Discord summaries for new job recommendations."""
 
-import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,7 +18,7 @@ from job_finder.reporting import (
 )
 
 
-STATE_VERSION = 2
+STATE_VERSION = 3
 NOTIFIABLE_STATUSES = {"new", "review", "interesting", "inquiry"}
 MAX_EMBEDS = 10
 MAX_EMBED_CHARACTERS = 6000
@@ -75,9 +74,9 @@ def process_notifications(
     state = load_notification_state(state_path)
     jobs_by_key = {}
     queued = 0
-    current_updates = 0
-    eligible_updates = 0
-    default_review_updates = 0
+    current_new = 0
+    eligible_new = 0
+    default_review_new = 0
 
     # A job may have been queued in an earlier run but be excluded after a
     # stricter general rule or an updated posting. It must not remain queued.
@@ -87,22 +86,18 @@ def process_notifications(
     for job in results["included"]:
         key = notification_key(job)
         jobs_by_key[key] = job
-        is_current_update = (
-            job.get("is_new")
-            or job.get("review_update_pending")
-            or job.get("content_changed")
-        )
-        if is_current_update:
-            current_updates += 1
+        is_new_job = bool(job.get("is_new"))
+        if is_new_job:
+            current_new += 1
         if not is_notifiable(job):
             state["pending"].pop(key, None)
             continue
-        if is_current_update:
-            eligible_updates += 1
+        if is_new_job:
+            eligible_new += 1
             if is_visible_in_default_review(job):
-                default_review_updates += 1
+                default_review_new += 1
         if (
-            is_current_update
+            is_new_job
             and key not in state["sent"]
             and key not in state["pending"]
         ):
@@ -117,10 +112,10 @@ def process_notifications(
     stats = {
         "queued": queued,
         "ready": len(candidates),
-        "current_updates": current_updates,
-        "eligible_updates": eligible_updates,
-        "default_review_updates": default_review_updates,
-        "already_notified": max(eligible_updates - len(candidates), 0),
+        "current_new": current_new,
+        "eligible_new": eligible_new,
+        "default_review_new": default_review_new,
+        "already_notified": max(eligible_new - len(candidates), 0),
         "sent": 0,
         "failed": 0,
         "configuration_error": None,
@@ -175,8 +170,8 @@ def run_summary_payload(summary):
     notifications = summary.get("notifications", {})
     sent = notifications.get("sent", 0)
     failed = notifications.get("failed", 0)
-    eligible = notifications.get("eligible_updates", summary["review_updates"])
-    default_review = notifications.get("default_review_updates", eligible)
+    eligible = notifications.get("eligible_new", summary["review_new"])
+    default_review = notifications.get("default_review_new", eligible)
     hidden_by_default = max(eligible - default_review, 0)
     source_warnings = exceptional_source_text(sources)
     color = 0xD99A2B if failed or any(
@@ -229,38 +224,19 @@ def is_notifiable(job):
 
 
 def is_visible_in_default_review(job):
-    """Mirror the review page's default visibility for an updated job."""
+    """Mirror the review page's default visibility for a new job."""
     return not is_international_listing(job) and not str(
         job.get("location_precheck") or ""
     ).startswith("Junior-Hybrid")
 
 
 def notification_key(job):
-    """Identify one job content version independently of score changes."""
-    payload = {
-        "id": job["id"],
-        "title": job.get("title"),
-        "company": job.get("company"),
-        "locations": job.get("locations", []),
-        "description_clean": job.get("description_clean"),
-        "work_mode": job.get("work_mode"),
-        "remote_percentage": job.get("remote_percentage"),
-        "employment_type": job.get("employment_type"),
-        "career_levels": job.get("career_levels", []),
-        "salary_min_eur": job.get("salary_min_eur"),
-        "salary_max_eur": job.get("salary_max_eur"),
-    }
-    encoded = json.dumps(
-        payload,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
+    """Identify a job independently of later content or scoring changes."""
+    return job["id"]
 
 
 def pending_entry(job, timestamp):
-    """Create auditable retry state for one unsent content version."""
+    """Create auditable retry state for one unsent job."""
     return {
         "job_id": job["id"],
         "title": job["title"],
@@ -308,7 +284,6 @@ def discord_embed(job):
     """Render a quiet, compact card with the facts needed for a first look."""
     locations = ", ".join(job.get("locations", [])) or "unbekannt"
     role = format_role_group(job)
-    kind = notification_kind(job)
     remote = format_remote(job)
     return {
         "title": truncate(job["title"], 256),
@@ -318,12 +293,12 @@ def discord_embed(job):
             f"📍 {locations} · 🏠 {remote}",
             4096,
         ),
-        "color": 0x2E8B57 if kind == "Neu" else 0x3678C2,
+        "color": 0x2E8B57,
         "fields": [
             {
                 "name": "Kurzcheck",
                 "value": truncate(
-                    f"{kind} · {role} · Vorfilter {job.get('match_percent', 0)}/100",
+                    f"Neu · {role} · Vorfilter {job.get('match_percent', 0)}/100",
                     1024,
                 ),
                 "inline": False,
@@ -392,11 +367,6 @@ def source_status_label(status):
     return "nur teilweise geladen" if status == "partial" else "fehlgeschlagen"
 
 
-def notification_kind(job):
-    """Distinguish first discoveries from persistent review updates."""
-    return "Neu" if job.get("is_new") else "Aktualisiert"
-
-
 def embed_character_count(embed):
     """Count fields included in Discord's combined 6000-character limit."""
     return (
@@ -428,21 +398,21 @@ def webhook_url_with_confirmation(webhook_url):
 
 
 def load_notification_state(path=NOTIFICATION_STATE_FILE):
-    """Load sent versions and pending delivery attempts."""
+    """Load delivery state and fold legacy content keys into stable job IDs."""
     state_path = Path(path)
     if not state_path.exists():
         return {"sent": {}, "pending": {}}
     document = json.loads(state_path.read_text(encoding="utf-8"))
-    if document.get("version") == 1:
-        # Version 1 queued only positive LLM recommendations. Preserve its sent
-        # content keys, but do not release an obsolete pending backlog.
-        return {"sent": document.get("sent", {}), "pending": {}}
-    if document.get("version") != STATE_VERSION:
+    version = document.get("version")
+    if version not in {1, 2, STATE_VERSION}:
         raise ValueError("Benachrichtigungsstatus verwendet eine unbekannte Version")
-    return {
-        "sent": document.get("sent", {}),
-        "pending": document.get("pending", {}),
+    sent = {entry.get("job_id", key): entry
+            for key, entry in document.get("sent", {}).items()}
+    pending = {} if version == 1 else {
+        entry["job_id"]: entry for entry in document.get("pending", {}).values()
+        if entry.get("job_id") and entry["job_id"] not in sent
     }
+    return {"sent": sent, "pending": pending}
 
 
 def save_notification_state(state, path=NOTIFICATION_STATE_FILE):

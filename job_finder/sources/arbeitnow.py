@@ -14,7 +14,6 @@ from job_finder.sources.common import (
     canonical_detail_url,
     detail_is_fresh,
     load_detail_cache,
-    mark_content_change,
     normalize_employment_type,
     record_partial_failure,
     save_detail_cache,
@@ -79,7 +78,6 @@ def fetch_jobs(cache_path=CACHE_FILE):
         cache_key = canonical_detail_url(job.primary_url)
         previous = cache.get(cache_key)
         reuse_cached_enrichment(job, previous)
-        mark_content_change(job, previous)
         current_cache[cache_key] = job
         jobs.append(job)
 
@@ -168,11 +166,9 @@ def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE):
             description = external_description(html)
             if len(description) < MIN_EXTERNAL_DESCRIPTION_LENGTH:
                 continue
-            previous = cache.get(canonical_detail_url(source.url))
             source.application_url = target_url
             job.description_raw = html
             job.description_clean = description
-            mark_content_change(job, previous)
             cache[canonical_detail_url(source.url)] = job
             enriched += 1
         except Exception:

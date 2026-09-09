@@ -13,7 +13,7 @@ from job_finder.notifications import (
 )
 
 
-def make_job(job_id="job:1", *, is_new=True, content_changed=False, status="new"):
+def make_job(job_id="job:1", *, is_new=True, status="new"):
     return {
         "id": job_id,
         "title": "Junior Python Developer",
@@ -29,8 +29,6 @@ def make_job(job_id="job:1", *, is_new=True, content_changed=False, status="new"
         "location_precheck": "100% remote Deutschland",
         "workflow_status": status,
         "is_new": is_new,
-        "content_changed": content_changed,
-        "review_update_pending": content_changed,
     }
 
 
@@ -59,27 +57,41 @@ class NotificationTests(unittest.TestCase):
             )
             state = json.loads(path.read_text(encoding="utf-8"))
         self.assertEqual(stats["ready"], 0)
-        self.assertEqual(state["version"], 2)
+        self.assertEqual(state["version"], 3)
         self.assertEqual(state["pending"], {})
 
-    def test_only_new_or_changed_prefiltered_jobs_are_queued(self):
+    def test_only_new_prefiltered_jobs_are_queued(self):
         with tempfile.TemporaryDirectory() as directory:
             stats = process_notifications(
                 {
                     "included": [
                         make_job("new"),
-                        make_job("changed", is_new=False, content_changed=True),
+                        make_job("changed", is_new=False),
                         make_job("known", is_new=False),
                     ],
                     "excluded": [],
                 },
                 state_path=Path(directory) / "state.json",
             )
-        self.assertEqual(stats["queued"], 2)
-        self.assertEqual(stats["ready"], 2)
-        self.assertEqual(stats["current_updates"], 2)
-        self.assertEqual(stats["eligible_updates"], 2)
-        self.assertEqual(stats["default_review_updates"], 2)
+        self.assertEqual(stats["queued"], 1)
+        self.assertEqual(stats["ready"], 1)
+        self.assertEqual(stats["current_new"], 1)
+        self.assertEqual(stats["eligible_new"], 1)
+        self.assertEqual(stats["default_review_new"], 1)
+
+    def test_content_changes_never_resend_an_already_notified_job(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.json"
+            path.write_text(json.dumps({"version": 2, "sent": {
+                "old-content-hash": {"job_id": "job:1", "sent_at": "2026-09-01"}},
+                "pending": {"changed-content-hash": {"job_id": "job:1"}}}), encoding="utf-8")
+            job = make_job()
+            job["description_clean"] = "A completely rewritten job description"
+            stats = process_notifications({"included": [job], "excluded": []}, state_path=path)
+            self.assertEqual(stats["queued"], 0)
+            self.assertEqual(stats["ready"], 0)
+            state = json.loads(path.read_text(encoding="utf-8"))
+            self.assertIn("job:1", state["sent"])
 
     def test_reviewed_job_is_not_queued(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -105,8 +117,8 @@ class NotificationTests(unittest.TestCase):
                 state_path=Path(directory) / "state.json",
             )
 
-        self.assertEqual(stats["eligible_updates"], 3)
-        self.assertEqual(stats["default_review_updates"], 1)
+        self.assertEqual(stats["eligible_new"], 3)
+        self.assertEqual(stats["default_review_new"], 1)
 
     def test_successful_delivery_is_sent_only_once(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -149,23 +161,23 @@ class NotificationTests(unittest.TestCase):
         self.assertEqual(fields["Standortprüfung"], "100% remote Deutschland")
         self.assertNotIn("Pro", fields)
 
-    def test_embed_marks_persistent_update(self):
+    def test_delayed_first_notification_is_still_a_new_job(self):
         embed = discord_embed(
-            make_job(is_new=False, content_changed=True, status="review")
+            make_job(is_new=False, status="review")
         )
         fields = {field["name"]: field["value"] for field in embed["fields"]}
 
-        self.assertIn("Aktualisiert", fields["Kurzcheck"])
+        self.assertIn("Neu", fields["Kurzcheck"])
 
     def test_run_summary_contains_no_ai_statistics(self):
         payload = run_summary_payload(
             {
                 "duration": "10 Sek.", "jobs_total": 100, "jobs_new": 3,
                 "jobs_known": 97, "included": 20, "excluded": 80,
-                "review_updates": 2,
+                "review_new": 2,
                 "notifications": {
-                    "eligible_updates": 2,
-                    "default_review_updates": 1,
+                    "eligible_new": 2,
+                    "default_review_new": 1,
                     "sent": 2,
                     "failed": 0,
                 },

@@ -82,12 +82,6 @@ def load_review_jobs(
         job["is_new"] = bool(job.get("is_new")) and (
             job["workflow_status"] == WorkflowStatus.NEW.value
         )
-        job["review_update_pending"] = bool(
-            entry.get(
-                "review_update_pending",
-                job.get("review_update_pending", False),
-            )
-        )
         job["application_tracked"] = is_application(entry)
         if not job.get("source_links"):
             job["source_links"] = memory_source_links(entry)
@@ -125,7 +119,6 @@ def remembered_review_job(job_id, entry):
         "url": source_links[0]["url"] if source_links else "",
         "workflow_status": entry["workflow_status"],
         "is_new": False,
-        "review_update_pending": bool(entry.get("review_update_pending", False)),
         "application_tracked": is_application(entry),
         "current_snapshot_missing": True,
         "prefilter_warning": availability_warning,
@@ -176,7 +169,6 @@ def update_workflow_status(
         current_status = record_status_change(
             memory[job_id], status, occurred_on, scheduled_for
         )
-        memory[job_id]["review_update_pending"] = False
     return current_status
 
 
@@ -205,24 +197,9 @@ def update_review_decision(
                 "application_tracked": True,
             }
         current_status = record_status_change(entry, status)
-        entry["review_update_pending"] = False
     return {
         "workflow_status": current_status,
         "application_tracked": False,
-    }
-
-
-def acknowledge_review_update(job_id, memory_path=MEMORY_FILE):
-    """Clear an update notice without changing the job's workflow status."""
-    with edit_memory(memory_path) as memory:
-        if job_id not in memory:
-            raise KeyError(f"Unbekannte Job-ID: {job_id}")
-        entry = memory[job_id]
-        entry["review_update_pending"] = False
-        status = entry.get("workflow_status", WorkflowStatus.NEW.value)
-    return {
-        "workflow_status": status,
-        "review_update_pending": False,
     }
 
 
@@ -292,7 +269,6 @@ def start_application(
                 entry["salary_expectation_eur"] = salary_eur
                 entry.pop("salary_expectation", None)
             status = record_status_change(entry, WorkflowStatus.APPLIED)
-            entry["review_update_pending"] = False
     except Exception:
         # Files are created before the database commit and must not survive a
         # failed transaction as unreferenced application documents.
@@ -341,7 +317,6 @@ def update_application_salary(job_id, value, period="year", memory_path=MEMORY_F
             entry["salary_expectation_eur"] = salary
         entry.pop("salary_expectation", None)
     return {"salary_expectation_eur": salary}
-
 
 
 def update_workflow_history(
@@ -468,7 +443,6 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
             "/api/applications",
             "/api/application-salary",
             "/api/review-status",
-            "/api/review-update",
             "/api/review-undo",
             "/api/history",
             "/api/history/delete",
@@ -510,11 +484,6 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
                 result = update_review_decision(
                     payload["job_id"],
                     payload["workflow_status"],
-                    self.memory_path,
-                )
-            elif request_path == "/api/review-update":
-                result = acknowledge_review_update(
-                    payload["job_id"],
                     self.memory_path,
                 )
             elif request_path == "/api/review-undo":

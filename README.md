@@ -23,7 +23,7 @@ Stellenkarten und Laufstatistiken an Discord übertragen.
 - Bewerbungsübersicht mit Verlauf, Gesprächsterminen, optional gespeicherter
   Gehaltsvorstellung (Eingabe pro Monat oder Jahr, gespeichert als Jahresbrutto) und Statistik; die Antwortquote
   bezieht sich nur auf abgeschlossene Bewerbungen
-- kompakte Discord-Karten für neue oder inhaltlich geänderte Stellen sowie
+- kompakte Discord-Karten für neue Stellen sowie
   eine strukturierte Laufstatistik, die Fundmenge, Vorfilter, tatsächlich
   versendete Karten und die im Standard-Review sichtbare Anzahl trennt
 - isolierte Quellenfehler, Laufprotokolle und rotierende Backups wichtiger
@@ -114,27 +114,24 @@ Danach stehen zur Verfügung:
 - `http://127.0.0.1:8765/review` – Stellen prüfen
 - `http://127.0.0.1:8765/applications` – Bewerbungen und Statistik
 
-Der Review startet mit „Neu oder Änderung offen“. Internationale Anzeigen und
+Der Review startet mit „Neu“. Internationale Anzeigen und
 Junior-Hybrid-Sonderfälle sind eigene, standardmäßig deaktivierte Filter.
 
 ## Ablauf
 
 1. Die Quellen liefern Suchtreffer und Detaildaten.
 2. URLs und inhaltlich gleiche Stellen werden zusammengeführt.
-3. Das lokale Gedächtnis erkennt neue, bekannte, geänderte und inaktive Jobs.
+3. Das lokale Gedächtnis erkennt neue, bekannte und inaktive Jobs.
 4. Der Vorfilter schließt klare Konflikte sowie automatisch gefundene Anzeigen
    aus, deren bekanntes Veröffentlichungsdatum mehr als 60 Tage zurückliegt.
    Anzeigen ohne verlässliches Datum bleiben nach der Verfügbarkeitsprüfung
    zulässig. Manuell eingereichte alte Anzeigen bleiben mit Warnung prüfbar.
    Die übrigen Stellen erhalten nachvollziehbare Kategorien für IT-Bereich,
    Einstieg und Standort.
-5. Alle durchgelassenen Stellen erscheinen im Review. Neue oder geänderte
-   Stellen können zusätzlich an Discord gesendet werden. Der Standardfilter
-   „Neu oder aktualisiert“ zeigt dieselbe Art von Stellen; eine erkannte
-   Aktualisierung bleibt dort sichtbar, bis sie im Review entschieden wurde.
-   Die Discord-Laufstatistik trennt Fundmenge, Vorfilter,
-   benachrichtigungsfähige Stellen, tatsächlich versendete Karten und die nach
-   den Standardfiltern direkt im Review sichtbare Anzahl.
+5. Alle durchgelassenen Stellen erscheinen im Review. Neue Stellen können
+   zusätzlich an Discord gesendet werden. Nachträgliche Textänderungen werden
+   eingelesen, lösen aber weder eine erneute Benachrichtigung noch ein erneutes
+   Auftauchen unter „Neu“ aus.
 6. Bewerbungen werden getrennt vom Stellen-Review dauerhaft nachverfolgt.
 
 Der veränderliche Stellen- und Bewerbungszustand liegt transaktional in

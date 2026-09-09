@@ -382,8 +382,6 @@ def preferred_memory_id(candidates, memory, current_job_id):
         job_id for job_id in candidates if has_manual_state(memory[job_id])
     ]
     preferred = application_candidates or manual_candidates or candidates
-    if len(preferred) > 1 and current_job_id in preferred:
-        return current_job_id
     return min(
         preferred,
         key=lambda job_id: memory_candidate_key(

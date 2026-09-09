@@ -198,6 +198,41 @@ class MemoryTests(unittest.TestCase):
         self.assertIn("stepstone:456", memory)
         self.assertIn("test:123", memory)
 
+    def test_older_review_decision_wins_over_later_duplicate_decision(self):
+        job = make_job()
+        older_id = "remotely:older"
+        job.sources.append(
+            JobSource(
+                source="remotely",
+                url="https://remotely.test/jobs/older",
+            )
+        )
+        memory = {
+            older_id: {
+                "first_seen_at": "2026-09-04T08:00:00+00:00",
+                "last_seen_at": "2026-09-08T08:00:00+00:00",
+                "workflow_status": "inquiry",
+                "source_urls": ["https://remotely.test/jobs/older"],
+                "source_names": ["remotely"],
+                "missed_runs": 0,
+                "active": True,
+            },
+            job.id: {
+                "first_seen_at": "2026-09-08T10:00:00+00:00",
+                "last_seen_at": "2026-09-08T10:00:00+00:00",
+                "workflow_status": "ignored",
+                "source_urls": [job.primary_url],
+                "source_names": ["test"],
+                "missed_runs": 0,
+                "active": True,
+            },
+        }
+
+        update_memory([job], memory)
+
+        self.assertEqual(job.id, older_id)
+        self.assertEqual(job.workflow_status, WorkflowStatus.INQUIRY)
+
     def test_republished_job_with_new_url_reuses_ignored_decision(self):
         job = make_job()
         old_id = "stepstone:old"

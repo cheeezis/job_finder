@@ -127,7 +127,8 @@
         const item = document.createElement("li");
         if (event.occurred_on && event.status !== "no_response") {
           item.append(`${formatDate(event.occurred_on)} · `);
-
+        } else if (event.status !== "no_response") {
+          item.append("Datum unbekannt · ");
         }
         const label = statusLabels[event.status] || event.status;
         item.append(
@@ -320,6 +321,51 @@
     return item;
   }
 
+  function salaryEditor(application) {
+    const details = make("details");
+    details.append(make("summary", "Gehaltsvorstellung bearbeiten"));
+    const form = make("form", null, "history-form");
+    const label = make("label", "Gehaltsvorstellung (optional)");
+    const input = make("input");
+    input.type = "number";
+    input.min = "1";
+    input.step = "1";
+    input.value = application.salary_expectation_eur || "";
+    label.append(input);
+    const periodLabel = make("label", "Gehaltszeitraum");
+    const period = make("select");
+    for (const [value, text] of [["year", "€ Brutto / Jahr"], ["month", "€ Brutto / Monat"]]) {
+      const option = make("option", text);
+      option.value = value;
+      period.append(option);
+    }
+    periodLabel.append(period);
+    const hint = make("p", null, "field-hint");
+    hint.setAttribute("aria-live", "polite");
+    JobFinder.bindSalaryInputs(input, period, hint);
+    const save = make("button", "Gehalt speichern");
+    save.type = "submit";
+    form.append(label, periodLabel, hint, save);
+    form.addEventListener("submit", async event => {
+      event.preventDefault();
+      save.disabled = true;
+      try {
+        await postJson("/api/application-salary", {
+          job_id: application.id,
+          salary_expectation_eur: input.value ? Number(input.value) : null,
+          salary_period: period.value
+        }, "Gehaltsvorstellung konnte nicht gespeichert werden");
+        await load();
+      } catch (error) {
+        showError(error);
+      } finally {
+        save.disabled = false;
+      }
+    });
+    details.append(form);
+    return details;
+  }
+
   function renderApplications(applications, containerId) {
     const container = element(containerId);
     container.replaceChildren();
@@ -351,6 +397,7 @@
         );
         card.append(salary);
       }
+      card.append(salaryEditor(application));
       appendDocuments(card, application);
       renderTimeline(application, card);
       container.append(card);

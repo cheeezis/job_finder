@@ -69,6 +69,27 @@ const JobFinder = (() => {
     return result;
   }
 
+  function salaryYearAmount(value, period) {
+    if (!value) return null;
+    const amount = Number(value) * (period === "month" ? 12 : 1);
+    return Number.isInteger(amount) && amount > 0 ? amount : null;
+  }
+
+  function bindSalaryInputs(input, period, hint) {
+    const update = () => {
+      input.max = period.value === "month" ? "833333" : "10000000";
+      input.placeholder = period.value === "month" ? "4500" : "54000";
+      const annual = salaryYearAmount(input.value, period.value);
+      hint.textContent = annual
+        ? `${new Intl.NumberFormat("de-DE").format(annual)} € Brutto/Jahr` +
+          (period.value === "month" ? " (12 Monatsgehälter)" : "")
+        : "Optional. Monatsbrutto wird mit 12 auf Jahresbrutto umgerechnet.";
+    };
+    input.addEventListener("input", update);
+    period.addEventListener("change", update);
+    update();
+  }
+
   function showFeedback(text) {
     const message = element("action-message");
     message.textContent = text;
@@ -77,5 +98,5 @@ const JobFinder = (() => {
 
   const showError = error => showFeedback(error.message);
   return {element, make, safeUrl, appendSourceLinks, postJson, showError, showFeedback,
-    statusLabels, sourceLabels};
+    statusLabels, sourceLabels, salaryYearAmount, bindSalaryInputs};
 })();

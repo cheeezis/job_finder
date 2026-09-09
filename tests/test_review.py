@@ -25,6 +25,7 @@ from job_finder.review import (
     address_is_in_use,
     load_review_jobs,
     start_application,
+    update_application_salary,
     update_review_decision,
     undo_ignored_decision,
     update_workflow_status,
@@ -615,6 +616,26 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(content, b"%PDF resume")
         self.assertIn("Lebenslauf.pdf", disposition)
 
+    def test_monthly_salary_and_edits_preserve_application_history(self):
+        start_application("job:1", self.memory_path,
+                          salary_expectation_eur=4500, salary_period="month")
+        original = load_memory(self.memory_path)["job:1"]
+        self.assertEqual(original["salary_expectation_eur"], 54000)
+        with self.server_context() as base_url:
+            request = Request(base_url + "/api/application-salary",
+                data=json.dumps({"job_id": "job:1", "salary_expectation_eur": 5000,
+                                 "salary_period": "month"}).encode(),
+                headers={"Content-Type": "application/json"}, method="POST")
+            with urlopen(request) as response:
+                self.assertEqual(json.load(response)["salary_expectation_eur"], 60000)
+        updated = load_memory(self.memory_path)["job:1"]
+        self.assertEqual(updated["workflow_history"], original["workflow_history"])
+        for value, period in [(900000, "month"), (0, "year"), (True, "month"), (4500, "week")]:
+            with self.subTest(value=value, period=period), self.assertRaises(ValueError):
+                update_application_salary("job:1", value, period, self.memory_path)
+            self.assertEqual(load_memory(self.memory_path)["job:1"], updated)
+        update_application_salary("job:1", None, memory_path=self.memory_path)
+        self.assertNotIn("salary_expectation_eur", load_memory(self.memory_path)["job:1"])
 
     def test_application_can_store_optional_salary_expectation(self):
         result = start_application(

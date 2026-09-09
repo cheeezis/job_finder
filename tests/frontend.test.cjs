@@ -70,3 +70,11 @@ test("JSON requests preserve payload and server errors", async () => {
       {message: error || "fallback"});
   }
 });
+
+test("monthly salary preview converts twelve payments without changing annual input", () => {
+  const {salaryYearAmount} = helpers();
+  assert.equal(salaryYearAmount("4500", "month"), 54000);
+  assert.equal(salaryYearAmount("54000", "year"), 54000);
+  assert.equal(salaryYearAmount("", "month"), null);
+  assert.equal(salaryYearAmount("invalid", "year"), null);
+});

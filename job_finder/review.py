@@ -262,6 +262,7 @@ def start_application(
     documents=None,
     documents_dir=APPLICATION_DOCUMENTS_DIR,
     salary_expectation_eur=None,
+    salary_period="year",
 ):
     """Record the first application without overwriting later progress."""
     stored_documents = []
@@ -277,7 +278,7 @@ def start_application(
                     ),
                     "application_tracked": True,
                 }
-            salary_eur = validated_salary_expectation_eur(salary_expectation_eur)
+            salary_eur = validated_salary_expectation_eur(salary_expectation_eur, salary_period)
             stored_documents = store_documents(
                 job_id,
                 documents,
@@ -303,8 +304,10 @@ def start_application(
     }
 
 
-def validated_salary_expectation_eur(value):
+def validated_salary_expectation_eur(value, period="year"):
     """Return one optional positive annual gross salary in whole euros."""
+    if period not in {"year", "month"}:
+        raise ValueError("Gehaltszeitraum muss Jahr oder Monat sein")
     if value is None or value == "":
         return None
     if isinstance(value, bool):
@@ -318,11 +321,26 @@ def validated_salary_expectation_eur(value):
         salary = value
     else:
         raise ValueError("Gehaltsvorstellung muss eine ganze Zahl sein")
+    if period == "month":
+        salary *= 12
     if salary <= 0 or salary > 10_000_000:
         raise ValueError("Gehaltsvorstellung liegt außerhalb des gültigen Bereichs")
     return salary
 
 
+def update_application_salary(job_id, value, period="year", memory_path=MEMORY_FILE):
+    """Change the salary without changing application status or history."""
+    salary = validated_salary_expectation_eur(value, period)
+    with edit_memory(memory_path) as memory:
+        entry = memory[job_id]
+        if not is_application(entry):
+            raise ValueError("Für diese Stelle ist noch keine Bewerbung gespeichert")
+        if salary is None:
+            entry.pop("salary_expectation_eur", None)
+        else:
+            entry["salary_expectation_eur"] = salary
+        entry.pop("salary_expectation", None)
+    return {"salary_expectation_eur": salary}
 
 
 
@@ -448,6 +466,7 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
         if request_path not in {
             "/api/status",
             "/api/applications",
+            "/api/application-salary",
             "/api/review-status",
             "/api/review-update",
             "/api/review-undo",
@@ -480,6 +499,12 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
                         "salary_expectation_eur",
                         payload.get("salary_expectation"),
                     ),
+                    salary_period=payload.get("salary_period", "year"),
+                )
+            elif request_path == "/api/application-salary":
+                result = update_application_salary(
+                    payload["job_id"], payload.get("salary_expectation_eur"),
+                    payload.get("salary_period", "year"), self.memory_path,
                 )
             elif request_path == "/api/review-status":
                 result = update_review_decision(

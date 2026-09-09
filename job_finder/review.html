@@ -104,13 +104,17 @@
       <label>Lebenslauf
         <input id="resume-file" type="file" accept=".pdf,.doc,.docx,.odt">
       </label>
-      <label>Gehaltsvorstellung <span class="optional">optional</span>
-        <span class="salary-input">
-          <input id="salary-expectation" type="number" min="1" max="10000000" step="1" inputmode="numeric" placeholder="58000" aria-describedby="salary-unit salary-hint">
-          <span id="salary-unit" class="salary-unit">€ Brutto/Jahr</span>
-        </span>
-        <span id="salary-hint" class="field-hint">Nur den Jahresbruttobetrag als ganze Zahl eingeben.</span>
-      </label>
+      <div>
+        <label for="salary-expectation">Gehaltsvorstellung <span class="optional">optional</span></label>
+        <div class="salary-input">
+          <input id="salary-expectation" type="number" min="1" max="10000000" step="1" inputmode="numeric" placeholder="54000" aria-describedby="salary-hint">
+          <select id="salary-period" aria-label="Gehaltszeitraum">
+            <option value="year">€ Brutto / Jahr</option>
+            <option value="month">€ Brutto / Monat</option>
+          </select>
+        </div>
+        <p id="salary-hint" class="field-hint" aria-live="polite"></p>
+      </div>
       <div class="dialog-actions">
         <button id="application-cancel" type="button">Abbrechen</button>
         <button id="application-save" class="primary" type="submit">Als beworben speichern</button>
@@ -401,7 +405,8 @@
     try {
       const result = await postJson("/api/applications", {
         job_id: job.id, documents,
-        salary_expectation_eur: salaryValue ? Number(salaryValue) : null
+        salary_expectation_eur: salaryValue ? Number(salaryValue) : null,
+        salary_period: element("salary-period").value
       }, "Bewerbung konnte nicht gespeichert werden");
       applyWorkflowResult(job, result);
       element("application-dialog").close();
@@ -485,12 +490,14 @@
     try {
       await startApplication(await selectedDocuments());
       event.target.reset();
+      element("salary-period").dispatchEvent(new Event("change"));
     } catch (error) {
       showError(error);
     } finally {
       button.disabled = false;
     }
   });
+  JobFinder.bindSalaryInputs(element("salary-expectation"), element("salary-period"), element("salary-hint"));
   load();
 </script>
 </body>

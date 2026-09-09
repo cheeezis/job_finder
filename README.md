@@ -53,6 +53,8 @@ ausgewiesene Veröffentlichungsdatum.
 Einzelne Quellen können vorübergehend nur Teilergebnisse liefern, etwa bei
 Rate-Limits oder nicht erreichbaren Detailseiten. Der Lauf isoliert solche
 Fehler und kennzeichnet sie in Konsole, Log und Discord-Zusammenfassung.
+Sind mehr als die Hälfte der Quellen nicht verwendbar, endet der Lauf dagegen
+als fehlgeschlagen und lässt den vorherigen Job- und Review-Stand unverändert.
 
 ## Einrichtung
 
@@ -112,7 +114,7 @@ Danach stehen zur Verfügung:
 - `http://127.0.0.1:8765/review` – Stellen prüfen
 - `http://127.0.0.1:8765/applications` – Bewerbungen und Statistik
 
-Der Review startet mit „Neu oder aktualisiert“. Internationale Anzeigen und
+Der Review startet mit „Neu oder Änderung offen“. Internationale Anzeigen und
 Junior-Hybrid-Sonderfälle sind eigene, standardmäßig deaktivierte Filter.
 
 ## Ablauf
@@ -159,9 +161,13 @@ deren URL.
 Remotely übernimmt ausschließlich Anzeigen aus einem rollierenden
 Sieben-Tage-Fenster. Alte hervorgehobene Anzeigen und bereits vergebene Stellen
 werden verworfen; jeder Lauf liest die Listenansicht bis zur alten
-Trefferfront. Detailseiten werden einen Tag lokal gecacht. Bei Kandidaten mit
+Trefferfront. Detailseiten werden sieben Tage lokal gecacht. Bei Kandidaten mit
 LinkedIn als Originalquelle wird zusätzlich geprüft, ob dort noch Bewerbungen
 angenommen werden; geschlossene Anzeigen gelangen nicht ins Review.
+
+get-in-IT liefert zunächst kompakte Suchdaten. Vollständige Detailseiten werden
+nur für Stellen geladen, die den bewusst großzügigen ersten Vorfilter bestehen;
+erfolgreich geladene Details bleiben sieben Tage im Cache.
 
 StudySmarter wird lokal im konfigurierten Radius und deutschlandweit nach
 vollständig remote möglichen Einstiegsrollen durchsucht. Detailseiten werden

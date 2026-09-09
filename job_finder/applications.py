@@ -211,6 +211,7 @@ def editable_history_event(
     )
     if appointment is not None:
         expected_event["scheduled_for"] = appointment
+    current_event.pop("reason", None)
     if current_event != expected_event:
         raise ValueError(
             "Verlauf wurde zwischenzeitlich geändert; Seite neu laden"
@@ -352,6 +353,8 @@ def normalized_history_event(event, event_index=None):
     normalized = {"status": status, "occurred_on": occurred_on}
     if appointment is not None:
         normalized["scheduled_for"] = appointment
+    if event.get("reason") == "listing_unavailable":
+        normalized["reason"] = "listing_unavailable"
     if event_index is not None:
         normalized["event_index"] = event_index
     return normalized

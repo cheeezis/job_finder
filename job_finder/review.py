@@ -90,7 +90,9 @@ def load_review_jobs(
     for job_id, entry in memory.items():
         if (
             job_id in represented_memory_ids
-            or entry.get("workflow_status") not in PERSISTED_REVIEW_STATUSES
+            or not (entry.get("workflow_status") in PERSISTED_REVIEW_STATUSES
+                    or (entry.get("workflow_status") == "ignored"
+                        and entry.get("availability_checked_at")))
         ):
             continue
         review_jobs.append(remembered_review_job(job_id, entry))
@@ -100,7 +102,9 @@ def load_review_jobs(
 def remembered_review_job(job_id, entry):
     """Keep a manual shortlist entry until the user changes its status."""
     source_links = memory_source_links(entry)
-    if entry.get("active", True):
+    if entry.get("availability_checked_at") and entry.get("workflow_status") == "ignored":
+        availability_warning = "Anzeige nicht mehr verfügbar; automatisch auf Nicht interessant gesetzt."
+    elif entry.get("active", True):
         availability_warning = (
             "Im aktuellen Lauf nicht gefunden; Verfügbarkeit bitte über die "
             "Anzeige prüfen."

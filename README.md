@@ -134,6 +134,15 @@ Junior-Hybrid-Sonderfälle sind eigene, standardmäßig deaktivierte Filter.
    Auftauchen unter „Neu“ aus.
 6. Bewerbungen werden getrennt vom Stellen-Review dauerhaft nachverfolgt.
 
+Interessante Stellen bleiben auch bei fehlenden Suchtreffern vorgemerkt. Jeder
+Finder-Lauf prüft ihre gespeicherten Anzeigen-URLs direkt, ebenso die URLs neuer
+Stellen, die inzwischen fehlen oder nur aus veraltetem Cache stammen. Nur wenn
+alle bekannten URLs eindeutig geschlossen sind (HTTP 404/410 oder expliziter
+Schließungshinweis), wechselt die Stelle automatisch auf „Nicht interessant“.
+Fehlende Suchtreffer, Login-Weiterleitungen und Abruffehler reichen dafür nicht.
+Bestehende Bewerbungen bleiben davon ausgenommen. Der automatische Wechsel wird
+mit Datum und Grund gespeichert.
+
 Der veränderliche Stellen- und Bewerbungszustand liegt transaktional in
 `data/internal/job_finder.sqlite3`. Beim ersten Zugriff wird eine vorhandene
 `seen_jobs.json` einmalig importiert und als unveränderte Rückfallkopie

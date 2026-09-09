@@ -4,6 +4,7 @@ import argparse
 import os
 import time
 
+from job_finder.availability import ignore_closed_listings
 from job_finder.console import configure_utf8_output, print_phase, print_progress
 from job_finder.deduplication import deduplicate_jobs
 from job_finder.main import build_score_results, evaluate_jobs, score_jobs
@@ -147,6 +148,9 @@ def run_pipeline(args):
             memory,
             successful_sources=complete_sources,
         )
+    closed_ids = ignore_closed_listings(jobs, MEMORY_FILE)
+    if closed_ids:
+        print(f"Nicht mehr verfügbar: {len(closed_ids)} Stelle(n) auf Nicht interessant gesetzt")
     results = build_score_results(evaluated_jobs)
     print(
         f'{memory_stats["new"]} neu · {memory_stats["known"]} bekannt · '

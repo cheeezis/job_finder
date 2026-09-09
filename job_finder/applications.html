@@ -136,6 +136,7 @@
             ? make("strong", label)
             : document.createTextNode(label)
         );
+        if (event.reason === "listing_unavailable") item.append(" · Anzeige nicht mehr verfügbar (automatisch)");
         if (event.scheduled_for) {
           item.append(` · Termin: ${formatDateTime(event.scheduled_for)}`);
         }

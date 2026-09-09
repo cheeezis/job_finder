@@ -65,6 +65,45 @@ SOURCES = [
     nethinks,
 ]
 
+
+class IncompleteSourceSnapshotError(RuntimeError):
+    """Stop a run before incomplete source data can replace good output."""
+
+
+def source_snapshot_is_usable(source_reports):
+    """Accept a snapshot only when at least half its sources were reachable."""
+    if not source_reports:
+        return False
+
+    unavailable = sum(
+        report.get("status") == "failed"
+        or (
+            report.get("status") == "partial"
+            and not report.get("jobs")
+        )
+        for report in source_reports
+    )
+    return unavailable * 2 <= len(source_reports)
+
+
+def require_usable_source_snapshot(source_reports):
+    """Raise with a concise diagnosis when source coverage is catastrophic."""
+    if source_snapshot_is_usable(source_reports):
+        return
+
+    unavailable = sum(
+        report.get("status") == "failed"
+        or (
+            report.get("status") == "partial"
+            and not report.get("jobs")
+        )
+        for report in source_reports
+    )
+    raise IncompleteSourceSnapshotError(
+        f"{unavailable} von {len(source_reports)} Quellen waren nicht "
+        "verwendbar; vorhandene Jobs und Review-Ausgabe bleiben unverändert"
+    )
+
 def parse_args():
     """Parse command-line options for one Job Finder run."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -91,6 +130,7 @@ def run_pipeline(args):
     print_phase(1, 4, "Quellen")
     jobs, source_reports = collect_jobs()
     print_source_summary(source_reports, len(jobs))
+    require_usable_source_snapshot(source_reports)
 
     print_phase(2, 4, "Vorfilter und Details")
     results = score_jobs(jobs)
@@ -249,9 +289,14 @@ def enrich_candidate_jobs(jobs, candidate_ids, sources=None):
 
 def print_source_summary(source_reports, total_jobs):
     """Print one source total plus exceptional source states."""
-    successful = sum(report["status"] == "success" for report in source_reports)
+    counts = {
+        status: sum(report["status"] == status for report in source_reports)
+        for status in ("success", "partial", "empty", "failed")
+    }
     print(
-        f"  {successful}/{len(source_reports)} Quellen mit Treffern · "
+        f"  Quellen: {counts['success']} vollständig · "
+        f"{counts['partial']} teilweise · {counts['empty']} ohne Treffer · "
+        f"{counts['failed']} fehlgeschlagen · "
         f"{total_jobs} Stellen nach Deduplizierung"
     )
     for report in source_reports:

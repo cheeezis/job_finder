@@ -224,6 +224,9 @@ class RemotelySourceTests(unittest.TestCase):
         self.assertEqual(jobs, [cached])
         fetch_job.assert_not_called()
 
+    def test_detail_cache_is_reused_for_seven_days(self):
+        self.assertEqual(remotely.DETAIL_REFRESH_DAYS, 7)
+
     def test_fetch_jobs_removes_closed_listing_from_stale_cache(self):
         now = datetime(2026, 8, 29, 12, tzinfo=timezone.utc)
         url = "https://www.remotely.de/job/now-closed"
@@ -237,7 +240,7 @@ class RemotelySourceTests(unittest.TestCase):
             description_clean="Python",
             work_mode=WorkMode.REMOTE,
             remote_percentage=100,
-            fetched_at=now - timedelta(days=2),
+            fetched_at=now - timedelta(days=8),
         )
         with tempfile.TemporaryDirectory() as directory:
             cache_path = Path(directory) / "remotely.json"

@@ -300,7 +300,7 @@ class StepStoneCacheTests(unittest.TestCase):
 class SharedDetailCacheTests(unittest.TestCase):
     def test_saved_cache_contains_only_reusable_source_fields(self):
         now = datetime(2026, 7, 17, 12, tzinfo=timezone.utc)
-        url = "https://example.test/get-in-it/1"
+        url = "https://www.get-in-it.de/jobsuche/p1"
         job = self.make_job(get_in_it.SOURCE_NAME, url, now)
 
         with tempfile.TemporaryDirectory() as directory:
@@ -312,11 +312,10 @@ class SharedDetailCacheTests(unittest.TestCase):
         self.assertNotIn("llm_score", saved_job)
         self.assertNotIn("first_seen_at", saved_job)
 
-    def test_fresh_details_are_reused_by_arbeitsagentur_and_get_in_it(self):
+    def test_fresh_details_are_reused_by_arbeitsagentur(self):
         now = datetime(2026, 7, 17, 12, tzinfo=timezone.utc)
         sources = [
             (arbeitsagentur, "https://example.test/arbeitsagentur/1"),
-            (get_in_it, "https://example.test/get-in-it/1"),
         ]
 
         for source, url in sources:
@@ -337,7 +336,7 @@ class SharedDetailCacheTests(unittest.TestCase):
 
     def test_stale_changed_detail_is_downloaded_and_marked(self):
         now = datetime(2026, 7, 17, 12, tzinfo=timezone.utc)
-        url = "https://example.test/get-in-it/1"
+        url = "https://www.get-in-it.de/jobsuche/p1"
         cached_job = self.make_job(
             get_in_it.SOURCE_NAME,
             url,
@@ -350,7 +349,20 @@ class SharedDetailCacheTests(unittest.TestCase):
             cache_path = Path(directory) / "details.json"
             save_detail_cache(cache_path, {url: cached_job})
             with (
-                patch.object(get_in_it, "collect_links", return_value=[url]),
+                patch.object(
+                    get_in_it,
+                    "collect_records",
+                    return_value=[
+                        {
+                            "id": 1,
+                            "title": "Python Developer",
+                            "url": "/jobsuche/p1",
+                            "homeOffice": True,
+                            "locations": [{"name": "Remote"}],
+                            "company": {"title": "Example GmbH"},
+                        }
+                    ],
+                ),
                 patch.object(
                     get_in_it,
                     "fetch_job",
@@ -358,10 +370,17 @@ class SharedDetailCacheTests(unittest.TestCase):
                 ) as fetch_job,
             ):
                 jobs = get_in_it.fetch_jobs(cache_path=cache_path, now=now)
+                enriched = get_in_it.enrich_candidate_jobs(
+                    jobs,
+                    {jobs[0].id},
+                    cache_path=cache_path,
+                    now=now,
+                )
 
         self.assertEqual(jobs, [refreshed_job])
+        self.assertEqual(enriched, 1)
         self.assertTrue(jobs[0].content_changed)
-        fetch_job.assert_called_once_with(url)
+        fetch_job.assert_called_once_with("https://www.get-in-it.de/jobsuche/p1")
 
     def test_failed_refresh_falls_back_to_stale_detail(self):
         now = datetime(2026, 7, 17, 12, tzinfo=timezone.utc)

@@ -7,7 +7,9 @@ can contain malformed escaping.
 
 import json
 import re
+from dataclasses import replace
 from html import unescape
+from pathlib import Path
 from urllib.parse import urlencode, urljoin
 
 from job_finder.config import (
@@ -17,16 +19,21 @@ from job_finder.config import (
     GET_IN_IT_SEARCH_TERMS,
 )
 from job_finder.http import fetch_json, fetch_text
-from job_finder.models import Job, JobSource
+from job_finder.models import Job, JobSource, WorkMode
 from job_finder.paths import GET_IN_IT_CACHE_FILE
 from job_finder.remote import classify_remote, detect_remote
-from job_finder.search_plan import append_unique, iter_search_queries, unique_in_order
+from job_finder.search_plan import iter_search_queries, unique_in_order
 from job_finder.sources.common import (
+    DETAIL_CACHE_SAVE_INTERVAL,
+    canonical_detail_url,
+    detail_is_fresh,
     extract_annual_salary_eur,
     extract_schema_locations,
-    fetch_cached_details,
+    load_detail_cache,
+    mark_content_change,
     normalize_employment_type,
     parse_published_date,
+    save_detail_cache,
     source_job_id,
     utc_now,
 )
@@ -59,25 +66,15 @@ TERM_PRIORITY_RULES = [
 
 
 def fetch_jobs(cache_path=CACHE_FILE, now=None):
-    """Search get in IT and return imported job details."""
-    links = collect_links()
-    if not links:
-        return []
-    return fetch_cached_details(
-        links,
-        cache_path,
-        fetch_job,
-        "get-in-IT",
-        now=now,
-    )
+    """Return fresh cached details or lightweight API search records."""
+    records = collect_records()
+    return jobs_from_records(records, cache_path, now=now)
 
 
 def fetch_jobs_with_report(cache_path=CACHE_FILE, now=None):
     """Return jobs plus coverage so partial searches never age out old jobs."""
-    links, failed, total = collect_links(return_report=True)
-    jobs = fetch_cached_details(
-        links, cache_path, fetch_job, "get-in-IT", now=now
-    ) if links else []
+    records, failed, total = collect_records(return_report=True)
+    jobs = jobs_from_records(records, cache_path, now=now)
     return {
         "jobs": jobs,
         "status": "partial" if failed else ("success" if jobs else "empty"),
@@ -85,9 +82,23 @@ def fetch_jobs_with_report(cache_path=CACHE_FILE, now=None):
     }
 
 
-def collect_links(*, return_report=False):
-    """Collect unique detail links from all generated API searches."""
-    links = []
+def jobs_from_records(records, cache_path=CACHE_FILE, now=None):
+    """Reuse fresh details and keep stale or unknown records lightweight."""
+    cache = load_detail_cache(Path(cache_path))
+    jobs = []
+    for record in records:
+        summary = summary_job_from_record(record)
+        cached_job = cache.get(canonical_detail_url(summary.primary_url))
+        if detail_is_fresh(cached_job, now):
+            jobs.append(with_current_summary(cached_job, summary))
+        else:
+            jobs.append(summary)
+    return jobs
+
+
+def collect_records(*, return_report=False):
+    """Collect unique lightweight records from all generated API searches."""
+    records = []
     seen = set()
     search_errors = 0
 
@@ -99,13 +110,119 @@ def collect_links(*, return_report=False):
             search_errors += 1
             continue
 
-        found_links = extract_detail_links_from_api(results)
-        for url in found_links:
-            append_unique(url, links, seen)
+        for record in results:
+            identifier = str(record.get("id") or record.get("url") or "")
+            if not identifier or identifier in seen:
+                continue
+            seen.add(identifier)
+            records.append(record)
 
     if search_errors:
         print(f"WARNUNG get-in-IT: {search_errors} Suche(n) fehlgeschlagen")
-    return (links, search_errors, len(searches)) if return_report else links
+    result = (records, search_errors, len(searches))
+    return result if return_report else records
+
+
+def collect_links(*, return_report=False):
+    """Return detail links for compatibility with diagnostic callers."""
+    result = collect_records(return_report=return_report)
+    if not return_report:
+        return extract_detail_links_from_api(result)
+    records, failed, total = result
+    return extract_detail_links_from_api(records), failed, total
+
+
+def summary_job_from_record(record):
+    """Build a permissive first-pass job from get-in-IT API metadata."""
+    url = canonical_detail_url(
+        urljoin("https://www.get-in-it.de", str(record.get("url") or ""))
+    )
+    identifier = str(record.get("id") or "").strip()
+    company = record.get("company") or {}
+    locations = [
+        str(location.get("name") or "").strip()
+        for location in record.get("locations") or []
+        if isinstance(location, dict) and str(location.get("name") or "").strip()
+    ]
+    career_labels = [
+        str(career.get("name") or "").strip()
+        for career in record.get("careers") or []
+        if isinstance(career, dict) and str(career.get("name") or "").strip()
+    ]
+    has_home_office = bool(record.get("homeOffice"))
+    return Job(
+        id=source_job_id(SOURCE_NAME, identifier, url),
+        title=str(record.get("title") or "").strip(),
+        company=str(company.get("title") or "").strip(),
+        locations=locations or ["unbekannt"],
+        sources=[JobSource(source=SOURCE_NAME, source_id=identifier, url=url)],
+        description_raw="",
+        description_clean=" ".join(career_labels),
+        # The API only says that home office is offered. Treating that as
+        # remote here prevents false exclusions; the detail page corrects it.
+        work_mode=WorkMode.REMOTE if has_home_office else WorkMode.ONSITE,
+        remote_percentage=100 if has_home_office else 0,
+    )
+
+
+def with_current_summary(cached_job, summary):
+    """Refresh API fields while retaining a fresh cached detail description."""
+    current = replace(
+        cached_job,
+        id=summary.id,
+        title=summary.title or cached_job.title,
+        company=summary.company or cached_job.company,
+        locations=(
+            summary.locations
+            if summary.locations != ["unbekannt"]
+            else cached_job.locations
+        ),
+        sources=summary.sources,
+    )
+    return mark_content_change(current, cached_job)
+
+
+def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE, now=None):
+    """Fetch full pages only for first-pass candidates without fresh details."""
+    cache_file = Path(cache_path)
+    cache = load_detail_cache(cache_file)
+    enriched = 0
+    unsaved = 0
+    errors = 0
+
+    for index, job in enumerate(jobs):
+        if (
+            job.id not in candidate_ids
+            or not job.primary_source
+            or job.primary_source.source != SOURCE_NAME
+        ):
+            continue
+        url = canonical_detail_url(job.primary_url)
+        cached_job = cache.get(url)
+        if detail_is_fresh(cached_job, now):
+            continue
+        try:
+            detailed = fetch_job(url)
+            mark_content_change(detailed, cached_job)
+            detailed.first_seen_at = job.first_seen_at
+            detailed.last_seen_at = job.last_seen_at
+            detailed.workflow_status = job.workflow_status
+            detailed.is_new = job.is_new
+            jobs[index] = detailed
+            cache[url] = detailed
+            enriched += 1
+            unsaved += 1
+            if unsaved >= DETAIL_CACHE_SAVE_INTERVAL:
+                save_detail_cache(cache_file, cache)
+                unsaved = 0
+        except Exception:
+            errors += 1
+
+    if unsaved:
+        save_detail_cache(cache_file, cache)
+    if errors:
+        print(f"WARNUNG get-in-IT: {errors} Kandidat(en) nicht erreichbar")
+    return enriched
 
 
 def build_api_searches():

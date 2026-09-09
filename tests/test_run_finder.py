@@ -11,12 +11,15 @@ from unittest.mock import patch
 
 from job_finder.models import Job, JobSource
 from run_finder import (
+    IncompleteSourceSnapshotError,
     build_run_summary,
     canonical_url,
     collect_jobs,
     enrich_candidate_jobs,
     format_duration,
+    print_source_summary,
     run_pipeline,
+    source_snapshot_is_usable,
     source_error_label,
 )
 
@@ -83,6 +86,61 @@ class RunFinderTests(unittest.TestCase):
         self.assertEqual(score_jobs.call_count, 3)
         self.assertIn("2/4 Vorfilter", output.getvalue())
         self.assertNotIn("Junior Developer", output.getvalue())
+
+    def test_incomplete_snapshot_does_not_replace_persistent_output(self):
+        reports = [
+            {"name": "working", "status": "success", "jobs": 1},
+            {"name": "broken-1", "status": "failed", "jobs": 0},
+            {"name": "broken-2", "status": "failed", "jobs": 0},
+            {"name": "partial", "status": "partial", "jobs": 0},
+        ]
+        with (
+            patch("run_finder.create_backup"),
+            patch("run_finder.collect_jobs", return_value=([make_job("working:1")], reports)),
+            patch("run_finder.edit_memory") as edit_memory,
+            patch("run_finder.write_json_atomic") as write_jobs,
+            patch("run_finder.write_recommendations") as write_recommendations,
+            patch("run_finder.process_notifications") as notifications,
+            self.assertRaises(IncompleteSourceSnapshotError),
+        ):
+            run_pipeline(SimpleNamespace(notify=False))
+
+        edit_memory.assert_not_called()
+        write_jobs.assert_not_called()
+        write_recommendations.assert_not_called()
+        notifications.assert_not_called()
+
+    def test_half_reachable_sources_are_still_usable(self):
+        reports = [
+            {"status": "success", "jobs": 2},
+            {"status": "empty", "jobs": 0},
+            {"status": "failed", "jobs": 0},
+            {"status": "partial", "jobs": 0},
+        ]
+
+        self.assertTrue(source_snapshot_is_usable(reports))
+
+    def test_source_summary_distinguishes_all_coverage_states(self):
+        reports = [
+            {"name": "complete", "status": "success", "jobs": 2},
+            {
+                "name": "partial",
+                "status": "partial",
+                "jobs": 1,
+                "failed_segments": 3,
+            },
+            {"name": "empty", "status": "empty", "jobs": 0},
+            {"name": "failed", "status": "failed", "jobs": 0},
+        ]
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            print_source_summary(reports, 3)
+
+        self.assertIn(
+            "1 vollständig · 1 teilweise · 1 ohne Treffer · 1 fehlgeschlagen",
+            output.getvalue(),
+        )
 
     def test_failed_source_does_not_stop_following_sources(self):
         failing = SimpleNamespace(SOURCE_NAME="broken", fetch_jobs=lambda: (_ for _ in ()).throw(RuntimeError("kaputt")))

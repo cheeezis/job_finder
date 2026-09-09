@@ -7,6 +7,7 @@ from job_finder.application_documents import public_documents
 from job_finder.memory import (
     has_application_state as is_application,
     load_memory,
+    first_seen_date,
     memory_source_links,
 )
 from job_finder.models import APPLICATION_STATUSES, WorkflowStatus
@@ -63,7 +64,7 @@ def record_status_change(
             history.append(
                 {
                     "status": previous_status,
-                    "occurred_on": None,
+                    "occurred_on": first_seen_date(entry) if previous_status == "new" else None,
                 }
             )
             history_changed = True

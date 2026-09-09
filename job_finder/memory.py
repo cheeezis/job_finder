@@ -110,10 +110,22 @@ def load_sqlite_memory(connection):
         entry = json.loads(payload)
         if not isinstance(entry, dict):
             raise ValueError(f"Ungültiger Zustand für Job {job_id}")
+        history = entry.get("workflow_history")
+        if isinstance(history, list) and history:
+            first = history[0]
+            if isinstance(first, dict) and first.get("status") == "new" and first.get("occurred_on") is None:
+                first["occurred_on"] = first_seen_date(entry)
         memory[job_id] = entry
     return memory
 
 
+def first_seen_date(entry):
+    """Recover only the initial discovery date, never a later decision date."""
+    try:
+        timestamp = datetime.fromisoformat(entry["first_seen_at"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    return timestamp.astimezone().date().isoformat()
 
 
 

@@ -28,6 +28,27 @@ class ApplicationTrackingTests(unittest.TestCase):
     def save_jobs(self, jobs):
         save_memory(jobs, self.memory_path)
 
+    def test_initial_discovery_date_is_recovered_without_guessing_decision_dates(self):
+        self.save_job({
+            "workflow_status": "new", "first_seen_at": "2026-08-01T12:00:00+00:00",
+        })
+        update_workflow_status("job:1", "interesting", self.memory_path, "2026-08-03")
+        history = load_memory(self.memory_path)["job:1"]["workflow_history"]
+        self.assertEqual(history, [
+            {"status": "new", "occurred_on": "2026-08-01"},
+            {"status": "interesting", "occurred_on": "2026-08-03"},
+        ])
+        self.save_job({
+            "workflow_status": "applied", "first_seen_at": "2026-08-01T12:00:00+00:00",
+            "workflow_history": [
+                {"status": "new", "occurred_on": None},
+                {"status": "interesting", "occurred_on": None},
+                {"status": "applied", "occurred_on": "2026-08-04"},
+            ],
+        })
+        history = load_application_overview(self.memory_path, as_of=date(2026, 8, 5))["applications"][0]["workflow_history"]
+        dates = {event["status"]: event["occurred_on"] for event in history}
+        self.assertEqual(dates, {"new": "2026-08-01", "interesting": None, "applied": "2026-08-04"})
 
     def test_every_manual_status_change_is_kept_with_its_date(self):
         self.save_job({

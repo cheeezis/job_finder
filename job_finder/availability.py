@@ -2,6 +2,7 @@
 
 import re
 from datetime import datetime, timezone
+from html.parser import HTMLParser
 from urllib.error import HTTPError
 from urllib.parse import urlsplit
 
@@ -9,6 +10,7 @@ from job_finder.applications import record_status_change
 from job_finder.http import fetch_text_with_final_url
 from job_finder.memory import edit_memory, has_application_state, load_memory
 from job_finder.models import WorkflowStatus
+from job_finder.sources.arbeitnow import application_page_is_missing
 from job_finder.sources.manual import VisibleJobParser, validate_public_url
 from job_finder.structured_data import extract_json_ld_job_posting
 
@@ -23,6 +25,52 @@ CLOSED_MESSAGE = re.compile(
     r"|es werden keine bewerbungen mehr angenommen)[.!\s]*$",
     re.IGNORECASE,
 )
+
+
+class MissingPageHeadingParser(HTMLParser):
+    """Read page headings even when an error template has no main element."""
+
+    def __init__(self):
+        super().__init__()
+        self.headings = []
+        self.parts = None
+
+    def handle_starttag(self, tag, attrs):
+        if tag in {"h1", "h2"}:
+            self.parts = []
+
+    def handle_data(self, data):
+        if self.parts is not None:
+            self.parts.append(data)
+
+    def handle_endtag(self, tag):
+        if tag in {"h1", "h2"} and self.parts is not None:
+            self.headings.append(" ".join("".join(self.parts).split()).casefold())
+            self.parts = None
+
+
+def arbeitnow_listing_is_missing(original_url, final_url, html):
+    """Recognize Arbeitnow's own missing-page response, including HTTP 200."""
+    hosts = {"arbeitnow.com", "www.arbeitnow.com"}
+    if any(urlsplit(url).hostname not in hosts for url in (original_url, final_url)):
+        return False
+    if application_page_is_missing(final_url):
+        return True
+    parser = MissingPageHeadingParser()
+    parser.feed(html)
+    return "page not found" in parser.headings
+
+
+def himalayas_listing_redirects_to_search(original_url, final_url):
+    """A removed Himalayas detail page redirects to its general jobs index."""
+    original = urlsplit(original_url)
+    final = urlsplit(final_url)
+    hosts = {"himalayas.app", "www.himalayas.app"}
+    return (
+        original.hostname in hosts and final.hostname in hosts
+        and re.fullmatch(r"/companies/[^/]+/jobs/[^/]+/?", original.path) is not None
+        and final.path.rstrip("/") == "/jobs"
+    )
 
 
 def listing_is_closed(url):
@@ -40,6 +88,10 @@ def listing_is_closed(url):
         )
     except (OSError, ValueError):
         return False
+    if arbeitnow_listing_is_missing(url, final_url, html):
+        return True
+    if himalayas_listing_redirects_to_search(url, final_url):
+        return True
     parser = VisibleJobParser()
     parser.feed(html)
     if CLOSED_MESSAGE.fullmatch(" ".join(parser.title.split())):

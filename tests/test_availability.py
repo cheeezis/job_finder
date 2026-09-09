@@ -12,6 +12,44 @@ from job_finder.review import load_review_jobs, undo_ignored_decision
 
 
 class AvailabilityTests(unittest.TestCase):
+    def test_himalayas_removed_detail_redirect_but_not_login_is_closed(self):
+        url = "https://himalayas.app/companies/example/jobs/developer"
+        for final_url, expected in [
+            ("https://himalayas.app/jobs", True),
+            ("https://himalayas.app/jobs/?page=1", True),
+            ("https://himalayas.app/login", False),
+            ("https://other.test/jobs", False),
+            (url, False),
+        ]:
+            with self.subTest(final_url=final_url), patch(
+                "job_finder.availability.fetch_text_with_final_url",
+                return_value=(final_url, "<main><h1>Remote jobs</h1></main>"),
+            ):
+                self.assertEqual(listing_is_closed(url), expected)
+
+    def test_arbeitnow_missing_page_is_closed_even_with_http_200_and_related_jobs(self):
+        url = "https://www.arbeitnow.com/jobs/companies/example/developer-123"
+        html = '''<body><h1>Jobs in Germany</h1><h2>Page <span>not found</span></h2>
+            <p>Click below to find more jobs.</p><h2>Other jobs you may like</h2>
+            <script type="application/ld+json">
+            {"@type":"JobPosting","title":"An unrelated suggested job"}
+            </script></body>'''
+        with patch("job_finder.availability.fetch_text_with_final_url", return_value=(url, html)):
+            self.assertTrue(listing_is_closed(url))
+
+    def test_arbeitnow_missing_detection_does_not_match_scripts_or_external_login(self):
+        url = "https://www.arbeitnow.com/jobs/companies/example/developer-123"
+        for final_url, html, expected in [
+            (url, '<script>"<h2>Page not found</h2>"</script><h1>Developer</h1>', False),
+            (url, '<h1>Developer</h1><p>Handle errors such as Page not found.</p>', False),
+            ("https://login.example.test/", "<h2>Page not found</h2>", False),
+            ("https://www.arbeitnow.com/?not_found=1", "<h1>Jobs in Germany</h1>", True),
+        ]:
+            with self.subTest(final_url=final_url, html=html), patch(
+                "job_finder.availability.fetch_text_with_final_url", return_value=(final_url, html)
+            ):
+                self.assertEqual(listing_is_closed(url), expected)
+
     def test_only_definitive_http_errors_mean_closed(self):
         url = "https://example.test/job/1"
         for code, host, expected in [

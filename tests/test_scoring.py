@@ -905,6 +905,95 @@ class DeduplicationTests(unittest.TestCase):
             ["arbeitnow", "startup_jobs"],
         )
 
+    def test_remote_work_model_suffix_is_merged_across_sources(self):
+        first = make_job(
+            title="AI Enablement & Automation Engineer (80-100%, f::m::d)",
+            company="OnlineDoctor AG",
+            location="Full Remote",
+            remote="100%",
+            source="german_tech_jobs",
+            url="https://germantechjobs.test/online-doctor",
+        )
+        second = make_job(
+            title=(
+                "AI Enablement & Automation Engineer "
+                "(80-100%, f::m::d) - Remote"
+            ),
+            company="OnlineDoctor AG",
+            location="St. Gallen",
+            remote="100%",
+            source="remotely",
+            url="https://remotely.test/online-doctor",
+        )
+
+        result = deduplicate_jobs([first, second])
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(
+            [source.source for source in result[0].sources],
+            ["german_tech_jobs", "remotely"],
+        )
+
+    def test_hybrid_work_model_suffix_is_merged_at_same_location(self):
+        first = make_job(
+            title="Junior Python Developer",
+            company="Example GmbH",
+            location="Fulda",
+            remote="homeoffice",
+            source="stepstone",
+            url="https://stepstone.test/example",
+        )
+        second = make_job(
+            title="Junior Python Developer | Hybrid",
+            company="Example GmbH",
+            location="Fulda",
+            remote="homeoffice",
+            source="get_in_it",
+            url="https://get-in-it.test/example",
+        )
+
+        self.assertEqual(len(deduplicate_jobs([first, second])), 1)
+
+    def test_location_suffixes_are_not_treated_as_work_models(self):
+        berlin = make_job(
+            title="Junior Python Developer - Berlin",
+            company="Example GmbH",
+            location="Berlin",
+            remote="100%",
+            source="stepstone",
+            url="https://stepstone.test/berlin",
+        )
+        munich = make_job(
+            title="Junior Python Developer - München",
+            company="Example GmbH",
+            location="München",
+            remote="100%",
+            source="get_in_it",
+            url="https://get-in-it.test/munich",
+        )
+
+        self.assertEqual(len(deduplicate_jobs([berlin, munich])), 2)
+
+    def test_remote_suffix_does_not_override_incompatible_work_locations(self):
+        remote = make_job(
+            title="Junior Python Developer - Remote",
+            company="Example GmbH",
+            location="Remote",
+            remote="100%",
+            source="stepstone",
+            url="https://stepstone.test/remote",
+        )
+        onsite = make_job(
+            title="Junior Python Developer",
+            company="Example GmbH",
+            location="Berlin",
+            remote="0%",
+            source="get_in_it",
+            url="https://get-in-it.test/onsite",
+        )
+
+        self.assertEqual(len(deduplicate_jobs([remote, onsite])), 2)
+
     def test_remote_and_onsite_postings_at_different_places_stay_separate(self):
         remote = make_job(
             company="Example GmbH",

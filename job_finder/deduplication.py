@@ -21,6 +21,15 @@ LEGAL_FORMS = [
     "inc",
 ]
 
+WORK_MODE_TITLE_SUFFIX = re.compile(
+    r"(?:\s*[-–—|]\s*|\s+\()"
+    r"(?:"
+    r"(?:100\s*%\s*)?(?:full(?:y)?\s+|vollstaendig\s+)?remote"
+    r"|home\s*office|homeoffice"
+    r"|hybrid(?:\s+work)?"
+    r")\)?\s*$"
+)
+
 
 def deduplicate_jobs(jobs: list[Job]) -> list[Job]:
     """Merge cross-source jobs only when title, company, and location agree."""
@@ -130,6 +139,9 @@ def normalize_title(title):
         " ",
         text,
     )
+    # Portals often append the work model to the title although location and
+    # remote compatibility are checked independently before a merge.
+    text = WORK_MODE_TITLE_SUFFIX.sub(" ", text)
     text = re.sub(r"[^a-z0-9+#.]+", " ", text)
     return " ".join(text.split())
 

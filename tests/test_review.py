@@ -3,6 +3,7 @@
 import base64
 from datetime import date
 import json
+import socket
 import tempfile
 import threading
 import unittest
@@ -17,8 +18,11 @@ from job_finder.review import (
     APP_STYLES,
     APPLICATIONS_PAGE,
     LANDING_PAGE,
+    LocalReviewServer,
     REVIEW_PAGE,
     ReviewRequestHandler,
+    acknowledge_review_update,
+    address_is_in_use,
     load_review_jobs,
     start_application,
     update_review_decision,
@@ -29,6 +33,29 @@ from job_finder.config import LOCAL_SEARCH_LOCATION, LOCAL_SEARCH_POSTAL_CODE
 
 
 class ReviewTests(unittest.TestCase):
+    def test_address_in_use_is_recognized_on_windows(self):
+        error = OSError()
+        error.winerror = 10048
+
+        self.assertTrue(address_is_in_use(error))
+
+    def test_review_server_requests_exclusive_port_binding_on_windows(self):
+        self.assertFalse(LocalReviewServer.allow_reuse_address)
+        if not hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            self.skipTest("SO_EXCLUSIVEADDRUSE is Windows-specific")
+        server = object.__new__(LocalReviewServer)
+        server.socket = unittest.mock.Mock()
+
+        with unittest.mock.patch.object(HTTPServer, "server_bind") as parent_bind:
+            server.server_bind()
+
+        server.socket.setsockopt.assert_called_once_with(
+            socket.SOL_SOCKET,
+            socket.SO_EXCLUSIVEADDRUSE,
+            1,
+        )
+        parent_bind.assert_called_once_with()
+
     def setUp(self):
         self.temporary_directory = tempfile.TemporaryDirectory()
         self.directory = Path(self.temporary_directory.name)
@@ -407,6 +434,19 @@ class ReviewTests(unittest.TestCase):
             load_memory(self.memory_path)["job:1"]["review_update_pending"]
         )
 
+    def test_update_can_be_acknowledged_without_changing_workflow_status(self):
+        memory = load_memory(self.memory_path)
+        memory["job:1"]["review_update_pending"] = True
+        save_memory(memory, self.memory_path)
+
+        result = acknowledge_review_update("job:1", self.memory_path)
+        entry = load_memory(self.memory_path)["job:1"]
+
+        self.assertEqual(result["workflow_status"], "interesting")
+        self.assertFalse(result["review_update_pending"])
+        self.assertEqual(entry["workflow_status"], "interesting")
+        self.assertFalse(entry["review_update_pending"])
+
     def test_latest_ignored_decision_can_be_undone(self):
         update_review_decision("job:1", "ignored", self.memory_path)
 
@@ -508,11 +548,14 @@ class ReviewTests(unittest.TestCase):
         self.assertNotIn('/api/note', review_page)
         self.assertIn("Ergebnis des Vorfilters", review_page)
         self.assertIn('id="role-filter"', review_page)
-        self.assertIn('<option value="attention">Neu oder aktualisiert</option>', review_page)
+        self.assertIn('<option value="attention">Neu oder Änderung offen</option>', review_page)
         self.assertIn('job.is_new || job.review_update_pending', review_page)
         self.assertNotIn('<option value="fresh">Nur neu</option>', review_page)
         self.assertNotIn('<option value="updated">Nur aktualisiert</option>', review_page)
         self.assertIn('id="change-badge"', review_page)
+        self.assertIn('id="acknowledge-update"', review_page)
+        self.assertIn('fetch("/api/review-update"', review_page)
+        self.assertIn("Änderung geprüft", review_page)
         self.assertIn('id="experience-level"', review_page)
         self.assertIn('id="location-precheck"', review_page)
         self.assertNotIn("renderDecisionHints", review_page)

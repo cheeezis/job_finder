@@ -270,6 +270,8 @@ label { display: grid; gap: 6px; color: var(--muted); font-size: .79rem; font-we
 #job-links { display: flex; }
 button.inquiry { border-color: #9b6d24; background: transparent; color: #714b10; }
 button.inquiry:hover { background: var(--warning); color: white; }
+button.updated { border-color: #c28a2b; background: var(--warning-soft); color: #6d460d; }
+button.updated:hover { background: var(--warning); color: white; }
 button.ignore { border-color: var(--line-strong); color: var(--danger); }
 
 .navigation { display: flex; justify-content: space-between; margin-top: 12px; }

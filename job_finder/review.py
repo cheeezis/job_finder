@@ -1,9 +1,11 @@
 """Small local web interface for reviewing prefiltered jobs."""
 
 import argparse
+import errno
 import json
 import mimetypes
 import re
+import socket
 import threading
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -235,6 +237,20 @@ def update_review_decision(
     }
 
 
+def acknowledge_review_update(job_id, memory_path=MEMORY_FILE):
+    """Clear an update notice without changing the job's workflow status."""
+    with edit_memory(memory_path) as memory:
+        if job_id not in memory:
+            raise KeyError(f"Unbekannte Job-ID: {job_id}")
+        entry = memory[job_id]
+        entry["review_update_pending"] = False
+        status = entry.get("workflow_status", WorkflowStatus.NEW.value)
+    return {
+        "workflow_status": status,
+        "review_update_pending": False,
+    }
+
+
 def undo_ignored_decision(
     job_id,
     expected_status,
@@ -373,6 +389,21 @@ def delete_workflow_history(
     return {"workflow_status": status}
 
 
+class LocalReviewServer(HTTPServer):
+    """Bind the local review port exclusively, especially on Windows."""
+
+    allow_reuse_address = False
+
+    def server_bind(self):
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            self.socket.setsockopt(
+                socket.SOL_SOCKET,
+                socket.SO_EXCLUSIVEADDRUSE,
+                1,
+            )
+        super().server_bind()
+
+
 class ReviewRequestHandler(BaseHTTPRequestHandler):
     """Serve the review page and its small JSON API."""
 
@@ -436,6 +467,7 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
             "/api/status",
             "/api/applications",
             "/api/review-status",
+            "/api/review-update",
             "/api/review-undo",
             "/api/history",
             "/api/history/delete",
@@ -471,6 +503,11 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
                 result = update_review_decision(
                     payload["job_id"],
                     payload["workflow_status"],
+                    self.memory_path,
+                )
+            elif request_path == "/api/review-update":
+                result = acknowledge_review_update(
+                    payload["job_id"],
                     self.memory_path,
                 )
             elif request_path == "/api/review-undo":
@@ -632,12 +669,28 @@ def parse_args():
     return parser.parse_args()
 
 
+def address_is_in_use(error):
+    """Recognize the cross-platform error for an already running server."""
+    return (
+        error.errno == errno.EADDRINUSE
+        or getattr(error, "winerror", None) == 10048
+    )
+
+
 def main():
     """Start the review server on the local computer only."""
     args = parse_args()
     address = ("127.0.0.1", args.port)
-    server = HTTPServer(address, ReviewRequestHandler)
     url = f"http://{address[0]}:{address[1]}"
+    try:
+        server = LocalReviewServer(address, ReviewRequestHandler)
+    except OSError as error:
+        if not address_is_in_use(error):
+            raise
+        print(f"Job Finder läuft bereits unter {url}")
+        if not args.no_browser:
+            webbrowser.open(url)
+        return
     if not args.no_browser:
         threading.Timer(0.3, webbrowser.open, args=(url,)).start()
     print(f"Job Finder geoeffnet unter {url}")

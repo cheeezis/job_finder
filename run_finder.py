@@ -6,7 +6,7 @@ import time
 
 from job_finder.console import configure_utf8_output, print_phase, print_progress
 from job_finder.deduplication import deduplicate_jobs
-from job_finder.main import score_jobs
+from job_finder.main import build_score_results, evaluate_jobs, score_jobs
 from job_finder.memory import edit_memory, update_memory
 from job_finder.notifications import process_notifications, send_run_summary
 from job_finder.operations import RunLog, create_backup
@@ -70,19 +70,20 @@ class IncompleteSourceSnapshotError(RuntimeError):
     """Stop a run before incomplete source data can replace good output."""
 
 
+def unavailable_source_count(source_reports):
+    return sum(
+        report.get("status") == "failed"
+        or (report.get("status") == "partial" and not report.get("jobs"))
+        for report in source_reports
+    )
+
+
 def source_snapshot_is_usable(source_reports):
     """Accept a snapshot only when at least half its sources were reachable."""
     if not source_reports:
         return False
 
-    unavailable = sum(
-        report.get("status") == "failed"
-        or (
-            report.get("status") == "partial"
-            and not report.get("jobs")
-        )
-        for report in source_reports
-    )
+    unavailable = unavailable_source_count(source_reports)
     return unavailable * 2 <= len(source_reports)
 
 
@@ -91,14 +92,7 @@ def require_usable_source_snapshot(source_reports):
     if source_snapshot_is_usable(source_reports):
         return
 
-    unavailable = sum(
-        report.get("status") == "failed"
-        or (
-            report.get("status") == "partial"
-            and not report.get("jobs")
-        )
-        for report in source_reports
-    )
+    unavailable = unavailable_source_count(source_reports)
     raise IncompleteSourceSnapshotError(
         f"{unavailable} von {len(source_reports)} Quellen waren nicht "
         "verwendbar; vorhandene Jobs und Review-Ausgabe bleiben unverändert"
@@ -135,9 +129,10 @@ def run_pipeline(args):
     print_phase(2, 4, "Vorfilter und Details")
     results = score_jobs(jobs)
     candidate_ids = {job["id"] for job in results["included"]}
-    enriched = enrich_candidate_jobs(jobs, candidate_ids)
-    if enriched:
-        results = score_jobs(jobs)
+    enrich_candidate_jobs(jobs, candidate_ids)
+    # Validate final details before committing any workflow state. The score
+    # stays attached to the job as memory resolves its ID and timestamps.
+    evaluated_jobs = evaluate_jobs(jobs)
 
     # Persist only the final post-enrichment set; enrichers may remove closed ads.
     print_phase(3, 4, "Gedächtnis")
@@ -152,7 +147,7 @@ def run_pipeline(args):
             memory,
             successful_sources=complete_sources,
         )
-    results = score_jobs(jobs)
+    results = build_score_results(evaluated_jobs)
     print(
         f'{memory_stats["new"]} neu · {memory_stats["known"]} bekannt · '
         f'{memory_stats["inactive"]} neu inaktiv · '

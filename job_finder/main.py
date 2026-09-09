@@ -13,7 +13,7 @@ from job_finder.scoring import score_job
 
 
 def main():
-    """Score an existing import file and write review output."""
+    """Score an existing import file and print its results."""
     configure_utf8_output()
     jobs_file = sys.argv[1] if len(sys.argv) > 1 else JOBS_FILE
     jobs = deduplicate_jobs(load_jobs(jobs_file))
@@ -22,11 +22,19 @@ def main():
 
 
 def score_jobs(jobs):
-    """Score imported jobs and split them into included/excluded buckets."""
-    results = []
+    """Evaluate jobs and return their sorted output views."""
+    return build_score_results(evaluate_jobs(jobs))
 
-    for job in jobs:
-        result = score_for_pipeline(job)
+
+def evaluate_jobs(jobs):
+    """Keep each pure score attached to its job while memory adds metadata."""
+    return [(job, score_for_pipeline(job)) for job in jobs]
+
+
+def build_score_results(evaluated_jobs):
+    """Serialize current job metadata with its already validated score."""
+    results = []
+    for job, result in evaluated_jobs:
         results.append(
             {
                 **job.to_dict(),
@@ -36,7 +44,7 @@ def score_jobs(jobs):
             }
         )
 
-    # Separate buckets keep hard-filter reasons visible in the review.
+    # Preserve exclusion reasons for console diagnostics and notifications.
     included = [
         job
         for job in results

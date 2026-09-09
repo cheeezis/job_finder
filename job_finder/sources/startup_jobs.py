@@ -6,6 +6,7 @@ from urllib.parse import urlencode
 from job_finder.http import fetch_json
 from job_finder.models import Job, JobSource, WorkMode
 from job_finder.sources.common import (
+    numeric_salary,
     normalize_employment_type,
     parse_published_date,
     remote_region_allows_germany,
@@ -154,12 +155,4 @@ def annual_salary_eur(salary):
         return None, None
     if str(salary.get("interval") or "").casefold() != "year":
         return None, None
-    return numeric_value(salary.get("min")), numeric_value(salary.get("max"))
-
-
-def numeric_value(value):
-    """Return a whole-number salary when possible."""
-    try:
-        return int(float(value)) if value is not None else None
-    except (TypeError, ValueError):
-        return None
+    return numeric_salary(salary.get("min")), numeric_salary(salary.get("max"))

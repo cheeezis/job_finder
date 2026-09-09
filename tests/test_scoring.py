@@ -53,6 +53,149 @@ def make_job(**overrides):
 
 
 class ScoringTests(unittest.TestCase):
+    def test_named_scoring_cases(self):
+        cases = [
+            (
+                'dev_abbreviation_is_allowed',
+                {'title': 'Junior Python Dev'},
+                {'filter_status': 'included'},
+            ),
+            (
+                'broad_it_title_reaches_personal_review',
+                {'title': 'Developer Node.js / TypeScript', 'location': 'Deutschland', 'remote': '100%', 'description': 'Erfahrung ist idealerweise vorhanden.'},
+                {'filter_status': 'included', 'role_group': 'general_it'},
+            ),
+            (
+                'non_it_remote_role_stays_excluded',
+                {'title': 'Junior Sales Manager', 'location': 'Deutschland', 'remote': '100%'},
+                {'filter_status': 'excluded'},
+            ),
+            (
+                'junior_it_manager_reaches_personal_review',
+                {'title': 'Junior IT Project Manager', 'location': 'Deutschland', 'remote': '100%'},
+                {'filter_status': 'included'},
+            ),
+            (
+                'it_leadership_role_stays_excluded',
+                {'title': 'Leitung IT-Entwicklung', 'location': 'Deutschland', 'remote': '100%'},
+                {'filter_status': 'excluded'},
+            ),
+            (
+                'distant_junior_hybrid_role_reaches_manual_review',
+                {'title': 'Junior Python Developer', 'location': 'Berlin', 'remote': 'homeoffice'},
+                {'filter_status': 'included', 'location_precheck': 'Junior-Hybrid außerhalb des Suchgebiets; Präsenzumfang prüfen'},
+            ),
+            (
+                'distant_junior_onsite_role_stays_excluded',
+                {'title': 'Junior Python Developer', 'location': 'Berlin', 'remote': '0%'},
+                {'filter_status': 'excluded'},
+            ),
+            (
+                'foreign_junior_hybrid_role_stays_excluded',
+                {'title': 'Junior Python Developer', 'location': 'Portugal', 'remote': 'hybrid'},
+                {'filter_status': 'excluded'},
+            ),
+            (
+                'full_remote_outside_local_area_is_allowed',
+                {'location': 'Muenchen', 'remote': '100%'},
+                {'filter_status': 'included'},
+            ),
+            (
+                'unrelated_wuenschenswert_does_not_make_years_optional',
+                {'description': 'Mindestens 4 Jahre Berufserfahrung erforderlich. Docker-Kenntnisse sind wuenschenswert.'},
+                {'filter_status': 'excluded'},
+            ),
+            (
+                'optional_experience_is_only_slightly_lower',
+                {'title': 'Python Developer', 'description': 'Ein Jahr Berufserfahrung waere ideal, aber kein Muss.'},
+                {'filter_status': 'included', 'experience_rank': 1},
+            ),
+            (
+                'junior_role_with_strong_experience_remains_reviewable',
+                {'title': 'Junior Data Engineer', 'description': 'Mehrjaehrige Erfahrung mit Python ist wuenschenswert.'},
+                {'filter_status': 'included'},
+            ),
+            (
+                'skill_experience_without_professional_signal_remains_reviewable',
+                {'title': 'Data Engineer', 'description': 'Erfahrungen in der Analyse grosser Datenbestaende und Erfahrung in Python.'},
+                {'filter_status': 'included'},
+            ),
+            (
+                'abbreviated_minimum_years_are_detected',
+                {'title': 'Junior QA Automation Engineer', 'description': 'Mit deiner mehrjaehrigen praktischen Erfahrung (mind. 3 Jahre) in QA.'},
+                {'filter_status': 'included', 'experience_level': '3 Jahr(e) gefordert'},
+            ),
+            (
+                'blocked_staff_word_does_not_match_staffing',
+                {'title': 'Staffing Software Developer'},
+                {'filter_status': 'included'},
+            ),
+            (
+                'incidental_sap_mention_is_not_a_hard_blocker',
+                {'description': 'Python APIs verbinden bei Bedarf auch ein SAP-Nebensystem.'},
+                {'filter_status': 'included'},
+            ),
+            (
+                'explicit_sap_focus_reaches_personal_review',
+                {'description': 'Der Schwerpunkt SAP bestimmt deine taeglichen Aufgaben.'},
+                {'filter_status': 'included'},
+            ),
+            (
+                'supported_java_role_is_allowed',
+                {'title': 'Junior Java Software Developer', 'description': 'Java und REST APIs.'},
+                {'filter_status': 'included'},
+            ),
+            (
+                'ai_business_analyst_is_allowed',
+                {'title': 'KI Business Analyst', 'description': 'Analyse und Umsetzung datengetriebener KI Use Cases.'},
+                {'filter_status': 'included', 'role_group': 'ai_business_analysis'},
+            ),
+            (
+                'infrastructure_automation_is_allowed',
+                {'title': 'Automation Engineer', 'location': 'Deutschland', 'remote': '100%', 'description': 'Infrastructure as Code, Terraform und automatisierte Deployments.'},
+                {'filter_status': 'included', 'role_group': 'infrastructure_automation'},
+            ),
+            (
+                'rpa_with_ci_cd_remains_process_automation',
+                {'title': 'Automationsentwickler', 'description': 'UiPath RPA, REST APIs, CI/CD und Testautomatisierung.'},
+                {'filter_status': 'included', 'role_group': 'rpa_automation'},
+            ),
+            (
+                'industrial_automation_without_it_context_is_not_allowed',
+                {'title': 'Automation Engineer', 'description': 'Planung und Inbetriebnahme industrieller Produktionsanlagen.'},
+                {'filter_status': 'excluded'},
+            ),
+            (
+                'junior_abap_role_is_reviewable',
+                {'title': 'Junior ABAP Entwickler', 'description': 'Traineeprogramm mit umfassender Einarbeitung.'},
+                {'filter_status': 'included', 'role_group': 'junior_sap'},
+            ),
+            (
+                'unfamiliar_core_technology_reaches_personal_review',
+                {'title': 'Junior C# Software Developer', 'description': 'Reine C# Entwicklung.'},
+                {'filter_status': 'included'},
+            ),
+            (
+                'test_automation_role_is_allowed',
+                {'title': 'Junior Test Automation Engineer', 'description': 'Playwright, Jest und API-Testautomatisierung.'},
+                {'filter_status': 'included'},
+            ),
+            (
+                'salary_range_with_target_inside_is_allowed',
+                {'description': 'Jahresgehalt 80.000 - 105.000 EUR brutto.'},
+                {'filter_status': 'included'},
+            ),
+            (
+                'structured_minimum_without_maximum_is_not_an_upper_limit',
+                {'salary_min_eur': 40000},
+                {'filter_status': 'included'},
+            ),
+        ]
+        for name, overrides, expected in cases:
+            with self.subTest(case=name):
+                result = score_job(make_job(**overrides))
+                self.assertEqual({key: result[key] for key in expected}, expected)
+
     def test_posting_older_than_sixty_days_is_excluded(self):
         today = date(2026, 8, 31)
 
@@ -163,55 +306,6 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(result["filter_status"], "excluded")
         self.assertIn("IT-Rolle", result["reasons"][0])
 
-    def test_dev_abbreviation_is_allowed(self):
-        result = score_job(make_job(title="Junior Python Dev"))
-        self.assertEqual(result["filter_status"], "included")
-
-    def test_broad_it_title_reaches_personal_review(self):
-        result = score_job(
-            make_job(
-                title="Developer Node.js / TypeScript",
-                location="Deutschland",
-                remote="100%",
-                description="Erfahrung ist idealerweise vorhanden.",
-            )
-        )
-
-        self.assertEqual(result["filter_status"], "included")
-        self.assertEqual(result["role_group"], "general_it")
-
-    def test_non_it_remote_role_stays_excluded(self):
-        result = score_job(
-            make_job(
-                title="Junior Sales Manager",
-                location="Deutschland",
-                remote="100%",
-            )
-        )
-
-        self.assertEqual(result["filter_status"], "excluded")
-
-    def test_junior_it_manager_reaches_personal_review(self):
-        result = score_job(
-            make_job(
-                title="Junior IT Project Manager",
-                location="Deutschland",
-                remote="100%",
-            )
-        )
-
-        self.assertEqual(result["filter_status"], "included")
-
-    def test_it_leadership_role_stays_excluded(self):
-        result = score_job(
-            make_job(
-                title="Leitung IT-Entwicklung",
-                location="Deutschland",
-                remote="100%",
-            )
-        )
-
-        self.assertEqual(result["filter_status"], "excluded")
 
     def test_apprenticeships_are_warned_instead_of_hard_excluded(self):
         result = score_job(
@@ -236,46 +330,6 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(result["filter_status"], "excluded")
         self.assertEqual(result["reasons"][0], "Ort/Remote passt nicht")
 
-    def test_distant_junior_hybrid_role_reaches_manual_review(self):
-        result = score_job(
-            make_job(
-                title="Junior Python Developer",
-                location="Berlin",
-                remote="homeoffice",
-            )
-        )
-
-        self.assertEqual(result["filter_status"], "included")
-        self.assertEqual(
-            result["location_precheck"],
-            "Junior-Hybrid außerhalb des Suchgebiets; Präsenzumfang prüfen",
-        )
-
-    def test_distant_junior_onsite_role_stays_excluded(self):
-        result = score_job(
-            make_job(
-                title="Junior Python Developer",
-                location="Berlin",
-                remote="0%",
-            )
-        )
-
-        self.assertEqual(result["filter_status"], "excluded")
-
-    def test_foreign_junior_hybrid_role_stays_excluded(self):
-        result = score_job(
-            make_job(
-                title="Junior Python Developer",
-                location="Portugal",
-                remote="hybrid",
-            )
-        )
-
-        self.assertEqual(result["filter_status"], "excluded")
-
-    def test_full_remote_outside_local_area_is_allowed(self):
-        result = score_job(make_job(location="Muenchen", remote="100%"))
-        self.assertEqual(result["filter_status"], "included")
 
     def test_remote_portugal_is_excluded(self):
         result = score_job(make_job(location="Portugal", remote="100%"))
@@ -336,26 +390,6 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(result["experience_rank"], 4)
         self.assertTrue(any(reason.startswith("+3 Erfahrung") for reason in result["reasons"]))
 
-    def test_unrelated_wuenschenswert_does_not_make_years_optional(self):
-        result = score_job(
-            make_job(
-                description=(
-                    "Mindestens 4 Jahre Berufserfahrung erforderlich. "
-                    "Docker-Kenntnisse sind wuenschenswert."
-                )
-            )
-        )
-        self.assertEqual(result["filter_status"], "excluded")
-
-    def test_optional_experience_is_only_slightly_lower(self):
-        result = score_job(
-            make_job(
-                title="Python Developer",
-                description="Ein Jahr Berufserfahrung waere ideal, aber kein Muss.",
-            )
-        )
-        self.assertEqual(result["filter_status"], "included")
-        self.assertEqual(result["experience_rank"], 1)
 
     def test_required_experience_wins_over_separate_optional_experience(self):
         result = score_job(
@@ -391,26 +425,6 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(german["filter_status"], "excluded")
         self.assertEqual(english["filter_status"], "excluded")
 
-    def test_junior_role_with_strong_experience_remains_reviewable(self):
-        result = score_job(
-            make_job(
-                title="Junior Data Engineer",
-                description="Mehrjaehrige Erfahrung mit Python ist wuenschenswert.",
-            )
-        )
-        self.assertEqual(result["filter_status"], "included")
-
-    def test_skill_experience_without_professional_signal_remains_reviewable(self):
-        result = score_job(
-            make_job(
-                title="Data Engineer",
-                description=(
-                    "Erfahrungen in der Analyse grosser Datenbestaende und Erfahrung "
-                    "in Python."
-                ),
-            )
-        )
-        self.assertEqual(result["filter_status"], "included")
 
     def test_company_entry_level_boilerplate_does_not_define_the_vacancy(self):
         result = score_job(
@@ -426,18 +440,6 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(result["filter_status"], "included")
         self.assertNotEqual(result["experience_rank"], 0)
 
-    def test_abbreviated_minimum_years_are_detected(self):
-        result = score_job(
-            make_job(
-                title="Junior QA Automation Engineer",
-                description=(
-                    "Mit deiner mehrjaehrigen praktischen Erfahrung "
-                    "(mind. 3 Jahre) in QA."
-                ),
-            )
-        )
-        self.assertEqual(result["filter_status"], "included")
-        self.assertEqual(result["experience_level"], "3 Jahr(e) gefordert")
 
     def test_non_junior_one_to_three_years_receive_a_strong_penalty(self):
         result = score_job(
@@ -513,28 +515,6 @@ class ScoringTests(unittest.TestCase):
                 self.assertEqual(result["filter_status"], "excluded")
                 self.assertIn(reason, result["reasons"][0])
 
-    def test_blocked_staff_word_does_not_match_staffing(self):
-        result = score_job(make_job(title="Staffing Software Developer"))
-
-        self.assertEqual(result["filter_status"], "included")
-
-    def test_incidental_sap_mention_is_not_a_hard_blocker(self):
-        result = score_job(
-            make_job(description="Python APIs verbinden bei Bedarf auch ein SAP-Nebensystem.")
-        )
-        self.assertEqual(result["filter_status"], "included")
-
-    def test_explicit_sap_focus_reaches_personal_review(self):
-        result = score_job(
-            make_job(description="Der Schwerpunkt SAP bestimmt deine taeglichen Aufgaben.")
-        )
-        self.assertEqual(result["filter_status"], "included")
-
-    def test_supported_java_role_is_allowed(self):
-        result = score_job(
-            make_job(title="Junior Java Software Developer", description="Java und REST APIs.")
-        )
-        self.assertEqual(result["filter_status"], "included")
 
     def test_frontend_and_web_roles_are_general_software_development(self):
         frontend = score_job(
@@ -556,29 +536,6 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(sre["filter_status"], "included")
         self.assertEqual(netops["filter_status"], "included")
 
-    def test_ai_business_analyst_is_allowed(self):
-        result = score_job(
-            make_job(
-                title="KI Business Analyst",
-                description="Analyse und Umsetzung datengetriebener KI Use Cases.",
-            )
-        )
-        self.assertEqual(result["filter_status"], "included")
-        self.assertEqual(result["role_group"], "ai_business_analysis")
-
-    def test_infrastructure_automation_is_allowed(self):
-        result = score_job(
-            make_job(
-                title="Automation Engineer",
-                location="Deutschland",
-                remote="100%",
-                description=(
-                    "Infrastructure as Code, Terraform und automatisierte Deployments."
-                ),
-            )
-        )
-        self.assertEqual(result["filter_status"], "included")
-        self.assertEqual(result["role_group"], "infrastructure_automation")
 
     def test_rpa_is_allowed_with_lower_role_score(self):
         result = score_job(
@@ -591,24 +548,6 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(result["role_group"], "rpa_automation")
         self.assertTrue(any(reason.startswith("+14 Rolle") for reason in result["reasons"]))
 
-    def test_rpa_with_ci_cd_remains_process_automation(self):
-        result = score_job(
-            make_job(
-                title="Automationsentwickler",
-                description="UiPath RPA, REST APIs, CI/CD und Testautomatisierung.",
-            )
-        )
-        self.assertEqual(result["filter_status"], "included")
-        self.assertEqual(result["role_group"], "rpa_automation")
-
-    def test_industrial_automation_without_it_context_is_not_allowed(self):
-        result = score_job(
-            make_job(
-                title="Automation Engineer",
-                description="Planung und Inbetriebnahme industrieller Produktionsanlagen.",
-            )
-        )
-        self.assertEqual(result["filter_status"], "excluded")
 
     def test_microsoft_365_roles_reach_personal_review(self):
         junior = score_job(
@@ -653,15 +592,6 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(junior["role_group"], "junior_sap")
         self.assertEqual(experienced["filter_status"], "included")
 
-    def test_junior_abap_role_is_reviewable(self):
-        result = score_job(
-            make_job(
-                title="Junior ABAP Entwickler",
-                description="Traineeprogramm mit umfassender Einarbeitung.",
-            )
-        )
-        self.assertEqual(result["filter_status"], "included")
-        self.assertEqual(result["role_group"], "junior_sap")
 
     def test_requirements_roles_reach_personal_review(self):
         junior = score_job(
@@ -704,20 +634,6 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(junior["role_group"], "junior_administration")
         self.assertEqual(experienced["filter_status"], "included")
 
-    def test_unfamiliar_core_technology_reaches_personal_review(self):
-        result = score_job(
-            make_job(title="Junior C# Software Developer", description="Reine C# Entwicklung.")
-        )
-        self.assertEqual(result["filter_status"], "included")
-
-    def test_test_automation_role_is_allowed(self):
-        result = score_job(
-            make_job(
-                title="Junior Test Automation Engineer",
-                description="Playwright, Jest und API-Testautomatisierung.",
-            )
-        )
-        self.assertEqual(result["filter_status"], "included")
 
     def test_test_manager_is_excluded(self):
         result = score_job(
@@ -752,11 +668,6 @@ class ScoringTests(unittest.TestCase):
 
     @patch("job_finder.scoring.SALARY_TARGET", 99_000)
     @patch("job_finder.scoring.SALARY_MINIMUM", 77_000)
-    def test_salary_range_with_target_inside_is_allowed(self):
-        result = score_job(
-            make_job(description="Jahresgehalt 80.000 - 105.000 EUR brutto.")
-        )
-        self.assertEqual(result["filter_status"], "included")
 
     def test_structured_part_time_is_scored_as_a_preference_warning(self):
         full_time = score_job(make_job(employment_type="Vollzeit"))
@@ -799,10 +710,6 @@ class ScoringTests(unittest.TestCase):
             any("Gehalt unter" in reason for reason in result["reasons"])
         )
 
-    def test_structured_minimum_without_maximum_is_not_an_upper_limit(self):
-        result = score_job(make_job(salary_min_eur=40_000))
-
-        self.assertEqual(result["filter_status"], "included")
 
     def test_jobs_sort_by_score_before_experience_level(self):
         entry = make_job(

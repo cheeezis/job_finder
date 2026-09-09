@@ -141,7 +141,11 @@ Der veränderliche Stellen- und Bewerbungszustand liegt transaktional in
 `data/internal/job_finder.sqlite3`. Beim ersten Zugriff wird eine vorhandene
 `seen_jobs.json` einmalig importiert und als unveränderte Rückfallkopie
 beibehalten. `jobs.json` und `recommendations.json` bleiben bewusst lesbare,
-neu erzeugbare Ausgaben.
+neu erzeugbare Ausgaben. Bewerbungsunterlagen liegen als eigenständige Dateien
+in `data/internal/application_documents`; die Zustandsbackups enthalten diese
+Dokumentordner nicht. Für eine vollständige Sicherung den gesamten `data`-Ordner
+bei beendeter Anwendung separat sichern. SQLite ist der einzige schreibbare Speicher für den
+Stellen- und Bewerbungszustand; JSON wird dafür nur noch beim Altimport gelesen.
 
 ```text
 data/internal/job_finder.sqlite3  Status, Entscheidungen und Bewerbungsverlauf
@@ -190,6 +194,17 @@ Persistenzschritt.
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s tests
 ```
+
+Die gemeinsamen Browser-Helfer lassen sich zusätzlich mit Node.js (ab Version 18)
+ohne weitere Pakete prüfen:
+
+```powershell
+node --test tests/frontend.test.cjs
+```
+
+Node.js wird nur für diese Tests benötigt, nicht für den Betrieb. Die drei
+Oberflächen teilen sich `app.js` und `app.css`; ihre jeweiligen Abläufe bleiben
+direkt in den Seiten.
 
 Die Tests bleiben absichtlich im Repository: Sie dokumentieren die Regeln und
 schützen insbesondere Deduplizierung, Quellenadapter, Review-Workflow und

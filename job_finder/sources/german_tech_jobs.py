@@ -185,7 +185,7 @@ def load_feed_cache(path, now=None):
         if current - fetched_at > MAX_STALE_FEED_AGE:
             return []
         jobs = [Job.from_dict(values) for values in document.get("jobs", [])]
-    except (KeyError, OSError, ValueError, json.JSONDecodeError):
+    except (KeyError, OSError, ValueError):
         return []
     for job in jobs:
         job.cache_stale = True

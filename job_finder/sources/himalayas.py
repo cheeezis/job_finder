@@ -7,6 +7,8 @@ from urllib.parse import urlencode
 from job_finder.http import fetch_json
 from job_finder.models import Job, JobSource, WorkMode
 from job_finder.sources.common import (
+    numeric_salary,
+    integer,
     normalize_employment_type,
     parse_published_date,
     source_job_id,
@@ -144,7 +146,7 @@ def annual_salary_eur(record):
         return None, None
     if str(record.get("salaryPeriod") or "annual").casefold() != "annual":
         return None, None
-    return numeric_value(record.get("minSalary")), numeric_value(record.get("maxSalary"))
+    return numeric_salary(record.get("minSalary")), numeric_salary(record.get("maxSalary"))
 
 
 def parse_api_date(value):
@@ -165,19 +167,3 @@ def text_values(value):
     """Normalize a scalar or list into non-empty strings."""
     values = value if isinstance(value, list) else [value]
     return [str(item).strip() for item in values if str(item or "").strip()]
-
-
-def numeric_value(value):
-    """Return a whole-number salary when possible."""
-    try:
-        return int(float(value)) if value is not None else None
-    except (TypeError, ValueError):
-        return None
-
-
-def integer(value, default):
-    """Return an integer pagination value with a safe fallback."""
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default

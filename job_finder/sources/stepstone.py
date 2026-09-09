@@ -9,9 +9,11 @@ import re
 import time
 from html import unescape
 from pathlib import Path
+
 from urllib.error import HTTPError
 from urllib.parse import quote, urlencode, urljoin, urlsplit, urlunsplit
 
+from job_finder.storage import write_json_atomic
 from job_finder.config import (
     STEPSTONE_SEARCH_LOCATIONS,
     STEPSTONE_SEARCH_RADIUS_KM,
@@ -347,21 +349,14 @@ def load_cache(path):
 
 def save_cache(path, cache):
     """Persist cache updates atomically so interrupted runs keep valid JSON."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary_path = path.with_suffix(f"{path.suffix}.tmp")
-    serialized = {
+    write_json_atomic(path, {
         "version": CACHE_VERSION,
         "last_links": cache.get("last_links", []),
         "jobs": {
             url: detail_cache_job_dict(job)
             for url, job in cache.get("jobs", {}).items()
         },
-    }
-    temporary_path.write_text(
-        json.dumps(serialized, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-    temporary_path.replace(path)
+    })
 
 
 def cached_jobs(links, cache, now=None):

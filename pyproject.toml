@@ -13,4 +13,4 @@ keywords = ["job-search", "job-tracker", "sqlite", "discord"]
 dependencies = ["PyYAML>=6.0,<7"]
 
 [tool.setuptools.package-data]
-job_finder = ["*.html", "*.css"]
+job_finder = ["*.html", "*.css", "*.js"]

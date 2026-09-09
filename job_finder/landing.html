@@ -40,6 +40,7 @@
     <p id="import-status" role="status"></p>
   </section>
 </main>
+<script src="/app.js"></script>
 <script>
   const form = document.getElementById("manual-import-form");
   const button = document.getElementById("manual-import-button");
@@ -50,13 +51,10 @@
     status.className = "";
     status.textContent = "Anzeige wird eingelesen und vorgefiltert …";
     try {
-      const response = await fetch("/api/manual-import", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({url: document.getElementById("manual-url").value})
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "Die Stelle konnte nicht importiert werden");
+      const result = await JobFinder.postJson(
+        "/api/manual-import", {url: document.getElementById("manual-url").value},
+        "Die Stelle konnte nicht importiert werden"
+      );
       window.location.href = `/review?job=${encodeURIComponent(result.job_id)}`;
     } catch (error) {
       status.className = "error";

@@ -17,24 +17,24 @@ from job_finder.review import (
 class ApplicationTrackingTests(unittest.TestCase):
     def setUp(self):
         self.temporary_directory = tempfile.TemporaryDirectory()
-        self.memory_path = Path(self.temporary_directory.name) / "seen_jobs.json"
+        self.memory_path = Path(self.temporary_directory.name) / "state.sqlite3"
 
     def tearDown(self):
         self.temporary_directory.cleanup()
 
+    def save_job(self, entry):
+        self.save_jobs({"job:1": entry})
+
     def save_jobs(self, jobs):
         save_memory(jobs, self.memory_path)
 
+
     def test_every_manual_status_change_is_kept_with_its_date(self):
-        self.save_jobs(
-            {
-                "job:1": {
-                    "title": "IT Consultant",
-                    "company": "Example GmbH",
-                    "workflow_status": "interesting",
-                }
-            }
-        )
+        self.save_job({
+            "title": "IT Consultant",
+            "company": "Example GmbH",
+            "workflow_status": "interesting",
+        })
 
         update_workflow_status("job:1", "applied", self.memory_path, "2026-08-01")
         update_workflow_status("job:1", "response", self.memory_path, "2026-08-04")
@@ -55,15 +55,11 @@ class ApplicationTrackingTests(unittest.TestCase):
         )
 
     def test_reselecting_same_status_without_date_does_not_duplicate_it(self):
-        self.save_jobs(
-            {
-                "job:1": {
-                    "title": "IT Consultant",
-                    "company": "Example GmbH",
-                    "workflow_status": "interesting",
-                }
-            }
-        )
+        self.save_job({
+            "title": "IT Consultant",
+            "company": "Example GmbH",
+            "workflow_status": "interesting",
+        })
 
         update_workflow_status("job:1", "interesting", self.memory_path)
 
@@ -73,18 +69,14 @@ class ApplicationTrackingTests(unittest.TestCase):
         )
 
     def test_interview_can_store_one_upcoming_appointment(self):
-        self.save_jobs(
-            {
-                "job:1": {
-                    "title": "IT Consultant",
-                    "company": "Example GmbH",
-                    "workflow_status": "applied",
-                    "workflow_history": [
-                        {"status": "applied", "occurred_on": "2026-08-01"}
-                    ],
-                }
-            }
-        )
+        self.save_job({
+            "title": "IT Consultant",
+            "company": "Example GmbH",
+            "workflow_status": "applied",
+            "workflow_history": [
+                {"status": "applied", "occurred_on": "2026-08-01"}
+            ],
+        })
 
         update_workflow_status(
             "job:1",
@@ -173,15 +165,11 @@ class ApplicationTrackingTests(unittest.TestCase):
         self.assertEqual(load_memory(self.memory_path), jobs)
 
     def test_invalid_date_does_not_change_current_status(self):
-        self.save_jobs(
-            {
-                "job:1": {
-                    "title": "IT Consultant",
-                    "company": "Example GmbH",
-                    "workflow_status": "interesting",
-                }
-            }
-        )
+        self.save_job({
+            "title": "IT Consultant",
+            "company": "Example GmbH",
+            "workflow_status": "interesting",
+        })
 
         with self.assertRaisesRegex(ValueError, "Ungueltiges Datum"):
             update_workflow_status(
@@ -224,24 +212,20 @@ class ApplicationTrackingTests(unittest.TestCase):
         )
 
     def test_application_overview_exposes_only_public_document_metadata(self):
-        self.save_jobs(
-            {
-                "job:1": {
-                    "workflow_status": "applied",
-                    "workflow_history": [
-                        {"status": "applied", "occurred_on": "2026-08-01"}
-                    ],
-                    "application_documents": [
-                        {
-                            "id": "document-1",
-                            "kind": "cover_letter",
-                            "name": "Anschreiben.pdf",
-                            "stored_name": "private-name.pdf",
-                        }
-                    ],
+        self.save_job({
+            "workflow_status": "applied",
+            "workflow_history": [
+                {"status": "applied", "occurred_on": "2026-08-01"}
+            ],
+            "application_documents": [
+                {
+                    "id": "document-1",
+                    "kind": "cover_letter",
+                    "name": "Anschreiben.pdf",
+                    "stored_name": "private-name.pdf",
                 }
-            }
-        )
+            ],
+        })
 
         documents = load_application_overview(
             self.memory_path,
@@ -374,19 +358,15 @@ class ApplicationTrackingTests(unittest.TestCase):
         self.assertEqual(statistics["response_rate_percent"], 0)
 
     def test_completed_application_leaves_the_default_list(self):
-        self.save_jobs(
-            {
-                "job:1": {
-                    "title": "Consultant",
-                    "company": "Example GmbH",
-                    "workflow_status": "ignored",
-                    "workflow_history": [
-                        {"status": "applied", "occurred_on": "2026-08-01"},
-                        {"status": "ignored", "occurred_on": "2026-08-02"},
-                    ],
-                }
-            }
-        )
+        self.save_job({
+            "title": "Consultant",
+            "company": "Example GmbH",
+            "workflow_status": "ignored",
+            "workflow_history": [
+                {"status": "applied", "occurred_on": "2026-08-01"},
+                {"status": "ignored", "occurred_on": "2026-08-02"},
+            ],
+        })
 
         overview = load_application_overview(self.memory_path)
 
@@ -429,18 +409,14 @@ class ApplicationTrackingTests(unittest.TestCase):
         )
 
     def test_unknown_legacy_date_does_not_hide_later_application_date(self):
-        self.save_jobs(
-            {
-                "job:1": {
-                    "workflow_status": "response",
-                    "workflow_history": [
-                        {"status": "applied", "occurred_on": None},
-                        {"status": "applied", "occurred_on": "2026-08-01"},
-                        {"status": "response", "occurred_on": "2026-08-03"},
-                    ],
-                }
-            }
-        )
+        self.save_job({
+            "workflow_status": "response",
+            "workflow_history": [
+                {"status": "applied", "occurred_on": None},
+                {"status": "applied", "occurred_on": "2026-08-01"},
+                {"status": "response", "occurred_on": "2026-08-03"},
+            ],
+        })
 
         application = load_application_overview(self.memory_path)["applications"][0]
 
@@ -448,14 +424,10 @@ class ApplicationTrackingTests(unittest.TestCase):
         self.assertEqual(application["days_to_response"], 2)
 
     def test_invalid_history_shape_is_ignored(self):
-        self.save_jobs(
-            {
-                "job:1": {
-                    "workflow_status": "applied",
-                    "workflow_history": None,
-                }
-            }
-        )
+        self.save_job({
+            "workflow_status": "applied",
+            "workflow_history": None,
+        })
 
         overview = load_application_overview(self.memory_path)
 
@@ -463,17 +435,13 @@ class ApplicationTrackingTests(unittest.TestCase):
         self.assertEqual(overview["applications"][0]["workflow_history"], [])
 
     def test_response_before_application_is_not_used_for_duration(self):
-        self.save_jobs(
-            {
-                "job:1": {
-                    "workflow_status": "response",
-                    "workflow_history": [
-                        {"status": "response", "occurred_on": "2026-08-01"},
-                        {"status": "applied", "occurred_on": "2026-08-05"},
-                    ],
-                }
-            }
-        )
+        self.save_job({
+            "workflow_status": "response",
+            "workflow_history": [
+                {"status": "response", "occurred_on": "2026-08-01"},
+                {"status": "applied", "occurred_on": "2026-08-05"},
+            ],
+        })
 
         overview = load_application_overview(self.memory_path)
         application = overview["applications"][0]
@@ -483,14 +451,10 @@ class ApplicationTrackingTests(unittest.TestCase):
         self.assertEqual(overview["statistics"]["response_time_samples"], 0)
 
     def test_no_response_is_a_manual_terminal_status(self):
-        self.save_jobs(
-            {
-                "job:1": {
-                    "workflow_status": "applied",
-                    "active": False,
-                }
-            }
-        )
+        self.save_job({
+            "workflow_status": "applied",
+            "active": False,
+        })
 
         before = load_application_overview(self.memory_path)
         update_workflow_status(
@@ -518,16 +482,12 @@ class ApplicationTrackingTests(unittest.TestCase):
         )
 
     def test_no_response_is_derived_after_fourteen_days_without_event(self):
-        self.save_jobs(
-            {
-                "job:1": {
-                    "workflow_status": "applied",
-                    "workflow_history": [
-                        {"status": "applied", "occurred_on": "2026-08-01"}
-                    ],
-                }
-            }
-        )
+        self.save_job({
+            "workflow_status": "applied",
+            "workflow_history": [
+                {"status": "applied", "occurred_on": "2026-08-01"}
+            ],
+        })
 
         before = load_application_overview(
             self.memory_path,
@@ -562,16 +522,12 @@ class ApplicationTrackingTests(unittest.TestCase):
         self.assertNotIn("no_response", after["application_statuses"])
 
     def test_response_reopens_automatically_derived_no_response(self):
-        self.save_jobs(
-            {
-                "job:1": {
-                    "workflow_status": "applied",
-                    "workflow_history": [
-                        {"status": "applied", "occurred_on": "2026-08-01"}
-                    ],
-                }
-            }
-        )
+        self.save_job({
+            "workflow_status": "applied",
+            "workflow_history": [
+                {"status": "applied", "occurred_on": "2026-08-01"}
+            ],
+        })
 
         before = load_application_overview(
             self.memory_path,
@@ -593,17 +549,13 @@ class ApplicationTrackingTests(unittest.TestCase):
         self.assertEqual(after["applications"][0]["workflow_status"], "response")
 
     def test_late_response_reopens_no_response_outcome(self):
-        self.save_jobs(
-            {
-                "job:1": {
-                    "workflow_status": "no_response",
-                    "workflow_history": [
-                        {"status": "applied", "occurred_on": "2026-08-01"},
-                        {"status": "no_response", "occurred_on": "2026-08-20"},
-                    ],
-                }
-            }
-        )
+        self.save_job({
+            "workflow_status": "no_response",
+            "workflow_history": [
+                {"status": "applied", "occurred_on": "2026-08-01"},
+                {"status": "no_response", "occurred_on": "2026-08-20"},
+            ],
+        })
 
         update_workflow_status(
             "job:1",
@@ -621,17 +573,13 @@ class ApplicationTrackingTests(unittest.TestCase):
         )
 
     def test_history_event_can_be_edited_and_reopens_application(self):
-        self.save_jobs(
-            {
-                "job:1": {
-                    "workflow_status": "no_response",
-                    "workflow_history": [
-                        {"status": "applied", "occurred_on": "2026-08-01"},
-                        {"status": "no_response", "occurred_on": "2026-08-20"},
-                    ],
-                }
-            }
-        )
+        self.save_job({
+            "workflow_status": "no_response",
+            "workflow_history": [
+                {"status": "applied", "occurred_on": "2026-08-01"},
+                {"status": "no_response", "occurred_on": "2026-08-20"},
+            ],
+        })
 
         result = update_workflow_history(
             "job:1",
@@ -654,17 +602,13 @@ class ApplicationTrackingTests(unittest.TestCase):
         )
 
     def test_deleting_final_event_restores_previous_current_status(self):
-        self.save_jobs(
-            {
-                "job:1": {
-                    "workflow_status": "no_response",
-                    "workflow_history": [
-                        {"status": "applied", "occurred_on": "2026-08-01"},
-                        {"status": "no_response", "occurred_on": "2026-08-20"},
-                    ],
-                }
-            }
-        )
+        self.save_job({
+            "workflow_status": "no_response",
+            "workflow_history": [
+                {"status": "applied", "occurred_on": "2026-08-01"},
+                {"status": "no_response", "occurred_on": "2026-08-20"},
+            ],
+        })
 
         result = delete_workflow_history(
             "job:1",
@@ -711,16 +655,12 @@ class ApplicationTrackingTests(unittest.TestCase):
         self.assertEqual(load_memory(self.memory_path), jobs)
 
     def test_history_date_can_be_changed_to_unknown(self):
-        self.save_jobs(
-            {
-                "job:1": {
-                    "workflow_status": "applied",
-                    "workflow_history": [
-                        {"status": "applied", "occurred_on": "2026-08-01"}
-                    ],
-                }
-            }
-        )
+        self.save_job({
+            "workflow_status": "applied",
+            "workflow_history": [
+                {"status": "applied", "occurred_on": "2026-08-01"}
+            ],
+        })
 
         update_workflow_history(
             "job:1",
@@ -758,18 +698,14 @@ class ApplicationTrackingTests(unittest.TestCase):
         self.assertEqual(load_memory(self.memory_path), jobs)
 
     def test_closed_after_no_response_keeps_no_response_outcome(self):
-        self.save_jobs(
-            {
-                "job:1": {
-                    "workflow_status": "closed",
-                    "workflow_history": [
-                        {"status": "applied", "occurred_on": "2026-08-01"},
-                        {"status": "no_response", "occurred_on": "2026-08-20"},
-                        {"status": "closed", "occurred_on": "2026-08-20"},
-                    ],
-                }
-            }
-        )
+        self.save_job({
+            "workflow_status": "closed",
+            "workflow_history": [
+                {"status": "applied", "occurred_on": "2026-08-01"},
+                {"status": "no_response", "occurred_on": "2026-08-20"},
+                {"status": "closed", "occurred_on": "2026-08-20"},
+            ],
+        })
 
         overview = load_application_overview(self.memory_path)
 
@@ -778,18 +714,14 @@ class ApplicationTrackingTests(unittest.TestCase):
         self.assertEqual(overview["applications"], [])
 
     def test_editing_older_event_keeps_latest_status_and_updates_duration(self):
-        self.save_jobs(
-            {
-                "job:1": {
-                    "workflow_status": "interview",
-                    "workflow_history": [
-                        {"status": "applied", "occurred_on": "2026-08-01"},
-                        {"status": "response", "occurred_on": "2026-08-04"},
-                        {"status": "interview", "occurred_on": "2026-08-10"},
-                    ],
-                }
-            }
-        )
+        self.save_job({
+            "workflow_status": "interview",
+            "workflow_history": [
+                {"status": "applied", "occurred_on": "2026-08-01"},
+                {"status": "response", "occurred_on": "2026-08-04"},
+                {"status": "interview", "occurred_on": "2026-08-10"},
+            ],
+        })
 
         result = update_workflow_history(
             "job:1",

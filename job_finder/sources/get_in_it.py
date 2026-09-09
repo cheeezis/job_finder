@@ -24,7 +24,7 @@ from job_finder.paths import GET_IN_IT_CACHE_FILE
 from job_finder.remote import classify_remote, detect_remote
 from job_finder.search_plan import iter_search_queries, unique_in_order
 from job_finder.sources.common import (
-    DETAIL_CACHE_SAVE_INTERVAL,
+    enrich_cached_candidates,
     canonical_detail_url,
     detail_is_fresh,
     extract_annual_salary_eur,
@@ -33,7 +33,6 @@ from job_finder.sources.common import (
     mark_content_change,
     normalize_employment_type,
     parse_published_date,
-    save_detail_cache,
     source_job_id,
     utc_now,
 )
@@ -45,15 +44,6 @@ API_SEARCH_URL = "https://www.get-in-it.de/api/v2/open/job/search"
 API_PAGE_SIZE = 39
 HESSEN_STATE_ID = 5
 CACHE_FILE = GET_IN_IT_CACHE_FILE
-
-THEMATIC_PRIORITIES = {
-    36: "Anwendungsentwicklung",
-    38: "Business Analysis",
-    39: "Datenbankentwicklung/BI",
-    44: "Forschung",
-    35: "System Engineering / Admin",
-    5: "Webentwicklung",
-}
 
 TERM_PRIORITY_RULES = [
     (["data", "analytics", "analyst", "bi"], [38, 39]),
@@ -123,15 +113,6 @@ def collect_records(*, return_report=False):
     return result if return_report else records
 
 
-def collect_links(*, return_report=False):
-    """Return detail links for compatibility with diagnostic callers."""
-    result = collect_records(return_report=return_report)
-    if not return_report:
-        return extract_detail_links_from_api(result)
-    records, failed, total = result
-    return extract_detail_links_from_api(records), failed, total
-
-
 def summary_job_from_record(record):
     """Build a permissive first-pass job from get-in-IT API metadata."""
     url = canonical_detail_url(
@@ -183,46 +164,11 @@ def with_current_summary(cached_job, summary):
 
 
 def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE, now=None):
-    """Fetch full pages only for first-pass candidates without fresh details."""
-    cache_file = Path(cache_path)
-    cache = load_detail_cache(cache_file)
-    enriched = 0
-    unsaved = 0
-    errors = 0
-
-    for index, job in enumerate(jobs):
-        if (
-            job.id not in candidate_ids
-            or not job.primary_source
-            or job.primary_source.source != SOURCE_NAME
-        ):
-            continue
-        url = canonical_detail_url(job.primary_url)
-        cached_job = cache.get(url)
-        if detail_is_fresh(cached_job, now):
-            continue
-        try:
-            detailed = fetch_job(url)
-            mark_content_change(detailed, cached_job)
-            detailed.first_seen_at = job.first_seen_at
-            detailed.last_seen_at = job.last_seen_at
-            detailed.workflow_status = job.workflow_status
-            detailed.is_new = job.is_new
-            jobs[index] = detailed
-            cache[url] = detailed
-            enriched += 1
-            unsaved += 1
-            if unsaved >= DETAIL_CACHE_SAVE_INTERVAL:
-                save_detail_cache(cache_file, cache)
-                unsaved = 0
-        except Exception:
-            errors += 1
-
-    if unsaved:
-        save_detail_cache(cache_file, cache)
-    if errors:
-        print(f"WARNUNG get-in-IT: {errors} Kandidat(en) nicht erreichbar")
-    return enriched
+    """Fetch details only for prefiltered candidates without a fresh cache."""
+    return enrich_cached_candidates(
+        jobs, candidate_ids, cache_path, SOURCE_NAME, "get-in-IT",
+        lambda job, url: fetch_job(url), now=now,
+    )
 
 
 def build_api_searches():
@@ -236,7 +182,7 @@ def build_api_searches():
     for terms, locations in search_plans:
         for query in iter_search_queries(terms, locations):
             for priority_id in priority_ids_for_term(query.term):
-                key = (priority_id, query.location)
+                key = (priority_id, query.location.lower() == "remote")
                 if key in seen:
                     continue
 
@@ -244,10 +190,6 @@ def build_api_searches():
                 yield {
                     "priority_id": priority_id,
                     "location": query.location,
-                    "label": THEMATIC_PRIORITIES.get(
-                        priority_id,
-                        f"Thema {priority_id}",
-                    ),
                 }
 
 
@@ -301,17 +243,6 @@ def search_api(priority_id, location):
             return results
 
         start += len(page_results)
-
-
-def extract_detail_links_from_api(results):
-    links = []
-
-    for job in results:
-        path = job.get("url")
-        if path:
-            links.append(urljoin("https://www.get-in-it.de", path))
-
-    return links
 
 
 def fetch_job(url):

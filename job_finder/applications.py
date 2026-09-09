@@ -4,20 +4,15 @@ import re
 from datetime import date, datetime, timedelta
 
 from job_finder.application_documents import public_documents
-from job_finder.memory import load_memory
-from job_finder.models import WorkflowStatus
+from job_finder.memory import (
+    has_application_state as is_application,
+    load_memory,
+    memory_source_links,
+)
+from job_finder.models import APPLICATION_STATUSES, WorkflowStatus
 from job_finder.paths import MEMORY_FILE
 
 
-APPLICATION_STATUSES = (
-    WorkflowStatus.APPLIED.value,
-    WorkflowStatus.RESPONSE.value,
-    WorkflowStatus.INTERVIEW.value,
-    WorkflowStatus.REJECTED.value,
-    WorkflowStatus.NO_RESPONSE.value,
-    WorkflowStatus.OFFER.value,
-    WorkflowStatus.CLOSED.value,
-)
 OPEN_APPLICATION_STATUSES = {
     WorkflowStatus.APPLIED.value,
     WorkflowStatus.RESPONSE.value,
@@ -234,19 +229,6 @@ def synchronize_current_status(entry):
     return status
 
 
-def is_application(entry):
-    """Recognize current and historical applications."""
-    current_status = entry.get("workflow_status")
-    history = entry.get("workflow_history", [])
-    if not isinstance(history, list):
-        history = []
-    return current_status in APPLICATION_STATUSES or any(
-        isinstance(event, dict)
-        and event.get("status") in APPLICATION_STATUSES
-        for event in history
-    )
-
-
 def application_row(job_id, entry, as_of=None):
     """Build one compact row with its complete manual timeline."""
     history = valid_history(entry.get("workflow_history", []))
@@ -273,24 +255,7 @@ def application_row(job_id, entry, as_of=None):
         )
         if difference.days >= 0:
             days_to_response = difference.days
-    source_urls = entry.get("source_urls", [])
-    if not isinstance(source_urls, list):
-        source_urls = []
-    source_names = entry.get("source_names", [])
-    if not isinstance(source_names, list):
-        source_names = []
-    source_links = [
-        {
-            "source": (
-                source_names[index]
-                if index < len(source_names) and isinstance(source_names[index], str)
-                else "listing"
-            ),
-            "url": source_url,
-        }
-        for index, source_url in enumerate(source_urls)
-        if isinstance(source_url, str) and source_url
-    ]
+    source_links = memory_source_links(entry, validate_names=True)
     return {
         "id": job_id,
         "title": entry.get("title", "Unbekannte Stelle"),

@@ -245,8 +245,6 @@ ROLE_GROUPS = [
         "label": "DevOps/Cloud/Security/Network",
         "points": 20,
         "patterns": [
-            ["devops", "engineer"],
-            ["devops", "entwickler"],
             ["cloud", "engineer"],
             ["cloud", "entwickler"],
             ["security", "engineer"],
@@ -261,15 +259,6 @@ ROLE_GROUPS = [
             ["netops", "engineer"],
             ["cloud", "specialist"],
             ["devops"],
-        ],
-    },
-    {
-        "id": "architecture",
-        "label": "Software-Architektur",
-        "points": 20,
-        "patterns": [
-            ["software", "architect"],
-            ["software", "architekt"],
         ],
     },
     {

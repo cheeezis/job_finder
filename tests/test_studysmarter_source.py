@@ -1,6 +1,5 @@
 """Tests for the StudySmarter source adapter."""
 
-import json
 import tempfile
 import unittest
 from datetime import datetime, timezone

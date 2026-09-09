@@ -57,35 +57,57 @@ class RunFinderTests(unittest.TestCase):
 
     def test_pipeline_persists_jobs_after_arbeitnow_enrichment(self):
         job = make_job("arbeitnow:1")
-        results = {"included": [{"id": job.id}], "excluded": []}
+        job.remote_percentage = 100
 
-        def enrich(jobs, _candidate_ids):
+        def enrich(jobs, candidate_ids):
+            self.assertIn(job.id, candidate_ids)
             jobs[0].description_clean = "Originalbeschreibung"
             return 1
 
         with tempfile.TemporaryDirectory() as directory:
             jobs_file = Path(directory) / "jobs.json"
+            source = SimpleNamespace(enrich_candidate_jobs=enrich)
             with (
                 patch("run_finder.JOBS_FILE", jobs_file),
+                patch("run_finder.MEMORY_FILE", Path(directory) / "state.sqlite3"),
                 patch("run_finder.create_backup"),
-                patch("run_finder.collect_jobs", return_value=([job], [{"name": "arbeitnow", "status": "success", "jobs": 1}])),
-                patch("run_finder.edit_memory") as edit_memory,
-                patch("run_finder.update_memory", return_value={"new": 1, "known": 0, "inactive": 0, "reactivated": 0}),
-                patch("run_finder.score_jobs", return_value=results) as score_jobs,
-                patch("run_finder.arbeitnow.enrich_candidate_jobs", side_effect=enrich),
-                patch("run_finder.write_recommendations"),
-                patch("run_finder.process_notifications", return_value={"queued": 0, "ready": 0, "sent": 0, "failed": 0, "configuration_error": None}),
+                patch("run_finder.SOURCES", [source]),
+                patch("run_finder.collect_jobs", return_value=(
+                    [job], [{"name": "arbeitnow", "status": "success", "jobs": 1}]
+                )),
+                patch("run_finder.write_recommendations") as recommendations,
+                patch("run_finder.process_notifications", return_value={
+                    "ready": 0, "configuration_error": None,
+                }),
+                redirect_stdout(io.StringIO()),
             ):
-                edit_memory.return_value.__enter__.return_value = {}
-                output = io.StringIO()
-                with redirect_stdout(output):
-                    run_pipeline(SimpleNamespace(notify=False))
-            persisted = json.loads(jobs_file.read_text(encoding="utf-8"))
+                run_pipeline(SimpleNamespace(notify=False))
+            persisted = json.loads(jobs_file.read_text(encoding="utf-8"))[0]
+        result = recommendations.call_args.args[0]["included"][0]
+        self.assertEqual(persisted["description_clean"], "Originalbeschreibung")
+        self.assertEqual(result["description_clean"], "Originalbeschreibung")
+        self.assertEqual(result["id"], persisted["id"])
+        self.assertTrue(result["is_new"])
+        self.assertTrue(result["first_seen_at"])
+        self.assertGreater(result["match_percent"], 0)
 
-        self.assertEqual(persisted[0]["description_clean"], "Originalbeschreibung")
-        self.assertEqual(score_jobs.call_count, 3)
-        self.assertIn("2/4 Vorfilter", output.getvalue())
-        self.assertNotIn("Junior Developer", output.getvalue())
+    def test_invalid_enriched_data_does_not_commit_memory(self):
+        job = make_job("source:1")
+        with (
+            patch("run_finder.create_backup"),
+            patch("run_finder.collect_jobs", return_value=(
+                [job], [{"name": "source", "status": "success", "jobs": 1}]
+            )),
+            patch("run_finder.enrich_candidate_jobs"),
+            patch("run_finder.evaluate_jobs", side_effect=ValueError("invalid details")),
+            patch("run_finder.edit_memory") as memory,
+            patch("run_finder.write_json_atomic") as output,
+            self.assertRaises(ValueError),
+            redirect_stdout(io.StringIO()),
+        ):
+            run_pipeline(SimpleNamespace(notify=False))
+        memory.assert_not_called()
+        output.assert_not_called()
 
     def test_incomplete_snapshot_does_not_replace_persistent_output(self):
         reports = [
@@ -150,7 +172,7 @@ class RunFinderTests(unittest.TestCase):
         self.assertEqual(reports[0]["error"], "RuntimeError")
         self.assertEqual(reports[1]["status"], "success")
 
-    def test_empty_source_is_not_trusted_for_inactive_tracking(self):
+    def test_empty_source_is_reported_as_a_complete_empty_snapshot(self):
         jobs, reports = collect_jobs([SimpleNamespace(SOURCE_NAME="empty", fetch_jobs=lambda: [])])
         self.assertEqual(jobs, [])
         self.assertEqual(reports, [{"name": "empty", "status": "empty", "jobs": 0}])

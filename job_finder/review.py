@@ -29,7 +29,7 @@ from job_finder.applications import (
 )
 from job_finder.config import LOCAL_SEARCH_LOCATION, LOCAL_SEARCH_POSTAL_CODE
 from job_finder.manual_import import import_manual_url
-from job_finder.memory import edit_memory, load_memory, preferred_memory_id
+from job_finder.memory import edit_memory, load_memory, memory_source_links, preferred_memory_id
 from job_finder.models import WorkflowStatus
 from job_finder.paths import (
     APPLICATION_DOCUMENTS_DIR,
@@ -45,6 +45,7 @@ LANDING_PAGE = Path(__file__).with_name("landing.html")
 REVIEW_PAGE = Path(__file__).with_name("review.html")
 APPLICATIONS_PAGE = Path(__file__).with_name("applications.html")
 APP_STYLES = Path(__file__).with_name("app.css")
+APP_SCRIPT = Path(__file__).with_name("app.js")
 ROUTE_ORIGIN = f"{LOCAL_SEARCH_POSTAL_CODE} {LOCAL_SEARCH_LOCATION}".strip()
 MAX_REQUEST_BYTES = 45 * 1024 * 1024
 LOCAL_HOST_PATTERN = re.compile(r"^(?:127\.0\.0\.1|localhost)(?::\d{1,5})?$")
@@ -89,21 +90,7 @@ def load_review_jobs(
         )
         job["application_tracked"] = is_application(entry)
         if not job.get("source_links"):
-            source_names = entry.get("source_names", [])
-            if not isinstance(source_names, list):
-                source_names = []
-            job["source_links"] = [
-                {
-                    "source": (
-                        source_names[index]
-                        if index < len(source_names)
-                        else "listing"
-                    ),
-                    "url": url,
-                }
-                for index, url in enumerate(entry.get("source_urls", []))
-                if isinstance(url, str) and url
-            ]
+            job["source_links"] = memory_source_links(entry)
         review_jobs.append(job)
 
     for job_id, entry in memory.items():
@@ -118,19 +105,7 @@ def load_review_jobs(
 
 def remembered_review_job(job_id, entry):
     """Keep a manual shortlist entry until the user changes its status."""
-    source_names = entry.get("source_names", [])
-    if not isinstance(source_names, list):
-        source_names = []
-    source_links = [
-        {
-            "source": (
-                source_names[index] if index < len(source_names) else "listing"
-            ),
-            "url": url,
-        }
-        for index, url in enumerate(entry.get("source_urls", []))
-        if isinstance(url, str) and url
-    ]
+    source_links = memory_source_links(entry)
     if entry.get("active", True):
         availability_warning = (
             "Im aktuellen Lauf nicht gefunden; Verfügbarkeit bitte über die "
@@ -348,6 +323,9 @@ def validated_salary_expectation_eur(value):
     return salary
 
 
+
+
+
 def update_workflow_history(
     job_id,
     event_index,
@@ -417,6 +395,7 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
     page_path = REVIEW_PAGE
     applications_page_path = APPLICATIONS_PAGE
     styles_path = APP_STYLES
+    script_path = APP_SCRIPT
 
     def do_GET(self):
         """Return the page or the current joined recommendation data."""
@@ -437,6 +416,9 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
             return
         if request_path == "/app.css":
             self.send_file(self.styles_path, "text/css; charset=utf-8")
+            return
+        if request_path == "/app.js":
+            self.send_file(self.script_path, "text/javascript; charset=utf-8")
             return
         if request_path == "/api/recommendations":
             self.send_json(
@@ -557,7 +539,6 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
             KeyError,
             OSError,
             RuntimeError,
-            json.JSONDecodeError,
         ) as error:
             self.send_json({"error": str(error)}, status=400)
             return

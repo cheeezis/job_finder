@@ -2,7 +2,6 @@
 
 import time
 from dataclasses import replace
-from pathlib import Path
 from urllib.parse import urlencode
 
 from job_finder.config import (
@@ -13,14 +12,13 @@ from job_finder.http import fetch_json, fetch_text
 from job_finder.models import Job, JobSource, WorkMode
 from job_finder.paths import STUDYSMARTER_CACHE_FILE
 from job_finder.sources.common import (
-    DETAIL_CACHE_SAVE_INTERVAL,
+    enrich_cached_candidates,
     canonical_detail_url,
-    detail_is_fresh,
     load_detail_cache,
     mark_content_change,
+    integer,
     normalize_employment_type,
     parse_published_date,
-    save_detail_cache,
     source_job_id,
 )
 from job_finder.sources.company_careers import job_from_json_ld
@@ -44,39 +42,29 @@ REQUEST_PAUSE_SECONDS = 0.2
 
 def fetch_jobs(cache_path=CACHE_FILE, now=None):
     """Return cached details or lightweight records for the first prefilter."""
-    records = collect_records()
-    cache = load_detail_cache(Path(cache_path))
-    jobs = []
-
-    for record in records:
-        url = canonical_detail_url(record.get("link", ""))
-        if not url:
-            continue
-        summary = summary_job_from_record(record)
-        cached_job = cache.get(url)
-        if cached_job:
-            jobs.append(with_current_summary(cached_job, summary))
-        else:
-            jobs.append(summary)
-    return jobs
+    return jobs_from_records(collect_records(), cache_path)
 
 
 def fetch_jobs_with_report(cache_path=CACHE_FILE, now=None):
     """Return lightweight jobs and explicit search coverage metadata."""
     records, failed, total = collect_records(return_report=True)
-    cache = load_detail_cache(Path(cache_path))
-    jobs = []
-    for record in records:
-        url = canonical_detail_url(record.get("link", ""))
-        if not url:
-            continue
-        summary = summary_job_from_record(record)
-        jobs.append(with_current_summary(cache[url], summary) if url in cache else summary)
+    jobs = jobs_from_records(records, cache_path)
     return {
         "jobs": jobs,
         "status": "partial" if failed else ("success" if jobs else "empty"),
         "details": {"failed_segments": failed, "total_segments": total},
     }
+
+
+def jobs_from_records(records, cache_path):
+    cache = load_detail_cache(cache_path)
+    jobs = []
+    for record in records:
+        url = canonical_detail_url(record.get("link", ""))
+        if url:
+            summary = summary_job_from_record(record)
+            jobs.append(with_current_summary(cache[url], summary) if url in cache else summary)
+    return jobs
 
 
 def with_current_summary(cached_job, summary):
@@ -109,46 +97,11 @@ def with_current_summary(cached_job, summary):
 
 
 def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE, now=None):
-    """Load details only for prefiltered candidates without a fresh cache."""
-    cache_file = Path(cache_path)
-    cache = load_detail_cache(cache_file)
-    enriched = 0
-    unsaved = 0
-    errors = 0
-
-    for index, job in enumerate(jobs):
-        if (
-            job.id not in candidate_ids
-            or not job.primary_source
-            or job.primary_source.source != SOURCE_NAME
-        ):
-            continue
-        url = canonical_detail_url(job.primary_url)
-        cached_job = cache.get(url)
-        if detail_is_fresh(cached_job, now):
-            continue
-        try:
-            detailed = enrich_summary_job(job, fetch_text(url))
-            mark_content_change(detailed, cached_job)
-            detailed.first_seen_at = job.first_seen_at
-            detailed.last_seen_at = job.last_seen_at
-            detailed.workflow_status = job.workflow_status
-            detailed.is_new = job.is_new
-            jobs[index] = detailed
-            cache[url] = detailed
-            enriched += 1
-            unsaved += 1
-            if unsaved >= DETAIL_CACHE_SAVE_INTERVAL:
-                save_detail_cache(cache_file, cache)
-                unsaved = 0
-        except Exception:
-            errors += 1
-
-    if unsaved:
-        save_detail_cache(cache_file, cache)
-    if errors:
-        print(f"WARNUNG StudySmarter: {errors} Kandidat(en) nicht erreichbar")
-    return enriched
+    """Fetch details only for prefiltered candidates without a fresh cache."""
+    return enrich_cached_candidates(
+        jobs, candidate_ids, cache_path, SOURCE_NAME, "StudySmarter",
+        lambda job, url: enrich_summary_job(job, fetch_text(url)), now=now,
+    )
 
 
 def collect_records(searches=None, *, return_report=False):
@@ -277,11 +230,3 @@ def enrich_summary_job(summary, html):
     job.salary_min_eur = None
     job.salary_max_eur = None
     return job
-
-
-def integer(value, default):
-    """Return an integer pagination value with a safe fallback."""
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default

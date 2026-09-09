@@ -2,25 +2,18 @@
 
 import re
 from html import unescape
-from pathlib import Path
 from urllib.parse import urljoin, urlsplit
 
 from job_finder.http import fetch_text
 from job_finder.models import Job, JobSource
 from job_finder.remote import classify_remote, detect_remote
 from job_finder.sources.common import (
-    DETAIL_CACHE_SAVE_INTERVAL,
     canonical_detail_url,
-    detail_is_fresh,
-    detail_within_age,
     extract_annual_salary_eur,
     extract_schema_locations,
-    load_detail_cache,
-    mark_content_change,
+    fetch_cached_details,
     normalize_employment_type,
     parse_published_date,
-    record_partial_failure,
-    save_detail_cache,
     source_job_id,
     utc_now,
 )
@@ -28,64 +21,19 @@ from job_finder.structured_data import extract_json_ld_job_posting
 from job_finder.text import html_to_text
 
 
-def fetch_company_jobs(
-    source_name,
-    company,
-    links,
-    cache_path,
-    now=None,
-    parser=None,
-):
-    """Import company details with the same weekly cache used by job boards."""
-    cache_file = Path(cache_path)
-    cache = load_detail_cache(cache_file)
-    jobs = []
-    unsaved = 0
-    cache_updated = False
-    detail_errors = 0
-    stale_fallbacks = 0
+def fetch_company_jobs(source_name, company, links, cache_path, now=None, parser=None):
+    """Import company details with the shared weekly cache and stale fallback."""
     parser = parser or job_from_json_ld
 
-    for url in links:
-        cache_key = canonical_detail_url(url)
-        cached_job = cache.get(cache_key)
-        if detail_is_fresh(cached_job, now):
-            cache_updated = ensure_url_identity(cached_job, source_name, url) or cache_updated
-            cached_job.content_changed = False
-            cached_job.cache_stale = False
-            jobs.append(cached_job)
-            continue
+    def fetch_detail(url):
+        job = parser(source_name, company, url, fetch_text(url))
+        ensure_url_identity(job, source_name, url)
+        return job
 
-        try:
-            html = fetch_text(url)
-            job = parser(source_name, company, url, html)
-            job.cache_stale = False
-            ensure_url_identity(job, source_name, url)
-            mark_content_change(job, cached_job)
-            jobs.append(job)
-            cache[cache_key] = job
-            unsaved += 1
-            if unsaved >= DETAIL_CACHE_SAVE_INTERVAL:
-                save_detail_cache(cache_file, cache)
-                unsaved = 0
-        except Exception:
-            detail_errors += 1
-            if cached_job and detail_within_age(cached_job, now):
-                cache_updated = ensure_url_identity(cached_job, source_name, url) or cache_updated
-                cached_job.content_changed = False
-                cached_job.cache_stale = True
-                jobs.append(cached_job)
-                stale_fallbacks += 1
-
-    if unsaved or cache_updated:
-        save_detail_cache(cache_file, cache)
-    if detail_errors:
-        record_partial_failure(detail_errors)
-        print(
-            f"WARNUNG {source_name}: {detail_errors} Detailseite(n) "
-            f"nicht erreichbar, {stale_fallbacks} aus altem Cache übernommen"
-        )
-    return jobs
+    return fetch_cached_details(
+        links, cache_path, fetch_detail, source_name, now=now,
+        normalize_cached=lambda job, url: ensure_url_identity(job, source_name, url),
+    )
 
 
 def job_from_json_ld(source_name, fallback_company, url, html):

@@ -7,8 +7,10 @@ from datetime import date, datetime, timedelta, timezone
 from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
+
 from urllib.parse import urljoin, urlsplit
 
+from job_finder.storage import write_json_atomic
 from job_finder.console import print_progress, progress_checkpoint
 from job_finder.http import fetch_text, fetch_text_with_final_url
 from job_finder.models import Job, JobSource
@@ -204,18 +206,7 @@ def load_linkedin_status_cache(path):
 
 
 def save_linkedin_status_cache(path, checks):
-    status_path = Path(path)
-    status_path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = status_path.with_suffix(f"{status_path.suffix}.tmp")
-    temporary.write_text(
-        json.dumps(
-            {"version": 1, "checks": checks},
-            ensure_ascii=False,
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
-    temporary.replace(status_path)
+    write_json_atomic(path, {"version": 1, "checks": checks})
 
 
 def fresh_linkedin_status(entry, now):
@@ -237,12 +228,10 @@ def fresh_linkedin_status(entry, now):
 
 def collect_links(
     client=None,
-    known_urls=None,
     today=None,
     max_pages=None,
-    initial_scan=None,
 ):
-    """Collect recent listings and stop at the old or known frontier."""
+    """Collect recent listings and stop at the old frontier."""
     client = client or RemotelyHttpClient()
     page_limit = max_pages or MAX_LIST_PAGES
     reference_date = today or date.today()

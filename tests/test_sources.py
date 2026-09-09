@@ -57,12 +57,12 @@ class CommuterSearchTests(unittest.TestCase):
         )
 
 class StepStoneSearchTests(unittest.TestCase):
-    def test_search_plan_uses_sixteen_role_families(self):
-        self.assertEqual(len(STEPSTONE_SEARCH_TERMS), 16)
-        self.assertEqual(
-            len(STEPSTONE_SEARCH_TERMS) * len(STEPSTONE_SEARCH_LOCATIONS),
-            32,
-        )
+    def test_search_plan_has_unique_roles_and_local_remote_scopes(self):
+        self.assertEqual(len(STEPSTONE_SEARCH_TERMS), len(set(STEPSTONE_SEARCH_TERMS)))
+        self.assertIn("Remote", STEPSTONE_SEARCH_LOCATIONS)
+        self.assertIn(LOCAL_SEARCH_POSTAL_CODE, STEPSTONE_SEARCH_LOCATIONS)
+        for role in ("Data Analyst", "DevOps Engineer", "Software Test Engineer"):
+            self.assertIn(role, STEPSTONE_SEARCH_TERMS)
 
     def test_local_search_uses_postcode_and_radius(self):
         url = build_search_url("Python Developer", LOCAL_SEARCH_POSTAL_CODE, page=2)

@@ -84,9 +84,7 @@ class RemotelySourceTests(unittest.TestCase):
 
         links = remotely.collect_links(
             client,
-            known_urls={"https://www.remotely.de/job/already-cached"},
             today=date(2026, 3, 20),
-            initial_scan=True,
         )
 
         self.assertEqual(
@@ -111,10 +109,6 @@ class RemotelySourceTests(unittest.TestCase):
 
         links = remotely.collect_links(
             client,
-            known_urls={
-                "https://www.remotely.de/job/known-one",
-                "https://www.remotely.de/job/known-two",
-            },
             today=date(2026, 3, 20),
         )
 
@@ -224,8 +218,21 @@ class RemotelySourceTests(unittest.TestCase):
         self.assertEqual(jobs, [cached])
         fetch_job.assert_not_called()
 
-    def test_detail_cache_is_reused_for_seven_days(self):
-        self.assertEqual(remotely.DETAIL_REFRESH_DAYS, 7)
+    def test_detail_cache_refreshes_at_seven_day_boundary(self):
+        now = datetime(2026, 8, 28, 12, tzinfo=timezone.utc)
+        url = "https://www.remotely.de/job/cached"
+        for age, refresh in [(timedelta(days=7, seconds=-1), False), (timedelta(days=7), True)]:
+            cached = Job(
+                id="remotely:cached", title="Cached", company="Example",
+                locations=["Remote"], sources=[JobSource(source="remotely", url=url)],
+                description_raw="Python", description_clean="Python", fetched_at=now-age,
+            )
+            with self.subTest(age=age), tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "cache.json"
+                save_detail_cache(path, {url: cached})
+                with patch.object(remotely, "collect_links", return_value=[url]), patch.object(remotely, "fetch_job", return_value=cached) as fetch:
+                    self.assertEqual(len(remotely.fetch_jobs(path, client=Mock(), now=now)), 1)
+                self.assertEqual(fetch.called, refresh)
 
     def test_fetch_jobs_removes_closed_listing_from_stale_cache(self):
         now = datetime(2026, 8, 29, 12, tzinfo=timezone.utc)

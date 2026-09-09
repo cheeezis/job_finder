@@ -5,8 +5,10 @@ import json
 import re
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+from job_finder.storage import write_json_atomic
 from job_finder.models import Job
 from job_finder.console import print_progress, progress_checkpoint
 
@@ -123,25 +125,11 @@ def load_detail_cache(path):
 
 
 def save_detail_cache(path, jobs):
-    """Persist one source's detail cache via an atomic replacement."""
-    cache_path = Path(path)
-    cache_path.parent.mkdir(parents=True, exist_ok=True)
-    temporary_path = cache_path.with_suffix(f"{cache_path.suffix}.tmp")
-    temporary_path.write_text(
-        json.dumps(
-            {
-                "version": DETAIL_CACHE_VERSION,
-                "jobs": {
-                    url: detail_cache_job_dict(job)
-                    for url, job in jobs.items()
-                },
-            },
-            indent=2,
-            ensure_ascii=False,
-        ),
-        encoding="utf-8",
-    )
-    temporary_path.replace(cache_path)
+    """Persist reusable source fields via an atomic replacement."""
+    write_json_atomic(path, {
+        "version": DETAIL_CACHE_VERSION,
+        "jobs": {url: detail_cache_job_dict(job) for url, job in jobs.items()},
+    })
 
 
 def fetch_cached_details(
@@ -151,6 +139,7 @@ def fetch_cached_details(
     source_label,
     now=None,
     max_age=DETAIL_REFRESH_AGE,
+    normalize_cached=None,
 ):
     """Load detail pages with the shared weekly cache and stale fallback."""
     cache_file = Path(cache_path)
@@ -167,6 +156,8 @@ def fetch_cached_details(
         cache_key = canonical_detail_url(url)
         cached_job = cache.get(cache_key)
         if detail_is_fresh(cached_job, now, max_age=max_age):
+            if normalize_cached:
+                cache_changed = normalize_cached(cached_job, url) or cache_changed
             cached_job.content_changed = False
             cached_job.cache_stale = False
             jobs.append(cached_job)
@@ -191,6 +182,8 @@ def fetch_cached_details(
         except Exception:
             errors += 1
             if cached_job and detail_within_age(cached_job, now):
+                if normalize_cached:
+                    cache_changed = normalize_cached(cached_job, url) or cache_changed
                 cached_job.content_changed = False
                 cached_job.cache_stale = True
                 jobs.append(cached_job)
@@ -355,3 +348,48 @@ def extract_schema_locations(job_location):
                 cities.append(city)
 
     return cities or ["unbekannt"]
+
+
+def integer(value, default):
+    """Return an integer pagination value with a safe fallback."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def enrich_cached_candidates(
+    jobs, candidate_ids, cache_path, source_name, label, fetch_detail, now=None,
+):
+    """Replace only eligible source summaries whose details need refreshing."""
+    cache = load_detail_cache(cache_path)
+    enriched = unsaved = errors = 0
+    for index, job in enumerate(jobs):
+        if (job.id not in candidate_ids or not job.primary_source
+                or job.primary_source.source != source_name):
+            continue
+        url = canonical_detail_url(job.primary_url)
+        cached_job = cache.get(url)
+        if detail_is_fresh(cached_job, now):
+            continue
+        try:
+            detailed = fetch_detail(job, url)
+            mark_content_change(detailed, cached_job)
+            detailed.first_seen_at = job.first_seen_at
+            detailed.last_seen_at = job.last_seen_at
+            detailed.workflow_status = job.workflow_status
+            detailed.is_new = job.is_new
+            jobs[index] = detailed
+            cache[url] = detailed
+            enriched += 1
+            unsaved += 1
+            if unsaved >= DETAIL_CACHE_SAVE_INTERVAL:
+                save_detail_cache(cache_path, cache)
+                unsaved = 0
+        except Exception:
+            errors += 1
+    if unsaved:
+        save_detail_cache(cache_path, cache)
+    if errors:
+        print(f"WARNUNG {label}: {errors} Kandidat(en) nicht erreichbar")
+    return enriched

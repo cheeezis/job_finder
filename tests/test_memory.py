@@ -1,11 +1,14 @@
 """Tests for lifecycle metadata in the job memory."""
 
 import json
+from contextlib import closing
+import sqlite3
+import threading
 import tempfile
 import unittest
 from pathlib import Path
 
-from job_finder.memory import edit_memory, load_memory, migrate_legacy_memory, save_memory, update_memory
+from job_finder.memory import edit_memory, load_json_memory, load_memory, migrate_legacy_memory, save_memory, update_memory
 from job_finder.models import Job, JobSource, WorkflowStatus
 
 
@@ -348,16 +351,16 @@ class MemoryTests(unittest.TestCase):
         self.assertEqual(job.id, "test:123")
         self.assertEqual(job.workflow_status, WorkflowStatus.NEW)
 
-    def test_memory_file_has_an_explicit_version(self):
+    def test_memory_database_has_an_explicit_version(self):
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "seen_jobs.json"
+            path = Path(directory) / "state.sqlite3"
             save_memory({"test:123": {"workflow_status": "new"}}, path)
-
-            values = json.loads(path.read_text(encoding="utf-8"))
-            restored = load_memory(path)
-
-        self.assertEqual(values["version"], 2)
-        self.assertIn("test:123", restored)
+            with closing(sqlite3.connect(path)) as connection:
+                version = connection.execute(
+                    "SELECT value FROM metadata WHERE key='schema_version'"
+                ).fetchone()[0]
+            self.assertEqual(version, "1")
+            self.assertIn("test:123", load_memory(path))
 
     def test_old_memory_format_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -365,7 +368,7 @@ class MemoryTests(unittest.TestCase):
             path.write_text(json.dumps({"old-url": {}}), encoding="utf-8")
 
             with self.assertRaisesRegex(ValueError, "alte Format"):
-                load_memory(path)
+                load_json_memory(path)
 
     def test_sqlite_state_round_trip_and_transactional_edit(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -383,7 +386,9 @@ class MemoryTests(unittest.TestCase):
             root = Path(directory)
             legacy = root / "seen_jobs.json"
             database = root / "state.sqlite3"
-            save_memory({"test:1": {"workflow_status": "new"}}, legacy)
+            legacy.write_text(json.dumps({
+                "version": 2, "jobs": {"test:1": {"workflow_status": "new"}},
+            }), encoding="utf-8")
 
             migrated = migrate_legacy_memory(database, legacy)
 
@@ -391,6 +396,49 @@ class MemoryTests(unittest.TestCase):
             self.assertTrue(legacy.exists())
             self.assertIn("test:1", load_memory(database))
 
+
+    def test_failed_sqlite_edit_rolls_back_all_changes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.sqlite3"
+            original = {"job:1": {"workflow_status": "interesting"}}
+            save_memory(original, path)
+            with self.assertRaises(RuntimeError):
+                with edit_memory(path) as memory:
+                    memory["job:1"]["workflow_status"] = "applied"
+                    memory["job:2"] = {"workflow_status": "ignored"}
+                    raise RuntimeError("abort")
+            self.assertEqual(load_memory(path), original)
+
+    def test_concurrent_sqlite_edits_preserve_both_decisions(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.sqlite3"
+            save_memory({"job:1": {"workflow_status": "new"}}, path)
+            started = threading.Event()
+            finished = threading.Event()
+            errors = []
+
+            def second_editor():
+                started.set()
+                try:
+                    with edit_memory(path) as memory:
+                        memory["job:2"] = {"workflow_status": "ignored"}
+                except Exception as error:
+                    errors.append(error)
+                finally:
+                    finished.set()
+
+            with edit_memory(path) as memory:
+                memory["job:1"]["workflow_status"] = "applied"
+                worker = threading.Thread(target=second_editor)
+                worker.start()
+                self.assertTrue(started.wait(2))
+                self.assertFalse(finished.wait(0.05))
+            worker.join(timeout=5)
+            self.assertFalse(worker.is_alive())
+            self.assertEqual(errors, [])
+            restored = load_memory(path)
+            self.assertEqual(restored["job:1"]["workflow_status"], "applied")
+            self.assertEqual(restored["job:2"]["workflow_status"], "ignored")
 
 if __name__ == "__main__":
     unittest.main()

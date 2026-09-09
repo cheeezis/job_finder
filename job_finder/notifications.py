@@ -4,10 +4,12 @@ import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
+from job_finder.storage import write_json_atomic
 from job_finder.paths import NOTIFICATION_STATE_FILE
 from job_finder.reporting import (
     format_remote,
@@ -445,15 +447,4 @@ def load_notification_state(path=NOTIFICATION_STATE_FILE):
 
 def save_notification_state(state, path=NOTIFICATION_STATE_FILE):
     """Persist notification state via an atomic replacement."""
-    state_path = Path(path)
-    state_path.parent.mkdir(parents=True, exist_ok=True)
-    temporary_path = state_path.with_suffix(f"{state_path.suffix}.tmp")
-    temporary_path.write_text(
-        json.dumps(
-            {"version": STATE_VERSION, **state},
-            indent=2,
-            ensure_ascii=False,
-        ),
-        encoding="utf-8",
-    )
-    temporary_path.replace(state_path)
+    write_json_atomic(path, {"version": STATE_VERSION, **state})

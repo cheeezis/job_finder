@@ -22,6 +22,16 @@ class WorkflowStatus(str, Enum):
     CLOSED = "closed"
 
 
+APPLICATION_STATUSES = (
+    WorkflowStatus.APPLIED.value,
+    WorkflowStatus.RESPONSE.value,
+    WorkflowStatus.INTERVIEW.value,
+    WorkflowStatus.REJECTED.value,
+    WorkflowStatus.NO_RESPONSE.value,
+    WorkflowStatus.OFFER.value,
+    WorkflowStatus.CLOSED.value,
+)
+
 class FilterStatus(str, Enum):
     """Result of the rule-based job filter."""
 

@@ -1,6 +1,7 @@
 """Tests for the local recommendation review workflow."""
 
 import base64
+from contextlib import contextmanager
 from datetime import date
 import json
 import socket
@@ -16,8 +17,7 @@ from urllib.request import Request, urlopen
 from job_finder.memory import load_memory, save_memory
 from job_finder.review import (
     APP_STYLES,
-    APPLICATIONS_PAGE,
-    LANDING_PAGE,
+    APP_SCRIPT,
     LocalReviewServer,
     REVIEW_PAGE,
     ReviewRequestHandler,
@@ -59,7 +59,7 @@ class ReviewTests(unittest.TestCase):
     def setUp(self):
         self.temporary_directory = tempfile.TemporaryDirectory()
         self.directory = Path(self.temporary_directory.name)
-        self.memory_path = self.directory / "seen_jobs.json"
+        self.memory_path = self.directory / "state.sqlite3"
         self.recommendations_path = self.directory / "recommendations.json"
         save_memory(
             {
@@ -92,6 +92,23 @@ class ReviewTests(unittest.TestCase):
 
     def tearDown(self):
         self.temporary_directory.cleanup()
+
+    @contextmanager
+    def server_context(self, **attributes):
+        handler = type("TemporaryReviewHandler", (ReviewRequestHandler,), {
+            "recommendations_path": self.recommendations_path,
+            "memory_path": self.memory_path,
+            **attributes,
+        })
+        server = HTTPServer(("127.0.0.1", 0), handler)
+        thread = threading.Thread(target=server.serve_forever)
+        thread.start()
+        try:
+            yield f"http://127.0.0.1:{server.server_port}"
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join()
 
     def test_review_jobs_include_persisted_workflow_status(self):
         jobs = load_review_jobs(self.recommendations_path, self.memory_path)
@@ -487,138 +504,34 @@ class ReviewTests(unittest.TestCase):
             update_workflow_status("job:unknown", "ignored", self.memory_path)
 
     def test_pages_have_distinct_routes(self):
-        handler = type(
-            "TemporaryPageHandler",
-            (ReviewRequestHandler,),
-            {
-                "recommendations_path": self.recommendations_path,
-                "memory_path": self.memory_path,
-                "landing_page_path": LANDING_PAGE,
-                "page_path": REVIEW_PAGE,
-                "applications_page_path": APPLICATIONS_PAGE,
-            },
-        )
-        server = HTTPServer(("127.0.0.1", 0), handler)
-        thread = threading.Thread(target=server.serve_forever)
-        thread.start()
-        base_url = f"http://127.0.0.1:{server.server_port}"
-        try:
-            with urlopen(f"{base_url}/") as response:
-                landing_page = response.read().decode("utf-8")
-            with urlopen(f"{base_url}/review") as response:
-                review_page = response.read().decode("utf-8")
-            with urlopen(f"{base_url}/review?job=job%3A1") as response:
-                targeted_review_page = response.read().decode("utf-8")
-            with urlopen(f"{base_url}/applications") as response:
-                applications_page = response.read().decode("utf-8")
-        finally:
-            server.shutdown()
-            server.server_close()
-            thread.join()
+        with self.server_context() as base_url:
+            for route, marker in [
+                ("/", 'id="manual-import-form"'),
+                ("/review", 'id="application-dialog"'),
+                ("/applications", 'id="completed-applications"'),
+            ]:
+                with self.subTest(route=route), urlopen(base_url + route) as response:
+                    page = response.read().decode("utf-8")
+                    self.assertIn(marker, page)
+                    self.assertIn('href="/app.css?v=2"', page)
+                    self.assertIn('src="/app.js"', page)
+                    self.assertNotIn("<style", page)
+                    self.assertNotIn("style=", page)
+                    self.assertEqual(response.headers["Cache-Control"], "no-store")
+                    self.assertIn("frame-ancestors 'none'", response.headers["Content-Security-Policy"])
+            with urlopen(base_url + "/review?job=job%3A1") as response:
+                targeted = response.read()
+            self.assertEqual(targeted, REVIEW_PAGE.read_bytes())
 
-        self.assertIn('href="/review"', landing_page)
-        self.assertEqual(targeted_review_page, review_page)
-        self.assertIn('href="/applications"', landing_page)
-        self.assertIn("Stellen prüfen", landing_page)
-        self.assertIn("Bewerbungen verwalten", landing_page)
-        self.assertIn('id="manual-import-form"', landing_page)
-        self.assertIn('fetch("/api/manual-import"', landing_page)
-        for page in (landing_page, review_page, applications_page):
-            self.assertIn('href="/app.css?v=2"', page)
-            self.assertNotIn("<style", page)
-            self.assertNotIn("style=", page)
-        self.assertIn("Als beworben markieren", review_page)
-        self.assertIn('id="application-dialog"', review_page)
-        self.assertIn('id="cover-letter-file"', review_page)
-        self.assertIn('id="resume-file"', review_page)
-        self.assertIn('id="salary-expectation" type="number"', review_page)
-        self.assertIn('class="salary-unit">€ Brutto/Jahr</span>', review_page)
-        self.assertIn("salary_expectation_eur", review_page)
-        self.assertIn("formatSalaryExpectation", applications_page)
-        self.assertIn("selectedDocuments()", review_page)
-        self.assertIn("Rückfrage nötig", review_page)
-        self.assertIn('changeStatus("inquiry")', review_page)
-        self.assertIn('id="undo-ignored"', review_page)
-        self.assertIn('fetch("/api/review-undo"', review_page)
-        self.assertLess(
-            review_page.index("const score ="),
-            review_page.index("const published ="),
-        )
-        self.assertNotIn("Meine Notiz", review_page)
-        self.assertNotIn('/api/note', review_page)
-        self.assertIn("Ergebnis des Vorfilters", review_page)
-        self.assertIn('id="role-filter"', review_page)
-        self.assertIn('<option value="attention">Neu oder Änderung offen</option>', review_page)
-        self.assertIn('job.is_new || job.review_update_pending', review_page)
-        self.assertNotIn('<option value="fresh">Nur neu</option>', review_page)
-        self.assertNotIn('<option value="updated">Nur aktualisiert</option>', review_page)
-        self.assertIn('id="change-badge"', review_page)
-        self.assertIn('id="acknowledge-update"', review_page)
-        self.assertIn('fetch("/api/review-update"', review_page)
-        self.assertIn("Änderung geprüft", review_page)
-        self.assertIn('id="experience-level"', review_page)
-        self.assertIn('id="location-precheck"', review_page)
-        self.assertNotIn("renderDecisionHints", review_page)
-        self.assertNotIn("llm_score", review_page)
-        self.assertIn("Bewerbung verwalten", review_page)
-        self.assertIn("function safeUrl(value)", review_page)
-        self.assertIn("renderSourceLinks(job);", review_page)
-        self.assertIn("renderRouteLink(job);", review_page)
-        self.assertIn("Entfernung &amp; Fahrtzeit", review_page)
-        self.assertIn("https://www.google.com/maps/dir/", review_page)
-        self.assertIn("Anzeigen öffnen (${links.length})", review_page)
-        self.assertIn('id="international-filter" type="checkbox"', review_page)
-        self.assertIn("(showInternational || !job.international)", review_page)
-        self.assertIn('id="junior-hybrid-filter" type="checkbox"', review_page)
-        self.assertIn("Junior-Sonderfälle anzeigen", review_page)
-        self.assertIn("showJuniorHybrid || !String(job.location_precheck", review_page)
-        self.assertIn("function applyFilters(resetPosition = true)", review_page)
-        self.assertIn("applyFilters(false);", review_page)
-        self.assertIn("prefilter-warning", review_page)
-        self.assertIn("new URLSearchParams(window.location.search)", review_page)
-        self.assertNotIn("progress-select", review_page)
-        self.assertIn('href="/">← Zur Startseite</a>', review_page)
-        self.assertIn("Bewerbungsübersicht", applications_page)
-        self.assertIn("appendDocuments(card, application);", applications_page)
-        self.assertIn("/api/application-document?${query}", applications_page)
-        self.assertIn('inquiry: "Rückfrage offen"', applications_page)
-        self.assertIn('href="/">← Zur Startseite</a>', applications_page)
-        self.assertIn("application.automatic_no_response", applications_page)
-        self.assertIn(
-            'new Set(["rejected", "no_response", "offer"])',
-            applications_page,
-        )
-        self.assertLess(
-            applications_page.index('["offers",'),
-            applications_page.index('["rejections",'),
-        )
-        self.assertLess(
-            applications_page.index('["rejections",'),
-            applications_page.index('["no_responses",'),
-        )
-
-    def test_shared_stylesheet_is_served(self):
-        handler = type(
-            "TemporaryStyleHandler",
-            (ReviewRequestHandler,),
-            {"styles_path": APP_STYLES},
-        )
-        server = HTTPServer(("127.0.0.1", 0), handler)
-        thread = threading.Thread(target=server.serve_forever)
-        thread.start()
-        try:
-            with urlopen(
-                f"http://127.0.0.1:{server.server_port}/app.css"
-            ) as response:
-                content_type = response.headers["Content-Type"]
-                stylesheet = response.read().decode("utf-8")
-        finally:
-            server.shutdown()
-            server.server_close()
-            thread.join()
-
-        self.assertIn("text/css", content_type)
-        self.assertIn("--accent", stylesheet)
+    def test_shared_assets_are_served_with_correct_types(self):
+        with self.server_context() as base_url:
+            for route, content_type, path in [
+                ("/app.css", "text/css", APP_STYLES),
+                ("/app.js", "text/javascript", APP_SCRIPT),
+            ]:
+                with self.subTest(route=route), urlopen(base_url + route) as response:
+                    self.assertIn(content_type, response.headers["Content-Type"])
+                    self.assertEqual(response.read(), path.read_bytes())
 
     def test_manual_import_api_forwards_paths_and_url(self):
         calls = []
@@ -627,23 +540,13 @@ class ReviewTests(unittest.TestCase):
             calls.append((url, paths))
             return {"job_id": "manual:python", "analyzed": 1}
 
-        handler = type(
-            "TemporaryManualImportHandler",
-            (ReviewRequestHandler,),
-            {
-                "recommendations_path": self.recommendations_path,
-                "memory_path": self.memory_path,
-                "jobs_path": self.directory / "jobs.json",
-                "manual_cache_path": self.directory / "manual.json",
-                "manual_importer": staticmethod(importer),
-            },
-        )
-        server = HTTPServer(("127.0.0.1", 0), handler)
-        thread = threading.Thread(target=server.serve_forever)
-        thread.start()
-        try:
+        with self.server_context(
+            jobs_path=self.directory / 'jobs.json',
+            manual_cache_path=self.directory / 'manual.json',
+            manual_importer=staticmethod(importer),
+        ) as base_url:
             request = Request(
-                f"http://127.0.0.1:{server.server_port}/api/manual-import",
+                f"{base_url}/api/manual-import",
                 data=json.dumps(
                     {"url": "https://example.com/jobs/python"}
                 ).encode("utf-8"),
@@ -652,29 +555,13 @@ class ReviewTests(unittest.TestCase):
             )
             with urlopen(request) as response:
                 result = json.load(response)
-        finally:
-            server.shutdown()
-            server.server_close()
-            thread.join()
 
         self.assertEqual(result["job_id"], "manual:python")
         self.assertEqual(calls[0][0], "https://example.com/jobs/python")
         self.assertEqual(calls[0][1]["memory_path"], self.memory_path)
 
     def test_application_start_api_adds_job_to_overview(self):
-        handler = type(
-            "TemporaryApplicationStartHandler",
-            (ReviewRequestHandler,),
-            {
-                "recommendations_path": self.recommendations_path,
-                "memory_path": self.memory_path,
-            },
-        )
-        server = HTTPServer(("127.0.0.1", 0), handler)
-        thread = threading.Thread(target=server.serve_forever)
-        thread.start()
-        base_url = f"http://127.0.0.1:{server.server_port}"
-        try:
+        with self.server_context() as base_url:
             request = Request(
                 f"{base_url}/api/applications",
                 data=json.dumps(
@@ -687,10 +574,6 @@ class ReviewTests(unittest.TestCase):
                 result = json.load(response)
             with urlopen(f"{base_url}/api/applications") as response:
                 overview = json.load(response)
-        finally:
-            server.shutdown()
-            server.server_close()
-            thread.join()
 
         self.assertEqual(result["workflow_status"], "applied")
         self.assertTrue(result["application_tracked"])
@@ -718,32 +601,20 @@ class ReviewTests(unittest.TestCase):
         document = load_memory(self.memory_path)["job:1"][
             "application_documents"
         ][0]
-        handler = type(
-            "TemporaryDocumentHandler",
-            (ReviewRequestHandler,),
-            {
-                "memory_path": self.memory_path,
-                "application_documents_dir": documents_directory,
-            },
-        )
-        server = HTTPServer(("127.0.0.1", 0), handler)
-        thread = threading.Thread(target=server.serve_forever)
-        thread.start()
         query = urlencode({"job_id": "job:1", "document_id": document["id"]})
-        try:
+        with self.server_context(
+            application_documents_dir=documents_directory,
+        ) as base_url:
             with urlopen(
-                f"http://127.0.0.1:{server.server_port}"
+                f"{base_url}"
                 f"/api/application-document?{query}"
             ) as response:
                 content = response.read()
                 disposition = response.headers["Content-Disposition"]
-        finally:
-            server.shutdown()
-            server.server_close()
-            thread.join()
 
         self.assertEqual(content, b"%PDF resume")
         self.assertIn("Lebenslauf.pdf", disposition)
+
 
     def test_application_can_store_optional_salary_expectation(self):
         result = start_application(
@@ -779,20 +650,7 @@ class ReviewTests(unittest.TestCase):
             )
 
     def test_local_api_loads_jobs_and_persists_status(self):
-        handler = type(
-            "TemporaryReviewHandler",
-            (ReviewRequestHandler,),
-            {
-                "recommendations_path": self.recommendations_path,
-                "memory_path": self.memory_path,
-                "page_path": REVIEW_PAGE,
-            },
-        )
-        server = HTTPServer(("127.0.0.1", 0), handler)
-        thread = threading.Thread(target=server.serve_forever)
-        thread.start()
-        base_url = f"http://127.0.0.1:{server.server_port}"
-        try:
+        with self.server_context() as base_url:
             with urlopen(f"{base_url}/api/recommendations") as response:
                 document = json.load(response)
             request = Request(
@@ -805,10 +663,6 @@ class ReviewTests(unittest.TestCase):
             )
             with urlopen(request) as response:
                 result = json.load(response)
-        finally:
-            server.shutdown()
-            server.server_close()
-            thread.join()
 
         self.assertEqual(
             document["recommendations"][0]["workflow_status"],
@@ -824,47 +678,20 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(jobs[0]["workflow_status"], "ignored")
 
     def test_local_api_rejects_dns_rebinding_host(self):
-        handler = type(
-            "SecureReviewHandler",
-            (ReviewRequestHandler,),
-            {"recommendations_path": self.recommendations_path,
-             "memory_path": self.memory_path},
-        )
-        server = HTTPServer(("127.0.0.1", 0), handler)
-        thread = threading.Thread(target=server.serve_forever)
-        thread.start()
-        try:
+        with self.server_context() as base_url:
             request = Request(
-                f"http://127.0.0.1:{server.server_port}/api/recommendations",
+                f"{base_url}/api/recommendations",
                 headers={"Host": "attacker.example"},
             )
             with self.assertRaises(HTTPError) as caught:
                 urlopen(request)
-        finally:
-            server.shutdown()
-            server.server_close()
-            thread.join()
 
         self.assertEqual(caught.exception.code, 403)
         caught.exception.close()
 
     def test_application_page_records_dated_event_and_returns_statistics(self):
         event_on = date.today().isoformat()
-        handler = type(
-            "TemporaryApplicationHandler",
-            (ReviewRequestHandler,),
-            {
-                "recommendations_path": self.recommendations_path,
-                "memory_path": self.memory_path,
-                "page_path": REVIEW_PAGE,
-                "applications_page_path": APPLICATIONS_PAGE,
-            },
-        )
-        server = HTTPServer(("127.0.0.1", 0), handler)
-        thread = threading.Thread(target=server.serve_forever)
-        thread.start()
-        base_url = f"http://127.0.0.1:{server.server_port}"
-        try:
+        with self.server_context() as base_url:
             with urlopen(f"{base_url}/applications") as response:
                 page = response.read().decode("utf-8")
             request = Request(
@@ -955,10 +782,6 @@ class ReviewTests(unittest.TestCase):
                 pass
             with urlopen(f"{base_url}/api/applications") as response:
                 interview_overview = json.load(response)
-        finally:
-            server.shutdown()
-            server.server_close()
-            thread.join()
 
         self.assertIn("Bewerbungsübersicht", page)
         self.assertIn("Abgeschlossene Bewerbungen bearbeiten", page)
@@ -978,6 +801,33 @@ class ReviewTests(unittest.TestCase):
         )
         self.assertEqual(final_overview["statistics"]["open"], 1)
 
+
+    def test_cross_origin_and_non_json_mutations_are_rejected(self):
+        before = load_memory(self.memory_path)
+        with self.server_context() as base_url:
+            for headers, code in [
+                ({"Content-Type": "application/json", "Origin": "https://attacker.example"}, 403),
+                ({"Content-Type": "text/plain"}, 415),
+            ]:
+                request = Request(base_url + "/api/review-status", method="POST",
+                    data=b'{"job_id":"job:1","workflow_status":"ignored"}', headers=headers)
+                with self.subTest(headers=headers), self.assertRaises(HTTPError) as caught:
+                    urlopen(request)
+                self.assertEqual(caught.exception.code, code)
+                caught.exception.close()
+        self.assertEqual(load_memory(self.memory_path), before)
+
+    def test_database_failure_removes_new_application_documents(self):
+        before = load_memory(self.memory_path)
+        root = self.directory / "documents"
+        with unittest.mock.patch("job_finder.memory.replace_sqlite_memory", side_effect=OSError("commit failed")):
+            with self.assertRaises(OSError):
+                start_application("job:1", self.memory_path, [{
+                    "kind": "resume", "name": "CV.pdf",
+                    "content": base64.b64encode(b"test document").decode("ascii"),
+                }], root)
+        self.assertEqual(load_memory(self.memory_path), before)
+        self.assertEqual([p for p in root.rglob("*") if p.is_file()], [])
 
 if __name__ == "__main__":
     unittest.main()

@@ -8,35 +8,24 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from job_finder.deduplication import normalize_company, normalize_title
-from job_finder.models import WorkflowStatus
+from job_finder.models import APPLICATION_STATUSES, WorkflowStatus
 from job_finder.paths import LEGACY_MEMORY_FILE, MEMORY_FILE
 
 MEMORY_VERSION = 2
 DATABASE_SCHEMA_VERSION = 1
 INACTIVE_AFTER_MISSED_RUNS = 3
-APPLICATION_STATUSES = {
-    WorkflowStatus.APPLIED.value,
-    WorkflowStatus.RESPONSE.value,
-    WorkflowStatus.INTERVIEW.value,
-    WorkflowStatus.REJECTED.value,
-    WorkflowStatus.NO_RESPONSE.value,
-    WorkflowStatus.OFFER.value,
-    WorkflowStatus.CLOSED.value,
-}
 
 
 def load_memory(path=MEMORY_FILE):
-    """Load job state from SQLite or an explicitly requested legacy JSON file."""
+    """Load SQLite state, importing an existing legacy JSON file once."""
     memory_path = Path(path)
-    if is_sqlite_path(memory_path):
-        migrate_legacy_memory(memory_path)
-        with database_connection(memory_path) as connection:
-            return load_sqlite_memory(connection)
-    return load_json_memory(memory_path)
+    migrate_legacy_memory(memory_path)
+    with database_connection(memory_path) as connection:
+        return load_sqlite_memory(connection)
 
 
 def load_json_memory(memory_path):
-    """Load the versioned JSON format retained for migration and isolated tests."""
+    """Read the legacy JSON format solely for one-time migration."""
     if not memory_path.exists():
         return {}
     values = json.loads(memory_path.read_text(encoding="utf-8"))
@@ -49,45 +38,15 @@ def load_json_memory(memory_path):
 
 
 def save_memory(memory, path=MEMORY_FILE):
-    """Persist job state transactionally in SQLite or atomically in legacy JSON."""
-    memory_path = Path(path)
-    if is_sqlite_path(memory_path):
-        with database_connection(memory_path) as connection:
-            replace_sqlite_memory(connection, memory)
-        return
-    save_json_memory(memory, memory_path)
-
-
-def save_json_memory(memory, memory_path):
-    """Atomically replace a versioned JSON state file."""
-    memory_path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = memory_path.with_suffix(f"{memory_path.suffix}.tmp")
-    temporary.write_text(
-        json.dumps(
-            {"version": MEMORY_VERSION, "jobs": memory},
-            indent=2,
-            ensure_ascii=False,
-        ),
-        encoding="utf-8",
-    )
-    temporary.replace(memory_path)
+    """Replace SQLite state in one transaction."""
+    with database_connection(path) as connection:
+        replace_sqlite_memory(connection, memory)
 
 
 @contextmanager
 def edit_memory(path=MEMORY_FILE):
-    """Lock, expose, and commit one complete state mutation.
-
-    SQLite uses ``BEGIN IMMEDIATE`` so the read-modify-write sequence cannot
-    overwrite a concurrent review or collection update. Explicit JSON paths
-    remain available for backwards-compatible tests and manual recovery.
-    """
+    """Lock the entire read-modify-write sequence against concurrent updates."""
     memory_path = Path(path)
-    if not is_sqlite_path(memory_path):
-        memory = load_json_memory(memory_path)
-        yield memory
-        save_json_memory(memory, memory_path)
-        return
-
     migrate_legacy_memory(memory_path)
     with database_connection(memory_path) as connection:
         connection.execute("BEGIN IMMEDIATE")
@@ -99,11 +58,6 @@ def edit_memory(path=MEMORY_FILE):
             raise
         replace_sqlite_memory(connection, memory, commit=False)
         connection.commit()
-
-
-def is_sqlite_path(path):
-    """Identify database paths without probing or exposing their contents."""
-    return Path(path).suffix.casefold() in {".sqlite", ".sqlite3", ".db"}
 
 
 @contextmanager
@@ -158,6 +112,9 @@ def load_sqlite_memory(connection):
             raise ValueError(f"Ungültiger Zustand für Job {job_id}")
         memory[job_id] = entry
     return memory
+
+
+
 
 
 def replace_sqlite_memory(connection, memory, *, commit=True):
@@ -435,3 +392,20 @@ def inferred_sources(job_id):
     """Recover the source of older memory entries from their stable ID."""
     source, separator, _identifier = job_id.partition(":")
     return [source] if separator and source else []
+
+
+def memory_source_links(entry, *, validate_names=False):
+    """Pair persisted URLs with available labels, retaining older sparse data."""
+    names = entry.get("source_names", [])
+    if not isinstance(names, list):
+        names = []
+    urls = entry.get("source_urls", [])
+    if validate_names and not isinstance(urls, list):
+        urls = []
+    return [
+        {"source": names[index] if index < len(names) and (
+            not validate_names or isinstance(names[index], str)
+        ) else "listing", "url": url}
+        for index, url in enumerate(urls)
+        if isinstance(url, str) and url
+    ]

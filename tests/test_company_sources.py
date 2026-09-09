@@ -1,9 +1,12 @@
 """Tests for direct company career-page source adapters."""
 
 import unittest
+import tempfile
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from unittest.mock import patch
 
-from job_finder.models import WorkMode
+from job_finder.models import Job, JobSource, WorkMode
 from job_finder.sources import (
     bytewerk,
     compose_it,
@@ -11,7 +14,8 @@ from job_finder.sources import (
     jumo,
     rhoenenergie,
 )
-from job_finder.sources.common import canonical_detail_url
+from job_finder.sources.common import canonical_detail_url, save_detail_cache, load_detail_cache
+from job_finder.sources.company_careers import fetch_company_jobs
 
 
 class ComposeItSourceTests(unittest.TestCase):
@@ -98,6 +102,30 @@ class RhoenenergieSourceTests(unittest.TestCase):
         )
 
 class CompanyCareerTests(unittest.TestCase):
+    def test_cached_company_jobs_keep_unique_url_identity_and_age_limits(self):
+        now = datetime(2026, 9, 9, tzinfo=timezone.utc)
+        url = "https://example.test/job/developer-12345"
+        for age, expected_count in [(1, 1), (8, 1), (15, 0)]:
+            with self.subTest(age=age), tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "cache.json"
+                job = Job(
+                    id="example:generic", title="Developer", company="Example",
+                    locations=["Fulda"], description_raw="IT", description_clean="IT",
+                    sources=[JobSource(source="example", source_id="generic", url=url)],
+                    fetched_at=now - timedelta(days=age),
+                )
+                save_detail_cache(path, {url: job})
+                with patch("job_finder.sources.company_careers.fetch_text",
+                           side_effect=OSError("offline")) as fetch:
+                    jobs = fetch_company_jobs("example", "Example", [url], path, now=now)
+                self.assertEqual(len(jobs), expected_count)
+                self.assertEqual(fetch.called, age >= 7)
+                if jobs:
+                    self.assertEqual(jobs[0].id, "example:12345")
+                    self.assertEqual(jobs[0].sources[0].source_id, "12345")
+                    self.assertEqual(jobs[0].cache_stale, age >= 7)
+                    self.assertEqual(load_detail_cache(path)[url].id, "example:12345")
+
     def test_jumo_job_ids_are_unique(self):
         html = """
             onclick="showJobOfferDetail.do?jobOfferId=abc12345&amp;j=jobexchange"

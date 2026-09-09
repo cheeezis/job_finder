@@ -29,7 +29,7 @@ from job_finder.sources.company_careers import (
     job_from_json_ld,
 )
 from job_finder.structured_data import extract_json_ld_job_posting
-from job_finder.text import html_to_text, normalize_text
+from job_finder.text import normalize_text
 
 
 SOURCE_NAME = "manual"

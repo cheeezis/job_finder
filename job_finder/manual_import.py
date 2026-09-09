@@ -39,8 +39,6 @@ def import_manual_url(
         "content_changed": target.content_changed,
         **score,
     }
-    if warning:
-        row["prefilter_warning"] = warning
     save_recommendation(row, recommendations_path)
     return {
         "job_id": row["id"],

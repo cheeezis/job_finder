@@ -8,7 +8,7 @@ from urllib.parse import urlsplit
 
 from job_finder.applications import record_status_change
 from job_finder.http import fetch_text_with_final_url
-from job_finder.memory import edit_memory, has_application_state, load_memory
+from job_finder.memory import edit_memory, has_application_state, inferred_sources, load_memory
 from job_finder.models import WorkflowStatus
 from job_finder.sources.arbeitnow import application_page_is_missing
 from job_finder.sources.manual import VisibleJobParser, validate_public_url
@@ -101,8 +101,9 @@ def listing_is_closed(url):
     return any(CLOSED_MESSAGE.fullmatch(" ".join(text.split())) for text in parser.lines)
 
 
-def ignore_closed_listings(jobs, memory_path):
+def ignore_closed_listings(jobs, memory_path, *, successful_sources):
     """Check outside the write lock; ignore only unchanged, proven-closed jobs."""
+    successful = set(successful_sources)
     present_ids = {job.id for job in jobs if not job.cache_stale}
     snapshot = load_memory(memory_path)
     confirmed = {}
@@ -111,7 +112,11 @@ def ignore_closed_listings(jobs, memory_path):
         status = entry.get("workflow_status")
         if status not in {"new", "interesting"} or has_application_state(entry):
             continue
-        if status == "new" and job_id in present_ids:
+        if job_id in present_ids:
+            continue
+        # Absence is meaningful only when every known source completed its run.
+        known_sources = set(entry.get("source_names") or inferred_sources(job_id))
+        if not known_sources or not known_sources.issubset(successful):
             continue
         urls = entry.get("source_urls", [])
         if not isinstance(urls, list):

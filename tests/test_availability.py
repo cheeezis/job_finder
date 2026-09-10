@@ -2,6 +2,7 @@
 
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from urllib.error import HTTPError
@@ -108,7 +109,9 @@ class AvailabilityTests(unittest.TestCase):
             save_memory(original, path)
             with patch("job_finder.availability.listing_is_closed", side_effect=[True, False]):
                 self.assertEqual(ignore_closed_listings([], path, successful_sources={"job"}), set())
-            self.assertEqual(load_memory(path), original)
+            updated = load_memory(path)
+            self.assertTrue(updated["job:1"].pop("availability_checks"))
+            self.assertEqual(updated, original)
 
     def test_application_history_and_concurrent_decisions_are_preserved(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -196,3 +199,66 @@ class AvailabilityTests(unittest.TestCase):
             ignore_closed_listings([], path, successful_sources=set(),
                                    progress=lambda done, total: updates.append((done, total)))
             self.assertEqual(updates, [(0, 0)])
+
+
+    def test_budget_rotates_backlog_and_does_not_repeat_fresh_urls(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.sqlite3"
+            save_memory({f"feed:{i}": {"workflow_status": "new",
+                "source_urls": [f"https://example.test/{i}"]} for i in range(4)}, path)
+            with patch("job_finder.availability.listing_is_closed", return_value=False) as check:
+                for _ in range(3):
+                    ignore_closed_listings([], path, successful_sources={"feed"}, max_urls=2)
+                self.assertEqual(check.call_count, 4)
+                self.assertEqual(len({call.args[0] for call in check.call_args_list}), 4)
+            self.assertTrue(all(entry["workflow_status"] == "new" for entry in load_memory(path).values()))
+
+    def test_deadline_stops_new_requests_and_prioritizes_interesting(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.sqlite3"
+            save_memory({
+                "feed:1": {"workflow_status": "new", "source_urls": ["https://example.test/a"]},
+                "feed:2": {"workflow_status": "interesting", "source_urls": ["https://example.test/z"]},
+            }, path)
+            with patch("job_finder.availability.time.monotonic", side_effect=[0, 0, 121]), patch(
+                "job_finder.availability.listing_is_closed", return_value=False,
+            ) as check:
+                ignore_closed_listings([], path, successful_sources={"feed"})
+                check.assert_called_once_with("https://example.test/z")
+            self.assertNotIn("availability_checks", load_memory(path)["feed:1"])
+
+    def test_partial_multi_url_check_never_marks_job_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.sqlite3"
+            save_memory({"feed:1": {"workflow_status": "interesting",
+                "source_urls": ["https://example.test/a", "https://example.test/b"]}}, path)
+            with patch("job_finder.availability.listing_is_closed", return_value=True) as check:
+                self.assertEqual(ignore_closed_listings([], path, successful_sources={"feed"}, max_urls=1), set())
+                self.assertEqual(load_memory(path)["feed:1"]["workflow_status"], "interesting")
+                self.assertEqual(ignore_closed_listings([], path, successful_sources={"feed"}, max_urls=1), {"feed:1"})
+                self.assertEqual(check.call_count, 2)
+
+
+    def test_inconclusive_result_is_retried_after_24_hours(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.sqlite3"
+            start = datetime(2026, 9, 10, tzinfo=timezone.utc)
+            save_memory({"feed:1": {"workflow_status": "interesting",
+                "source_urls": ["https://example.test/a"]}}, path)
+            with patch("job_finder.availability.listing_is_closed", side_effect=[False, True]) as check:
+                self.assertEqual(ignore_closed_listings([], path, successful_sources={"feed"}, now=start), set())
+                self.assertEqual(ignore_closed_listings([], path, successful_sources={"feed"}, now=start+timedelta(hours=23)), set())
+                self.assertEqual(check.call_count, 1)
+                self.assertEqual(ignore_closed_listings([], path, successful_sources={"feed"}, now=start+timedelta(hours=24)), {"feed:1"})
+                self.assertEqual(check.call_count, 2)
+
+    def test_zero_budget_preserves_entire_state(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.sqlite3"
+            original = {"feed:1": {"workflow_status": "interesting",
+                "source_urls": ["https://example.test/a"]}}
+            save_memory(original, path)
+            with patch("job_finder.availability.listing_is_closed") as check:
+                self.assertEqual(ignore_closed_listings([], path, successful_sources={"feed"}, budget_seconds=0), set())
+                check.assert_not_called()
+            self.assertEqual(load_memory(path), original)

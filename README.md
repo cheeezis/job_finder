@@ -134,9 +134,10 @@ Junior-Hybrid-Sonderfälle sind eigene, standardmäßig deaktivierte Filter.
    Auftauchen unter „Neu“ aus.
 6. Bewerbungen werden getrennt vom Stellen-Review dauerhaft nachverfolgt.
 
-Interessante Stellen bleiben auch bei fehlenden Suchtreffern vorgemerkt. Jeder
-Finder-Lauf prüft ihre gespeicherten Anzeigen-URLs direkt, ebenso die URLs neuer
-Stellen, die inzwischen fehlen oder nur aus veraltetem Cache stammen. Nur wenn
+Interessante Stellen bleiben auch bei fehlenden Suchtreffern vorgemerkt. Ein
+Finder-Lauf prüft die URLs fehlender neuer oder interessanter Stellen nur, wenn
+alle bekannten Quellen vollständig erfolgreich abgeschlossen wurden. Aktuelle
+Treffer werden übersprungen; veraltete Cache-Treffer gelten als fehlend. Nur wenn
 alle bekannten URLs eindeutig geschlossen sind (HTTP 404/410 oder expliziter
 Schließungshinweis), wechselt die Stelle automatisch auf „Nicht interessant“.
 Fehlende Suchtreffer, Login-Weiterleitungen und Abruffehler reichen dafür nicht.
@@ -189,11 +190,20 @@ markierter Fallback erscheinen; ältere Einträge werden nicht mehr übernommen.
 Ein teilweise fehlgeschlagenes Suchsegment darf keine alten Stellen dieser
 Quelle automatisch inaktiv setzen.
 
-Die Laufzeit wird fast vollständig von den externen Quellen bestimmt. Läufe mit
-frischen Detail-Caches sind deutlich schneller; wenn viele sieben Tage alte
-Einträge gleichzeitig aktualisiert werden, können gelegentlich längere
-Netzwerkphasen entstehen. SQLite ist dabei nur der kurze lokale
-Persistenzschritt.
+Konsole und Laufprotokoll melden Start und Dauer der einzelnen Quellen, ihrer
+Detailanreicherung und der Pipeline-Schritte einschließlich Offline-Prüfung.
+Auch abgebrochene Schritte melden ihre bis dahin verstrichene Zeit. Die
+Offline-Prüfung zeigt erledigte und insgesamt geplante eindeutige URLs, ohne
+URLs oder Stelleninhalte auszugeben. Verschachtelte Zeiten überlappen und dürfen
+nicht zur Gesamtlaufzeit addiert werden.
+
+Die Review-Diagnose trennt erstmals gespeicherte und bekannte Treffer, passende
+und ausgeschlossene neue Treffer sowie den Status Neu vom Standardfilter Neu.
+Letzterer blendet internationale und Junior-Hybrid-Sonderfälle aus und verlangt
+zusätzlich einen Erstfund im aktuellen Lauf. Nach einem Abbruch nach dem
+Speichern des Gedächtnisses können Treffer beim Neustart bereits bekannt sein;
+unbearbeitete Treffer bleiben dann über Alle Status erreichbar. Die Diagnose
+ändert weder diesen Filter noch Prüfintervalle oder Netzwerkparallelität.
 
 ## Tests
 

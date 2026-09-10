@@ -177,3 +177,22 @@ class AvailabilityTests(unittest.TestCase):
                 ), set())
                 check.assert_not_called()
             self.assertEqual(load_memory(path), original)
+
+
+    def test_progress_counts_unique_urls_and_handles_empty_candidates(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.sqlite3"
+            save_memory({f"feed:{i}": {
+                "workflow_status": "interesting", "source_names": ["feed"],
+                "source_urls": ["https://example.test/shared"],
+            } for i in range(2)}, path)
+            updates = []
+            with patch("job_finder.availability.listing_is_closed", return_value=False) as check:
+                ignore_closed_listings([], path, successful_sources={"feed"},
+                                       progress=lambda done, total: updates.append((done, total)))
+                check.assert_called_once()
+            self.assertEqual(updates, [(0, 1), (1, 1)])
+            updates.clear()
+            ignore_closed_listings([], path, successful_sources=set(),
+                                   progress=lambda done, total: updates.append((done, total)))
+            self.assertEqual(updates, [(0, 0)])

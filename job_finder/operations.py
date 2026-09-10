@@ -1,13 +1,15 @@
 """Small operational helpers for unattended local runs."""
 
 import sys
+import time
 import traceback as traceback_module
 import zipfile
-from contextlib import AbstractContextManager
+from contextlib import AbstractContextManager, contextmanager
 from datetime import datetime
 from pathlib import Path
 
 from job_finder.paths import BACKUP_DIR, LOG_DIR
+from job_finder.console import format_clock
 
 
 BACKUP_FILES_TO_KEEP = 7
@@ -117,3 +119,17 @@ def create_backup(files, backup_dir=BACKUP_DIR, keep=BACKUP_FILES_TO_KEEP, now=N
     for old_backup in backups[max(keep, 1):]:
         old_backup.unlink()
     return archive
+
+
+@contextmanager
+def timed_step(label):
+    """Log elapsed wall time even when a step fails or is interrupted."""
+    started = time.monotonic()
+    print(f"Start: {label}", flush=True)
+    completed = False
+    try:
+        yield
+        completed = True
+    finally:
+        outcome = "fertig" if completed else "abgebrochen/fehlgeschlagen"
+        print(f"Dauer: {label}: {format_clock(time.monotonic() - started)} ({outcome})", flush=True)

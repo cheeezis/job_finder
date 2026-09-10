@@ -101,12 +101,13 @@ def listing_is_closed(url):
     return any(CLOSED_MESSAGE.fullmatch(" ".join(text.split())) for text in parser.lines)
 
 
-def ignore_closed_listings(jobs, memory_path, *, successful_sources):
+def ignore_closed_listings(jobs, memory_path, *, successful_sources, progress=None):
     """Check outside the write lock; ignore only unchanged, proven-closed jobs."""
     successful = set(successful_sources)
     present_ids = {job.id for job in jobs if not job.cache_stale}
     snapshot = load_memory(memory_path)
     confirmed = {}
+    candidates = {}
     checked_urls = {}
     for job_id, entry in snapshot.items():
         status = entry.get("workflow_status")
@@ -124,9 +125,16 @@ def ignore_closed_listings(jobs, memory_path, *, successful_sources):
         urls = tuple(dict.fromkeys(url for url in urls if isinstance(url, str) and url))
         if not urls:
             continue
-        for url in urls:
-            if url not in checked_urls:
-                checked_urls[url] = listing_is_closed(url)
+        candidates[job_id] = (entry, urls)
+        checked_urls.update((url, None) for url in urls)
+    total = len(checked_urls)
+    if progress is not None:
+        progress(0, total)
+    for current, url in enumerate(checked_urls, 1):
+        checked_urls[url] = listing_is_closed(url)
+        if progress is not None:
+            progress(current, total)
+    for job_id, (entry, urls) in candidates.items():
         if all(checked_urls[url] for url in urls):
             confirmed[job_id] = entry
     if not confirmed:

@@ -137,7 +137,7 @@ Junior-Hybrid-Sonderfälle sind eigene, standardmäßig deaktivierte Filter.
 6. Bewerbungen werden getrennt vom Stellen-Review dauerhaft nachverfolgt.
 
 Interessante Stellen bleiben auch bei fehlenden Suchtreffern vorgemerkt. Ein
-Finder-Lauf prüft die URLs fehlender neuer oder interessanter Stellen nur, wenn
+Finder-Lauf prüft ausschließlich die URLs fehlender interessanter Stellen, wenn
 alle bekannten Quellen vollständig erfolgreich abgeschlossen wurden. Aktuelle
 Treffer werden übersprungen; veraltete Cache-Treffer gelten als fehlend. Nur wenn
 alle bekannten URLs eindeutig geschlossen sind (HTTP 404/410 oder expliziter
@@ -208,7 +208,8 @@ Ein Abbruch nach dem Speichern des Gedächtnisses und anschließender Neustart
 entfernt unbearbeitete Stellen deshalb nicht mehr aus dem Filter Neu. Die
 Offline-Prüfung bearbeitet höchstens 200 URLs pro Lauf und startet nach zwei
 Minuten keine weitere Anfrage; eine laufende Anfrage darf noch fertig werden.
-Interessante Stellen haben Vorrang. Prüfergebnisse einschließlich unklarer
+Unbearbeitete Stellen mit Status Neu werden nicht zusätzlich geprüft.
+Prüfergebnisse einschließlich unklarer
 Antworten werden 24 Stunden berücksichtigt, bevor die URL erneut geprüft wird.
 Offene Prüfungen werden auf spätere Läufe verteilt; sie ändern den Status nicht.
 Bei mehreren Anzeigen-URLs müssen alle innerhalb der letzten 24 Stunden eindeutig

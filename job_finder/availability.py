@@ -129,7 +129,7 @@ def ignore_closed_listings(
     due = {}
     for job_id, entry in snapshot.items():
         status = entry.get("workflow_status")
-        if status not in {"new", "interesting"} or has_application_state(entry):
+        if status != "interesting" or has_application_state(entry):
             continue
         if job_id in present_ids:
             continue
@@ -150,9 +150,9 @@ def ignore_closed_listings(
             check = checks.get(url, {})
             if recent_check(check, now):
                 continue
-            # Shortlisted jobs first, then never-checked/oldest URLs. URL breaks ties.
+            # Never-checked/oldest URLs first; URL breaks ties.
             timestamp = str(check.get("checked_at", "")) if isinstance(check, dict) else ""
-            priority = (status != "interesting", timestamp, url)
+            priority = (timestamp, url)
             due[url] = min(due.get(url, priority), priority)
     selected = sorted(due, key=due.get)[:max(0, max_urls)]
     print(f"Offline-Prüfung: {len(due)} URLs fällig · höchstens {len(selected)} in diesem Lauf", flush=True)

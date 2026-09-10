@@ -206,7 +206,13 @@ internationale und Junior-Hybrid-Sonderfälle sind standardmäßig ausgeblendet.
 Das Erstfund-Merkmal bleibt für Laufstatistik und Benachrichtigungen bestehen.
 Ein Abbruch nach dem Speichern des Gedächtnisses und anschließender Neustart
 entfernt unbearbeitete Stellen deshalb nicht mehr aus dem Filter Neu. Die
-Diagnose ändert weder Prüfintervalle noch Netzwerkparallelität.
+Offline-Prüfung bearbeitet höchstens 200 URLs pro Lauf und startet nach zwei
+Minuten keine weitere Anfrage; eine laufende Anfrage darf noch fertig werden.
+Interessante Stellen haben Vorrang. Prüfergebnisse einschließlich unklarer
+Antworten werden 24 Stunden berücksichtigt, bevor die URL erneut geprüft wird.
+Offene Prüfungen werden auf spätere Läufe verteilt; sie ändern den Status nicht.
+Bei mehreren Anzeigen-URLs müssen alle innerhalb der letzten 24 Stunden eindeutig
+als geschlossen bestätigt worden sein. Die Anfragen bleiben sequenziell.
 
 ## Tests
 

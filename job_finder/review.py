@@ -643,6 +643,7 @@ def first_query_value(query, name):
 def parse_args():
     """Parse local server options."""
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--no-browser", action="store_true")
     return parser.parse_args()
@@ -659,7 +660,7 @@ def address_is_in_use(error):
 def main():
     """Start the review server on the local computer only."""
     args = parse_args()
-    address = ("127.0.0.1", args.port)
+    address = (args.host, args.port)
     url = f"http://{address[0]}:{address[1]}"
     try:
         server = LocalReviewServer(address, ReviewRequestHandler)

@@ -1,14 +1,15 @@
 """Confirm closed shortlisted listings without treating search gaps as closure."""
 
 import re
-from datetime import datetime, timezone
+import time
+from datetime import datetime, timedelta, timezone
 from html.parser import HTMLParser
 from urllib.error import HTTPError
 from urllib.parse import urlsplit
 
 from job_finder.applications import record_status_change
 from job_finder.http import fetch_text_with_final_url
-from job_finder.memory import edit_memory, has_application_state, load_memory
+from job_finder.memory import edit_memory, has_application_state, inferred_sources, load_memory
 from job_finder.models import WorkflowStatus
 from job_finder.sources.arbeitnow import application_page_is_missing
 from job_finder.sources.manual import VisibleJobParser, validate_public_url
@@ -101,17 +102,39 @@ def listing_is_closed(url):
     return any(CLOSED_MESSAGE.fullmatch(" ".join(text.split())) for text in parser.lines)
 
 
-def ignore_closed_listings(jobs, memory_path):
-    """Check outside the write lock; ignore only unchanged, proven-closed jobs."""
+MAX_CHECK_URLS = 200
+CHECK_BUDGET_SECONDS = 120
+CHECK_INTERVAL = timedelta(hours=24)
+
+
+def recent_check(check, now):
+    """Treat malformed or future timestamps as due rather than trusting them."""
+    try:
+        age = now - datetime.fromisoformat(check["checked_at"])
+        return timedelta(0) <= age < CHECK_INTERVAL
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
+def ignore_closed_listings(
+    jobs, memory_path, *, successful_sources, progress=None,
+    max_urls=MAX_CHECK_URLS, budget_seconds=CHECK_BUDGET_SECONDS, now=None,
+):
+    """Bound requests, retain inconclusive listings, and resume old checks later."""
+    now = now or datetime.now(timezone.utc)
+    successful = set(successful_sources)
     present_ids = {job.id for job in jobs if not job.cache_stale}
     snapshot = load_memory(memory_path)
-    confirmed = {}
-    checked_urls = {}
+    candidates = {}
+    due = {}
     for job_id, entry in snapshot.items():
         status = entry.get("workflow_status")
-        if status not in {"new", "interesting"} or has_application_state(entry):
+        if status != "interesting" or has_application_state(entry):
             continue
-        if status == "new" and job_id in present_ids:
+        if job_id in present_ids:
+            continue
+        known_sources = set(entry.get("source_names") or inferred_sources(job_id))
+        if not known_sources or not known_sources.issubset(successful):
             continue
         urls = entry.get("source_urls", [])
         if not isinstance(urls, list):
@@ -119,23 +142,58 @@ def ignore_closed_listings(jobs, memory_path):
         urls = tuple(dict.fromkeys(url for url in urls if isinstance(url, str) and url))
         if not urls:
             continue
+        checks = entry.get("availability_checks", {})
+        if not isinstance(checks, dict):
+            checks = {}
+        candidates[job_id] = (entry, urls, checks)
         for url in urls:
-            if url not in checked_urls:
-                checked_urls[url] = listing_is_closed(url)
-        if all(checked_urls[url] for url in urls):
-            confirmed[job_id] = entry
-    if not confirmed:
+            check = checks.get(url, {})
+            if recent_check(check, now):
+                continue
+            # Never-checked/oldest URLs first; URL breaks ties.
+            timestamp = str(check.get("checked_at", "")) if isinstance(check, dict) else ""
+            priority = (timestamp, url)
+            due[url] = min(due.get(url, priority), priority)
+    selected = sorted(due, key=due.get)[:max(0, max_urls)]
+    all_urls = {url for _, urls, _ in candidates.values() for url in urls}
+    print(f"  Offline: {len(due)} URLs fällig · {len(all_urls) - len(due)} im Prüfintervall · "
+          f"höchstens {len(selected)} in diesem Lauf", flush=True)
+    if progress is not None:
+        progress(0, len(selected))
+    checked_urls = {}
+    started = time.monotonic()
+    for url in selected:
+        # No new request after the budget; an already running request may finish.
+        if time.monotonic() - started >= budget_seconds:
+            break
+        checked_urls[url] = {
+            "checked_at": now.isoformat(), "closed": listing_is_closed(url),
+        }
+        if progress is not None:
+            progress(len(checked_urls), len(selected))
+    closed = sum(check["closed"] is True for check in checked_urls.values())
+    print(f"  Offline: {len(checked_urls)} URLs geprüft · {closed} geschlossen · "
+          f"{len(checked_urls) - closed} nicht bestätigt · "
+          f"{len(due) - len(checked_urls)} zurückgestellt", flush=True)
+    if not checked_urls:
         return set()
     ignored = set()
     with edit_memory(memory_path) as memory:
-        for job_id, previous in confirmed.items():
+        for job_id, (previous, urls, checks) in candidates.items():
+            if not any(url in checked_urls for url in urls):
+                continue
             entry = memory.get(job_id)
-            # A user decision or concurrent finder update takes precedence.
+            # A concurrent user decision or worker update takes precedence.
             if entry != previous:
+                continue
+            updated = {url: checked_urls.get(url, checks.get(url, {})) for url in urls}
+            entry["availability_checks"] = updated
+            if not all(recent_check(check, now) and check.get("closed") is True
+                       for check in updated.values()):
                 continue
             record_status_change(entry, WorkflowStatus.IGNORED)
             entry["workflow_history"][-1]["reason"] = "listing_unavailable"
-            entry["availability_checked_at"] = datetime.now(timezone.utc).isoformat()
+            entry["availability_checked_at"] = now.isoformat()
             entry["active"] = False
             ignored.add(job_id)
     for job in jobs:

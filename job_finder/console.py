@@ -6,6 +6,8 @@ import time
 
 PROGRESS_WIDTH = 24
 _PROGRESS_STARTED = {}
+_PROGRESS_REPORTED = {}
+LOG_PROGRESS_INTERVAL = 30
 
 
 def configure_utf8_output():
@@ -29,7 +31,14 @@ def print_progress(label, current, total, detail=""):
     total = max(int(total), 1)
     if current <= 0 or label not in _PROGRESS_STARTED:
         _PROGRESS_STARTED[label] = time.monotonic()
-    elapsed = max(0.0, time.monotonic() - _PROGRESS_STARTED[label])
+    now = time.monotonic()
+    elapsed = max(0.0, now - _PROGRESS_STARTED[label])
+    terminal = bool(getattr(sys.stdout, "isatty", lambda: False)())
+    if (not terminal and 0 < current < total
+            and label in _PROGRESS_REPORTED
+            and now - _PROGRESS_REPORTED[label] < LOG_PROGRESS_INTERVAL):
+        return
+    _PROGRESS_REPORTED[label] = now
     line = progress_line(
         label,
         current,
@@ -44,6 +53,7 @@ def print_progress(label, current, total, detail=""):
         print(line)
     if current >= total:
         _PROGRESS_STARTED.pop(label, None)
+        _PROGRESS_REPORTED.pop(label, None)
 
 
 def progress_line(label, current, total, detail="", elapsed_seconds=0.0):
@@ -55,14 +65,11 @@ def progress_line(label, current, total, detail="", elapsed_seconds=0.0):
     rate = current / elapsed if current and elapsed >= 0.05 else None
     remaining = total - current
     eta = remaining / rate if rate else None
-    rate_text = f"{rate:.2f} it/s" if rate is not None else "? it/s"
-    eta_text = format_clock(eta) if eta is not None else "?"
     suffix = f" · {detail}" if detail else ""
-    return (
-        f"  {label} {percent:3d}%|{progress_bar(current, total)[1:-1]}| "
-        f"{current}/{total} "
-        f"[{format_clock(elapsed)}<{eta_text}, {rate_text}]{suffix}"
-    )
+    if total == 1:
+        return f"  {label}: {detail or ('fertig' if current else 'wird geladen')} · {format_clock(elapsed)}"
+    estimate = f" · Rest ca. {format_clock(eta)}" if eta is not None and elapsed >= 5 and remaining else ""
+    return f"  {label}: {current}/{total} ({percent}%) · {format_clock(elapsed)}{estimate}{suffix}"
 
 
 def format_clock(seconds):
@@ -79,7 +86,7 @@ def format_clock(seconds):
 
 def print_phase(current, total, label):
     """Show a plain heading for one coarse pipeline phase."""
-    print(f"\n{current}/{total} {label}")
+    print(f"\n[{current}/{total}] {label}", flush=True)
 
 
 def progress_checkpoint(current, total, interval=10):

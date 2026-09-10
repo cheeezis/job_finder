@@ -120,8 +120,8 @@ class StepStonePaginationTests(unittest.TestCase):
 
         self.assertEqual(links, [url])
         output = print_output.call_args.args[0]
-        self.assertIn("StepStone Suche 100%|", output)
-        self.assertIn("1/1", output)
+        self.assertIn("StepStone Suche:", output)
+        self.assertNotIn("1/1", output)
         self.assertIn("2 Seiten", output)
         self.assertIn("1 Anzeigen", output)
         self.assertNotIn("Stopps:", output)

@@ -23,7 +23,7 @@
   <section class="filters" aria-label="Filter">
     <label>Status
       <select id="status-filter">
-        <option value="attention">Neu</option>
+        <option value="new">Neu</option>
         <option value="">Alle Status</option>
       </select>
     </label>
@@ -140,7 +140,6 @@
     german_tech_jobs: "GermanTechJobs", manual: "Manuell hinzugefügt"
   };
   const reviewStatuses = new Set(["review", "interesting", "inquiry", "ignored"]);
-  const notificationStatuses = new Set(["new", "review", "interesting", "inquiry"]);
   let jobs = [];
   let visibleJobs = [];
   let currentIndex = 0;
@@ -216,10 +215,7 @@
     const showInternational = element("international-filter").checked;
     const showJuniorHybrid = element("junior-hybrid-filter").checked;
     visibleJobs = jobs.filter(job => {
-      const awaitsDecision = notificationStatuses.has(job.workflow_status);
-      const statusMatches = status === "attention"
-        ? awaitsDecision && job.is_new
-        : (!status || job.workflow_status === status);
+      const statusMatches = !status || job.workflow_status === status;
       return statusMatches &&
       (!role || job.role_group === role) &&
       (showInternational || !job.international) &&
@@ -255,7 +251,7 @@
       ? "Vorgemerkt"
       : roleLabels[job.role_group] || "Allgemeine IT");
     const newBadge = element("new-badge");
-    newBadge.hidden = !job.is_new;
+    newBadge.hidden = job.workflow_status !== "new";
     newBadge.className = "badge";
     newBadge.textContent = "Neu";
     setText("title", job.title);

@@ -148,7 +148,9 @@ def run_pipeline(args):
             memory,
             successful_sources=complete_sources,
         )
-    closed_ids = ignore_closed_listings(jobs, MEMORY_FILE)
+    closed_ids = ignore_closed_listings(
+        jobs, MEMORY_FILE, successful_sources=complete_sources,
+    )
     if closed_ids:
         print(f"Nicht mehr verfügbar: {len(closed_ids)} Stelle(n) auf Nicht interessant gesetzt")
     results = build_score_results(evaluated_jobs)

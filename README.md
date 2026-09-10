@@ -114,7 +114,9 @@ Danach stehen zur Verfügung:
 - `http://127.0.0.1:8765/review` – Stellen prüfen
 - `http://127.0.0.1:8765/applications` – Bewerbungen und Statistik
 
-Der Review startet mit „Neu“. Internationale Anzeigen und
+Der Review startet mit „Neu“ und zeigt dort alle noch nicht eingestuften Stellen,
+unabhängig vom Fundlauf. Nach einer Entscheidung verschwindet die Stelle aus
+diesem Filter. Internationale Anzeigen und
 Junior-Hybrid-Sonderfälle sind eigene, standardmäßig deaktivierte Filter.
 
 ## Ablauf
@@ -134,9 +136,10 @@ Junior-Hybrid-Sonderfälle sind eigene, standardmäßig deaktivierte Filter.
    Auftauchen unter „Neu“ aus.
 6. Bewerbungen werden getrennt vom Stellen-Review dauerhaft nachverfolgt.
 
-Interessante Stellen bleiben auch bei fehlenden Suchtreffern vorgemerkt. Jeder
-Finder-Lauf prüft ihre gespeicherten Anzeigen-URLs direkt, ebenso die URLs neuer
-Stellen, die inzwischen fehlen oder nur aus veraltetem Cache stammen. Nur wenn
+Interessante Stellen bleiben auch bei fehlenden Suchtreffern vorgemerkt. Ein
+Finder-Lauf prüft die URLs fehlender neuer oder interessanter Stellen nur, wenn
+alle bekannten Quellen vollständig erfolgreich abgeschlossen wurden. Aktuelle
+Treffer werden übersprungen; veraltete Cache-Treffer gelten als fehlend. Nur wenn
 alle bekannten URLs eindeutig geschlossen sind (HTTP 404/410 oder expliziter
 Schließungshinweis), wechselt die Stelle automatisch auf „Nicht interessant“.
 Fehlende Suchtreffer, Login-Weiterleitungen und Abruffehler reichen dafür nicht.
@@ -189,11 +192,21 @@ markierter Fallback erscheinen; ältere Einträge werden nicht mehr übernommen.
 Ein teilweise fehlgeschlagenes Suchsegment darf keine alten Stellen dieser
 Quelle automatisch inaktiv setzen.
 
-Die Laufzeit wird fast vollständig von den externen Quellen bestimmt. Läufe mit
-frischen Detail-Caches sind deutlich schneller; wenn viele sieben Tage alte
-Einträge gleichzeitig aktualisiert werden, können gelegentlich längere
-Netzwerkphasen entstehen. SQLite ist dabei nur der kurze lokale
-Persistenzschritt.
+Konsole und Laufprotokoll melden Start und Dauer der einzelnen Quellen, ihrer
+Detailanreicherung und der Pipeline-Schritte einschließlich Offline-Prüfung.
+Auch abgebrochene Schritte melden ihre bis dahin verstrichene Zeit. Die
+Offline-Prüfung zeigt erledigte und insgesamt geplante eindeutige URLs, ohne
+URLs oder Stelleninhalte auszugeben. Verschachtelte Zeiten überlappen und dürfen
+nicht zur Gesamtlaufzeit addiert werden.
+
+Die Review-Diagnose trennt erstmals gespeicherte und bekannte Treffer, passende
+und ausgeschlossene neue Treffer sowie den Status Neu vom Standardfilter Neu.
+Letzterer zeigt unbearbeitete Stellen mit Status Neu unabhängig vom Fundlauf;
+internationale und Junior-Hybrid-Sonderfälle sind standardmäßig ausgeblendet.
+Das Erstfund-Merkmal bleibt für Laufstatistik und Benachrichtigungen bestehen.
+Ein Abbruch nach dem Speichern des Gedächtnisses und anschließender Neustart
+entfernt unbearbeitete Stellen deshalb nicht mehr aus dem Filter Neu. Die
+Diagnose ändert weder Prüfintervalle noch Netzwerkparallelität.
 
 ## Tests
 

@@ -78,3 +78,51 @@ test("monthly salary preview converts twelve payments without changing annual in
   assert.equal(salaryYearAmount("", "month"), null);
   assert.equal(salaryYearAmount("invalid", "year"), null);
 });
+
+
+const reviewHtml = fs.readFileSync(path.join(__dirname, "../job_finder/review.html"), "utf8");
+const filterStart = reviewHtml.indexOf("  function applyFilters(");
+const filterEnd = reviewHtml.indexOf("\n  function ", filterStart + 1);
+const applyReviewFilters = reviewHtml.slice(filterStart, filterEnd);
+
+function filteredReviewIds(rows, status = "new") {
+  const controls = {
+    "status-filter": {value: status}, "role-filter": {value: ""},
+    "search-filter": {value: ""}, "international-filter": {checked: false},
+    "junior-hybrid-filter": {checked: false}
+  };
+  return Array.from(vm.runInNewContext(applyReviewFilters +
+    "\napplyFilters(); visibleJobs.map(job => job.id);", {
+      jobs: rows, visibleJobs: [], currentIndex: 0,
+      element: id => controls[id], render() {}
+    }));
+}
+
+test("Neu retains unprocessed jobs across later runs and excludes every decided status", () => {
+  assert.match(reviewHtml, /<option value="new">Neu<\/option>/);
+  const rows = [
+    {id: "fresh", workflow_status: "new", is_new: true},
+    {id: "previous-run", workflow_status: "new", is_new: false},
+    ...["review", "interesting", "inquiry", "ignored", "applied", "response",
+        "interview", "rejected", "no_response", "offer", "closed"].map(status =>
+      ({id: status, workflow_status: status, is_new: true}))
+  ];
+  assert.deepEqual(filteredReviewIds(rows), ["fresh", "previous-run"]);
+  rows[0].workflow_status = "interesting";
+  assert.deepEqual(filteredReviewIds(rows), ["previous-run"]);
+  rows[0].workflow_status = "new";
+  rows[0].is_new = false;
+  assert.deepEqual(filteredReviewIds(rows), ["fresh", "previous-run"]);
+});
+
+test("review optional filters and explicit statuses remain effective", () => {
+  const rows = [
+    {id: "pending", workflow_status: "new", is_new: false},
+    {id: "international", workflow_status: "new", international: true},
+    {id: "hybrid", workflow_status: "new", location_precheck: "Junior-Hybrid: Test"},
+    {id: "saved", workflow_status: "interesting", is_new: false}
+  ];
+  assert.deepEqual(filteredReviewIds(rows), ["pending"]);
+  assert.deepEqual(filteredReviewIds(rows, "interesting"), ["saved"]);
+  assert.deepEqual(filteredReviewIds(rows, ""), ["pending", "saved"]);
+});

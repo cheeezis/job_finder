@@ -155,7 +155,9 @@ def ignore_closed_listings(
             priority = (timestamp, url)
             due[url] = min(due.get(url, priority), priority)
     selected = sorted(due, key=due.get)[:max(0, max_urls)]
-    print(f"Offline-Prüfung: {len(due)} URLs fällig · höchstens {len(selected)} in diesem Lauf", flush=True)
+    all_urls = {url for _, urls, _ in candidates.values() for url in urls}
+    print(f"  Offline: {len(due)} URLs fällig · {len(all_urls) - len(due)} im Prüfintervall · "
+          f"höchstens {len(selected)} in diesem Lauf", flush=True)
     if progress is not None:
         progress(0, len(selected))
     checked_urls = {}
@@ -169,8 +171,10 @@ def ignore_closed_listings(
         }
         if progress is not None:
             progress(len(checked_urls), len(selected))
-    print(f"Offline-Prüfung: {len(checked_urls)} URLs geprüft · "
-          f"{len(due) - len(checked_urls)} zurückgestellt; Status bleibt erhalten", flush=True)
+    closed = sum(check["closed"] is True for check in checked_urls.values())
+    print(f"  Offline: {len(checked_urls)} URLs geprüft · {closed} geschlossen · "
+          f"{len(checked_urls) - closed} nicht bestätigt · "
+          f"{len(due) - len(checked_urls)} zurückgestellt", flush=True)
     if not checked_urls:
         return set()
     ignored = set()

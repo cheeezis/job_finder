@@ -23,6 +23,7 @@ class TeeStream:
         self.log_file = log_file
         self.progress_active = False
         self.progress_width = 0
+        self.line_start = True
 
     def write(self, text):
         if self.progress_active and text:
@@ -31,8 +32,13 @@ class TeeStream:
             )
             self.progress_active = False
             self.progress_width = 0
-        self.original.write(text)
-        self.log_file.write(text)
+        terminal = bool(getattr(self.original, "isatty", lambda: False)())
+        for part in text.splitlines(keepends=True):
+            prefix = datetime.now().astimezone().isoformat(timespec="seconds") + " " if self.line_start and part.strip() else ""
+            self.original.write(part if terminal else prefix + part)
+            self.log_file.write(prefix + part)
+            self.line_start = part.endswith("\n")
+        self.original.flush()
         self.log_file.flush()
         return len(text)
 
@@ -53,7 +59,7 @@ class TeeStream:
         if complete:
             self.original.write("\n")
             self.original.flush()
-            self.log_file.write(f"{text}\n")
+            self.log_file.write(f"{datetime.now().astimezone().isoformat(timespec='seconds')} {text}\n")
             self.log_file.flush()
             self.progress_width = 0
 
@@ -73,10 +79,12 @@ class RunLog(AbstractContextManager):
         self.started_at = now or datetime.now().astimezone()
         self.path = self.log_dir / f"run-{self.started_at:%Y%m%d-%H%M%S}.log"
         self.log_file = None
+        self.started_monotonic = None
         self.original_stdout = None
         self.original_stderr = None
 
     def __enter__(self):
+        self.started_monotonic = time.monotonic()
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.log_file = self.path.open("w", encoding="utf-8")
         self.original_stdout = sys.stdout
@@ -90,7 +98,7 @@ class RunLog(AbstractContextManager):
     def __exit__(self, error_type, error, traceback):
         finished_at = datetime.now().astimezone()
         if error is None:
-            print(f"Lauf erfolgreich beendet: {finished_at.isoformat(timespec='seconds')}")
+            print(f"Lauf erfolgreich beendet · Gesamtdauer {format_clock(time.monotonic() - self.started_monotonic)}")
         else:
             print(f"Lauf fehlgeschlagen: {type(error).__name__}: {error}")
             traceback_module.print_exception(error_type, error, traceback)
@@ -125,11 +133,15 @@ def create_backup(files, backup_dir=BACKUP_DIR, keep=BACKUP_FILES_TO_KEEP, now=N
 def timed_step(label):
     """Log elapsed wall time even when a step fails or is interrupted."""
     started = time.monotonic()
-    print(f"Start: {label}", flush=True)
+    writer = getattr(sys.stdout, "write_progress", None)
+    if writer is not None and getattr(sys.stdout, "isatty", lambda: False)():
+        writer(f"  {label} …")
+    else:
+        print(f"  {label}: gestartet", flush=True)
     completed = False
     try:
         yield
         completed = True
     finally:
         outcome = "fertig" if completed else "abgebrochen/fehlgeschlagen"
-        print(f"Dauer: {label}: {format_clock(time.monotonic() - started)} ({outcome})", flush=True)
+        print(f"  {label}: {format_clock(time.monotonic() - started)} · {outcome}", flush=True)

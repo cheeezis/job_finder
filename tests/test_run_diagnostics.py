@@ -44,10 +44,10 @@ class RunDiagnosticsTests(unittest.TestCase):
         self.assertIn("1 erstmals gefunden und im Vorfilter passend", text)
         self.assertIn("1 erstmals gefunden und ausgeschlossen", text)
         self.assertIn("2 passende Stellen mit Status Neu", text)
-        self.assertIn("1 im Standardfilter Neu", text)
+        self.assertIn("2 im Standardfilter Neu", text)
 
 
-    def test_standard_review_count_excludes_optional_filters_and_known_jobs(self):
+    def test_standard_review_count_keeps_unprocessed_known_jobs(self):
         output = io.StringIO()
         rows = [
             {"is_new": True, "workflow_status": "new"},
@@ -57,4 +57,4 @@ class RunDiagnosticsTests(unittest.TestCase):
         ]
         with redirect_stdout(output):
             print_review_diagnostics({"included": rows, "excluded": []}, {"new": 3, "known": 1})
-        self.assertIn("1 im Standardfilter Neu", output.getvalue())
+        self.assertIn("2 im Standardfilter Neu", output.getvalue())

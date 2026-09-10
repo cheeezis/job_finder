@@ -114,7 +114,9 @@ Danach stehen zur Verfügung:
 - `http://127.0.0.1:8765/review` – Stellen prüfen
 - `http://127.0.0.1:8765/applications` – Bewerbungen und Statistik
 
-Der Review startet mit „Neu“. Internationale Anzeigen und
+Der Review startet mit „Neu“ und zeigt dort alle noch nicht eingestuften Stellen,
+unabhängig vom Fundlauf. Nach einer Entscheidung verschwindet die Stelle aus
+diesem Filter. Internationale Anzeigen und
 Junior-Hybrid-Sonderfälle sind eigene, standardmäßig deaktivierte Filter.
 
 ## Ablauf
@@ -199,11 +201,12 @@ nicht zur Gesamtlaufzeit addiert werden.
 
 Die Review-Diagnose trennt erstmals gespeicherte und bekannte Treffer, passende
 und ausgeschlossene neue Treffer sowie den Status Neu vom Standardfilter Neu.
-Letzterer blendet internationale und Junior-Hybrid-Sonderfälle aus und verlangt
-zusätzlich einen Erstfund im aktuellen Lauf. Nach einem Abbruch nach dem
-Speichern des Gedächtnisses können Treffer beim Neustart bereits bekannt sein;
-unbearbeitete Treffer bleiben dann über Alle Status erreichbar. Die Diagnose
-ändert weder diesen Filter noch Prüfintervalle oder Netzwerkparallelität.
+Letzterer zeigt unbearbeitete Stellen mit Status Neu unabhängig vom Fundlauf;
+internationale und Junior-Hybrid-Sonderfälle sind standardmäßig ausgeblendet.
+Das Erstfund-Merkmal bleibt für Laufstatistik und Benachrichtigungen bestehen.
+Ein Abbruch nach dem Speichern des Gedächtnisses und anschließender Neustart
+entfernt unbearbeitete Stellen deshalb nicht mehr aus dem Filter Neu. Die
+Diagnose ändert weder Prüfintervalle noch Netzwerkparallelität.
 
 ## Tests
 

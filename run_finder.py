@@ -232,7 +232,7 @@ def print_review_diagnostics(results, memory_stats):
     new_excluded = sum(bool(job.get("is_new")) for job in results["excluded"])
     pending = sum(job.get("workflow_status") == "new" for job in results["included"])
     standard_new = sum(
-        bool(job.get("is_new")) and job.get("workflow_status") == "new"
+        job.get("workflow_status") == "new"
         and not is_international_listing(job)
         and not str(job.get("location_precheck") or "").startswith("Junior-Hybrid")
         for job in results["included"]

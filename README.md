@@ -29,8 +29,10 @@ Stellenkarten und Laufstatistiken an Discord übertragen.
 - isolierte Quellenfehler, Laufprotokolle und rotierende Backups wichtiger
   lokaler Zustände
 - dynamische Fortschrittsanzeigen je Quelle und Detailabruf; im Terminal wird
-  eine tqdm-artige Zeile mit Prozent, Zähler, Laufzeit, Restzeit und Rate
-  aktualisiert, im Laufprotokoll bleibt nur der Endstand
+  eine kompakte Zeile mit Zähler, Prozent und Laufzeit aktualisiert; eine
+  geschätzte Restzeit erscheint nur bei längeren laufenden Abrufen. Keine 1/1-Balken.
+  Ohne interaktives Terminal werden zeitgestempelte Zwischenstände höchstens
+  alle 30 Sekunden je Vorgang ausgegeben; Start und Abschluss bleiben sichtbar.
 
 Der Vorfilter-Score ist keine persönliche Eignungsprognose. Er macht nur
 transparent, warum eine Stelle den regelbasierten Filter passiert hat. Die
@@ -192,7 +194,9 @@ markierter Fallback erscheinen; ältere Einträge werden nicht mehr übernommen.
 Ein teilweise fehlgeschlagenes Suchsegment darf keine alten Stellen dieser
 Quelle automatisch inaktiv setzen.
 
-Konsole und Laufprotokoll melden Start und Dauer der einzelnen Quellen, ihrer
+Jede Quelle erhält eine Ergebniszeile mit Treffern, Dauer und gegebenenfalls
+Teilergebnis oder Fehler. Im Terminal werden laufende Meldungen ersetzt.
+Konsole und Laufprotokoll zeigen außerdem die Dauer ihrer
 Detailanreicherung und der Pipeline-Schritte einschließlich Offline-Prüfung.
 Auch abgebrochene Schritte melden ihre bis dahin verstrichene Zeit. Die
 Offline-Prüfung zeigt erledigte und insgesamt geplante eindeutige URLs, ohne

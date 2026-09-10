@@ -114,7 +114,7 @@ def main():
     """Run the full pipeline: collect jobs, update memory, then score."""
     configure_utf8_output()
     args = parse_args()
-    with RunLog(), timed_step("Gesamtlauf"):
+    with RunLog():
         run_pipeline(args)
 
 
@@ -130,7 +130,7 @@ def run_pipeline(args):
         print_source_summary(source_reports, len(jobs))
         require_usable_source_snapshot(source_reports)
 
-    print_phase(2, 4, "Vorfilter und Details")
+    print_phase(2, 4, "Bewertung")
     with timed_step('Vorfilter'):
         results = score_jobs(jobs)
 
@@ -144,7 +144,7 @@ def run_pipeline(args):
         evaluated_jobs = evaluate_jobs(jobs)
 
     # Persist only the final post-enrichment set; enrichers may remove closed ads.
-    print_phase(3, 4, "Gedächtnis")
+    print_phase(3, 4, "Bestand und Verfügbarkeit")
     complete_sources = {
         report["name"]
         for report in source_reports
@@ -167,9 +167,7 @@ def run_pipeline(args):
     if closed_ids:
         print(f"Nicht mehr verfügbar: {len(closed_ids)} Stelle(n) auf Nicht interessant gesetzt")
     results = build_score_results(evaluated_jobs)
-    print_review_diagnostics(results, memory_stats)
     print(
-        f'{memory_stats["new"]} neu · {memory_stats["known"]} bekannt · '
         f'{memory_stats["inactive"]} neu inaktiv · '
         f'{memory_stats["reactivated"]} reaktiviert'
     )
@@ -218,6 +216,9 @@ def run_pipeline(args):
             else:
                 print("Discord-Laufstatistik gesendet")
 
+    print("\nErgebnisübersicht")
+    print_review_diagnostics(results, memory_stats)
+
 
 def print_availability_progress(current, total):
     if total:
@@ -238,12 +239,12 @@ def print_review_diagnostics(results, memory_stats):
         for job in results["included"]
     )
     print(
-        f"Review-Diagnose: {memory_stats['new']} erstmals gespeichert · "
+        f"  Erstfunde: {memory_stats['new']} · "
         f"{memory_stats['known']} bereits bekannt · "
-        f"{new_included} erstmals gefunden und im Vorfilter passend · "
-        f"{new_excluded} erstmals gefunden und ausgeschlossen · "
-        f"{pending} passende Stellen mit Status Neu · "
-        f"{standard_new} im Standardfilter Neu (ohne weitere Suchfilter)", flush=True,
+        f"{new_included} davon passend · "
+        f"{new_excluded} davon ausgeschlossen\n"
+        f"  Review Neu: {standard_new} im Standardfilter · "
+        f"{pending} unbearbeitet einschließlich Sonderfilter", flush=True,
     )
 
 
@@ -264,24 +265,23 @@ def collect_jobs(sources=None):
         )
         reset_fetch_diagnostics()
         try:
-            with timed_step(f"Quelle {label}"):
-                report_fetcher = getattr(source, "fetch_jobs_with_report", None)
-                if report_fetcher is None:
-                    source_jobs = source.fetch_jobs()
-                    source_status = "success" if source_jobs else "empty"
-                    report_details = {}
-                else:
-                    source_result = report_fetcher()
-                    source_jobs = source_result["jobs"]
-                    source_status = source_result["status"]
-                    report_details = source_result.get("details", {})
-                handled_failures = fetch_diagnostics()["failed_segments"]
-                if handled_failures and source_status != "partial":
-                    source_status = "partial"
-                    report_details = {
-                        **report_details,
-                        "failed_segments": handled_failures,
-                    }
+            report_fetcher = getattr(source, "fetch_jobs_with_report", None)
+            if report_fetcher is None:
+                source_jobs = source.fetch_jobs()
+                source_status = "success" if source_jobs else "empty"
+                report_details = {}
+            else:
+                source_result = report_fetcher()
+                source_jobs = source_result["jobs"]
+                source_status = source_result["status"]
+                report_details = source_result.get("details", {})
+            handled_failures = fetch_diagnostics()["failed_segments"]
+            if handled_failures and source_status != "partial":
+                source_status = "partial"
+                report_details = {
+                    **report_details,
+                    "failed_segments": handled_failures,
+                }
         except Exception as error:
             source_reports.append(
                 {
@@ -295,7 +295,7 @@ def collect_jobs(sources=None):
                 label,
                 1,
                 1,
-                "fehlgeschlagen",
+                f"fehlgeschlagen ({source_error_label(error)})",
             )
             continue
         source_reports.append(
@@ -310,7 +310,7 @@ def collect_jobs(sources=None):
             label,
             1,
             1,
-            f"{len(source_jobs)} Stellen",
+            f"{len(source_jobs)} Stellen" + (f" · Teilergebnis ({report_details.get('failed_segments', '?')} Segment(e) fehlgeschlagen)" if source_status == "partial" else ""),
         )
         for job in source_jobs:
             url = job.primary_url
@@ -347,17 +347,6 @@ def print_source_summary(source_reports, total_jobs):
         f"{counts['failed']} fehlgeschlagen · "
         f"{total_jobs} Stellen nach Deduplizierung"
     )
-    for report in source_reports:
-        label = source_label(report["name"])
-        if report["status"] == "failed":
-            print(f"  WARNUNG {label}: {report.get('error', 'Fehler')}")
-        elif report["status"] == "empty":
-            print(f"  HINWEIS {label}: keine verwertbaren Treffer")
-        elif report["status"] == "partial":
-            print(
-                f"  WARNUNG {label}: Teilergebnis; "
-                f"{report.get('failed_segments', '?')} Segment(e) fehlgeschlagen"
-            )
 
 
 def build_run_summary(

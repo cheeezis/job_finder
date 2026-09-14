@@ -34,6 +34,10 @@ from job_finder.text import normalize_text
 SOURCE_NAME = "manual"
 _BLOCK_TAGS = {"h1", "h2", "h3", "p", "li", "dt", "dd"}
 _SKIP_TAGS = {"script", "style", "noscript", "nav", "footer", "form", "button"}
+_VOID_TAGS = {
+    "area", "base", "br", "col", "embed", "hr", "img", "input", "link",
+    "meta", "param", "source", "track", "wbr",
+}
 
 
 def add_url(url, cache_path=MANUAL_CACHE_FILE):
@@ -166,16 +170,17 @@ def job_from_visible_page(url, html):
 
 def main_fragment(html):
     """Keep only the main visible document section for fallback imports."""
-    match = re.search(r"<main\b[^>]*>(.*?)</main>", html, re.IGNORECASE | re.DOTALL)
-    if not match:
-        match = re.search(
-            r"<article\b[^>]*>(.*?)</article>",
-            html,
-            re.IGNORECASE | re.DOTALL,
-        )
-    if not match:
+    parser = VisibleJobParser()
+    parser.feed(html)
+    if parser.fragment_start is None or parser.fragment_end is None:
         raise ValueError("Kein Hauptinhalt für die Stellenanzeige gefunden")
-    return match.group(1)
+    offsets = [0]
+    for line in html.splitlines(keepends=True):
+        offsets.append(offsets[-1] + len(line))
+    start_line, start_column = parser.fragment_start
+    end_line, end_column = parser.fragment_end
+    return html[offsets[start_line - 1] + start_column:
+                offsets[end_line - 1] + end_column]
 
 
 def extract_labeled_values(lines, labels):
@@ -226,6 +231,9 @@ class VisibleJobParser(HTMLParser):
         self.lines = []
         self.title = ""
         self._in_main = False
+        self._main_stack = []
+        self.fragment_start = None
+        self.fragment_end = None
         self._skip_depth = 0
         self._parts = []
         self._title_parts = []
@@ -238,15 +246,26 @@ class VisibleJobParser(HTMLParser):
             content = attributes.get("content")
             if name and content:
                 self.metadata[name.casefold()] = content.strip()
-        if tag in {"main", "article"} and not self._in_main:
+        if (
+            tag in {"main", "article"}
+            or attributes.get("role", "").casefold() == "main"
+        ) and self.fragment_start is None:
             self._in_main = True
+            self._main_stack = [tag]
+            line, column = self.getpos()
+            self.fragment_start = (line, column + len(self.get_starttag_text()))
             return
         if not self._in_main:
             return
+        if tag not in _VOID_TAGS:
+            self._main_stack.append(tag)
         if self._skip_depth:
-            self._skip_depth += 1
+            if tag not in _VOID_TAGS:
+                self._skip_depth += 1
             return
-        if tag in _SKIP_TAGS:
+        if (tag in _SKIP_TAGS
+                or attributes.get("role") in {"navigation", "contentinfo"}
+                or attributes.get("id") == "footer"):
             self._flush()
             self._skip_depth = 1
             return
@@ -259,17 +278,29 @@ class VisibleJobParser(HTMLParser):
     def handle_endtag(self, tag):
         if not self._in_main:
             return
-        if self._skip_depth:
-            self._skip_depth -= 1
+        if tag not in self._main_stack:
             return
+        index = len(self._main_stack) - 1 - self._main_stack[::-1].index(tag)
+        closed_count = len(self._main_stack) - index
+        del self._main_stack[index:]
+        if self._skip_depth:
+            self._skip_depth = max(0, self._skip_depth - closed_count)
+            if self._main_stack:
+                return
         if tag == "h1":
             self.title = " ".join(" ".join(self._title_parts).split())
             self._in_title = False
         if tag in _BLOCK_TAGS:
             self._flush()
-        if tag in {"main", "article"}:
+        if not self._main_stack:
             self._flush()
             self._in_main = False
+            self.fragment_end = self.getpos()
+
+    def handle_startendtag(self, tag, attrs):
+        self.handle_starttag(tag, attrs)
+        if tag not in _VOID_TAGS:
+            self.handle_endtag(tag)
 
     def handle_data(self, data):
         if not self._in_main or self._skip_depth:

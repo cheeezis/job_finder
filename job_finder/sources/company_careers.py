@@ -43,10 +43,12 @@ def job_from_json_ld(source_name, fallback_company, url, html):
         raise ValueError("JobPosting JSON-LD nicht gefunden")
 
     raw_description = posting.get("description", "")
+    if not re.search(r"<[a-z][^>]*>", raw_description, re.IGNORECASE):
+        raw_description = unescape(raw_description)
     description = html_to_text(raw_description)
     locations = extract_schema_locations(posting.get("jobLocation"))
     location_text = ", ".join(locations)
-    title = str(posting.get("title") or "").strip()
+    title = unescape(str(posting.get("title") or "")).strip()
     structured_remote = (
         "100%"
         if str(posting.get("jobLocationType") or "").upper() == "TELECOMMUTE"
@@ -69,7 +71,7 @@ def job_from_json_ld(source_name, fallback_company, url, html):
     return Job(
         id=source_job_id(source_name, identifier, url),
         title=title,
-        company=str(company or fallback_company).strip(),
+        company=unescape(str(company or fallback_company)).strip(),
         locations=locations,
         sources=[JobSource(source=source_name, source_id=identifier, url=url)],
         description_raw=raw_description,

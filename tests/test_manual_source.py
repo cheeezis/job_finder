@@ -11,6 +11,51 @@ from job_finder.sources.common import load_detail_cache
 
 
 class ManualSourceTests(unittest.TestCase):
+    def test_join_style_escaped_description_is_readable(self):
+        html = '''<script type="application/ld+json">{
+            "@type": "JobPosting",
+            "title": "Data Engineer &amp; Business Analyst",
+            "description": "&lt;h2 id=&quot;aufgaben&quot;&gt;Aufgaben&lt;/h2&gt;&lt;p&gt;Python &amp;amp; SQL&lt;/p&gt;",
+            "hiringOrganization": {"name": "ApoVid GmbH"},
+            "jobLocationType": "TELECOMMUTE",
+            "applicantLocationRequirements": {"name": "Deutschland"}
+        }</script>'''
+
+        job = manual.job_from_page("https://join.com/companies/example/12345678", html)
+
+        self.assertEqual(job.title, "Data Engineer & Business Analyst")
+        self.assertEqual(job.description_clean, "Aufgaben Python & SQL")
+        self.assertEqual(job.company, "ApoVid GmbH")
+        self.assertEqual(job.locations, ["Deutschland"])
+        self.assertEqual(job.work_mode, WorkMode.REMOTE)
+
+    def test_role_main_keeps_nested_content_and_excludes_footer(self):
+        description = "Softwareentwicklung mit Python und SQL im Produktteam. " * 5
+        html = f'''<meta property="og:site_name" content="Ecoplan CRM">
+            <header>Navigation</header><div id="main" role="main">
+            <div><h1>Softwareentwickler (m/w/d)</h1></div>
+            <article><p>Standort: Fulda</p></article>
+            <form><input><img src="example.png"><p>Formulartext</p></form>
+            <div><p>{description}</p></div>
+            <div id="footer"><p>Footertext</p></div>
+            </div><p>Außerhalb</p>'''
+
+        job = manual.job_from_page("https://example.com/softwareentwickler", html)
+
+        self.assertEqual(job.title, "Softwareentwickler (m/w/d)")
+        self.assertEqual(job.company, "Ecoplan CRM")
+        self.assertEqual(job.locations, ["Fulda"])
+        self.assertIn(description.strip(), job.description_clean)
+        for excluded in ("Navigation", "Formulartext", "Footertext", "Außerhalb"):
+            self.assertNotIn(excluded, job.description_clean)
+        self.assertNotIn("Außerhalb", job.description_raw)
+
+    def test_unmarked_page_is_still_rejected(self):
+        with self.assertRaisesRegex(ValueError, "Kein Hauptinhalt"):
+            manual.job_from_page(
+                "https://example.com", "<h1>Website</h1><p>Generic content</p>" * 20
+            )
+
     def test_remote_schema_uses_applicant_region_when_job_location_is_missing(self):
         html = """
         <script type="application/ld+json">{

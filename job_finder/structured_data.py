@@ -15,9 +15,14 @@ def extract_json_ld_job_posting(html):
     """Return the first valid JobPosting from JSON-LD scripts, if present."""
     for script in _JSON_LD_PATTERN.findall(html):
         try:
-            data = json.loads(unescape(script.strip()))
+            data = json.loads(script.strip())
         except json.JSONDecodeError:
-            continue
+            # Some publishers escape the entire JSON document. Decode only as
+            # a fallback: &quot; inside a valid JSON string must not break it.
+            try:
+                data = json.loads(unescape(script.strip()))
+            except json.JSONDecodeError:
+                continue
 
         posting = find_job_posting(data)
         if posting:

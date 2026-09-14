@@ -3,6 +3,7 @@
 import hashlib
 import json
 import re
+from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -60,6 +61,18 @@ def record_partial_failure(count=1):
 def fetch_diagnostics():
     """Return a copy of diagnostics for the just-completed adapter run."""
     return dict(_FETCH_DIAGNOSTICS)
+
+
+def build_fetch_report(jobs, failed_segments, total_segments):
+    """Describe complete, empty or partial source coverage for the runner."""
+    return {
+        "jobs": jobs,
+        "status": "partial" if failed_segments else ("success" if jobs else "empty"),
+        "details": {
+            "failed_segments": failed_segments,
+            "total_segments": total_segments,
+        },
+    }
 
 
 class ListingUnavailableError(ValueError):
@@ -384,3 +397,24 @@ def enrich_cached_candidates(
     if errors:
         print(f"WARNUNG {label}: {errors} Kandidat(en) nicht erreichbar")
     return enriched
+
+
+def with_current_summary(cached_job, summary, **details):
+    """Refresh shared API fields and apply additional source-specific fields.
+
+    Preserve cached descriptions and optional values missing from the
+    summary. Freshness is checked by the calling source, when required.
+    """
+    return replace(
+        cached_job,
+        id=summary.id,
+        title=summary.title or cached_job.title,
+        company=summary.company or cached_job.company,
+        locations=(
+            summary.locations
+            if summary.locations != ["unbekannt"]
+            else cached_job.locations
+        ),
+        sources=summary.sources,
+        **details,
+    )

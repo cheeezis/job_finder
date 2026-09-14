@@ -74,7 +74,7 @@ def fetch_jobs(cache_path=CACHE_FILE, client=None, now=None):
         client,
         today=reference_date,
     )
-    jobs = fetch_cached_details(
+    return fetch_cached_details(
         links,
         cache_file,
         lambda url: fetch_job(url, client),
@@ -82,7 +82,6 @@ def fetch_jobs(cache_path=CACHE_FILE, client=None, now=None):
         now=now,
         max_age=timedelta(days=DETAIL_REFRESH_DAYS),
     )
-    return jobs
 
 
 def enrich_candidate_jobs(
@@ -95,9 +94,9 @@ def enrich_candidate_jobs(
 ):
     """Remove prefiltered candidates whose LinkedIn application is closed."""
     targets = [
-        (index, linkedin_application_url(job))
+        (index, url)
         for index, job in enumerate(jobs)
-        if job.id in candidate_ids and linkedin_application_url(job)
+        if job.id in candidate_ids and (url := linkedin_application_url(job))
     ]
     if not targets:
         return 0

@@ -11,6 +11,7 @@ from job_finder.models import Job, JobSource
 from job_finder.paths import GERMAN_TECH_JOBS_CACHE_FILE
 from job_finder.remote import classify_remote, detect_remote
 from job_finder.sources.common import (
+    build_fetch_report,
     normalize_employment_type,
     parse_published_date,
     source_job_id,
@@ -40,21 +41,10 @@ def fetch_jobs_with_report(cache_path=CACHE_FILE, now=None):
         cached = load_feed_cache(cache_path, fetched_at)
         if not cached:
             raise
-        return {
-            "jobs": cached,
-            "status": "partial",
-            "details": {"failed_segments": 1, "total_segments": 1},
-        }
+        return build_fetch_report(cached, failed_segments=1, total_segments=1)
 
     save_feed_cache(cache_path, jobs, fetched_at)
-    return {
-        "jobs": jobs,
-        "status": "partial" if invalid_records else ("success" if jobs else "empty"),
-        "details": {
-            "failed_segments": invalid_records,
-            "total_segments": len(jobs) + invalid_records,
-        },
-    }
+    return build_fetch_report(jobs, invalid_records, len(jobs) + invalid_records)
 
 
 def parse_feed(xml_text, fetched_at=None):

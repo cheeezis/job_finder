@@ -3,6 +3,7 @@
 import argparse
 import os
 import time
+from collections import Counter
 
 from job_finder.availability import ignore_closed_listings
 from job_finder.console import configure_utf8_output, print_phase, print_progress
@@ -16,7 +17,7 @@ from job_finder.paths import (
     MEMORY_FILE,
     NOTIFICATION_STATE_FILE,
 )
-from job_finder.reporting import is_international_listing, write_recommendations
+from job_finder.reporting import is_visible_in_default_review, write_recommendations
 from job_finder.sources import (
     arbeitnow,
     arbeitsagentur,
@@ -240,9 +241,7 @@ def print_review_diagnostics(results, memory_stats):
     new_excluded = sum(bool(job.get("is_new")) for job in results["excluded"])
     pending = sum(job.get("workflow_status") == "new" for job in results["included"])
     standard_new = sum(
-        job.get("workflow_status") == "new"
-        and not is_international_listing(job)
-        and not str(job.get("location_precheck") or "").startswith("Junior-Hybrid")
+        job.get("workflow_status") == "new" and is_visible_in_default_review(job)
         for job in results["included"]
     )
     print(
@@ -280,23 +279,7 @@ def collect_jobs(sources=None):
         )
         reset_fetch_diagnostics()
         try:
-            report_fetcher = getattr(source, "fetch_jobs_with_report", None)
-            if report_fetcher is None:
-                source_jobs = source.fetch_jobs()
-                source_status = "success" if source_jobs else "empty"
-                report_details = {}
-            else:
-                source_result = report_fetcher()
-                source_jobs = source_result["jobs"]
-                source_status = source_result["status"]
-                report_details = source_result.get("details", {})
-            handled_failures = fetch_diagnostics()["failed_segments"]
-            if handled_failures and source_status != "partial":
-                source_status = "partial"
-                report_details = {
-                    **report_details,
-                    "failed_segments": handled_failures,
-                }
+            source_jobs, source_status, report_details = fetch_source_jobs(source)
         except Exception as error:
             source_reports.append(
                 {
@@ -343,6 +326,28 @@ def collect_jobs(sources=None):
     return deduplicate_jobs(jobs), source_reports
 
 
+def fetch_source_jobs(source):
+    """Apply the optional coverage report and include internally handled failures."""
+    report_fetcher = getattr(source, "fetch_jobs_with_report", None)
+    if report_fetcher is None:
+        source_jobs = source.fetch_jobs()
+        source_status = "success" if source_jobs else "empty"
+        report_details = {}
+    else:
+        source_result = report_fetcher()
+        source_jobs = source_result["jobs"]
+        source_status = source_result["status"]
+        report_details = source_result.get("details", {})
+    handled_failures = fetch_diagnostics()["failed_segments"]
+    if handled_failures and source_status != "partial":
+        source_status = "partial"
+        report_details = {
+            **report_details,
+            "failed_segments": handled_failures,
+        }
+    return source_jobs, source_status, report_details
+
+
 def enrich_candidate_jobs(jobs, candidate_ids, sources=None):
     """Let selected adapters update the candidate list in place.
 
@@ -363,10 +368,7 @@ def enrich_candidate_jobs(jobs, candidate_ids, sources=None):
 
 def print_source_summary(source_reports, total_jobs):
     """Print one source total plus exceptional source states."""
-    counts = {
-        status: sum(report["status"] == status for report in source_reports)
-        for status in ("success", "partial", "empty", "failed")
-    }
+    counts = Counter(report["status"] for report in source_reports)
     print(
         f"  Quellen: {counts['success']} vollständig · "
         f"{counts['partial']} teilweise · {counts['empty']} ohne Treffer · "

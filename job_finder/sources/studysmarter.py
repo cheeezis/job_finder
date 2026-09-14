@@ -1,7 +1,6 @@
 """StudySmarter source adapter using its public read-only jobs API."""
 
 import time
-from dataclasses import replace
 from urllib.parse import urlencode
 
 from job_finder.config import (
@@ -12,6 +11,7 @@ from job_finder.http import fetch_json, fetch_text
 from job_finder.models import Job, JobSource, WorkMode
 from job_finder.paths import STUDYSMARTER_CACHE_FILE
 from job_finder.sources.common import (
+    build_fetch_report,
     canonical_detail_url,
     enrich_cached_candidates,
     integer,
@@ -20,6 +20,7 @@ from job_finder.sources.common import (
     parse_published_date,
     source_job_id,
 )
+from job_finder.sources.common import with_current_summary as refresh_summary
 from job_finder.sources.company_careers import job_from_json_ld
 
 SOURCE_NAME = "studysmarter"
@@ -47,11 +48,7 @@ def fetch_jobs_with_report(cache_path=CACHE_FILE, now=None):
     """Return lightweight jobs and explicit search coverage metadata."""
     records, failed, total = collect_records(return_report=True)
     jobs = jobs_from_records(records, cache_path)
-    return {
-        "jobs": jobs,
-        "status": "partial" if failed else ("success" if jobs else "empty"),
-        "details": {"failed_segments": failed, "total_segments": total},
-    }
+    return build_fetch_report(jobs, failed, total)
 
 
 def jobs_from_records(records, cache_path):
@@ -70,17 +67,9 @@ def jobs_from_records(records, cache_path):
 
 def with_current_summary(cached_job, summary):
     """Keep cached detail text but refresh fields exposed by the search API."""
-    current = replace(
+    return refresh_summary(
         cached_job,
-        id=summary.id,
-        title=summary.title or cached_job.title,
-        company=summary.company or cached_job.company,
-        locations=(
-            summary.locations
-            if summary.locations != ["unbekannt"]
-            else cached_job.locations
-        ),
-        sources=summary.sources,
+        summary,
         work_mode=(
             summary.work_mode
             if summary.work_mode is not WorkMode.UNKNOWN
@@ -94,7 +83,6 @@ def with_current_summary(cached_job, summary):
         employment_type=summary.employment_type or cached_job.employment_type,
         published_at=summary.published_at or cached_job.published_at,
     )
-    return current
 
 
 def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE, now=None):

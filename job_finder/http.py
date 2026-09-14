@@ -68,6 +68,4 @@ def _read_bounded(response, max_bytes):
 
 def _build_headers(headers=None):
     """Merge optional request headers with the Job Finder defaults."""
-    merged = dict(DEFAULT_HEADERS)
-    merged.update(headers or {})
-    return merged
+    return {**DEFAULT_HEADERS, **(headers or {})}

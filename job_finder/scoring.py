@@ -9,6 +9,7 @@ from job_finder.profile import (
     BLOCKED_TITLE_WORDS,
     BODY_ENTRY_LEVEL_PHRASES,
     COMMUTER_LOCATIONS,
+    ENTRY_LEVEL_TITLE_EXCEPTIONS,
     ENTRY_LEVEL_WORDS,
     FIRST_EXPERIENCE_PHRASES,
     FOREIGN_ONLY_LOCATION_WORDS,
@@ -92,25 +93,28 @@ def score_job(job: Job, today=None):
     )
 
     role = find_role(title, description)
-    allowed, filter_reason = passes_hard_filters(
+    required_years = extract_required_years(full_text)
+    filter_reason = hard_filter_reason(
         title=title,
         description=description,
-        location=location,
-        remote=remote,
         full_text=full_text,
         role=role,
         career_levels=job.career_levels,
+        required_years=required_years,
     )
-    if not allowed:
+    if filter_reason:
         return excluded_result(filter_reason)
 
-    experience = analyze_experience(title, full_text)
     location_score = analyze_location_for_role(
         title,
         location,
         remote,
         description,
     )
+    if not location_score["allowed"]:
+        return excluded_result(location_score["label"])
+
+    experience = analyze_experience(title, full_text, required_years)
     skill_score, skill_labels = score_skills(f"{title} {description}")
     profile_score = score_profile_connection(full_text)
 
@@ -179,61 +183,46 @@ def strip_platform_boilerplate(description):
     return description
 
 
-def passes_hard_filters(
+def hard_filter_reason(
     title,
     description,
-    location,
-    remote,
     full_text,
     role,
     career_levels,
+    required_years,
 ):
-    """Return (allowed, reason) for normalized job text and role data.
+    """Return the first blocking job requirement, or an empty string.
 
     Inputs use normalize_text; role is a matching profile dictionary
-    or None. Return the first blocking reason, or (True, "") when title,
-    experience, degree, travel and location requirements pass. The age
-    check is performed separately by score_job.
+    or None. required_years is extracted once for filtering and scoring.
+    score_job checks age before these rules and location after them.
     """
     blocked_word = find_blocked_title_word(title)
     if blocked_word:
-        return False, f"Titel enthaelt Ausschlusswort: {blocked_word}"
+        return f"Titel enthaelt Ausschlusswort: {blocked_word}"
 
     if not role:
-        return False, "Titel ist keine erkennbare IT-Rolle"
+        return "Titel ist keine erkennbare IT-Rolle"
 
     advanced_level = structured_advanced_level(career_levels)
     if advanced_level and not is_entry_level(title, description):
-        return (
-            False,
-            f"Portal-Karrierestufe ist nicht fuer den Einstieg: {advanced_level}",
-        )
+        return f"Portal-Karrierestufe ist nicht fuer den Einstieg: {advanced_level}"
 
-    years = extract_required_years(full_text)
-    if years > 3:
-        return False, f"Mehr als 3 Jahre Erfahrung gefordert: {years} Jahre"
+    if required_years > 3:
+        return f"Mehr als 3 Jahre Erfahrung gefordert: {required_years} Jahre"
 
     if strong_experience_is_required(title, description):
-        return False, "Mehrjaehrige oder fundierte Erfahrung gefordert"
+        return "Mehrjaehrige oder fundierte Erfahrung gefordert"
 
     if any(
         re.search(pattern, full_text) for pattern in MANDATORY_ADVANCED_DEGREE_PATTERNS
     ):
-        return False, "Verpflichtender Master- oder Promotionsabschluss"
+        return "Verpflichtender Master- oder Promotionsabschluss"
 
     if contains_any(full_text, HIGH_TRAVEL_PHRASES):
-        return False, "Hohe oder deutschlandweite Reisetatigkeit gefordert"
+        return "Hohe oder deutschlandweite Reisetatigkeit gefordert"
 
-    location_score = analyze_location_for_role(
-        title,
-        location,
-        remote,
-        description,
-    )
-    if not location_score["allowed"]:
-        return False, location_score["label"]
-
-    return True, ""
+    return ""
 
 
 def find_role(title, description):
@@ -279,27 +268,11 @@ def find_role(title, description):
 
 def find_blocked_title_word(title):
     """Return a blocked title term, respecting explicit entry exceptions."""
+    entry_level = is_entry_level(title, title)
     for word in BLOCKED_TITLE_WORDS:
         # Explicit entry signals win over generic experience labels such as
         # Junior/Senior or Junior IT Project Manager.
-        if word in {
-            "senior",
-            "sr",
-            "experte",
-            "expert",
-            "lead",
-            "principal",
-            "head",
-            "leitung",
-            "leiter",
-            "projektleiter",
-            "projektmanager",
-            "teamleiter",
-            "abteilungsleiter",
-            "manager",
-            "testmanager",
-            "test manager",
-        } and is_entry_level(title, title):
+        if entry_level and word in ENTRY_LEVEL_TITLE_EXCEPTIONS:
             continue
         if contains_keyword(title, word):
             return word
@@ -326,22 +299,20 @@ def structured_advanced_level(career_levels):
     return None
 
 
-def analyze_experience(title, full_text):
+def analyze_experience(title, full_text, required_years):
     """Return experience rank, points and label for normalized job text.
 
-    Call after passes_hard_filters: explicit requirements above three
+    Call after hard_filter_reason: explicit requirements above three
     years must already be excluded. Numeric requirements take priority
     over entry-level signals; optional experience is weighted less
     strictly than required experience. Lower rank sorts first.
     """
-    years = extract_required_years(full_text)
-
-    if years:
-        points = {1: 14, 2: 8, 3: 3}[years]
+    if required_years:
+        points = {1: 14, 2: 8, 3: 3}[required_years]
         return {
-            "rank": years + 1,
+            "rank": required_years + 1,
             "points": points,
-            "label": f"{years} Jahr(e) gefordert",
+            "label": f"{required_years} Jahr(e) gefordert",
         }
 
     if contains_any(full_text, BODY_ENTRY_LEVEL_PHRASES):

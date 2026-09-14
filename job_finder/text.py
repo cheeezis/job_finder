@@ -3,6 +3,10 @@
 import re
 from html.parser import HTMLParser
 
+_SEARCH_TRANSLATION = str.maketrans(
+    {"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss", "\u00ad": None, "\u200b": None}
+)
+
 
 class _TextExtractor(HTMLParser):
     """Small HTML-to-text parser for schema.org description fragments."""
@@ -22,19 +26,9 @@ class _TextExtractor(HTMLParser):
 
 def normalize_text(text):
     """Lowercase text and make German umlauts searchable with ASCII keywords."""
-    replacements = {
-        "\u00e4": "ae",
-        "\u00f6": "oe",
-        "\u00fc": "ue",
-        "\u00df": "ss",
-    }
-    normalized = str(text or "").lower()
     # Career pages sometimes insert invisible soft hyphens for line wrapping.
     # They must not split searchable words such as "Auszubildende".
-    normalized = normalized.replace("\u00ad", "").replace("\u200b", "")
-    for old, new in replacements.items():
-        normalized = normalized.replace(old, new)
-    return normalized
+    return str(text or "").lower().translate(_SEARCH_TRANSLATION)
 
 
 def html_to_text(html):

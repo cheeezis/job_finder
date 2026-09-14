@@ -170,3 +170,10 @@ def format_remote(job):
     if job.get("work_mode") == "hybrid":
         return "homeoffice"
     return "0%"
+
+
+def is_visible_in_default_review(job):
+    """Return whether a job passes the default review visibility filters."""
+    return not is_international_listing(job) and not str(
+        job.get("location_precheck") or ""
+    ).startswith("Junior-Hybrid")

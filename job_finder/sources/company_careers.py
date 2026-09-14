@@ -45,7 +45,11 @@ def job_from_json_ld(source_name, fallback_company, url, html):
     posting = extract_json_ld_job_posting(html)
     if not posting:
         raise ValueError("JobPosting JSON-LD nicht gefunden")
+    return job_from_posting(source_name, fallback_company, url, posting)
 
+
+def job_from_posting(source_name, fallback_company, url, posting):
+    """Convert an already extracted schema.org JobPosting to a shared Job."""
     raw_description = posting.get("description", "")
     if not re.search(r"<[a-z][^>]*>", raw_description, re.IGNORECASE):
         raw_description = unescape(raw_description)
@@ -108,8 +112,9 @@ def ensure_url_identity(job, source_name, url):
     opening.  Using it would merge unrelated postings in memory and caches.
     """
     identifier = identifier_from_url(url)
-    changed = job.id != source_job_id(source_name, identifier, url)
-    job.id = source_job_id(source_name, identifier, url)
+    job_id = source_job_id(source_name, identifier, url)
+    changed = job.id != job_id
+    job.id = job_id
     for source in job.sources:
         if source.source == source_name:
             changed = changed or source.source_id != identifier or source.url != url

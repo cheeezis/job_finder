@@ -66,9 +66,7 @@ def collect_links():
 
         for result in results:
             reference = result.get("referenznummer")
-            if not reference:
-                continue
-            if "/" in reference:
+            if not reference or "/" in reference:
                 continue
 
             url = f"{DETAIL_BASE_URL}/{reference}"
@@ -106,7 +104,7 @@ def search(term, location=LOCAL_SEARCH_LOCATION, radius=LOCAL_SEARCH_RADIUS_KM):
             results.append(result)
 
         total = int(search_result.get("maxErgebnisse", 0) or 0)
-        if not page_results or not new_results or len(results) >= total:
+        if not new_results or len(results) >= total:
             return results
 
         page += 1

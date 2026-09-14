@@ -341,3 +341,10 @@ class VisibleJobParser(HTMLParser):
         if text:
             self.lines.append(text)
         self._parts = []
+
+
+def main_fragment(html):
+    """Keep only the main visible document section for fallback imports."""
+    parser = VisibleJobParser()
+    parser.feed(html)
+    return parser.main_fragment(html)

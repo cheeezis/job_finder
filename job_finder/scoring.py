@@ -299,7 +299,7 @@ def structured_advanced_level(career_levels):
     return None
 
 
-def analyze_experience(title, full_text, required_years):
+def analyze_experience(title, full_text, required_years=None):
     """Return experience rank, points and label for normalized job text.
 
     Call after hard_filter_reason: explicit requirements above three
@@ -307,6 +307,9 @@ def analyze_experience(title, full_text, required_years):
     over entry-level signals; optional experience is weighted less
     strictly than required experience. Lower rank sorts first.
     """
+    if required_years is None:
+        required_years = extract_required_years(full_text)
+
     if required_years:
         points = {1: 14, 2: 8, 3: 3}[required_years]
         return {
@@ -712,3 +715,60 @@ def keyword_pattern(keyword):
 def matches_pattern(text, pattern):
     """Require every keyword in a profile pattern to match normalized text."""
     return all(contains_keyword(text, part) for part in pattern)
+
+
+def passes_hard_filters(
+    title,
+    description,
+    location,
+    remote,
+    full_text,
+    role,
+    career_levels,
+):
+    """Return (allowed, reason) for normalized job text and role data.
+
+    Inputs use normalize_text; role is a matching profile dictionary
+    or None. Return the first blocking reason, or (True, "") when title,
+    experience, degree, travel and location requirements pass. The age
+    check is performed separately by score_job.
+    """
+    blocked_word = find_blocked_title_word(title)
+    if blocked_word:
+        return False, f"Titel enthaelt Ausschlusswort: {blocked_word}"
+
+    if not role:
+        return False, "Titel ist keine erkennbare IT-Rolle"
+
+    advanced_level = structured_advanced_level(career_levels)
+    if advanced_level and not is_entry_level(title, description):
+        return (
+            False,
+            f"Portal-Karrierestufe ist nicht fuer den Einstieg: {advanced_level}",
+        )
+
+    years = extract_required_years(full_text)
+    if years > 3:
+        return False, f"Mehr als 3 Jahre Erfahrung gefordert: {years} Jahre"
+
+    if strong_experience_is_required(title, description):
+        return False, "Mehrjaehrige oder fundierte Erfahrung gefordert"
+
+    if any(
+        re.search(pattern, full_text) for pattern in MANDATORY_ADVANCED_DEGREE_PATTERNS
+    ):
+        return False, "Verpflichtender Master- oder Promotionsabschluss"
+
+    if contains_any(full_text, HIGH_TRAVEL_PHRASES):
+        return False, "Hohe oder deutschlandweite Reisetatigkeit gefordert"
+
+    location_score = analyze_location_for_role(
+        title,
+        location,
+        remote,
+        description,
+    )
+    if not location_score["allowed"]:
+        return False, location_score["label"]
+
+    return True, ""

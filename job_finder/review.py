@@ -711,3 +711,12 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+def memory_entry_for_job(job, memory):
+    """Resolve stale recommendation IDs through an exact known source URL."""
+    candidates = memory_ids_for_job(job, memory)
+    if not candidates:
+        return job["id"], {}
+    memory_id = preferred_memory_id(candidates, memory, job["id"])
+    return memory_id, memory[memory_id]

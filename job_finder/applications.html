@@ -37,7 +37,7 @@
   const statusLabels = {...JobFinder.statusLabels, interview: "Gespräch", offer: "Zusage"};
   const terminalStatuses = new Set(["rejected", "no_response", "offer"]);
 
-  const {element, make, appendSourceLinks, postJson, showError, showFeedback} = JobFinder;
+  const {element, make, addOptions, appendSourceLinks, postJson, showError} = JobFinder;
 
   function formatDate(value) {
     if (!value) return "unbekannt";
@@ -176,13 +176,7 @@
 
   function statusSelect(statuses, selectedStatus) {
     const select = document.createElement("select");
-    statuses.forEach(status => {
-      const option = document.createElement("option");
-      option.value = status;
-      option.textContent = statusLabels[status] || status;
-      option.selected = status === selectedStatus;
-      select.append(option);
-    });
+    addOptions(select, statuses, statusLabels, selectedStatus);
     return select;
   }
 
@@ -198,6 +192,18 @@
     select.addEventListener("change", updateVisibility);
     updateVisibility();
     return {label, input};
+  }
+
+  async function saveChange(buttons, path, payload, failureMessage) {
+    buttons.forEach(button => { button.disabled = true; });
+    try {
+      await postJson(path, payload, failureMessage);
+      await load();
+    } catch (error) {
+      showError(error);
+    } finally {
+      buttons.forEach(button => { button.disabled = false; });
+    }
   }
 
   function eventForm(jobId) {
@@ -219,26 +225,16 @@
     form.append(statusLabel, dateLabel, appointment.label, button);
     form.addEventListener("submit", async event => {
       event.preventDefault();
-      button.disabled = true;
-      try {
-        await postJson(
-          "/api/status",
-          {
-            job_id: jobId,
-            workflow_status: select.value,
-            occurred_on: dateInput.value,
-            scheduled_for: select.value === "interview"
-              ? appointment.input.value || null
-              : null
-          },
-          "Ereignis konnte nicht gespeichert werden"
-        );
-        await load();
-      } catch (error) {
-        showError(error);
-      } finally {
-        button.disabled = false;
-      }
+      await saveChange([button], "/api/status",
+        {
+          job_id: jobId,
+          workflow_status: select.value,
+          occurred_on: dateInput.value,
+          scheduled_for: select.value === "interview"
+            ? appointment.input.value || null
+            : null
+        },
+        "Ereignis konnte nicht gespeichert werden");
     });
     return form;
   }
@@ -263,59 +259,33 @@
     actions.append(saveButton, deleteButton);
     form.append(statusLabel, dateLabel, appointment.label, actions);
 
+    const previousEvent = {
+      job_id: jobId,
+      event_index: historyEvent.event_index,
+      previous_status: historyEvent.status,
+      previous_occurred_on: historyEvent.occurred_on,
+      previous_scheduled_for: historyEvent.scheduled_for || null
+    };
+
     form.addEventListener("submit", async event => {
       event.preventDefault();
-      saveButton.disabled = true;
-      deleteButton.disabled = true;
-      try {
-        await postJson(
-          "/api/history",
-          {
-            job_id: jobId,
-            event_index: historyEvent.event_index,
-            previous_status: historyEvent.status,
-            previous_occurred_on: historyEvent.occurred_on,
-            previous_scheduled_for: historyEvent.scheduled_for || null,
-            workflow_status: select.value,
-            occurred_on: dateInput.value || null,
-            scheduled_for: select.value === "interview"
-              ? appointment.input.value || null
-              : null
-          },
-          "Verlaufsereignis konnte nicht geändert werden"
-        );
-        await load();
-      } catch (error) {
-        showError(error);
-      } finally {
-        saveButton.disabled = false;
-        deleteButton.disabled = false;
-      }
+      await saveChange([saveButton, deleteButton], "/api/history",
+        {
+          ...previousEvent,
+          workflow_status: select.value,
+          occurred_on: dateInput.value || null,
+          scheduled_for: select.value === "interview"
+            ? appointment.input.value || null
+            : null
+        },
+        "Verlaufsereignis konnte nicht geändert werden");
     });
 
     deleteButton.addEventListener("click", async () => {
       if (!window.confirm("Dieses Verlaufsereignis wirklich löschen?")) return;
-      saveButton.disabled = true;
-      deleteButton.disabled = true;
-      try {
-        await postJson(
-          "/api/history/delete",
-          {
-            job_id: jobId,
-            event_index: historyEvent.event_index,
-            previous_status: historyEvent.status,
-            previous_occurred_on: historyEvent.occurred_on,
-            previous_scheduled_for: historyEvent.scheduled_for || null
-          },
-          "Verlaufsereignis konnte nicht gelöscht werden"
-        );
-        await load();
-      } catch (error) {
-        showError(error);
-      } finally {
-        saveButton.disabled = false;
-        deleteButton.disabled = false;
-      }
+      await saveChange([saveButton, deleteButton], "/api/history/delete",
+        previousEvent,
+        "Verlaufsereignis konnte nicht gelöscht werden");
     });
 
     item.append(form);
@@ -349,19 +319,11 @@
     form.append(label, periodLabel, hint, save);
     form.addEventListener("submit", async event => {
       event.preventDefault();
-      save.disabled = true;
-      try {
-        await postJson("/api/application-salary", {
-          job_id: application.id,
-          salary_expectation_eur: input.value ? Number(input.value) : null,
-          salary_period: period.value
-        }, "Gehaltsvorstellung konnte nicht gespeichert werden");
-        await load();
-      } catch (error) {
-        showError(error);
-      } finally {
-        save.disabled = false;
-      }
+      await saveChange([save], "/api/application-salary", {
+        job_id: application.id,
+        salary_expectation_eur: input.value ? Number(input.value) : null,
+        salary_period: period.value
+      }, "Gehaltsvorstellung konnte nicht gespeichert werden");
     });
     details.append(form);
     return details;

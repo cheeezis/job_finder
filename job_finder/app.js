@@ -19,6 +19,15 @@ const JobFinder = (() => {
     return node;
   }
 
+  function addOptions(select, values, labels, selectedValue) {
+    for (const value of values) {
+      const option = make("option", labels[value] || value);
+      option.value = value;
+      option.selected = value === selectedValue;
+      select.append(option);
+    }
+  }
+
   function safeUrl(value) {
     try {
       const url = new URL(value);
@@ -97,6 +106,6 @@ const JobFinder = (() => {
   }
 
   const showError = error => showFeedback(error.message);
-  return {element, make, safeUrl, appendSourceLinks, postJson, showError, showFeedback,
+  return {element, make, addOptions, safeUrl, appendSourceLinks, postJson, showError, showFeedback,
     statusLabels, sourceLabels, salaryYearAmount, bindSalaryInputs};
 })();

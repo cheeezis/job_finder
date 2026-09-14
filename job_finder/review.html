@@ -146,16 +146,7 @@
   let routeOrigin = "";
   let undoDecision = null;
 
-  const {element, make, appendSourceLinks, postJson, showError} = JobFinder;
-
-  function addOptions(select, values, labels) {
-    values.forEach(value => {
-      const option = document.createElement("option");
-      option.value = value;
-      option.textContent = labels[value] || value;
-      select.append(option);
-    });
-  }
+  const {element, make, addOptions, appendSourceLinks, postJson, showError} = JobFinder;
 
   function setText(id, value) {
     element(id).textContent = value || "";
@@ -278,10 +269,9 @@
       ? "Quelle hat die Stelle im aktuellen Lauf nicht geliefert"
       : job.location_precheck || "passt zur Standortregel");
     const applicationTracked = Boolean(job.application_tracked);
-    element("mark-interesting").hidden = applicationTracked;
-    element("mark-inquiry").hidden = applicationTracked;
-    element("mark-ignored").hidden = applicationTracked;
-    element("mark-applied").hidden = applicationTracked;
+    for (const id of ["mark-interesting", "mark-inquiry", "mark-ignored", "mark-applied"]) {
+      element(id).hidden = applicationTracked;
+    }
     element("application-link").hidden = !applicationTracked;
     const warning = element("prefilter-warning");
     warning.hidden = !job.prefilter_warning;
@@ -300,6 +290,7 @@
     if (result.application_tracked != null) {
       job.application_tracked = result.application_tracked;
     }
+    // Several source cards can resolve to the same persisted job ID.
     const original = jobs.find(item => item.id === job.id);
     if (original) {
       original.workflow_status = result.workflow_status;
@@ -308,12 +299,10 @@
     }
     if (element("status-filter").value && element("status-filter").value !== result.workflow_status) {
       applyFilters(false);
-    } else if (currentIndex < visibleJobs.length - 1) {
-      currentIndex += 1;
-      render();
-    } else {
-      render();
+      return;
     }
+    if (currentIndex < visibleJobs.length - 1) currentIndex += 1;
+    render();
   }
 
   async function changeStatus(workflowStatus) {
@@ -424,22 +413,15 @@
     }
   }
 
-  element("status-filter").addEventListener("change", () => applyFilters());
-  element("role-filter").addEventListener("change", () => applyFilters());
+  for (const id of ["status-filter", "role-filter", "international-filter", "junior-hybrid-filter"]) {
+    element(id).addEventListener("change", () => applyFilters());
+  }
   element("search-filter").addEventListener("input", () => applyFilters());
-  element("international-filter").addEventListener("change", () => applyFilters());
-  element("junior-hybrid-filter").addEventListener("change", () => applyFilters());
   element("previous").addEventListener("click", () => { currentIndex -= 1; render(); });
   element("next").addEventListener("click", () => { currentIndex += 1; render(); });
-  element("mark-interesting").addEventListener("click", () =>
-    changeStatus("interesting").catch(showError)
-  );
-  element("mark-inquiry").addEventListener("click", () =>
-    changeStatus("inquiry").catch(showError)
-  );
-  element("mark-ignored").addEventListener("click", () =>
-    changeStatus("ignored").catch(showError)
-  );
+  for (const status of ["interesting", "inquiry", "ignored"]) {
+    element(`mark-${status}`).addEventListener("click", () => changeStatus(status).catch(showError));
+  }
   element("undo-ignored").addEventListener("click", () =>
     undoIgnored().catch(showError)
   );

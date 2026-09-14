@@ -49,6 +49,7 @@ beschreibt Titel und Beschreibung.
 | `job_finder/memory.py` | SQLite-Zustand, stabile IDs und frühere Entscheidungen |
 | `job_finder/availability.py` | Fehlende interessante Stellen auf bestätigte Schließung prüfen |
 | `job_finder/review.py`, `applications.py`, `application_documents.py` | Review, Bewerbungsverlauf und lokale Unterlagen |
+| `job_finder/app.js`, `review.html`, `applications.html` | Gemeinsame Browser-Helfer und die beiden Arbeitsansichten |
 | `job_finder/reporting.py`, `notifications.py` | Review-Ausgabe und Discord-Warteschlange |
 | `job_finder/user_settings.py`, `config.py`, `paths.py` | Konfiguration, Suche und lokale Dateipfade |
 
@@ -103,11 +104,9 @@ Der vom Runner erwartete Vertrag:
 Ein Abdeckungsbericht sieht beispielsweise so aus:
 
 ```python
-return {
-    "jobs": jobs,
-    "status": "partial" if failed_segments else ("success" if jobs else "empty"),
-    "details": {"failed_segments": failed_segments},
-}
+from job_finder.sources.common import build_fetch_report
+
+return build_fetch_report(jobs, failed_segments, total_segments)
 ```
 
 Bei einem abgefangenen Teilfehler muss die Quelle diesen melden, etwa über
@@ -173,6 +172,17 @@ Ausschlussgrund; nur regulär eingeschlossene Ergebnisse besitzen zusätzlich
 `role_group` und `location_precheck`. `score_for_pipeline` ergänzt die
 Sonderbehandlung manueller Einträge. Diese Ergebnisse sind Sortierhilfen,
 keine Vorhersagen einer Einstellungschance.
+
+Die Bewertung prüft zuerst das Anzeigenalter, danach die Anforderungen und
+zuletzt den Standort. Die erste Ablehnung bleibt der sichtbare Ausschlussgrund.
+Erfahrungsjahre und Standortanalyse werden anschließend für die Punktevergabe
+wiederverwendet. Bei Änderungen diese Reihenfolge und die Grenzwerte erhalten.
+
+Die Review-API ordnet POST-Routen kurzen Aktionsmethoden zu. Host-/Origin-Prüfung,
+Größenlimit und JSON-Objektprüfung erfolgen gemeinsam vor dem Aufruf der Aktion;
+Fehlerantworten und Antwortheader bleiben zentral. Im Browser verwenden die
+Bewerbungsformulare denselben Speicherablauf, der ihre Aktionsbuttons auch nach
+einem Fehler wieder freigibt.
 
 ## Python-Stil und hilfreiche Dokumentation
 

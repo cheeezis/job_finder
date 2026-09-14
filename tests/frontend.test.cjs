@@ -85,6 +85,108 @@ const filterStart = reviewHtml.indexOf("  function applyFilters(");
 const filterEnd = reviewHtml.indexOf("\n  function ", filterStart + 1);
 const applyReviewFilters = reviewHtml.slice(filterStart, filterEnd);
 
+function pageFunction(html, name) {
+  const start = html.search(new RegExp(`  (?:async )?function ${name}\\(`));
+  assert.notEqual(start, -1, `Missing function ${name}`);
+  const tail = html.slice(start + 1);
+  const end = tail.search(/\n  (?:async )?function /);
+  assert.notEqual(end, -1, `Missing function boundary after ${name}`);
+  return html.slice(start, start + 1 + end);
+}
+
+test("shared options retain labels, selection and plain text rendering", () => {
+  const select = node("select");
+  helpers().addOptions(select, ["new", "interview", "custom"], {
+    new: "Neu", interview: "<b>Gespräch</b>"
+  }, "interview");
+  assert.deepEqual(select.children.map(option => [option.value, option.textContent, option.selected]), [
+    ["new", "Neu", false], ["interview", "<b>Gespräch</b>", true], ["custom", "custom", false]
+  ]);
+});
+
+test("review decisions update the backing jobs and preserve navigation", () => {
+  for (const filtered of [false, true]) {
+    const jobs = [{id: "one", workflow_status: "new", is_new: true}, {id: "two"}];
+    let renders = 0;
+    let filterCalls = 0;
+    const context = vm.createContext({
+      jobs, visibleJobs: jobs.filter(() => true), currentIndex: 0,
+      element: () => ({value: filtered ? "new" : ""}),
+      render() { renders += 1; },
+      applyFilters(reset) { assert.equal(reset, false); filterCalls += 1; }
+    });
+    vm.runInContext(pageFunction(reviewHtml, "applyWorkflowResult") +
+      '\napplyWorkflowResult(visibleJobs[0], {workflow_status: "interesting", application_tracked: false});', context);
+    assert.equal(jobs[0].workflow_status, "interesting");
+    assert.equal(jobs[0].is_new, false);
+    assert.equal(jobs[0].application_tracked, false);
+    assert.equal(filterCalls, filtered ? 1 : 0);
+    assert.equal(renders, filtered ? 0 : 1);
+    assert.equal(context.currentIndex, filtered ? 0 : 1);
+  }
+});
+
+test("review decisions retain updates for cards sharing a persisted job ID", () => {
+  const jobs = [
+    {id: "merged:1", workflow_status: "new", is_new: true},
+    {id: "merged:1", workflow_status: "new", is_new: true}
+  ];
+  vm.runInNewContext(pageFunction(reviewHtml, "applyWorkflowResult") +
+    '\napplyWorkflowResult(visibleJobs[0], {workflow_status: "applied", application_tracked: true});', {
+      jobs, visibleJobs: [jobs[1]], currentIndex: 0,
+      element: () => ({value: ""}), render() {}
+    });
+  for (const job of jobs) {
+    assert.equal(job.workflow_status, "applied");
+    assert.equal(job.application_tracked, true);
+    assert.equal(job.is_new, false);
+  }
+});
+
+const applicationsHtml = fs.readFileSync(path.join(__dirname, "../job_finder/applications.html"), "utf8");
+
+test("application saves disable all action buttons through the reload", async () => {
+  const buttons = [{disabled: false}, {disabled: false}];
+  const payload = {job_id: "job:1", previous_status: "applied"};
+  let reloaded = false;
+  const save = vm.runInNewContext(pageFunction(applicationsHtml, "saveChange") + "\nsaveChange;", {
+    async postJson(path, actual, message) {
+      assert.ok(buttons.every(button => button.disabled));
+      assert.equal(path, "/api/history");
+      assert.equal(actual, payload);
+      assert.equal(message, "fallback");
+    },
+    async load() { assert.ok(buttons.every(button => button.disabled)); reloaded = true; },
+    showError(error) { throw error; }
+  });
+  await save(buttons, "/api/history", payload, "fallback");
+  assert.equal(reloaded, true);
+  assert.ok(buttons.every(button => !button.disabled));
+});
+
+test("failed application saves restore buttons and keep the current view", async () => {
+  const buttons = [{disabled: false}, {disabled: false}];
+  const failure = new Error("Verlauf wurde zwischenzeitlich geändert");
+  const errors = [];
+  const save = vm.runInNewContext(pageFunction(applicationsHtml, "saveChange") + "\nsaveChange;", {
+    async postJson() { throw failure; },
+    async load() { assert.fail("Failed saves must not reload"); },
+    showError(error) { errors.push(error); }
+  });
+  await save(buttons, "/api/history", {}, "fallback");
+  assert.deepEqual(errors, [failure]);
+  assert.ok(buttons.every(button => !button.disabled));
+});
+
+test("every page's inline JavaScript parses with the shared helpers", () => {
+  for (const filename of ["landing.html", "review.html", "applications.html"]) {
+    const html = fs.readFileSync(path.join(__dirname, "../job_finder", filename), "utf8");
+    for (const [, script] of html.matchAll(/<script>([\s\S]*?)<\/script>/g)) {
+      assert.doesNotThrow(() => new vm.Script(source + "\n" + script, {filename}));
+    }
+  }
+});
+
 function filteredReviewIds(rows, status = "new") {
   const controls = {
     "status-filter": {value: status}, "role-filter": {value: ""},

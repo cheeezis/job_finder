@@ -282,7 +282,7 @@ button.ignore { border-color: var(--line-strong); color: var(--danger); }
   background: var(--panel);
   box-shadow: 6px 6px 0 rgba(32, 33, 38, .14);
 }
-.review-badges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.review-badges, .badges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .source-menu { position: relative; }
 .source-menu summary { display: block; list-style: none; cursor: pointer; }
 .source-menu summary::-webkit-details-marker { display: none; }
@@ -364,7 +364,6 @@ dialog::backdrop { background: rgba(25, 24, 23, .58); }
 .application { padding: 22px 24px 22px 20px; border-left: 5px solid var(--ink); }
 .application-header { display: flex; justify-content: space-between; gap: 18px; align-items: start; }
 .application h2 { font-size: 1.45rem; }
-.badges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .badges .badge { background: transparent; }
 .badge.inactive { border-color: var(--line); background: var(--paper); color: var(--muted); }
 .application details { margin-top: 18px; padding-top: 15px; border-top: 1px solid var(--line); }

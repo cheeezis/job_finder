@@ -1,6 +1,5 @@
 """Local application history and derived workflow statistics."""
 
-import re
 from datetime import date, datetime, timedelta
 
 from job_finder.application_documents import public_documents
@@ -14,6 +13,7 @@ from job_finder.memory import (
 )
 from job_finder.models import APPLICATION_STATUSES, WorkflowStatus
 from job_finder.paths import MEMORY_FILE
+from job_finder.state_compat import legacy_salary_expectation
 
 OPEN_APPLICATION_STATUSES = {
     WorkflowStatus.APPLIED.value,
@@ -293,13 +293,7 @@ def application_salary_expectation_eur(entry):
     value = entry.get("salary_expectation_eur")
     if isinstance(value, int) and not isinstance(value, bool) and value > 0:
         return value
-    legacy = entry.get("salary_expectation")
-    if not isinstance(legacy, str):
-        return None
-    match = re.search(r"\b(\d{2,3}(?:[.\s]\d{3})+|\d{4,7})\b", legacy)
-    if not match:
-        return None
-    return int(re.sub(r"\D", "", match.group(1)))
+    return legacy_salary_expectation(entry.get("salary_expectation"))
 
 
 def valid_history(history):

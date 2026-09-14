@@ -10,8 +10,10 @@ from pathlib import Path
 from job_finder.deduplication import normalize_company, normalize_title
 from job_finder.models import APPLICATION_STATUSES, WorkflowStatus
 from job_finder.paths import LEGACY_MEMORY_FILE, MEMORY_FILE
+from job_finder.state_compat import MEMORY_VERSION as MEMORY_VERSION
+from job_finder.state_compat import decode_legacy_memory, restore_initial_discovery_date
+from job_finder.state_compat import first_seen_date as first_seen_date
 
-MEMORY_VERSION = 2
 DATABASE_SCHEMA_VERSION = 1
 INACTIVE_AFTER_MISSED_RUNS = 3
 
@@ -29,12 +31,7 @@ def load_json_memory(memory_path):
     if not memory_path.exists():
         return {}
     values = json.loads(memory_path.read_text(encoding="utf-8"))
-    if values.get("version") != MEMORY_VERSION:
-        raise ValueError(
-            "seen_jobs.json verwendet das alte Format; Datei vor dem "
-            "ersten neuen Lauf loeschen"
-        )
-    return values.get("jobs", {})
+    return decode_legacy_memory(values)
 
 
 def save_memory(memory, path=MEMORY_FILE):
@@ -116,26 +113,9 @@ def load_sqlite_memory(connection):
         entry = json.loads(payload)
         if not isinstance(entry, dict):
             raise ValueError(f"Ungültiger Zustand für Job {job_id}")
-        history = entry.get("workflow_history")
-        if isinstance(history, list) and history:
-            first = history[0]
-            if (
-                isinstance(first, dict)
-                and first.get("status") == "new"
-                and first.get("occurred_on") is None
-            ):
-                first["occurred_on"] = first_seen_date(entry)
+        restore_initial_discovery_date(entry)
         memory[job_id] = entry
     return memory
-
-
-def first_seen_date(entry):
-    """Recover only the initial discovery date, never a later decision date."""
-    try:
-        timestamp = datetime.fromisoformat(entry["first_seen_at"])
-    except (KeyError, TypeError, ValueError):
-        return None
-    return timestamp.astimezone().date().isoformat()
 
 
 def replace_sqlite_memory(connection, memory, *, commit=True):

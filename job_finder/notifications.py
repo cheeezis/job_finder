@@ -15,9 +15,10 @@ from job_finder.reporting import (
     is_visible_in_default_review,
     primary_url,
 )
+from job_finder.state_compat import NOTIFICATION_STATE_VERSION as STATE_VERSION
+from job_finder.state_compat import decode_notification_state
 from job_finder.storage import write_json_atomic
 
-STATE_VERSION = 3
 NOTIFIABLE_STATUSES = {"new", "review", "interesting", "inquiry"}
 MAX_EMBEDS = 10
 MAX_EMBED_CHARACTERS = 6000
@@ -408,23 +409,7 @@ def load_notification_state(path=NOTIFICATION_STATE_FILE):
     if not state_path.exists():
         return {"sent": {}, "pending": {}}
     document = json.loads(state_path.read_text(encoding="utf-8"))
-    version = document.get("version")
-    if version not in {1, 2, STATE_VERSION}:
-        raise ValueError("Benachrichtigungsstatus verwendet eine unbekannte Version")
-    sent = {
-        entry.get("job_id", key): entry
-        for key, entry in document.get("sent", {}).items()
-    }
-    pending = (
-        {}
-        if version == 1
-        else {
-            entry["job_id"]: entry
-            for entry in document.get("pending", {}).values()
-            if entry.get("job_id") and entry["job_id"] not in sent
-        }
-    )
-    return {"sent": sent, "pending": pending}
+    return decode_notification_state(document)
 
 
 def save_notification_state(state, path=NOTIFICATION_STATE_FILE):

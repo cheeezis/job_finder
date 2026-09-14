@@ -25,6 +25,30 @@ def store_documents(
     title="",
 ):
     """Validate and persist at most one document of each supported kind."""
+    prepared = _prepare_documents(documents)
+    if not prepared:
+        return []
+    folder_name = application_folder_name(company, title, job_id)
+    directory = document_directory(job_id, root, folder_name)
+    written = []
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+        for metadata, content in prepared:
+            metadata["folder_name"] = folder_name
+            destination = directory / metadata["stored_name"]
+            temporary = destination.with_suffix(f"{destination.suffix}.tmp")
+            temporary.write_bytes(content)
+            temporary.replace(destination)
+            written.append(destination)
+    except OSError:
+        for path in written:
+            path.unlink(missing_ok=True)
+        raise
+    return [metadata for metadata, _ in prepared]
+
+
+def _prepare_documents(documents):
+    """Validate and decode the entire upload before creating any files."""
     if documents is None:
         return []
     if not isinstance(documents, list):
@@ -61,23 +85,7 @@ def store_documents(
     if len(stored_names) != len(set(stored_names)):
         raise ValueError("Bewerbungsunterlagen müssen unterschiedliche Namen haben")
 
-    folder_name = application_folder_name(company, title, job_id)
-    directory = document_directory(job_id, root, folder_name)
-    written = []
-    try:
-        for metadata, content in prepared:
-            metadata["folder_name"] = folder_name
-            directory.mkdir(parents=True, exist_ok=True)
-            destination = directory / metadata["stored_name"]
-            temporary = destination.with_suffix(f"{destination.suffix}.tmp")
-            temporary.write_bytes(content)
-            temporary.replace(destination)
-            written.append(destination)
-    except OSError:
-        for path in written:
-            path.unlink(missing_ok=True)
-        raise
-    return [metadata for metadata, _ in prepared]
+    return prepared
 
 
 def document_path(job_id, metadata, root=APPLICATION_DOCUMENTS_DIR):

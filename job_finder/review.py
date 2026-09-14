@@ -74,8 +74,14 @@ def load_review_jobs(
         job["international"] = bool(
             job.get("international")
         ) or is_international_listing(job)
-        represented_memory_ids.update(memory_ids_for_job(job, memory))
-        memory_id, entry = memory_entry_for_job(job, memory)
+        candidates = memory_ids_for_job(job, memory)
+        represented_memory_ids.update(candidates)
+        memory_id = (
+            preferred_memory_id(candidates, memory, job["id"])
+            if candidates
+            else job["id"]
+        )
+        entry = memory.get(memory_id, {})
         job["id"] = memory_id
         job["workflow_status"] = entry.get(
             "workflow_status",
@@ -140,15 +146,6 @@ def remembered_review_job(job_id, entry):
     }
     job["international"] = is_international_listing(job)
     return job
-
-
-def memory_entry_for_job(job, memory):
-    """Resolve stale recommendation IDs through an exact known source URL."""
-    candidates = memory_ids_for_job(job, memory)
-    if not candidates:
-        return job["id"], {}
-    memory_id = preferred_memory_id(candidates, memory, job["id"])
-    return memory_id, memory[memory_id]
 
 
 def memory_ids_for_job(job, memory):
@@ -469,20 +466,21 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
         self.send_error(404)
 
     def do_POST(self):
-        """Persist a workflow status selected in the browser."""
+        """Validate a local JSON request and dispatch its application action."""
         if not self.accept_local_request(require_json=True):
             return
-        request_path = urlsplit(self.path).path
-        if request_path not in {
-            "/api/status",
-            "/api/applications",
-            "/api/application-salary",
-            "/api/review-status",
-            "/api/review-undo",
-            "/api/history",
-            "/api/history/delete",
-            "/api/manual-import",
-        }:
+        actions = {
+            "/api/manual-import": self._import_manual,
+            "/api/applications": self._start_application,
+            "/api/application-salary": self._update_salary,
+            "/api/review-status": self._review_status,
+            "/api/review-undo": self._undo_review,
+            "/api/status": self._update_status,
+            "/api/history": self._update_history,
+            "/api/history/delete": self._delete_history,
+        }
+        action = actions.get(urlsplit(self.path).path)
+        if action is None:
             self.send_error(404)
             return
         try:
@@ -490,86 +488,91 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
             if length <= 0 or length > MAX_REQUEST_BYTES:
                 raise ValueError("Anfrage ist leer oder zu groß")
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-            if request_path == "/api/manual-import":
-                result = type(self).manual_importer(
-                    payload.get("url"),
-                    cache_path=self.manual_cache_path,
-                    jobs_path=self.jobs_path,
-                    memory_path=self.memory_path,
-                    recommendations_path=self.recommendations_path,
-                )
-            elif request_path == "/api/applications":
-                result = start_application(
-                    payload["job_id"],
-                    self.memory_path,
-                    payload.get("documents"),
-                    self.application_documents_dir,
-                    salary_expectation_eur=payload.get(
-                        "salary_expectation_eur",
-                        payload.get("salary_expectation"),
-                    ),
-                    salary_period=payload.get("salary_period", "year"),
-                )
-            elif request_path == "/api/application-salary":
-                result = update_application_salary(
-                    payload["job_id"],
-                    payload.get("salary_expectation_eur"),
-                    payload.get("salary_period", "year"),
-                    self.memory_path,
-                )
-            elif request_path == "/api/review-status":
-                result = update_review_decision(
-                    payload["job_id"],
-                    payload["workflow_status"],
-                    self.memory_path,
-                )
-            elif request_path == "/api/review-undo":
-                result = undo_ignored_decision(
-                    payload["job_id"],
-                    payload["expected_status"],
-                    self.memory_path,
-                )
-            elif request_path == "/api/status":
-                result = {
-                    "workflow_status": update_workflow_status(
-                        payload["job_id"],
-                        payload["workflow_status"],
-                        self.memory_path,
-                        payload.get("occurred_on"),
-                        payload.get("scheduled_for"),
-                    )
-                }
-            elif request_path == "/api/history":
-                result = update_workflow_history(
-                    payload["job_id"],
-                    payload["event_index"],
-                    payload["previous_status"],
-                    payload.get("previous_occurred_on"),
-                    payload["workflow_status"],
-                    payload.get("occurred_on"),
-                    self.memory_path,
-                    scheduled_for=payload.get("scheduled_for"),
-                    previous_scheduled_for=payload.get("previous_scheduled_for"),
-                )
-            else:
-                result = delete_workflow_history(
-                    payload["job_id"],
-                    payload["event_index"],
-                    payload["previous_status"],
-                    payload.get("previous_occurred_on"),
-                    self.memory_path,
-                    previous_scheduled_for=payload.get("previous_scheduled_for"),
-                )
-        except (
-            TypeError,
-            ValueError,
-            KeyError,
-            OSError,
-            RuntimeError,
-        ) as error:
+            if not isinstance(payload, dict):
+                raise ValueError("JSON-Objekt erforderlich")
+            result = action(payload)
+        except (TypeError, ValueError, KeyError, OSError, RuntimeError) as error:
             self.send_json({"error": str(error)}, status=400)
             return
         self.send_json(result)
+
+    def _import_manual(self, payload):
+        return type(self).manual_importer(
+            payload.get("url"),
+            cache_path=self.manual_cache_path,
+            jobs_path=self.jobs_path,
+            memory_path=self.memory_path,
+            recommendations_path=self.recommendations_path,
+        )
+
+    def _start_application(self, payload):
+        return start_application(
+            payload["job_id"],
+            self.memory_path,
+            payload.get("documents"),
+            self.application_documents_dir,
+            salary_expectation_eur=payload.get(
+                "salary_expectation_eur",
+                payload.get("salary_expectation"),
+            ),
+            salary_period=payload.get("salary_period", "year"),
+        )
+
+    def _update_salary(self, payload):
+        return update_application_salary(
+            payload["job_id"],
+            payload.get("salary_expectation_eur"),
+            payload.get("salary_period", "year"),
+            self.memory_path,
+        )
+
+    def _review_status(self, payload):
+        return update_review_decision(
+            payload["job_id"],
+            payload["workflow_status"],
+            self.memory_path,
+        )
+
+    def _undo_review(self, payload):
+        return undo_ignored_decision(
+            payload["job_id"],
+            payload["expected_status"],
+            self.memory_path,
+        )
+
+    def _update_status(self, payload):
+        return {
+            "workflow_status": update_workflow_status(
+                payload["job_id"],
+                payload["workflow_status"],
+                self.memory_path,
+                payload.get("occurred_on"),
+                payload.get("scheduled_for"),
+            )
+        }
+
+    def _update_history(self, payload):
+        return update_workflow_history(
+            payload["job_id"],
+            payload["event_index"],
+            payload["previous_status"],
+            payload.get("previous_occurred_on"),
+            payload["workflow_status"],
+            payload.get("occurred_on"),
+            self.memory_path,
+            scheduled_for=payload.get("scheduled_for"),
+            previous_scheduled_for=payload.get("previous_scheduled_for"),
+        )
+
+    def _delete_history(self, payload):
+        return delete_workflow_history(
+            payload["job_id"],
+            payload["event_index"],
+            payload["previous_status"],
+            payload.get("previous_occurred_on"),
+            self.memory_path,
+            previous_scheduled_for=payload.get("previous_scheduled_for"),
+        )
 
     def send_application_document(self):
         """Return one document referenced by the matching memory entry."""
@@ -590,15 +593,11 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
             self.send_error(404)
             return
         content_type = mimetypes.guess_type(metadata["name"])[0]
-        self.send_response(200)
-        self.send_header("Content-Type", content_type or "application/octet-stream")
-        self.send_header("Content-Length", str(len(content)))
-        self.send_header(
-            "Content-Disposition",
-            f"attachment; filename*=UTF-8''{quote(metadata['name'])}",
+        self.send_content(
+            content,
+            content_type or "application/octet-stream",
+            disposition=f"attachment; filename*=UTF-8''{quote(metadata['name'])}",
         )
-        self.end_headers()
-        self.wfile.write(content)
 
     def accept_local_request(self, *, require_json=False):
         """Reject DNS rebinding and cross-site mutation attempts.
@@ -642,18 +641,20 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
         except FileNotFoundError:
             self.send_error(404)
             return
-        self.send_response(200)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(content)))
-        self.end_headers()
-        self.wfile.write(content)
+        self.send_content(content, content_type)
 
     def send_json(self, value, status=200):
         """Return one JSON response."""
         content = json.dumps(value, ensure_ascii=False).encode("utf-8")
+        self.send_content(content, "application/json; charset=utf-8", status)
+
+    def send_content(self, content, content_type, status=200, *, disposition=None):
+        """Send bytes with shared response headers and an optional download name."""
         self.send_response(status)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(content)))
+        if disposition is not None:
+            self.send_header("Content-Disposition", disposition)
         self.end_headers()
         self.wfile.write(content)
 

@@ -254,8 +254,7 @@ def update_memory(
         for job_id, entry in memory.items():
             if job_id in current_ids:
                 continue
-            known_sources = set(entry.get("source_names") or inferred_sources(job_id))
-            if not known_sources or not known_sources.issubset(successful):
+            if not sources_succeeded(job_id, entry, successful):
                 continue
             entry["missed_runs"] = entry.get("missed_runs", 0) + 1
             if entry["missed_runs"] >= inactive_after and entry.get("active", True):
@@ -415,6 +414,12 @@ def inferred_sources(job_id):
     """Recover the source of older memory entries from their stable ID."""
     source, separator, _identifier = job_id.partition(":")
     return [source] if separator and source else []
+
+
+def sources_succeeded(job_id, entry, successful_sources):
+    """Require complete coverage of every known source before treating a job as missing."""
+    known = set(entry.get("source_names") or inferred_sources(job_id))
+    return bool(known) and known.issubset(successful_sources)
 
 
 def memory_source_links(entry, *, validate_names=False):

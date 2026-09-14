@@ -10,6 +10,7 @@ from contextlib import contextmanager
 from datetime import date
 from http.server import HTTPServer
 from pathlib import Path
+from unittest import mock
 from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -44,9 +45,9 @@ class ReviewTests(unittest.TestCase):
         if not hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
             self.skipTest("SO_EXCLUSIVEADDRUSE is Windows-specific")
         server = object.__new__(LocalReviewServer)
-        server.socket = unittest.mock.Mock()
+        server.socket = mock.Mock()
 
-        with unittest.mock.patch.object(HTTPServer, "server_bind") as parent_bind:
+        with mock.patch.object(HTTPServer, "server_bind") as parent_bind:
             server.server_bind()
 
         server.socket.setsockopt.assert_called_once_with(
@@ -113,6 +114,53 @@ class ReviewTests(unittest.TestCase):
             server.shutdown()
             server.server_close()
             thread.join()
+
+    def test_json_actions_reject_non_object_payloads_without_changing_memory(self):
+        original = load_memory(self.memory_path)
+        routes = (
+            "/api/status",
+            "/api/applications",
+            "/api/application-salary",
+            "/api/review-status",
+            "/api/review-undo",
+            "/api/history",
+            "/api/history/delete",
+            "/api/manual-import",
+        )
+        with self.server_context() as base_url:
+            for route in routes:
+                for payload in (None, [], "text", 1):
+                    with self.subTest(route=route, payload=payload):
+                        request = Request(
+                            base_url + route,
+                            data=json.dumps(payload).encode("utf-8"),
+                            headers={"Content-Type": "application/json"},
+                        )
+                        with self.assertRaises(HTTPError) as raised:
+                            urlopen(request)
+                        self.assertEqual(raised.exception.code, 400)
+                        result = json.loads(raised.exception.read())
+                        self.assertEqual(result["error"], "JSON-Objekt erforderlich")
+        self.assertEqual(load_memory(self.memory_path), original)
+
+    def test_review_routes_ignore_and_undo_the_same_job(self):
+        with self.server_context() as base_url:
+            for route, fields, expected in (
+                ("/api/review-status", {"workflow_status": "ignored"}, "ignored"),
+                ("/api/review-undo", {"expected_status": "ignored"}, "interesting"),
+            ):
+                request = Request(
+                    base_url + route,
+                    data=json.dumps({"job_id": "job:1", **fields}).encode("utf-8"),
+                    headers={"Content-Type": "application/json"},
+                )
+                with urlopen(request) as response:
+                    result = json.loads(response.read())
+                self.assertEqual(result["workflow_status"], expected)
+                self.assertFalse(result["application_tracked"])
+                self.assertEqual(
+                    load_memory(self.memory_path)["job:1"]["workflow_status"], expected
+                )
 
     def test_review_jobs_include_persisted_workflow_status(self):
         jobs = load_review_jobs(self.recommendations_path, self.memory_path)
@@ -847,7 +895,7 @@ class ReviewTests(unittest.TestCase):
     def test_database_failure_removes_new_application_documents(self):
         before = load_memory(self.memory_path)
         root = self.directory / "documents"
-        with unittest.mock.patch(
+        with mock.patch(
             "job_finder.memory.replace_sqlite_memory",
             side_effect=OSError("commit failed"),
         ):

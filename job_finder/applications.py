@@ -142,12 +142,7 @@ def update_history_event(
         previous_occurred_on,
         previous_scheduled_for,
     )
-    status = WorkflowStatus(workflow_status).value
-    event_date = validated_optional_date(occurred_on)
-    appointment = validated_scheduled_for(status, scheduled_for)
-    updated_event = {"status": status, "occurred_on": event_date}
-    if appointment is not None:
-        updated_event["scheduled_for"] = appointment
+    updated_event = history_event(workflow_status, occurred_on, scheduled_for)
     for other_index, other_event in enumerate(history):
         if other_index == index:
             continue
@@ -160,9 +155,9 @@ def update_history_event(
     current_status = synchronize_current_status(entry)
     return {
         "event_index": index,
-        "status": status,
-        "occurred_on": event_date,
-        "scheduled_for": appointment,
+        "status": updated_event["status"],
+        "occurred_on": updated_event["occurred_on"],
+        "scheduled_for": updated_event.get("scheduled_for"),
         "workflow_status": current_status,
     }
 
@@ -204,16 +199,11 @@ def editable_history_event(
     current_event = normalized_history_event(history[event_index])
     if current_event is None:
         raise ValueError("Verlaufsereignis ist ungültig")
-    expected_event = {
-        "status": WorkflowStatus(previous_status).value,
-        "occurred_on": validated_optional_date(previous_occurred_on),
-    }
-    appointment = validated_scheduled_for(
-        expected_event["status"],
+    expected_event = history_event(
+        previous_status,
+        previous_occurred_on,
         previous_scheduled_for,
     )
-    if appointment is not None:
-        expected_event["scheduled_for"] = appointment
     current_event.pop("reason", None)
     if current_event != expected_event:
         raise ValueError("Verlauf wurde zwischenzeitlich geändert; Seite neu laden")
@@ -336,22 +326,28 @@ def normalized_history_event(event, event_index=None):
     if not isinstance(event, dict):
         return None
     try:
-        status = WorkflowStatus(event.get("status")).value
-        occurred_on = validated_optional_date(event.get("occurred_on"))
-        appointment = validated_scheduled_for(
-            status,
+        normalized = history_event(
+            event.get("status"),
+            event.get("occurred_on"),
             event.get("scheduled_for"),
         )
     except (TypeError, ValueError):
         return None
-    normalized = {"status": status, "occurred_on": occurred_on}
-    if appointment is not None:
-        normalized["scheduled_for"] = appointment
     if event.get("reason") == "listing_unavailable":
         normalized["reason"] = "listing_unavailable"
     if event_index is not None:
         normalized["event_index"] = event_index
     return normalized
+
+
+def history_event(workflow_status, occurred_on, scheduled_for=None):
+    """Build one validated event while preserving an unknown event date."""
+    status = WorkflowStatus(workflow_status).value
+    event = {"status": status, "occurred_on": validated_optional_date(occurred_on)}
+    appointment = validated_scheduled_for(status, scheduled_for)
+    if appointment is not None:
+        event["scheduled_for"] = appointment
+    return event
 
 
 def validated_optional_date(value):

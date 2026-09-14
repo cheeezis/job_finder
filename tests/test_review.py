@@ -20,7 +20,10 @@ from job_finder.memory import load_memory, save_memory
 from job_finder.review import (
     APP_SCRIPT,
     APP_STYLES,
+    APPLICATIONS_SCRIPT,
+    LANDING_SCRIPT,
     REVIEW_PAGE,
+    REVIEW_SCRIPT,
     LocalReviewServer,
     ReviewRequestHandler,
     address_is_in_use,
@@ -556,6 +559,9 @@ class ReviewTests(unittest.TestCase):
             for route, content_type, path in [
                 ("/app.css", "text/css", APP_STYLES),
                 ("/app.js", "text/javascript", APP_SCRIPT),
+                ("/landing.js", "text/javascript", LANDING_SCRIPT),
+                ("/review.js", "text/javascript", REVIEW_SCRIPT),
+                ("/applications.js", "text/javascript", APPLICATIONS_SCRIPT),
             ]:
                 with self.subTest(route=route), urlopen(base_url + route) as response:
                     self.assertIn(content_type, response.headers["Content-Type"])
@@ -848,8 +854,13 @@ class ReviewTests(unittest.TestCase):
 
         self.assertIn("Bewerbungsübersicht", page)
         self.assertIn("Abgeschlossene Bewerbungen bearbeiten", page)
-        self.assertIn('input.type = "datetime-local"', page)
-        self.assertIn("Nächstes Gespräch", page)
+        self.assertIn(
+            'input.type = "datetime-local"',
+            APPLICATIONS_SCRIPT.read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "Nächstes Gespräch", APPLICATIONS_SCRIPT.read_text(encoding="utf-8")
+        )
         self.assertEqual(overview["statistics"]["total"], 1)
         self.assertEqual(overview["applications"], [])
         self.assertEqual(

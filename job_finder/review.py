@@ -77,6 +77,9 @@ REVIEW_PAGE = Path(__file__).with_name("review.html")
 APPLICATIONS_PAGE = Path(__file__).with_name("applications.html")
 APP_STYLES = Path(__file__).with_name("app.css")
 APP_SCRIPT = Path(__file__).with_name("app.js")
+LANDING_SCRIPT = Path(__file__).with_name("landing.js")
+REVIEW_SCRIPT = Path(__file__).with_name("review.js")
+APPLICATIONS_SCRIPT = Path(__file__).with_name("applications.js")
 ROUTE_ORIGIN = f"{LOCAL_SEARCH_POSTAL_CODE} {LOCAL_SEARCH_LOCATION}".strip()
 MAX_REQUEST_BYTES = 45 * 1024 * 1024
 LOCAL_HOST_PATTERN = re.compile(r"^(?:127\.0\.0\.1|localhost)(?::\d{1,5})?$")
@@ -112,6 +115,9 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
     applications_page_path = APPLICATIONS_PAGE
     styles_path = APP_STYLES
     script_path = APP_SCRIPT
+    landing_script_path = LANDING_SCRIPT
+    review_script_path = REVIEW_SCRIPT
+    applications_script_path = APPLICATIONS_SCRIPT
 
     def do_GET(self):
         """Return the page or the current joined recommendation data."""
@@ -133,8 +139,14 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
         if request_path == "/app.css":
             self.send_file(self.styles_path, "text/css; charset=utf-8")
             return
-        if request_path == "/app.js":
-            self.send_file(self.script_path, "text/javascript; charset=utf-8")
+        scripts = {
+            "/app.js": self.script_path,
+            "/landing.js": self.landing_script_path,
+            "/review.js": self.review_script_path,
+            "/applications.js": self.applications_script_path,
+        }
+        if request_path in scripts:
+            self.send_file(scripts[request_path], "text/javascript; charset=utf-8")
             return
         if request_path == "/api/recommendations":
             self.send_json(

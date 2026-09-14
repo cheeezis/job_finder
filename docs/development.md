@@ -45,11 +45,13 @@ beschreibt Titel und Beschreibung.
 | `job_finder/sources/` | Quellen abrufen und in `Job`/`JobSource` umwandeln |
 | `job_finder/models.py` | Datenmodell, Statuswerte und Serialisierung |
 | `job_finder/deduplication.py` | Gleiche Anzeigen verschiedener Quellen zusammenführen |
-| `job_finder/scoring.py`, `profile.py`, `remote.py` | Filter, Punkte, Profilregeln und Remote-Erkennung |
+| `job_finder/scoring.py`, `profile.py`, `remote.py` | Bewertungsablauf, Profilregeln und Remote-Erkennung |
+| `job_finder/experience.py`, `location_rules.py`, `salary.py`, `matching_text.py` | Zusammenhängende Analysen und normalisierte Textvergleiche |
 | `job_finder/memory.py` | SQLite-Zustand, stabile IDs und frühere Entscheidungen |
 | `job_finder/availability.py` | Fehlende interessante Stellen auf bestätigte Schließung prüfen |
-| `job_finder/review.py`, `applications.py`, `application_documents.py` | Review, Bewerbungsverlauf und lokale Unterlagen |
-| `job_finder/app.js`, `review.html`, `applications.html` | Gemeinsame Browser-Helfer und die beiden Arbeitsansichten |
+| `job_finder/review.py`, `review_data.py`, `review_actions.py` | HTTP-Server, Review-Datenaufbereitung und transaktionale Aktionen |
+| `job_finder/applications.py`, `application_documents.py`, `state_compat.py` | Bewerbungsverlauf, lokale Unterlagen und unterstützte Speicherformate |
+| `job_finder/app.js`, `landing.js`, `review.js`, `applications.js` und zugehörige HTML-Dateien | Gemeinsame Browser-Helfer, Seitenskripte und Arbeitsansichten |
 | `job_finder/reporting.py`, `notifications.py` | Review-Ausgabe und Discord-Warteschlange |
 | `job_finder/user_settings.py`, `config.py`, `paths.py` | Konfiguration, Suche und lokale Dateipfade |
 
@@ -184,6 +186,11 @@ Fehlerantworten und Antwortheader bleiben zentral. Im Browser verwenden die
 Bewerbungsformulare denselben Speicherablauf, der ihre Aktionsbuttons auch nach
 einem Fehler wieder freigibt.
 
+Die ursprünglichen fachlichen Funktionen bleiben über `job_finder.review`
+importierbar. Ebenso behält `job_finder.scoring` seine bisherigen Analyse-Helfer;
+die spezialisierten Module übernehmen deren Implementierung. Standortregeln
+bekommen lokale Einstellungen explizit vom Scoring-Einstiegspunkt übergeben.
+
 ## Python-Stil und hilfreiche Dokumentation
 
 Orientierung geben [PEP 8](https://peps.python.org/pep-0008/) und
@@ -254,3 +261,17 @@ Private Konfiguration und Bewerbungsdaten gehören nicht in Test-Fixtures.
 Framework-Wechsel, Dependency-Upgrades, neue Dateiformate oder Datenbankschemata
 und parallele Quellenabfragen sind separate Migrationsaufgaben. Die globale
 Quelldiagnostik setzt weiterhin sequenzielle Verarbeitung voraus.
+
+Die sieben Schritte sind auf `refactor/simplify-project` umgesetzt. Der öffentlich
+erreichbare Helfer `progress_bar` bleibt erhalten; entfernt wurde ausschließlich
+die unbelegte CSS-Regel `.salary-unit`. Unterstützte Altformate bleiben lesbar.
+
+`tests/fixtures/scoring_parity.json` hält 32 vollständige Bewertungsergebnisse mit
+anonymisierten Eingaben, festen Einstellungen und Referenzdatum fest. Diese
+Erwartungen nicht automatisch aus verändertem Produktivcode regenerieren: Eine
+abweichende Fachregel braucht eine ausdrücklich gewünschte Verhaltensänderung.
+
+Die Frontend-Tests laden HTML und alle referenzierten Skripte vollständig in einer
+kleinen simulierten DOM-Umgebung. Sie prüfen Registrierung und Ausführung von
+Interaktionen, ersetzen aber keinen visuellen Test in einem echten Browser.
+Die HTTP-Tests prüfen zusätzlich die ausgelieferten Seitenskripte und Content-Typen.

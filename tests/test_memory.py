@@ -1,14 +1,21 @@
 """Tests for lifecycle metadata in the job memory."""
 
 import json
-from contextlib import closing
 import sqlite3
-import threading
 import tempfile
+import threading
 import unittest
+from contextlib import closing
 from pathlib import Path
 
-from job_finder.memory import edit_memory, load_json_memory, load_memory, migrate_legacy_memory, save_memory, update_memory
+from job_finder.memory import (
+    edit_memory,
+    load_json_memory,
+    load_memory,
+    migrate_legacy_memory,
+    save_memory,
+    update_memory,
+)
 from job_finder.models import Job, JobSource, WorkflowStatus
 
 
@@ -387,16 +394,21 @@ class MemoryTests(unittest.TestCase):
             root = Path(directory)
             legacy = root / "seen_jobs.json"
             database = root / "state.sqlite3"
-            legacy.write_text(json.dumps({
-                "version": 2, "jobs": {"test:1": {"workflow_status": "new"}},
-            }), encoding="utf-8")
+            legacy.write_text(
+                json.dumps(
+                    {
+                        "version": 2,
+                        "jobs": {"test:1": {"workflow_status": "new"}},
+                    }
+                ),
+                encoding="utf-8",
+            )
 
             migrated = migrate_legacy_memory(database, legacy)
 
             self.assertTrue(migrated)
             self.assertTrue(legacy.exists())
             self.assertIn("test:1", load_memory(database))
-
 
     def test_failed_sqlite_edit_rolls_back_all_changes(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -440,6 +452,7 @@ class MemoryTests(unittest.TestCase):
             restored = load_memory(path)
             self.assertEqual(restored["job:1"]["workflow_status"], "applied")
             self.assertEqual(restored["job:2"]["workflow_status"], "ignored")
+
 
 if __name__ == "__main__":
     unittest.main()

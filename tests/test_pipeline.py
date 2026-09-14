@@ -47,9 +47,7 @@ class PipelineTests(unittest.TestCase):
                 json_path=directory_path / "recommendations.json",
             )
             review = json.loads(
-                (directory_path / "recommendations.json").read_text(
-                    encoding="utf-8"
-                )
+                (directory_path / "recommendations.json").read_text(encoding="utf-8")
             )
 
         self.assertEqual(len(results["included"]), 1)

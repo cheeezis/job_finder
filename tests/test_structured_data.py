@@ -7,20 +7,20 @@ from job_finder.structured_data import extract_json_ld_job_posting
 
 class StructuredDataTests(unittest.TestCase):
     def test_entities_inside_json_strings_do_not_break_json(self):
-        html = '''<script type="application/ld+json">{
+        html = """<script type="application/ld+json">{
             "@type": "JobPosting",
             "description": "&lt;h2 id=&quot;aufgaben&quot;&gt;Aufgaben&lt;/h2&gt;"
-        }</script>'''
+        }</script>"""
 
         posting = extract_json_ld_job_posting(html)
 
         self.assertIn("&quot;aufgaben&quot;", posting["description"])
 
     def test_accepts_entirely_html_escaped_json(self):
-        html = '''<script type="application/ld+json">{
+        html = """<script type="application/ld+json">{
             &quot;@type&quot;: &quot;JobPosting&quot;,
             &quot;title&quot;: &quot;Developer&quot;
-        }</script>'''
+        }</script>"""
 
         self.assertEqual(extract_json_ld_job_posting(html)["title"], "Developer")
 

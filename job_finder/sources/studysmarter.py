@@ -12,16 +12,15 @@ from job_finder.http import fetch_json, fetch_text
 from job_finder.models import Job, JobSource, WorkMode
 from job_finder.paths import STUDYSMARTER_CACHE_FILE
 from job_finder.sources.common import (
-    enrich_cached_candidates,
     canonical_detail_url,
-    load_detail_cache,
+    enrich_cached_candidates,
     integer,
+    load_detail_cache,
     normalize_employment_type,
     parse_published_date,
     source_job_id,
 )
 from job_finder.sources.company_careers import job_from_json_ld
-
 
 SOURCE_NAME = "studysmarter"
 API_URL = "https://talents.studysmarter.de/wp-json/studysmarter/v1/jobs/"
@@ -56,13 +55,16 @@ def fetch_jobs_with_report(cache_path=CACHE_FILE, now=None):
 
 
 def jobs_from_records(records, cache_path):
+    """Combine current search summaries with cached details by canonical URL."""
     cache = load_detail_cache(cache_path)
     jobs = []
     for record in records:
         url = canonical_detail_url(record.get("link", ""))
         if url:
             summary = summary_job_from_record(record)
-            jobs.append(with_current_summary(cache[url], summary) if url in cache else summary)
+            jobs.append(
+                with_current_summary(cache[url], summary) if url in cache else summary
+            )
     return jobs
 
 
@@ -98,8 +100,13 @@ def with_current_summary(cached_job, summary):
 def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE, now=None):
     """Fetch details only for prefiltered candidates without a fresh cache."""
     return enrich_cached_candidates(
-        jobs, candidate_ids, cache_path, SOURCE_NAME, "StudySmarter",
-        lambda job, url: enrich_summary_job(job, fetch_text(url)), now=now,
+        jobs,
+        candidate_ids,
+        cache_path,
+        SOURCE_NAME,
+        "StudySmarter",
+        lambda job, url: enrich_summary_job(job, fetch_text(url)),
+        now=now,
     )
 
 
@@ -195,7 +202,8 @@ def summary_job_from_record(record):
             str(location).strip()
             for location in record.get("locations") or []
             if str(location).strip()
-        ] or ["unbekannt"],
+        ]
+        or ["unbekannt"],
         sources=[JobSource(source=SOURCE_NAME, source_id=identifier, url=url)],
         description_raw="",
         description_clean="",

@@ -7,7 +7,6 @@ from dataclasses import replace
 from job_finder.models import Job, WorkMode
 from job_finder.text import normalize_text
 
-
 LEGAL_FORMS = [
     "gmbh",
     "mbh",
@@ -32,7 +31,13 @@ WORK_MODE_TITLE_SUFFIX = re.compile(
 
 
 def deduplicate_jobs(jobs: list[Job]) -> list[Job]:
-    """Merge cross-source jobs only when title, company, and location agree."""
+    """Merge matching cross-source listings into copied Job objects.
+
+    Titles and companies must match after normalization. Locations must
+    overlap unless both listings are fully remote. Listings from the
+    same source are kept separate. The input list and its jobs are not
+    modified; the result retains source links from merged duplicates.
+    """
     unique_jobs = []
     positions_by_title = defaultdict(list)
 
@@ -61,6 +66,7 @@ def deduplicate_jobs(jobs: list[Job]) -> list[Job]:
 
 
 def find_duplicate_position(job, company_key, positions, unique_jobs):
+    """Return a compatible cross-source index, or None if none matches."""
     if not company_key:
         return None
 
@@ -119,6 +125,7 @@ def companies_match(first, second):
 
 
 def normalize_company(company):
+    """Remove legal forms and punctuation for company-name comparison."""
     text = normalize_text(company)
     text = re.sub(r"[^a-z0-9]+", " ", text)
     text = re.sub(r"^bei\s+", "", text)
@@ -127,6 +134,7 @@ def normalize_company(company):
 
 
 def normalize_title(title):
+    """Remove gender labels and work-mode suffixes for title comparison."""
     text = normalize_text(title)
     text = re.sub(r"\[[^]]*\]", " ", text)
     text = re.sub(

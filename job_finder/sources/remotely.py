@@ -7,10 +7,8 @@ from datetime import date, datetime, timedelta, timezone
 from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
-
 from urllib.parse import urljoin, urlsplit
 
-from job_finder.storage import write_json_atomic
 from job_finder.console import print_progress, progress_checkpoint
 from job_finder.http import fetch_text, fetch_text_with_final_url
 from job_finder.models import Job, JobSource
@@ -22,8 +20,8 @@ from job_finder.sources.common import (
     source_job_id,
     utc_now,
 )
+from job_finder.storage import write_json_atomic
 from job_finder.text import html_to_text
-
 
 SOURCE_NAME = "remotely"
 BASE_URL = "https://www.remotely.de"
@@ -60,6 +58,7 @@ class RemotelyHttpClient:
         self.has_requested = False
 
     def get(self, url):
+        """Fetch text, pausing before requests after the first one."""
         if self.has_requested:
             self.sleeper(self.delay)
         self.has_requested = True
@@ -143,9 +142,7 @@ def enrich_candidate_jobs(
     if cache_changed:
         save_linkedin_status_cache(status_path, checks)
     if closed_indices:
-        jobs[:] = [
-            job for index, job in enumerate(jobs) if index not in closed_indices
-        ]
+        jobs[:] = [job for index, job in enumerate(jobs) if index not in closed_indices]
         print(
             f"HINWEIS Remotely: {len(closed_indices)} geschlossene "
             "LinkedIn-Bewerbung(en) aus dem Review entfernt"
@@ -167,9 +164,8 @@ def linkedin_application_url(job):
         parts = urlsplit(url)
         host = (parts.hostname or "").casefold()
         if (
-            (host == "linkedin.com" or host.endswith(".linkedin.com"))
-            and "/jobs/view/" in parts.path.casefold()
-        ):
+            host == "linkedin.com" or host.endswith(".linkedin.com")
+        ) and "/jobs/view/" in parts.path.casefold():
             return url
     return ""
 
@@ -185,17 +181,20 @@ def linkedin_listing_is_closed(original_url, final_url, html):
 
 
 def linkedin_job_id(url):
+    """Read trailing digits after a hyphen in a LinkedIn job URL path."""
     path = urlsplit(str(url or "")).path.rstrip("/")
     match = re.search(r"-(\d+)$", path)
     return match.group(1) if match else ""
 
 
 def linkedin_job_key(url):
+    """Use the extracted job ID or normalized URL as the status-cache key."""
     identifier = linkedin_job_id(url)
     return identifier or normalize_detail_url(url)
 
 
 def load_linkedin_status_cache(path):
+    """Return cached checks or {} for unreadable or incompatible cache data."""
     try:
         document = json.loads(Path(path).read_text(encoding="utf-8"))
     except (FileNotFoundError, OSError, json.JSONDecodeError):
@@ -206,10 +205,16 @@ def load_linkedin_status_cache(path):
 
 
 def save_linkedin_status_cache(path, checks):
+    """Atomically persist LinkedIn checks with the supported cache version."""
     write_json_atomic(path, {"version": 1, "checks": checks})
 
 
 def fresh_linkedin_status(entry, now):
+    """Return a cached closure boolean, or None when unusable or expired.
+
+    Treat naive timestamps as UTC. A False value records an
+    unconfirmed closure, not a guarantee that applications remain open.
+    """
     if not isinstance(entry, dict) or not isinstance(entry.get("closed"), bool):
         return None
     try:
@@ -313,6 +318,7 @@ def page_is_before_cutoff(entries, cutoff, today):
 
 
 def normalize_detail_url(url):
+    """Drop query, fragment and trailing slash for a stable detail URL."""
     parts = urlsplit(url)
     return f"{parts.scheme}://{parts.netloc}{parts.path}".rstrip("/")
 
@@ -324,6 +330,12 @@ def fetch_job(url, client=None):
 
 
 def job_from_html(url, html, today=None):
+    """Parse a visible Remotely page into a Job without making requests.
+
+    today supplies the reference date for relative publication labels.
+    Raise ListingUnavailableError for closure markers, or ValueError
+    when the title, employer or description cannot be recovered.
+    """
     parser = _RemotelyDetailParser()
     parser.feed(str(html or ""))
     parser.close()
@@ -403,6 +415,7 @@ def parse_relative_date(value, today=None):
 
 
 def clean_text(value):
+    """Decode HTML entities and collapse whitespace, treating None as empty."""
     return " ".join(unescape(str(value or "")).split())
 
 
@@ -535,9 +548,7 @@ class _RemotelyListParser(HTMLParser):
     def handle_endtag(self, tag):
         if not self.in_anchor or tag != "a":
             return
-        self.entries.append(
-            (self.href, " ".join(self.text_parts), self.promoted)
-        )
+        self.entries.append((self.href, " ".join(self.text_parts), self.promoted))
         self.href = ""
         self.in_anchor = False
         self.text_parts = []

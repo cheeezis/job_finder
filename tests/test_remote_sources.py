@@ -105,12 +105,11 @@ class HimalayasTests(unittest.TestCase):
         self.assertIsNone(job.salary_min_eur)
         self.assertIsNone(job.salary_max_eur)
 
+
 class StartupJobsTests(unittest.TestCase):
     def test_source_is_only_configured_with_nonempty_api_key(self):
         self.assertFalse(startup_jobs.is_configured({}))
-        self.assertFalse(
-            startup_jobs.is_configured({startup_jobs.API_KEY_ENV: "  "})
-        )
+        self.assertFalse(startup_jobs.is_configured({startup_jobs.API_KEY_ENV: "  "}))
         self.assertTrue(
             startup_jobs.is_configured({startup_jobs.API_KEY_ENV: "sj_test"})
         )
@@ -175,9 +174,7 @@ class StartupJobsTests(unittest.TestCase):
             jobs = startup_jobs.fetch_jobs(api_key="sj_test")
 
         self.assertEqual([job.id for job in jobs], ["startup_jobs:de"])
-        self.assertEqual(
-            collect.call_args.args[0]["Authorization"], "Bearer sj_test"
-        )
+        self.assertEqual(collect.call_args.args[0]["Authorization"], "Bearer sj_test")
 
     def test_job_from_record_maps_remote_location_and_annual_euro_salary(self):
         job = startup_jobs.job_from_record(
@@ -213,6 +210,7 @@ class StartupJobsTests(unittest.TestCase):
         self.assertEqual(job.published_at.isoformat(), "2026-08-16")
         self.assertEqual(job.sources[0].url, "https://startup.jobs/example-job")
 
+
 class JobicyTests(unittest.TestCase):
     def test_build_search_url_uses_bounded_official_filters(self):
         url = jobicy.build_search_url({"industry": "technical-support"})
@@ -237,9 +235,7 @@ class JobicyTests(unittest.TestCase):
                 ({"geo": "germany"}, {"industry": "engineering"})
             )
 
-        self.assertEqual(
-            [record["id"] for record in records], ["one", "two", "three"]
-        )
+        self.assertEqual([record["id"] for record in records], ["one", "two", "three"])
         self.assertEqual(fetch.call_count, 2)
         self.assertEqual(sleep.call_count, 1)
 
@@ -331,6 +327,7 @@ class JobicyTests(unittest.TestCase):
         self.assertEqual(job.locations, ["weltweit"])
         self.assertIsNone(job.salary_min_eur)
         self.assertIsNone(job.salary_max_eur)
+
 
 if __name__ == "__main__":
     unittest.main()

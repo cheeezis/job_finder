@@ -49,6 +49,7 @@ class ValidatingRedirectHandler(HTTPRedirectHandler):
         self.validator = validator
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
+        """Validate each redirect target before urllib creates its next request."""
         if self.validator is not None:
             newurl = self.validator(newurl)
         return super().redirect_request(req, fp, code, msg, headers, newurl)

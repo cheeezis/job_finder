@@ -6,7 +6,6 @@ working conditions fit the current profile.
 
 from job_finder.user_settings import USER_SETTINGS
 
-
 MATCHING_SETTINGS = USER_SETTINGS["matching"]
 
 # The five score categories add up to exactly 100 points.
@@ -429,7 +428,13 @@ SKILL_GROUPS = [
         "id": "web_api",
         "label": "Web/API",
         "points": 3,
-        "keywords": ["rest api", "rest-api", "backend", "webanwendung", "web application"],
+        "keywords": [
+            "rest api",
+            "rest-api",
+            "backend",
+            "webanwendung",
+            "web application",
+        ],
     },
 ]
 

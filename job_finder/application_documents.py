@@ -9,7 +9,6 @@ from pathlib import Path
 
 from job_finder.paths import APPLICATION_DOCUMENTS_DIR
 
-
 ALLOWED_KINDS = {"cover_letter", "resume"}
 ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".odt"}
 MAX_DOCUMENT_BYTES = 15 * 1024 * 1024
@@ -149,7 +148,9 @@ def document_directory(job_id, root=APPLICATION_DOCUMENTS_DIR, folder_name=None)
 def application_folder_name(company, title, job_id):
     """Create a readable folder whose stable suffix prevents cross-job collisions."""
     label = " - ".join(
-        value for value in [str(company or "").strip(), str(title or "").strip()] if value
+        value
+        for value in [str(company or "").strip(), str(title or "").strip()]
+        if value
     )
     identifier = hashlib.sha256(str(job_id).encode("utf-8")).hexdigest()[:12]
     suffix = f" [{identifier}]"

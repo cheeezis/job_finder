@@ -5,14 +5,15 @@ from datetime import date, datetime, timedelta
 
 from job_finder.application_documents import public_documents
 from job_finder.memory import (
-    has_application_state as is_application,
-    load_memory,
     first_seen_date,
+    load_memory,
     memory_source_links,
+)
+from job_finder.memory import (
+    has_application_state as is_application,
 )
 from job_finder.models import APPLICATION_STATUSES, WorkflowStatus
 from job_finder.paths import MEMORY_FILE
-
 
 OPEN_APPLICATION_STATUSES = {
     WorkflowStatus.APPLIED.value,
@@ -64,7 +65,9 @@ def record_status_change(
             history.append(
                 {
                     "status": previous_status,
-                    "occurred_on": first_seen_date(entry) if previous_status == "new" else None,
+                    "occurred_on": first_seen_date(entry)
+                    if previous_status == "new"
+                    else None,
                 }
             )
             history_changed = True
@@ -213,20 +216,14 @@ def editable_history_event(
         expected_event["scheduled_for"] = appointment
     current_event.pop("reason", None)
     if current_event != expected_event:
-        raise ValueError(
-            "Verlauf wurde zwischenzeitlich geändert; Seite neu laden"
-        )
+        raise ValueError("Verlauf wurde zwischenzeitlich geändert; Seite neu laden")
     return history, event_index
 
 
 def synchronize_current_status(entry):
     """Use the chronologically latest valid event as current status."""
     history = valid_history(entry.get("workflow_history", []))
-    status = (
-        history[-1]["status"]
-        if history
-        else WorkflowStatus.NEW.value
-    )
+    status = history[-1]["status"] if history else WorkflowStatus.NEW.value
     entry["workflow_status"] = status
     return status
 
@@ -245,16 +242,13 @@ def application_row(job_id, entry, as_of=None):
         current_status == WorkflowStatus.APPLIED.value
         and applied_on is not None
         and not statuses.intersection(RESPONSE_STATUSES)
-        and date.fromisoformat(applied_on)
-        + timedelta(days=NO_RESPONSE_AFTER_DAYS)
+        and date.fromisoformat(applied_on) + timedelta(days=NO_RESPONSE_AFTER_DAYS)
         <= reference_date
     ):
         current_status = WorkflowStatus.NO_RESPONSE.value
     days_to_response = None
     if applied_on and response_on:
-        difference = date.fromisoformat(response_on) - date.fromisoformat(
-            applied_on
-        )
+        difference = date.fromisoformat(response_on) - date.fromisoformat(applied_on)
         if difference.days >= 0:
             days_to_response = difference.days
     source_links = memory_source_links(entry, validate_names=True)
@@ -401,8 +395,7 @@ def first_event_date(history, statuses):
     dates = [
         event["occurred_on"]
         for event in history
-        if event["status"] in statuses
-        and event["occurred_on"] is not None
+        if event["status"] in statuses and event["occurred_on"] is not None
     ]
     return min(dates, default=None)
 
@@ -429,8 +422,7 @@ def application_statistics(applications):
     ]
     responses = sum(item["has_response"] for item in applications)
     open_count = sum(
-        item["workflow_status"] in OPEN_APPLICATION_STATUSES
-        for item in applications
+        item["workflow_status"] in OPEN_APPLICATION_STATUSES for item in applications
     )
     completed = [
         item
@@ -445,20 +437,13 @@ def application_statistics(applications):
         "responses": responses,
         "interviews": sum(item["has_interview"] for item in applications),
         "rejections": sum(item["has_rejection"] for item in applications),
-        "no_responses": sum(
-            item["has_no_response"]
-            for item in applications
-        ),
+        "no_responses": sum(item["has_no_response"] for item in applications),
         "offers": sum(item["has_offer"] for item in applications),
         "response_rate_percent": (
-            round(completed_responses / len(completed) * 100)
-            if completed
-            else 0
+            round(completed_responses / len(completed) * 100) if completed else 0
         ),
         "average_response_days": (
-            round(sum(response_days) / len(response_days), 1)
-            if response_days
-            else None
+            round(sum(response_days) / len(response_days), 1) if response_days else None
         ),
         "response_time_samples": len(response_days),
     }

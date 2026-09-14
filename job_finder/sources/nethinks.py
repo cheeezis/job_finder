@@ -13,13 +13,17 @@ CACHE_FILE = NETHINKS_CACHE_FILE
 
 
 def fetch_jobs(cache_path=CACHE_FILE, now=None):
+    """Import NETHINKS listings through the shared company detail cache."""
     links = collect_links()
     return fetch_company_jobs(SOURCE_NAME, COMPANY, links, cache_path, now=now)
 
 
 def collect_links():
+    """Collect unique NETHINKS detail links across all advertised pages."""
     first_html = fetch_text(LIST_URL)
-    pages = [int(value) for value in re.findall(r"/nethinks_jobs/page/(\d+)/", first_html)]
+    pages = [
+        int(value) for value in re.findall(r"/nethinks_jobs/page/(\d+)/", first_html)
+    ]
     last_page = max(pages, default=1)
     links = extract_job_links(first_html)
     seen = set(links)
@@ -34,6 +38,7 @@ def collect_links():
 
 
 def extract_job_links(html):
+    """Extract job-detail URLs while excluding pagination and feed links."""
     return extract_links(
         html,
         LIST_URL,

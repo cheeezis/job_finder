@@ -7,15 +7,14 @@ from urllib.parse import urlencode
 from job_finder.http import fetch_json
 from job_finder.models import Job, JobSource, WorkMode
 from job_finder.sources.common import (
-    numeric_salary,
     integer,
     normalize_employment_type,
+    numeric_salary,
     parse_published_date,
     source_job_id,
     utc_now,
 )
 from job_finder.text import html_to_text
-
 
 SOURCE_NAME = "himalayas"
 API_URL = "https://himalayas.app/jobs/api/search"
@@ -112,7 +111,9 @@ def job_from_record(record):
         title=title,
         company=company,
         locations=locations,
-        sources=[JobSource(source=SOURCE_NAME, source_id=record_identifier(record), url=url)],
+        sources=[
+            JobSource(source=SOURCE_NAME, source_id=record_identifier(record), url=url)
+        ],
         description_raw=raw_description,
         description_clean=html_to_text(raw_description),
         work_mode=WorkMode.REMOTE,
@@ -146,7 +147,9 @@ def annual_salary_eur(record):
         return None, None
     if str(record.get("salaryPeriod") or "annual").casefold() != "annual":
         return None, None
-    return numeric_salary(record.get("minSalary")), numeric_salary(record.get("maxSalary"))
+    return numeric_salary(record.get("minSalary")), numeric_salary(
+        record.get("maxSalary")
+    )
 
 
 def parse_api_date(value):

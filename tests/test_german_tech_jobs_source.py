@@ -9,7 +9,6 @@ from unittest.mock import patch
 from job_finder.models import WorkMode
 from job_finder.sources import german_tech_jobs
 
-
 FEED = """<?xml version="1.0" encoding="UTF-8"?>
 <jobs>
   <job id="feed-1" category="IT">
@@ -89,9 +88,7 @@ class GermanTechJobsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             cache = Path(directory) / "feed.json"
             jobs, _invalid = german_tech_jobs.parse_feed(FEED, now)
-            german_tech_jobs.save_feed_cache(
-                cache, jobs, now - timedelta(days=4)
-            )
+            german_tech_jobs.save_feed_cache(cache, jobs, now - timedelta(days=4))
             with patch.object(
                 german_tech_jobs, "fetch_text", side_effect=OSError("offline")
             ):

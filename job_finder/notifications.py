@@ -3,12 +3,10 @@
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
-from job_finder.storage import write_json_atomic
 from job_finder.paths import NOTIFICATION_STATE_FILE
 from job_finder.reporting import (
     format_remote,
@@ -16,7 +14,7 @@ from job_finder.reporting import (
     is_international_listing,
     primary_url,
 )
-
+from job_finder.storage import write_json_atomic
 
 STATE_VERSION = 3
 NOTIFIABLE_STATUSES = {"new", "review", "interesting", "inquiry"}
@@ -69,7 +67,18 @@ def process_notifications(
     client=None,
     now=None,
 ):
-    """Queue eligible jobs and optionally send pending Discord summaries."""
+    """Update the persistent queue and optionally send eligible Discord cards.
+
+    results contains included and excluded job dictionaries from the
+    scoring pipeline. Even send=False writes queue changes to
+    state_path; it only prevents delivery. With send=True, use client
+    when supplied or construct a client from webhook_url.
+
+    Return queue, eligibility and delivery counters together with
+    configuration_error. Missing webhook configuration is reported in
+    that field. Delivery failures remain pending for a later run and
+    increment failed; filesystem and malformed-state errors propagate.
+    """
     timestamp = (now or datetime.now(timezone.utc)).isoformat()
     state = load_notification_state(state_path)
     jobs_by_key = {}
@@ -96,11 +105,7 @@ def process_notifications(
             eligible_new += 1
             if is_visible_in_default_review(job):
                 default_review_new += 1
-        if (
-            is_new_job
-            and key not in state["sent"]
-            and key not in state["pending"]
-        ):
+        if is_new_job and key not in state["sent"] and key not in state["pending"]:
             state["pending"][key] = pending_entry(job, timestamp)
             queued += 1
 
@@ -174,9 +179,12 @@ def run_summary_payload(summary):
     default_review = notifications.get("default_review_new", eligible)
     hidden_by_default = max(eligible - default_review, 0)
     source_warnings = exceptional_source_text(sources)
-    color = 0xD99A2B if failed or any(
-        source["status"] in {"failed", "partial"} for source in sources
-    ) else 0x2E8B57
+    color = (
+        0xD99A2B
+        if failed
+        or any(source["status"] in {"failed", "partial"} for source in sources)
+        else 0x2E8B57
+    )
     lines = [
         f"Laufzeit: **{summary['duration']}**",
         "",
@@ -406,12 +414,19 @@ def load_notification_state(path=NOTIFICATION_STATE_FILE):
     version = document.get("version")
     if version not in {1, 2, STATE_VERSION}:
         raise ValueError("Benachrichtigungsstatus verwendet eine unbekannte Version")
-    sent = {entry.get("job_id", key): entry
-            for key, entry in document.get("sent", {}).items()}
-    pending = {} if version == 1 else {
-        entry["job_id"]: entry for entry in document.get("pending", {}).values()
-        if entry.get("job_id") and entry["job_id"] not in sent
+    sent = {
+        entry.get("job_id", key): entry
+        for key, entry in document.get("sent", {}).items()
     }
+    pending = (
+        {}
+        if version == 1
+        else {
+            entry["job_id"]: entry
+            for entry in document.get("pending", {}).values()
+            if entry.get("job_id") and entry["job_id"] not in sent
+        }
+    )
     return {"sent": sent, "pending": pending}
 
 

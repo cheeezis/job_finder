@@ -4,7 +4,6 @@ from pathlib import Path
 
 import yaml
 
-
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 LOCAL_SETTINGS_PATH = PROJECT_DIR / "user_settings.local.yaml"
 EXAMPLE_SETTINGS_PATH = PROJECT_DIR / "user_settings.example.yaml"
@@ -14,13 +13,28 @@ SETTINGS_PATH = (
 
 
 def load_user_settings(path=SETTINGS_PATH):
+    """Load and validate the search and matching sections of a YAML file.
+
+    Return the parsed mapping without filling in missing optional
+    keys. Raise ValueError for unreadable files, invalid YAML or invalid
+    field values. See user_settings.example.yaml for the input schema.
+
+    The default path is selected at module import: use the local file
+    when present, otherwise the example. USER_SETTINGS is also loaded
+    at import, so running processes need a restart after configuration
+    changes. An explicit path is useful for isolated validation/tests.
+    """
     settings_path = Path(path)
     try:
         values = yaml.safe_load(settings_path.read_text(encoding="utf-8"))
     except OSError as error:
-        raise ValueError(f"Einstellungen konnten nicht gelesen werden: {settings_path}") from error
+        raise ValueError(
+            f"Einstellungen konnten nicht gelesen werden: {settings_path}"
+        ) from error
     except yaml.YAMLError as error:
-        raise ValueError(f"Einstellungen enthalten ungueltiges YAML: {settings_path}") from error
+        raise ValueError(
+            f"Einstellungen enthalten ungueltiges YAML: {settings_path}"
+        ) from error
 
     if not isinstance(values, dict):
         raise ValueError("Einstellungen muessen ein Objekt sein")
@@ -55,30 +69,35 @@ def load_user_settings(path=SETTINGS_PATH):
 
 
 def require_mapping(value, name):
+    """Return a dictionary value or raise ValueError naming its setting."""
     if not isinstance(value, dict):
         raise ValueError(f"{name} muss ein Objekt sein")
     return value
 
 
 def require_text(value, name):
+    """Return nonblank text or raise ValueError naming its setting."""
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{name} muss ein nicht-leerer Text sein")
     return value
 
 
 def require_positive_int(value, name):
+    """Accept positive integers, excluding booleans, or raise ValueError."""
     if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
         raise ValueError(f"{name} muss eine positive Ganzzahl sein")
     return value
 
 
 def require_optional_positive_int(value, name):
+    """Accept None or a positive integer for an optional setting."""
     if value is None:
         return None
     return require_positive_int(value, name)
 
 
 def require_text_list(value, name, allow_empty=False):
+    """Validate text entries and the optional empty-list allowance."""
     if not isinstance(value, list) or (not value and not allow_empty):
         raise ValueError(f"{name} muss eine Liste sein")
     for item in value:
@@ -87,6 +106,7 @@ def require_text_list(value, name, allow_empty=False):
 
 
 def require_commuter_locations(value, name):
+    """Validate commuter aliases and remote thresholds from 1 to 100."""
     if not isinstance(value, list):
         raise ValueError(f"{name} muss eine Liste sein")
     for index, item in enumerate(value):

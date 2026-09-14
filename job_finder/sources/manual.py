@@ -13,8 +13,8 @@ from job_finder.paths import MANUAL_CACHE_FILE
 from job_finder.remote import classify_remote, detect_remote
 from job_finder.sources.common import (
     canonical_detail_url,
-    detail_within_age,
     detail_is_fresh,
+    detail_within_age,
     load_detail_cache,
     normalize_employment_type,
     parse_published_date,
@@ -30,13 +30,24 @@ from job_finder.sources.company_careers import (
 from job_finder.structured_data import extract_json_ld_job_posting
 from job_finder.text import normalize_text
 
-
 SOURCE_NAME = "manual"
 _BLOCK_TAGS = {"h1", "h2", "h3", "p", "li", "dt", "dd"}
 _SKIP_TAGS = {"script", "style", "noscript", "nav", "footer", "form", "button"}
 _VOID_TAGS = {
-    "area", "base", "br", "col", "embed", "hr", "img", "input", "link",
-    "meta", "param", "source", "track", "wbr",
+    "area",
+    "base",
+    "br",
+    "col",
+    "embed",
+    "hr",
+    "img",
+    "input",
+    "link",
+    "meta",
+    "param",
+    "source",
+    "track",
+    "wbr",
 }
 
 
@@ -132,14 +143,18 @@ def job_from_visible_page(url, html):
     company = parser.metadata.get("og:site_name", "") or urlsplit(url).hostname
     description_html = main_fragment(html)
     description = " ".join(parser.lines)
-    locations = extract_labeled_values(parser.lines, {"standort", "arbeitsort", "location"})
+    locations = extract_labeled_values(
+        parser.lines, {"standort", "arbeitsort", "location"}
+    )
     employment = first_labeled_value(
         parser.lines,
         {"beschaeftigungsart", "anstellungsart", "employment type"},
     )
 
     if not title or not company or len(description) < 200:
-        raise ValueError("Auf der Seite wurde keine vollständige Stellenanzeige erkannt")
+        raise ValueError(
+            "Auf der Seite wurde keine vollständige Stellenanzeige erkannt"
+        )
 
     remote = detect_remote(title, " ".join(locations), description)
     work_mode, remote_percentage = classify_remote(remote)
@@ -179,11 +194,13 @@ def main_fragment(html):
         offsets.append(offsets[-1] + len(line))
     start_line, start_column = parser.fragment_start
     end_line, end_column = parser.fragment_end
-    return html[offsets[start_line - 1] + start_column:
-                offsets[end_line - 1] + end_column]
+    return html[
+        offsets[start_line - 1] + start_column : offsets[end_line - 1] + end_column
+    ]
 
 
 def extract_labeled_values(lines, labels):
+    """Return the first labelled value as a list, or [] when absent."""
     value = first_labeled_value(lines, labels)
     return [value] if value else []
 
@@ -215,8 +232,12 @@ def validate_public_url(value):
     try:
         addresses = {item[4][0] for item in socket.getaddrinfo(hostname, parts.port)}
     except socket.gaierror as error:
-        raise ValueError("Adresse der Stellenanzeige konnte nicht aufgelöst werden") from error
-    if not addresses or any(not ipaddress.ip_address(item).is_global for item in addresses):
+        raise ValueError(
+            "Adresse der Stellenanzeige konnte nicht aufgelöst werden"
+        ) from error
+    if not addresses or any(
+        not ipaddress.ip_address(item).is_global for item in addresses
+    ):
         raise ValueError("Private Netzwerkadressen können nicht importiert werden")
     # Preserve functional query parameters; canonicalization is only a cache concern.
     return parts._replace(fragment="").geturl()
@@ -240,6 +261,7 @@ class VisibleJobParser(HTMLParser):
         self._in_title = False
 
     def handle_starttag(self, tag, attrs):
+        """Track the main container and skip non-job blocks, respecting void tags."""
         attributes = dict(attrs)
         if tag == "meta":
             name = attributes.get("property") or attributes.get("name")
@@ -263,9 +285,11 @@ class VisibleJobParser(HTMLParser):
             if tag not in _VOID_TAGS:
                 self._skip_depth += 1
             return
-        if (tag in _SKIP_TAGS
-                or attributes.get("role") in {"navigation", "contentinfo"}
-                or attributes.get("id") == "footer"):
+        if (
+            tag in _SKIP_TAGS
+            or attributes.get("role") in {"navigation", "contentinfo"}
+            or attributes.get("id") == "footer"
+        ):
             self._flush()
             self._skip_depth = 1
             return
@@ -276,6 +300,7 @@ class VisibleJobParser(HTMLParser):
             self._title_parts = []
 
     def handle_endtag(self, tag):
+        """Close nested capture scopes and record the main fragment boundary."""
         if not self._in_main:
             return
         if tag not in self._main_stack:
@@ -298,11 +323,13 @@ class VisibleJobParser(HTMLParser):
             self.fragment_end = self.getpos()
 
     def handle_startendtag(self, tag, attrs):
+        """Process self-closing elements without leaving a capture scope open."""
         self.handle_starttag(tag, attrs)
         if tag not in _VOID_TAGS:
             self.handle_endtag(tag)
 
     def handle_data(self, data):
+        """Collect readable text and title parts from unskipped main content."""
         if not self._in_main or self._skip_depth:
             return
         text = " ".join(data.split())

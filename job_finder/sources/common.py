@@ -5,13 +5,11 @@ import json
 import re
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from job_finder.storage import write_json_atomic
-from job_finder.models import Job
 from job_finder.console import print_progress, progress_checkpoint
-
+from job_finder.models import Job
+from job_finder.storage import write_json_atomic
 
 DETAIL_CACHE_VERSION = 1
 DETAIL_REFRESH_AGE = timedelta(days=7)
@@ -80,9 +78,7 @@ def canonical_detail_url(url):
         (name, value)
         for name, value in parse_qsl(parts.query, keep_blank_values=True)
         if not name.casefold().startswith("utm_")
-        and name.casefold() not in {
-            "fbclid", "gclid", "msclkid", "language", "j"
-        }
+        and name.casefold() not in {"fbclid", "gclid", "msclkid", "language", "j"}
     ]
     return urlunsplit(
         (
@@ -107,17 +103,19 @@ def load_detail_cache(path):
     if document.get("version") != DETAIL_CACHE_VERSION:
         return {}
     return {
-        url: Job.from_dict(values)
-        for url, values in document.get("jobs", {}).items()
+        url: Job.from_dict(values) for url, values in document.get("jobs", {}).items()
     }
 
 
 def save_detail_cache(path, jobs):
     """Persist reusable source fields via an atomic replacement."""
-    write_json_atomic(path, {
-        "version": DETAIL_CACHE_VERSION,
-        "jobs": {url: detail_cache_job_dict(job) for url, job in jobs.items()},
-    })
+    write_json_atomic(
+        path,
+        {
+            "version": DETAIL_CACHE_VERSION,
+            "jobs": {url: detail_cache_job_dict(job) for url, job in jobs.items()},
+        },
+    )
 
 
 def fetch_cached_details(
@@ -129,7 +127,20 @@ def fetch_cached_details(
     max_age=DETAIL_REFRESH_AGE,
     normalize_cached=None,
 ):
-    """Load detail pages with the shared weekly cache and stale fallback."""
+    """Load requested details with a persistent cache and bounded fallback.
+
+    links is an iterable with a length; fetch_detail(url) returns a
+    Job or raises. Fresh entries bypass fetching. now and max_age
+    control freshness; now should be timezone-aware when supplied.
+
+    A ListingUnavailableError evicts the entry. Other fetch errors
+    retain cached data only within MAX_STALE_DETAIL_AGE, mark it stale,
+    and record a partial source failure. Return the usable Job list.
+    Cache writes and progress output occur during processing.
+
+    normalize_cached(job, url), when provided, mutates cached jobs and
+    returns whether persistence is needed.
+    """
     cache_file = Path(cache_path)
     cache = load_detail_cache(cache_file)
     jobs = []
@@ -264,11 +275,7 @@ def remote_region_allows_germany(value, country_code=None):
     if not text:
         return True
 
-    labels = {
-        label.strip()
-        for label in re.split(r"[,;/|]+", text)
-        if label.strip()
-    }
+    labels = {label.strip() for label in re.split(r"[,;/|]+", text) if label.strip()}
     return bool(
         labels.intersection(GERMANY_LOCATION_LABELS)
         or labels.intersection(GERMANY_REMOTE_REGION_LABELS)
@@ -335,14 +342,23 @@ def integer(value, default):
 
 
 def enrich_cached_candidates(
-    jobs, candidate_ids, cache_path, source_name, label, fetch_detail, now=None,
+    jobs,
+    candidate_ids,
+    cache_path,
+    source_name,
+    label,
+    fetch_detail,
+    now=None,
 ):
     """Replace only eligible source summaries whose details need refreshing."""
     cache = load_detail_cache(cache_path)
     enriched = unsaved = errors = 0
     for index, job in enumerate(jobs):
-        if (job.id not in candidate_ids or not job.primary_source
-                or job.primary_source.source != source_name):
+        if (
+            job.id not in candidate_ids
+            or not job.primary_source
+            or job.primary_source.source != source_name
+        ):
             continue
         url = canonical_detail_url(job.primary_url)
         cached_job = cache.get(url)

@@ -81,6 +81,9 @@ Copy-Item user_settings.example.yaml user_settings.local.yaml
 Pendlerorte und fachliche Stichwörter. Die Datei wird von Git ignoriert. Ohne
 lokale Datei wird die anonymisierte Beispielkonfiguration verwendet.
 
+Die Einstellungen werden beim Start geladen. Nach Änderungen die laufende
+Review-Anwendung neu starten; ein Neuladen der Browserseite genügt nicht.
+
 Für Discord kann `DISCORD_WEBHOOK_URL` als Umgebungsvariable gesetzt werden.
 Lokale Geheimnisse gehören nicht in YAML-Dateien oder ins Repository.
 
@@ -125,13 +128,18 @@ Junior-Hybrid-Sonderfälle sind eigene, standardmäßig deaktivierte Filter.
 
 1. Die Quellen liefern Suchtreffer und Detaildaten.
 2. URLs und inhaltlich gleiche Stellen werden zusammengeführt.
-3. Das lokale Gedächtnis erkennt neue, bekannte und inaktive Jobs.
-4. Der Vorfilter schließt klare Konflikte sowie automatisch gefundene Anzeigen
+3. Der Vorfilter schließt klare Konflikte sowie automatisch gefundene Anzeigen
    aus, deren bekanntes Veröffentlichungsdatum mehr als 60 Tage zurückliegt.
-   Anzeigen ohne verlässliches Datum bleiben nach der Verfügbarkeitsprüfung
-   zulässig. Manuell eingereichte alte Anzeigen bleiben mit Warnung prüfbar.
+   Ein fehlendes Datum allein führt nicht zum Ausschluss. Zusätzliche Detail-
+   und Verfügbarkeitsprüfungen hängen von der jeweiligen Quelle ab.
+   Manuell eingereichte alte Anzeigen bleiben mit Warnung prüfbar.
    Die übrigen Stellen erhalten nachvollziehbare Kategorien für IT-Bereich,
    Einstieg und Standort.
+4. Für passende Kandidaten werden je nach Quelle vollständige Details ergänzt.
+   Die endgültige Bewertung erfolgt vor dem Speichern des Gedächtnisses.
+   Anschließend werden neue, bekannte und inaktive Stellen zugeordnet sowie
+   fehlende interessante Anzeigen unter den unten beschriebenen Bedingungen
+   auf Verfügbarkeit geprüft.
 5. Alle durchgelassenen Stellen erscheinen im Review. Neue Stellen können
    zusätzlich an Discord gesendet werden. Nachträgliche Textänderungen werden
    eingelesen, lösen aber weder eine erneute Benachrichtigung noch ein erneutes
@@ -242,10 +250,26 @@ Bewerbungsverlauf vor Regressionen.
 
 ## Projektstruktur
 
+Die [Entwickleranleitung](docs/development.md) erklärt den Datenfluss, das
+Ergänzen von Quellen, den Umgang mit lokalem Zustand sowie die Python- und
+Docstring-Konventionen. Entwicklungswerkzeuge installieren und prüfen:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m ruff check job_finder tests run_finder.py
+.\.venv\Scripts\python.exe -m ruff format --check job_finder tests run_finder.py
+```
+
+Der Workflow in `.github/workflows/checks.yml` führt Stilprüfungen, Python-
+und Frontend-Tests bei Pull Requests und Pushes auf `main` aus. Er startet
+keinen Finder-Lauf und verschickt keine Discord-Nachrichten.
+
 ```text
 job_finder/             Kernlogik, Quellen, Review und Bewerbungsverwaltung
 job_finder/sources/     einzelne Quellenadapter
 tests/                  automatisierte Tests
+docs/development.md     Architektur, Quellenvertrag und Entwicklungsablauf
+requirements-dev.txt    zusätzliche Werkzeuge für die Entwicklung
 run_finder.py           produktiver Kommandozeilen-Einstieg
 review_jobs.bat         Start der lokalen Weboberfläche
 user_settings.example.yaml  dokumentierte, anonymisierte Konfigurationsvorlage

@@ -45,7 +45,13 @@ def save_memory(memory, path=MEMORY_FILE):
 
 @contextmanager
 def edit_memory(path=MEMORY_FILE):
-    """Lock the entire read-modify-write sequence against concurrent updates."""
+    """Yield mutable state under a SQLite write lock and save on success.
+
+    Import legacy JSON if necessary, then hold BEGIN IMMEDIATE across
+    reading, the caller's edits and writing. Exceptions roll back the
+    transaction and propagate. Keep network requests outside this
+    context so interactive updates do not wait on remote services.
+    """
     memory_path = Path(path)
     migrate_legacy_memory(memory_path)
     with database_connection(memory_path) as connection:
@@ -113,7 +119,11 @@ def load_sqlite_memory(connection):
         history = entry.get("workflow_history")
         if isinstance(history, list) and history:
             first = history[0]
-            if isinstance(first, dict) and first.get("status") == "new" and first.get("occurred_on") is None:
+            if (
+                isinstance(first, dict)
+                and first.get("status") == "new"
+                and first.get("occurred_on") is None
+            ):
                 first["occurred_on"] = first_seen_date(entry)
         memory[job_id] = entry
     return memory
@@ -171,7 +181,18 @@ def update_memory(
     successful_sources=None,
     inactive_after=INACTIVE_AFTER_MISSED_RUNS,
 ):
-    """Mark jobs as new or known and refresh their last-seen metadata."""
+    """Update job identity and discovery state in the supplied objects.
+
+    Mutate both memory and the Job objects in jobs: resolve canonical
+    IDs, restore workflow status, and update discovery timestamps and
+    is_new. Return counts keyed by new, known, inactive and reactivated.
+    This function does not write the resulting state to disk.
+
+    successful_sources=None disables missed-run accounting, as needed
+    for a single manual import. Otherwise, count an absent job only if
+    every known source completed successfully. Mark it inactive after
+    inactive_after missed runs; do not change its workflow decision.
+    """
     now = datetime.now(timezone.utc)
     new_count = 0
     known_count = 0
@@ -329,10 +350,9 @@ def repost_fingerprint(title_value, company_value, locations=None):
 
 def repost_decision_is_reusable(entry):
     """Limit fuzzy repost matching to explicit rejection or application state."""
-    return (
-        entry.get("workflow_status") == WorkflowStatus.IGNORED.value
-        or has_application_state(entry)
-    )
+    return entry.get(
+        "workflow_status"
+    ) == WorkflowStatus.IGNORED.value or has_application_state(entry)
 
 
 def preferred_memory_id(candidates, memory, current_job_id):
@@ -388,9 +408,7 @@ def has_application_state(entry):
 
 def unique_values(*groups):
     """Combine ordered scalar lists without duplicates or empty values."""
-    return list(
-        dict.fromkeys(value for group in groups for value in group if value)
-    )
+    return list(dict.fromkeys(value for group in groups for value in group if value))
 
 
 def inferred_sources(job_id):
@@ -408,9 +426,13 @@ def memory_source_links(entry, *, validate_names=False):
     if validate_names and not isinstance(urls, list):
         urls = []
     return [
-        {"source": names[index] if index < len(names) and (
-            not validate_names or isinstance(names[index], str)
-        ) else "listing", "url": url}
+        {
+            "source": names[index]
+            if index < len(names)
+            and (not validate_names or isinstance(names[index], str))
+            else "listing",
+            "url": url,
+        }
         for index, url in enumerate(urls)
         if isinstance(url, str) and url
     ]

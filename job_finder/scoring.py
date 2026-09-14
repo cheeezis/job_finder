@@ -189,7 +189,7 @@ def hard_filter_reason(
     full_text,
     role,
     career_levels,
-    required_years,
+    required_years=None,
 ):
     """Return the first blocking job requirement, or an empty string.
 
@@ -208,6 +208,8 @@ def hard_filter_reason(
     if advanced_level and not is_entry_level(title, description):
         return f"Portal-Karrierestufe ist nicht fuer den Einstieg: {advanced_level}"
 
+    if required_years is None:
+        required_years = extract_required_years(full_text)
     if required_years > 3:
         return f"Mehr als 3 Jahre Erfahrung gefordert: {required_years} Jahre"
 
@@ -733,34 +735,9 @@ def passes_hard_filters(
     experience, degree, travel and location requirements pass. The age
     check is performed separately by score_job.
     """
-    blocked_word = find_blocked_title_word(title)
-    if blocked_word:
-        return False, f"Titel enthaelt Ausschlusswort: {blocked_word}"
-
-    if not role:
-        return False, "Titel ist keine erkennbare IT-Rolle"
-
-    advanced_level = structured_advanced_level(career_levels)
-    if advanced_level and not is_entry_level(title, description):
-        return (
-            False,
-            f"Portal-Karrierestufe ist nicht fuer den Einstieg: {advanced_level}",
-        )
-
-    years = extract_required_years(full_text)
-    if years > 3:
-        return False, f"Mehr als 3 Jahre Erfahrung gefordert: {years} Jahre"
-
-    if strong_experience_is_required(title, description):
-        return False, "Mehrjaehrige oder fundierte Erfahrung gefordert"
-
-    if any(
-        re.search(pattern, full_text) for pattern in MANDATORY_ADVANCED_DEGREE_PATTERNS
-    ):
-        return False, "Verpflichtender Master- oder Promotionsabschluss"
-
-    if contains_any(full_text, HIGH_TRAVEL_PHRASES):
-        return False, "Hohe oder deutschlandweite Reisetatigkeit gefordert"
+    reason = hard_filter_reason(title, description, full_text, role, career_levels)
+    if reason:
+        return False, reason
 
     location_score = analyze_location_for_role(
         title,

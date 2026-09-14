@@ -3,55 +3,97 @@
 import re
 from datetime import date, timedelta
 
+from job_finder import location_rules
 from job_finder.config import LOCAL_SEARCH_RADIUS_KM
+from job_finder.experience import (
+    EXPERIENCE_TERM as EXPERIENCE_TERM,
+)
+from job_finder.experience import (
+    MORE_THAN_QUALIFIERS as MORE_THAN_QUALIFIERS,
+)
+from job_finder.experience import (
+    REQUIRED_EXPERIENCE_PATTERNS as REQUIRED_EXPERIENCE_PATTERNS,
+)
+from job_finder.experience import (
+    YEAR_UNIT as YEAR_UNIT,
+)
+from job_finder.experience import (
+    analyze_experience as analyze_experience,
+)
+from job_finder.experience import (
+    experience_is_optional as experience_is_optional,
+)
+from job_finder.experience import (
+    extract_required_years as extract_required_years,
+)
+from job_finder.experience import (
+    has_required_experience as has_required_experience,
+)
+from job_finder.experience import (
+    match_context as match_context,
+)
+from job_finder.experience import (
+    match_is_optional as match_is_optional,
+)
+from job_finder.experience import (
+    strong_experience_is_required as strong_experience_is_required,
+)
+from job_finder.location_rules import (
+    is_full_remote as is_full_remote,
+)
+from job_finder.location_rules import (
+    is_hybrid as is_hybrid,
+)
+from job_finder.location_rules import (
+    remote_percent as remote_percent,
+)
+from job_finder.location_rules import (
+    remote_possible_from_germany as remote_possible_from_germany,
+)
+from job_finder.matching_text import (
+    contains_any as contains_any,
+)
+from job_finder.matching_text import (
+    contains_keyword as contains_keyword,
+)
+from job_finder.matching_text import (
+    is_entry_level as is_entry_level,
+)
+from job_finder.matching_text import (
+    keyword_pattern as keyword_pattern,
+)
+from job_finder.matching_text import (
+    matches_pattern as matches_pattern,
+)
 from job_finder.models import FilterStatus, Job
 from job_finder.profile import (
     BLOCKED_TITLE_WORDS,
-    BODY_ENTRY_LEVEL_PHRASES,
     COMMUTER_LOCATIONS,
     ENTRY_LEVEL_TITLE_EXCEPTIONS,
-    ENTRY_LEVEL_WORDS,
-    FIRST_EXPERIENCE_PHRASES,
-    FOREIGN_ONLY_LOCATION_WORDS,
     GENERAL_IT_ROLE,
     GENERAL_IT_TITLE_KEYWORDS,
-    GERMANY_LOCATION_WORDS,
     HIGH_TRAVEL_PHRASES,
     LOCAL_PLACES,
     MANDATORY_ADVANCED_DEGREE_PATTERNS,
-    OPTIONAL_EXPERIENCE_PHRASES,
     PROFILE_DOMAIN_KEYWORDS,
     ROLE_GROUPS,
     SALARY_MINIMUM,
     SALARY_TARGET,
     SCORE_LIMITS,
     SKILL_GROUPS,
-    STRONG_EXPERIENCE_PHRASES,
 )
 from job_finder.remote import detect_remote
+from job_finder.salary import (
+    extract_annual_salary as extract_annual_salary,
+)
+from job_finder.salary import (
+    salary_number as salary_number,
+)
+from job_finder.salary import (
+    valid_salary as valid_salary,
+)
 from job_finder.text import normalize_text, text_is_mainly_english
 
-EXPERIENCE_TERM = (
-    r"(?:berufserfahrung|arbeitserfahrung|entwicklungserfahrung|"
-    r"praktische erfahrung|praxiserfahrung|"
-    r"professional experience|practical experience|hands-on experience|"
-    r"erfahrung(?:en)?|experience)"
-)
-YEAR_UNIT = r"(?:jahre?n?|years?|yrs?)"
-MORE_THAN_QUALIFIERS = {
-    "mehr als",
-    "ueber",
-    "more than",
-    "over",
-}
-REQUIRED_EXPERIENCE_PATTERNS = [
-    r"\b(?:du|sie)\s+(?:hast|haben|bringst|bringen|verfuegst|verfuegen)"
-    r"[\s\S]{0,70}\berfahr(?:ung|ungen)\b",
-    r"\b(?:erfahrung|erfahrungen)\s+(?:im|in|als|mit)\b",
-    r"\b(?:hands-on|practical|previous|professional|relevant|solid)\s+experience\b",
-    r"\bexperience\s+(?:in|with|using|working|building|developing)\b",
-    r"\bexperienced\s+(?:in|with)\b",
-]
 MAX_JOB_AGE_DAYS = 60
 
 
@@ -301,147 +343,6 @@ def structured_advanced_level(career_levels):
     return None
 
 
-def analyze_experience(title, full_text, required_years=None):
-    """Return experience rank, points and label for normalized job text.
-
-    Call after hard_filter_reason: explicit requirements above three
-    years must already be excluded. Numeric requirements take priority
-    over entry-level signals; optional experience is weighted less
-    strictly than required experience. Lower rank sorts first.
-    """
-    if required_years is None:
-        required_years = extract_required_years(full_text)
-
-    if required_years:
-        points = {1: 14, 2: 8, 3: 3}[required_years]
-        return {
-            "rank": required_years + 1,
-            "points": points,
-            "label": f"{required_years} Jahr(e) gefordert",
-        }
-
-    if contains_any(full_text, BODY_ENTRY_LEVEL_PHRASES):
-        return {"rank": 0, "points": 25, "label": "klare Einstiegsstelle"}
-
-    if contains_any(full_text, STRONG_EXPERIENCE_PHRASES):
-        return {
-            "rank": 5,
-            "points": 6,
-            "label": "mehrjaehrige/fundierte Erfahrung ohne Jahreszahl",
-        }
-
-    if is_entry_level(title, full_text):
-        return {"rank": 0, "points": 25, "label": "klare Einstiegsstelle"}
-
-    if contains_any(full_text, FIRST_EXPERIENCE_PHRASES):
-        return {"rank": 0, "points": 25, "label": "erste Erfahrung reicht aus"}
-
-    if has_required_experience(full_text):
-        return {
-            "rank": 4,
-            "points": 8,
-            "label": "praktische Vorerfahrung mit Technologien vorausgesetzt",
-        }
-
-    if experience_is_optional(full_text):
-        return {"rank": 1, "points": 18, "label": "Erfahrung nur wuenschenswert"}
-
-    return {"rank": 1, "points": 20, "label": "keine klare Jahresanforderung"}
-
-
-def extract_required_years(text):
-    """Return the highest explicit experience requirement up to ten years."""
-    range_patterns = [
-        rf"(\d+)\s*(?:-|bis|to)\s*(\d+)\s*{YEAR_UNIT}"
-        rf"[\s\S]{{0,80}}?{EXPERIENCE_TERM}",
-        rf"{EXPERIENCE_TERM}[\s\S]{{0,80}}?"
-        rf"(\d+)\s*(?:-|bis|to)\s*(\d+)\s*{YEAR_UNIT}",
-    ]
-    years = []
-    for pattern in range_patterns:
-        for match in re.finditer(pattern, text):
-            if match_is_optional(text, match):
-                continue
-            lower, upper = match.groups()[-2:]
-            years.extend([int(lower), int(upper)])
-
-    single_patterns = [
-        rf"(?:(mehr als|ueber|more than|over|mindestens|mind\.?|at least|"
-        rf"minimum of)\s*)?(\d+)\s*\+?\s*{YEAR_UNIT}"
-        rf"[\s\S]{{0,80}}?{EXPERIENCE_TERM}",
-        rf"{EXPERIENCE_TERM}[\s\S]{{0,80}}?"
-        rf"(?:(mehr als|ueber|more than|over|mindestens|mind\.?|at least|"
-        rf"minimum of)\s*)?(\d+)\s*\+?\s*{YEAR_UNIT}",
-    ]
-    for pattern in single_patterns:
-        for match in re.finditer(pattern, text):
-            if match_is_optional(text, match):
-                continue
-            qualifier, value = match.groups()[-2:]
-            year = int(value)
-            if qualifier and qualifier.strip() in MORE_THAN_QUALIFIERS:
-                year += 1
-            years.append(year)
-
-    plausible = [year for year in years if 0 < year <= 10]
-    return max(plausible, default=0)
-
-
-def experience_is_optional(text):
-    """Detect an experience mention whose surrounding sentence is optional."""
-    experience_pattern = re.compile(EXPERIENCE_TERM)
-    for match in experience_pattern.finditer(text):
-        if match_is_optional(text, match):
-            return True
-    return False
-
-
-def has_required_experience(text):
-    """Return whether applicant experience is stated as a requirement."""
-    for pattern in REQUIRED_EXPERIENCE_PATTERNS:
-        for match in re.finditer(pattern, text):
-            if not match_is_optional(text, match):
-                return True
-    return False
-
-
-def strong_experience_is_required(title, description):
-    """Reject vague seniority requirements unless the vacancy is entry-level."""
-    if is_entry_level(title, description):
-        return False
-    for phrase in STRONG_EXPERIENCE_PHRASES:
-        position = description.find(phrase)
-        if position < 0:
-            continue
-        context = description[max(0, position - 55) : position + len(phrase) + 55]
-        if not contains_any(context, OPTIONAL_EXPERIENCE_PHRASES):
-            return True
-    return False
-
-
-def match_is_optional(text, match, context_size=55):
-    """Check whether optional wording belongs to a nearby requirement."""
-    start, end = match_context(text, match, context_size)
-    return contains_any(text[start:end], OPTIONAL_EXPERIENCE_PHRASES)
-
-
-def match_context(text, match, context_size):
-    """Return a nearby clause without crossing clear punctuation boundaries."""
-    start = max(0, match.start() - context_size)
-    end = min(len(text), match.end() + context_size)
-
-    for separator in ".!?;\n":
-        left_boundary = text.rfind(separator, start, match.start())
-        if left_boundary >= 0:
-            start = max(start, left_boundary + 1)
-
-        right_boundary = text.find(separator, match.end(), end)
-        if right_boundary >= 0:
-            end = min(end, right_boundary)
-
-    return start, end
-
-
 def score_skills(text):
     """Return capped skill points and labels matched in normalized text."""
     matched = [group for group in SKILL_GROUPS if contains_any(text, group["keywords"])]
@@ -461,55 +362,6 @@ def score_profile_connection(text):
     return SCORE_LIMITS["profile"] if contains_any(text, PROFILE_DOMAIN_KEYWORDS) else 0
 
 
-def analyze_location(location, remote, description):
-    """Return allowed, points and label for normalized location evidence.
-
-    Accept configured local places, full remote work compatible with
-    Germany, or commuter locations meeting their remote-percentage
-    threshold. Local matching uses configured aliases, not a geographic
-    distance calculation. The junior-hybrid exception is applied by
-    analyze_location_for_role, not by this function.
-    """
-    full_remote = is_full_remote(location, remote)
-    if full_remote and not remote_possible_from_germany(location, description):
-        return {
-            "allowed": False,
-            "points": 0,
-            "label": "Remote-Stelle ist nicht aus Deutschland ausuebbar",
-        }
-
-    if is_local_area(location):
-        radius_label = f"{LOCAL_SEARCH_RADIUS_KM}-km-Radius"
-        if full_remote:
-            return {"allowed": True, "points": 15, "label": "lokal und 100% Remote"}
-        if is_hybrid(remote):
-            return {
-                "allowed": True,
-                "points": 13,
-                "label": f"{radius_label} und Hybrid",
-            }
-        return {"allowed": True, "points": 10, "label": f"im {radius_label}"}
-
-    if full_remote:
-        return {"allowed": True, "points": 15, "label": "100% Remote aus Deutschland"}
-
-    commuter_location = find_commuter_location(location)
-    if commuter_location:
-        minimum = commuter_location["minimum_remote_percentage"]
-        percentage = remote_percent(remote)
-        if percentage >= minimum:
-            return {
-                "allowed": True,
-                "points": 8,
-                "label": (
-                    f"Pendelort {commuter_location['search_location']} mit "
-                    f"{percentage}% Remote"
-                ),
-            }
-
-    return {"allowed": False, "points": 0, "label": "Ort/Remote passt nicht"}
-
-
 def analyze_location_for_role(title, location, remote, description):
     """Allow explicit entry roles with hybrid work to reach manual review."""
     result = analyze_location(location, remote, description)
@@ -526,67 +378,6 @@ def analyze_location_for_role(title, location, remote, description):
             "label": "Junior-Hybrid außerhalb des Suchgebiets; Präsenzumfang prüfen",
         }
     return result
-
-
-def is_local_area(location):
-    """Match normalized location text against configured local aliases."""
-    return contains_any(location, LOCAL_PLACES)
-
-
-def find_commuter_location(location):
-    """Return the first matching commuter configuration, or None."""
-    for item in COMMUTER_LOCATIONS:
-        excluded_aliases = [
-            normalize_text(alias) for alias in item.get("excluded_aliases", [])
-        ]
-        if contains_any(location, excluded_aliases):
-            continue
-        aliases = [normalize_text(alias) for alias in item["aliases"]]
-        if contains_any(location, aliases):
-            return item
-    return None
-
-
-def is_full_remote(location, remote):
-    """Recognize full remote evidence in normalized work-mode or location text."""
-    if remote_percent(remote) >= 100:
-        return True
-    if remote in ["remote", "fully remote", "full remote"]:
-        return True
-
-    # A structured location explicitly labelled remote is stronger evidence
-    # than a generic "Homeoffice possible" phrase.
-    return contains_keyword(location, "remote")
-
-
-def remote_possible_from_germany(location, description):
-    """Check normalized location restrictions for German remote eligibility.
-
-    Germany markers in the location or first 1,200 description
-    characters take precedence. Otherwise, reject EMEA locations and
-    configured foreign-only location markers. This is a text heuristic,
-    not a verification of legal employment eligibility.
-    """
-    combined = f"{location} {description[:1200]}"
-    if contains_any(combined, GERMANY_LOCATION_WORDS):
-        return True
-    if "emea" in location:
-        return False
-    return not contains_any(location, FOREIGN_ONLY_LOCATION_WORDS)
-
-
-def is_hybrid(remote):
-    """Recognize hybrid wording or a remote percentage between 0 and 100."""
-    return (
-        contains_any(remote, ["hybrid", "homeoffice", "home office"])
-        or 0 < remote_percent(remote) < 100
-    )
-
-
-def remote_percent(remote):
-    """Read the first integer percentage, returning 0 if none is present."""
-    match = re.search(r"(\d+)\s*%", remote)
-    return int(match.group(1)) if match else 0
 
 
 def score_preferences(full_text):
@@ -642,83 +433,6 @@ def score_preferences(full_text):
     return penalties
 
 
-def extract_annual_salary(text):
-    """Extract explicit annual salary ranges without guessing from unrelated numbers."""
-    number = r"(?:\d{2,3}(?:[.\s]\d{3})|\d{5,6}|\d{2,3}\s*k)"
-    range_pattern = (
-        rf"({number})\s*(?:-|\u2013|bis|to)\s*({number})\s*(?:eur|euro|\u20ac)"
-    )
-    ranges = re.findall(range_pattern, text)
-    if ranges:
-        values = [(salary_number(low), salary_number(high)) for low, high in ranges]
-        plausible = [
-            (low, high)
-            for low, high in values
-            if valid_salary(low) and valid_salary(high)
-        ]
-        if plausible:
-            return max(plausible, key=lambda item: item[1])
-
-    salary_context_patterns = [
-        rf"(?:jahresgehalt|gehalt|salary|verguetung)[^.!\n]{{0,40}}({number})\s*(?:eur|euro|\u20ac)?",
-        rf"({number})\s*(?:eur|euro|\u20ac)\s*(?:brutto\s*)?(?:pro jahr|im jahr|jaehrlich|p\.a\.)",
-    ]
-    values = []
-    for pattern in salary_context_patterns:
-        values.extend(salary_number(value) for value in re.findall(pattern, text))
-
-    plausible = [value for value in values if valid_salary(value)]
-    if plausible:
-        value = max(plausible)
-        return value, value
-    return None
-
-
-def salary_number(value):
-    """Parse an integer salary with grouping separators or a trailing k."""
-    cleaned = str(value).lower().replace(".", "").replace(" ", "")
-    if cleaned.endswith("k"):
-        return int(cleaned[:-1]) * 1000
-    return int(cleaned)
-
-
-def valid_salary(value):
-    """Check whether an annual salary falls between 20,000 and 200,000 EUR."""
-    return 20_000 <= value <= 200_000
-
-
-def contains_any(text, words):
-    """Match any keyword against text already processed by normalize_text."""
-    return any(contains_keyword(text, word) for word in words)
-
-
-def is_entry_level(title, description=""):
-    """Return whether this specific vacancy explicitly welcomes beginners."""
-    return contains_any(title, ENTRY_LEVEL_WORDS) or contains_any(
-        description,
-        BODY_ENTRY_LEVEL_PHRASES,
-    )
-
-
-def contains_keyword(text, keyword):
-    """Match a normalized keyword, using word boundaries for plain words."""
-    return re.search(keyword_pattern(keyword), text) is not None
-
-
-def keyword_pattern(keyword):
-    """Escape a keyword and add boundaries for letters, digits or underscores."""
-    normalized = normalize_text(keyword)
-    escaped = re.escape(normalized)
-    if re.fullmatch(r"[a-z0-9_]+", normalized):
-        return rf"(?<!\w){escaped}(?!\w)"
-    return escaped
-
-
-def matches_pattern(text, pattern):
-    """Require every keyword in a profile pattern to match normalized text."""
-    return all(contains_keyword(text, part) for part in pattern)
-
-
 def passes_hard_filters(
     title,
     description,
@@ -749,3 +463,25 @@ def passes_hard_filters(
         return False, location_score["label"]
 
     return True, ""
+
+
+def analyze_location(location, remote, description):
+    """Analyze location using the currently configured local and commuter rules."""
+    return location_rules.analyze_location(
+        location,
+        remote,
+        description,
+        local_places=LOCAL_PLACES,
+        commuter_locations=COMMUTER_LOCATIONS,
+        radius=LOCAL_SEARCH_RADIUS_KM,
+    )
+
+
+def is_local_area(location):
+    """Match a location against the configured local aliases."""
+    return location_rules.is_local_area(location, LOCAL_PLACES)
+
+
+def find_commuter_location(location):
+    """Return the first matching configured commuter location, or None."""
+    return location_rules.find_commuter_location(location, COMMUTER_LOCATIONS)

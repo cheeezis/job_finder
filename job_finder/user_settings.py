@@ -4,7 +4,6 @@ from pathlib import Path
 
 import yaml
 
-
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 LOCAL_SETTINGS_PATH = PROJECT_DIR / "user_settings.local.yaml"
 EXAMPLE_SETTINGS_PATH = PROJECT_DIR / "user_settings.example.yaml"
@@ -18,9 +17,13 @@ def load_user_settings(path=SETTINGS_PATH):
     try:
         values = yaml.safe_load(settings_path.read_text(encoding="utf-8"))
     except OSError as error:
-        raise ValueError(f"Einstellungen konnten nicht gelesen werden: {settings_path}") from error
+        raise ValueError(
+            f"Einstellungen konnten nicht gelesen werden: {settings_path}"
+        ) from error
     except yaml.YAMLError as error:
-        raise ValueError(f"Einstellungen enthalten ungueltiges YAML: {settings_path}") from error
+        raise ValueError(
+            f"Einstellungen enthalten ungueltiges YAML: {settings_path}"
+        ) from error
 
     if not isinstance(values, dict):
         raise ValueError("Einstellungen muessen ein Objekt sein")

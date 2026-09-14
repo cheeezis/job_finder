@@ -19,7 +19,6 @@ from job_finder.sources.common import (
 from job_finder.storage import write_json_atomic
 from job_finder.text import html_to_text
 
-
 SOURCE_NAME = "german_tech_jobs"
 FEED_URL = "https://germantechjobs.de/job_feed.xml"
 CACHE_FILE = GERMAN_TECH_JOBS_CACHE_FILE
@@ -87,9 +86,7 @@ def job_from_element(element, fetched_at=None):
     city = element_text(element, "city")
     remote_text = detect_remote(title, location, description)
     work_mode, remote_percentage = classify_remote(remote_text)
-    salary_minimum, salary_maximum = annual_salary_eur(
-        element_text(element, "salary")
-    )
+    salary_minimum, salary_maximum = annual_salary_eur(element_text(element, "salary"))
     application_url = element_text(element, "apply_url") or None
 
     return Job(

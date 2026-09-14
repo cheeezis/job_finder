@@ -17,32 +17,35 @@ from job_finder.paths import (
     NOTIFICATION_STATE_FILE,
 )
 from job_finder.reporting import is_international_listing, write_recommendations
-from job_finder.storage import write_json_atomic
-from job_finder.sources import arbeitnow
-from job_finder.sources import arbeitsagentur
-from job_finder.sources import bytewerk
-from job_finder.sources import css
-from job_finder.sources import compose_it
-from job_finder.sources import edag
-from job_finder.sources import get_in_it
-from job_finder.sources import german_tech_jobs
-from job_finder.sources import himalayas
-from job_finder.sources import jumo
-from job_finder.sources import jobicy
-from job_finder.sources import manual
-from job_finder.sources import nethinks
-from job_finder.sources import proemion
-from job_finder.sources import remotely
-from job_finder.sources import rhoenenergie
-from job_finder.sources import stepstone
-from job_finder.sources import startup_jobs
-from job_finder.sources import studysmarter
+from job_finder.sources import (
+    arbeitnow,
+    arbeitsagentur,
+    bytewerk,
+    compose_it,
+    css,
+    edag,
+    german_tech_jobs,
+    get_in_it,
+    himalayas,
+    jobicy,
+    jumo,
+    manual,
+    nethinks,
+    proemion,
+    remotely,
+    rhoenenergie,
+    startup_jobs,
+    stepstone,
+    studysmarter,
+)
 from job_finder.sources.common import (
     canonical_detail_url as canonical_url,
+)
+from job_finder.sources.common import (
     fetch_diagnostics,
     reset_fetch_diagnostics,
 )
-
+from job_finder.storage import write_json_atomic
 
 SOURCES = [
     arbeitsagentur,
@@ -99,6 +102,7 @@ def require_usable_source_snapshot(source_reports):
         "verwendbar; vorhandene Jobs und Review-Ausgabe bleiben unverändert"
     )
 
+
 def parse_args():
     """Parse command-line options for one Job Finder run."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -121,26 +125,26 @@ def main():
 def run_pipeline(args):
     """Execute one logged run of the complete job-finding pipeline."""
     started = time.monotonic()
-    with timed_step('Backup'):
+    with timed_step("Backup"):
         create_backup([MEMORY_FILE, NOTIFICATION_STATE_FILE])
 
     print_phase(1, 4, "Quellen")
-    with timed_step('Quellen und Deduplizierung'):
+    with timed_step("Quellen und Deduplizierung"):
         jobs, source_reports = collect_jobs()
         print_source_summary(source_reports, len(jobs))
         require_usable_source_snapshot(source_reports)
 
     print_phase(2, 4, "Bewertung")
-    with timed_step('Vorfilter'):
+    with timed_step("Vorfilter"):
         results = score_jobs(jobs)
 
     candidate_ids = {job["id"] for job in results["included"]}
-    with timed_step('Detailanreicherung'):
+    with timed_step("Detailanreicherung"):
         enrich_candidate_jobs(jobs, candidate_ids)
 
     # Validate final details before committing any workflow state. The score
     # stays attached to the job as memory resolves its ID and timestamps.
-    with timed_step('Endgültige Bewertung'):
+    with timed_step("Endgültige Bewertung"):
         evaluated_jobs = evaluate_jobs(jobs)
 
     # Persist only the final post-enrichment set; enrichers may remove closed ads.
@@ -150,7 +154,7 @@ def run_pipeline(args):
         for report in source_reports
         if report["status"] in {"success", "empty"}
     }
-    with timed_step('Gedächtnis speichern'):
+    with timed_step("Gedächtnis speichern"):
         with edit_memory(MEMORY_FILE) as memory:
             memory_stats = update_memory(
                 jobs,
@@ -158,20 +162,24 @@ def run_pipeline(args):
                 successful_sources=complete_sources,
             )
 
-    with timed_step('Offline-Prüfung'):
+    with timed_step("Offline-Prüfung"):
         closed_ids = ignore_closed_listings(
-            jobs, MEMORY_FILE, successful_sources=complete_sources,
+            jobs,
+            MEMORY_FILE,
+            successful_sources=complete_sources,
             progress=print_availability_progress,
         )
 
     if closed_ids:
-        print(f"Nicht mehr verfügbar: {len(closed_ids)} Stelle(n) auf Nicht interessant gesetzt")
+        print(
+            f"Nicht mehr verfügbar: {len(closed_ids)} Stelle(n) auf Nicht interessant gesetzt"
+        )
     results = build_score_results(evaluated_jobs)
     print(
-        f'{memory_stats["inactive"]} neu inaktiv · '
-        f'{memory_stats["reactivated"]} reaktiviert'
+        f"{memory_stats['inactive']} neu inaktiv · "
+        f"{memory_stats['reactivated']} reaktiviert"
     )
-    with timed_step('Ergebnisdateien schreiben'):
+    with timed_step("Ergebnisdateien schreiben"):
         write_json_atomic(JOBS_FILE, [job.to_dict() for job in jobs])
         print(
             f"Vorfilter: {len(results['included'])} weiter · "
@@ -180,7 +188,7 @@ def run_pipeline(args):
         write_recommendations(results)
 
     print_phase(4, 4, "Ausgabe und Benachrichtigungen")
-    with timed_step('Benachrichtigungen'):
+    with timed_step("Benachrichtigungen"):
         notification_stats = process_notifications(
             results,
             send=args.notify,
@@ -194,10 +202,7 @@ def run_pipeline(args):
                 f"{notification_stats['failed']} fehlgeschlagen"
             )
         else:
-            print(
-                f"Discord: {notification_stats['ready']} bereit; "
-                "mit --notify senden"
-            )
+            print(f"Discord: {notification_stats['ready']} bereit; mit --notify senden")
 
         if args.notify:
             summary_error = send_run_summary(
@@ -244,7 +249,8 @@ def print_review_diagnostics(results, memory_stats):
         f"{new_included} davon passend · "
         f"{new_excluded} davon ausgeschlossen\n"
         f"  Review Neu: {standard_new} im Standardfilter · "
-        f"{pending} unbearbeitet einschließlich Sonderfilter", flush=True,
+        f"{pending} unbearbeitet einschließlich Sonderfilter",
+        flush=True,
     )
 
 
@@ -310,7 +316,12 @@ def collect_jobs(sources=None):
             label,
             1,
             1,
-            f"{len(source_jobs)} Stellen" + (f" · Teilergebnis ({report_details.get('failed_segments', '?')} Segment(e) fehlgeschlagen)" if source_status == "partial" else ""),
+            f"{len(source_jobs)} Stellen"
+            + (
+                f" · Teilergebnis ({report_details.get('failed_segments', '?')} Segment(e) fehlgeschlagen)"
+                if source_status == "partial"
+                else ""
+            ),
         )
         for job in source_jobs:
             url = job.primary_url
@@ -366,10 +377,7 @@ def build_run_summary(
         for source in job.sources:
             new_by_source[source.source] = new_by_source.get(source.source, 0) + 1
 
-    review_new = sum(
-        bool(job.get("is_new"))
-        for job in results["included"]
-    )
+    review_new = sum(bool(job.get("is_new")) for job in results["included"])
     summary_sources = [
         {
             "label": source_label(report["name"]),
@@ -395,7 +403,9 @@ def build_run_summary(
 def source_error_label(error):
     """Describe a source failure without leaking request URLs or messages."""
     status_code = getattr(error, "code", None) or getattr(error, "status_code", None)
-    return f"HTTP {status_code}" if isinstance(status_code, int) else type(error).__name__
+    return (
+        f"HTTP {status_code}" if isinstance(status_code, int) else type(error).__name__
+    )
 
 
 def format_duration(duration_seconds):

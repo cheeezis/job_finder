@@ -5,7 +5,6 @@ from datetime import date, timedelta
 
 from job_finder.config import LOCAL_SEARCH_RADIUS_KM
 from job_finder.models import FilterStatus, Job
-from job_finder.remote import detect_remote
 from job_finder.profile import (
     BLOCKED_TITLE_WORDS,
     BODY_ENTRY_LEVEL_PHRASES,
@@ -13,12 +12,12 @@ from job_finder.profile import (
     ENTRY_LEVEL_WORDS,
     FIRST_EXPERIENCE_PHRASES,
     FOREIGN_ONLY_LOCATION_WORDS,
+    GENERAL_IT_ROLE,
+    GENERAL_IT_TITLE_KEYWORDS,
     GERMANY_LOCATION_WORDS,
     HIGH_TRAVEL_PHRASES,
     LOCAL_PLACES,
     MANDATORY_ADVANCED_DEGREE_PATTERNS,
-    GENERAL_IT_ROLE,
-    GENERAL_IT_TITLE_KEYWORDS,
     OPTIONAL_EXPERIENCE_PHRASES,
     PROFILE_DOMAIN_KEYWORDS,
     ROLE_GROUPS,
@@ -28,8 +27,8 @@ from job_finder.profile import (
     SKILL_GROUPS,
     STRONG_EXPERIENCE_PHRASES,
 )
+from job_finder.remote import detect_remote
 from job_finder.text import normalize_text, text_is_mainly_english
-
 
 EXPERIENCE_TERM = (
     r"(?:berufserfahrung|arbeitserfahrung|entwicklungserfahrung|"
@@ -107,10 +106,10 @@ def score_job(job: Job, today=None):
     score = role["points"] + skill_score + experience["points"]
     score += location_score["points"] + profile_score
     reasons = [
-        f'+{role["points"]} Rolle: {role["label"]}',
+        f"+{role['points']} Rolle: {role['label']}",
         format_skill_reason(skill_score, skill_labels),
-        f'+{experience["points"]} Erfahrung: {experience["label"]}',
-        f'+{location_score["points"]} Standort: {location_score["label"]}',
+        f"+{experience['points']} Erfahrung: {experience['label']}",
+        f"+{location_score['points']} Standort: {location_score['label']}",
     ]
 
     if profile_score:
@@ -119,7 +118,7 @@ def score_job(job: Job, today=None):
     penalties = score_preferences(full_text)
     for penalty in penalties:
         score -= penalty["points"]
-        reasons.append(f'-{penalty["points"]} {penalty["label"]}')
+        reasons.append(f"-{penalty['points']} {penalty['label']}")
 
     score = max(0, min(100, score))
     return {
@@ -160,7 +159,9 @@ def strip_platform_boilerplate(description):
         "bei dieser jobboerse erstellen wir fuer stellen",
         "mithilfe von kuenstlicher intelligenz (ki) automatisch generierte zusammenfassungen",
     ]
-    positions = [description.find(marker) for marker in markers if marker in description]
+    positions = [
+        description.find(marker) for marker in markers if marker in description
+    ]
     if positions:
         return description[: min(positions)].strip()
     return description
@@ -184,7 +185,10 @@ def passes_hard_filters(
 
     advanced_level = structured_advanced_level(career_levels)
     if advanced_level and not is_entry_level(title, description):
-        return False, f"Portal-Karrierestufe ist nicht fuer den Einstieg: {advanced_level}"
+        return (
+            False,
+            f"Portal-Karrierestufe ist nicht fuer den Einstieg: {advanced_level}",
+        )
 
     years = extract_required_years(full_text)
     if years > 3:
@@ -193,7 +197,9 @@ def passes_hard_filters(
     if strong_experience_is_required(title, description):
         return False, "Mehrjaehrige oder fundierte Erfahrung gefordert"
 
-    if any(re.search(pattern, full_text) for pattern in MANDATORY_ADVANCED_DEGREE_PATTERNS):
+    if any(
+        re.search(pattern, full_text) for pattern in MANDATORY_ADVANCED_DEGREE_PATTERNS
+    ):
         return False, "Verpflichtender Master- oder Promotionsabschluss"
 
     if contains_any(full_text, HIGH_TRAVEL_PHRASES):
@@ -441,7 +447,7 @@ def score_skills(text):
 def format_skill_reason(points, labels):
     if not labels:
         return "+0 Technologien: keine direkte Profilueberschneidung"
-    return f'+{points} Technologien: {", ".join(labels)}'
+    return f"+{points} Technologien: {', '.join(labels)}"
 
 
 def score_profile_connection(text):
@@ -545,7 +551,10 @@ def remote_possible_from_germany(location, description):
 
 
 def is_hybrid(remote):
-    return contains_any(remote, ["hybrid", "homeoffice", "home office"]) or 0 < remote_percent(remote) < 100
+    return (
+        contains_any(remote, ["hybrid", "homeoffice", "home office"])
+        or 0 < remote_percent(remote) < 100
+    )
 
 
 def remote_percent(remote):
@@ -568,19 +577,33 @@ def score_preferences(full_text):
     if contains_any(
         full_text,
         [
-            "praktikum", "praktikant", "internship", "ausbildung",
-            "auszubildende", "auszubildender", "auszubildenden", "azubi",
-            "duales studium", "dual study", "abschlussarbeit", "bachelorarbeit",
-            "thesis", "weiterbildung",
+            "praktikum",
+            "praktikant",
+            "internship",
+            "ausbildung",
+            "auszubildende",
+            "auszubildender",
+            "auszubildenden",
+            "azubi",
+            "duales studium",
+            "dual study",
+            "abschlussarbeit",
+            "bachelorarbeit",
+            "thesis",
+            "weiterbildung",
         ],
     ):
         penalties.append({"points": 12, "label": "Ausbildungs-/Studienformat"})
 
-    if contains_any(full_text, ["arbeitnehmerueberlassung", "zeitarbeit", "personaldienstleister"]):
+    if contains_any(
+        full_text, ["arbeitnehmerueberlassung", "zeitarbeit", "personaldienstleister"]
+    ):
         penalties.append({"points": 3, "label": "Arbeitnehmerueberlassung/Zeitarbeit"})
 
     if text_is_mainly_english(full_text):
-        penalties.append({"points": 2, "label": "ueberwiegend englischsprachige Stelle"})
+        penalties.append(
+            {"points": 2, "label": "ueberwiegend englischsprachige Stelle"}
+        )
 
     salary = extract_annual_salary(full_text)
     if salary and SALARY_MINIMUM is not None and salary[1] < SALARY_MINIMUM:
@@ -594,11 +617,17 @@ def score_preferences(full_text):
 def extract_annual_salary(text):
     """Extract explicit annual salary ranges without guessing from unrelated numbers."""
     number = r"(?:\d{2,3}(?:[.\s]\d{3})|\d{5,6}|\d{2,3}\s*k)"
-    range_pattern = rf"({number})\s*(?:-|\u2013|bis|to)\s*({number})\s*(?:eur|euro|\u20ac)"
+    range_pattern = (
+        rf"({number})\s*(?:-|\u2013|bis|to)\s*({number})\s*(?:eur|euro|\u20ac)"
+    )
     ranges = re.findall(range_pattern, text)
     if ranges:
         values = [(salary_number(low), salary_number(high)) for low, high in ranges]
-        plausible = [(low, high) for low, high in values if valid_salary(low) and valid_salary(high)]
+        plausible = [
+            (low, high)
+            for low, high in values
+            if valid_salary(low) and valid_salary(high)
+        ]
         if plausible:
             return max(plausible, key=lambda item: item[1])
 

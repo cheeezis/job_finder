@@ -19,7 +19,9 @@ def fetch_jobs(cache_path=CACHE_FILE, now=None):
 
 def collect_links():
     first_html = fetch_text(LIST_URL)
-    pages = [int(value) for value in re.findall(r"/nethinks_jobs/page/(\d+)/", first_html)]
+    pages = [
+        int(value) for value in re.findall(r"/nethinks_jobs/page/(\d+)/", first_html)
+    ]
     last_page = max(pages, default=1)
     links = extract_job_links(first_html)
     seen = set(links)

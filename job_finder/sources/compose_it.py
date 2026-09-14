@@ -64,7 +64,13 @@ def job_from_html(source_name, fallback_company, url, html):
             for fact in facts
             if any(
                 word in normalize_text(fact)
-                for word in ["festanstellung", "vollzeit", "teilzeit", "ausbildung", "werkstudent"]
+                for word in [
+                    "festanstellung",
+                    "vollzeit",
+                    "teilzeit",
+                    "ausbildung",
+                    "werkstudent",
+                ]
             )
         ),
         None,
@@ -76,7 +82,11 @@ def job_from_html(source_name, fallback_company, url, html):
         re.IGNORECASE,
     )
     form_match = re.search(r'<div[^>]*id="bewerberform"[^>]*>', html, re.IGNORECASE)
-    if not content_match or not form_match or form_match.start() <= content_match.start():
+    if (
+        not content_match
+        or not form_match
+        or form_match.start() <= content_match.start()
+    ):
         raise ValueError("Compose-IT-Stellenbeschreibung nicht gefunden")
     raw_description = html[content_match.start() : form_match.start()].strip()
     description = html_to_text(raw_description)

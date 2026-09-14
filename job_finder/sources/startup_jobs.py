@@ -6,15 +6,14 @@ from urllib.parse import urlencode
 from job_finder.http import fetch_json
 from job_finder.models import Job, JobSource, WorkMode
 from job_finder.sources.common import (
-    numeric_salary,
     normalize_employment_type,
+    numeric_salary,
     parse_published_date,
     remote_region_allows_germany,
     source_job_id,
     utc_now,
 )
 from job_finder.text import html_to_text
-
 
 SOURCE_NAME = "startup_jobs"
 API_URL = "https://api.startup.jobs/v1/jobs"

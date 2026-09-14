@@ -82,12 +82,26 @@ class NotificationTests(unittest.TestCase):
     def test_content_changes_never_resend_an_already_notified_job(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "state.json"
-            path.write_text(json.dumps({"version": 2, "sent": {
-                "old-content-hash": {"job_id": "job:1", "sent_at": "2026-09-01"}},
-                "pending": {"changed-content-hash": {"job_id": "job:1"}}}), encoding="utf-8")
+            path.write_text(
+                json.dumps(
+                    {
+                        "version": 2,
+                        "sent": {
+                            "old-content-hash": {
+                                "job_id": "job:1",
+                                "sent_at": "2026-09-01",
+                            }
+                        },
+                        "pending": {"changed-content-hash": {"job_id": "job:1"}},
+                    }
+                ),
+                encoding="utf-8",
+            )
             job = make_job()
             job["description_clean"] = "A completely rewritten job description"
-            stats = process_notifications({"included": [job], "excluded": []}, state_path=path)
+            stats = process_notifications(
+                {"included": [job], "excluded": []}, state_path=path
+            )
             self.assertEqual(stats["queued"], 0)
             self.assertEqual(stats["ready"], 0)
             state = json.loads(path.read_text(encoding="utf-8"))
@@ -125,12 +139,18 @@ class NotificationTests(unittest.TestCase):
             path = Path(directory) / "state.json"
             client = FakeClient()
             first = process_notifications(
-                {"included": [make_job()], "excluded": []}, send=True,
-                webhook_url="https://discord.test/webhook", client=client, state_path=path,
+                {"included": [make_job()], "excluded": []},
+                send=True,
+                webhook_url="https://discord.test/webhook",
+                client=client,
+                state_path=path,
             )
             second = process_notifications(
-                {"included": [make_job()], "excluded": []}, send=True,
-                webhook_url="https://discord.test/webhook", client=client, state_path=path,
+                {"included": [make_job()], "excluded": []},
+                send=True,
+                webhook_url="https://discord.test/webhook",
+                client=client,
+                state_path=path,
             )
         self.assertEqual(first["sent"], 1)
         self.assertEqual(second["sent"], 0)
@@ -140,9 +160,14 @@ class NotificationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "state.json"
             stats = process_notifications(
-                {"included": [make_job()], "excluded": [],}, send=True,
+                {
+                    "included": [make_job()],
+                    "excluded": [],
+                },
+                send=True,
                 webhook_url="https://discord.test/webhook",
-                client=FakeClient(NotificationError("nicht erreichbar")), state_path=path,
+                client=FakeClient(NotificationError("nicht erreichbar")),
+                state_path=path,
             )
             state = json.loads(path.read_text(encoding="utf-8"))
         self.assertEqual(stats["failed"], 1)
@@ -162,9 +187,7 @@ class NotificationTests(unittest.TestCase):
         self.assertNotIn("Pro", fields)
 
     def test_delayed_first_notification_is_still_a_new_job(self):
-        embed = discord_embed(
-            make_job(is_new=False, status="review")
-        )
+        embed = discord_embed(make_job(is_new=False, status="review"))
         fields = {field["name"]: field["value"] for field in embed["fields"]}
 
         self.assertIn("Neu", fields["Kurzcheck"])
@@ -172,8 +195,12 @@ class NotificationTests(unittest.TestCase):
     def test_run_summary_contains_no_ai_statistics(self):
         payload = run_summary_payload(
             {
-                "duration": "10 Sek.", "jobs_total": 100, "jobs_new": 3,
-                "jobs_known": 97, "included": 20, "excluded": 80,
+                "duration": "10 Sek.",
+                "jobs_total": 100,
+                "jobs_new": 3,
+                "jobs_known": 97,
+                "included": 20,
+                "excluded": 80,
                 "review_new": 2,
                 "notifications": {
                     "eligible_new": 2,
@@ -181,7 +208,9 @@ class NotificationTests(unittest.TestCase):
                     "sent": 2,
                     "failed": 0,
                 },
-                "sources": [{"label": "StepStone", "status": "success", "jobs": 10, "new": 1}],
+                "sources": [
+                    {"label": "StepStone", "status": "success", "jobs": 10, "new": 1}
+                ],
             }
         )
         embed = payload["embeds"][0]

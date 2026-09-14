@@ -31,7 +31,11 @@ def fetch_company_jobs(source_name, company, links, cache_path, now=None, parser
         return job
 
     return fetch_cached_details(
-        links, cache_path, fetch_detail, source_name, now=now,
+        links,
+        cache_path,
+        fetch_detail,
+        source_name,
+        now=now,
         normalize_cached=lambda job, url: ensure_url_identity(job, source_name, url),
     )
 
@@ -64,9 +68,7 @@ def job_from_json_ld(source_name, fallback_company, url, html):
     identifier = identifier_from_url(url)
     salary_min, salary_max = extract_annual_salary_eur(posting)
     organization = posting.get("hiringOrganization") or {}
-    company = (
-        organization.get("name", "") if isinstance(organization, dict) else ""
-    )
+    company = organization.get("name", "") if isinstance(organization, dict) else ""
 
     return Job(
         id=source_job_id(source_name, identifier, url),

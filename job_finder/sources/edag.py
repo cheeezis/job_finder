@@ -44,16 +44,19 @@ def fetch_jobs(cache_path=CACHE_FILE, now=None):
 def collect_links():
     first_html = fetch_text(LIST_URL)
     pages = [
-        int(value)
-        for value in re.findall(r"currentPage(?:%5D|\])=(\d+)", first_html)
+        int(value) for value in re.findall(r"currentPage(?:%5D|\])=(\d+)", first_html)
     ]
     last_page = max(pages, default=1)
     links = []
     seen = set()
 
     for page in range(1, last_page + 1):
-        html = first_html if page == 1 else fetch_text(
-            f"{LIST_URL}?tx_successfactors_view%5BcurrentPage%5D={page}"
+        html = (
+            first_html
+            if page == 1
+            else fetch_text(
+                f"{LIST_URL}?tx_successfactors_view%5BcurrentPage%5D={page}"
+            )
         )
         for url in extract_local_links(html):
             if url not in seen:
@@ -104,15 +107,19 @@ def job_from_html(source_name, fallback_company, url, html):
     facts = extract_facts(html)
     company = facts[0] if facts else fallback_company
     employment = next(
-        (fact for fact in facts if "vollzeit" in normalize_text(fact) or "teilzeit" in normalize_text(fact)),
+        (
+            fact
+            for fact in facts
+            if "vollzeit" in normalize_text(fact) or "teilzeit" in normalize_text(fact)
+        ),
         None,
     )
-    locations = [
-        fact
-        for fact in facts[1:]
-        if is_location_fact(fact, employment)
-    ] or ["unbekannt"]
-    structured_remote = "homeoffice" if any("hybrid" in normalize_text(fact) for fact in facts) else ""
+    locations = [fact for fact in facts[1:] if is_location_fact(fact, employment)] or [
+        "unbekannt"
+    ]
+    structured_remote = (
+        "homeoffice" if any("hybrid" in normalize_text(fact) for fact in facts) else ""
+    )
     remote = detect_remote(
         title,
         clean_description,
@@ -133,9 +140,7 @@ def job_from_html(source_name, fallback_company, url, html):
         work_mode=work_mode,
         remote_percentage=remote_percentage,
         employment_type=normalize_employment_type(employment),
-        career_levels=[
-            fact for fact in facts if normalize_text(fact) in CAREER_LEVELS
-        ],
+        career_levels=[fact for fact in facts if normalize_text(fact) in CAREER_LEVELS],
         fetched_at=utc_now(),
     )
 
@@ -149,7 +154,9 @@ def extract_facts(html):
     )
     if not match:
         return []
-    facts = re.findall(r"<span[^>]*>(.*?)</span>", match.group(1), re.IGNORECASE | re.DOTALL)
+    facts = re.findall(
+        r"<span[^>]*>(.*?)</span>", match.group(1), re.IGNORECASE | re.DOTALL
+    )
     return [
         compact_text(html_to_text(unescape(fact)))
         for fact in facts

@@ -18,7 +18,6 @@ from job_finder.application_documents import (
     remove_documents,
     store_documents,
 )
-
 from job_finder.applications import (
     delete_history_event,
     is_application,
@@ -29,7 +28,12 @@ from job_finder.applications import (
 )
 from job_finder.config import LOCAL_SEARCH_LOCATION, LOCAL_SEARCH_POSTAL_CODE
 from job_finder.manual_import import import_manual_url
-from job_finder.memory import edit_memory, load_memory, memory_source_links, preferred_memory_id
+from job_finder.memory import (
+    edit_memory,
+    load_memory,
+    memory_source_links,
+    preferred_memory_id,
+)
 from job_finder.models import WorkflowStatus
 from job_finder.paths import (
     APPLICATION_DOCUMENTS_DIR,
@@ -39,7 +43,6 @@ from job_finder.paths import (
     RECOMMENDATIONS_JSON,
 )
 from job_finder.reporting import is_international_listing
-
 
 LANDING_PAGE = Path(__file__).with_name("landing.html")
 REVIEW_PAGE = Path(__file__).with_name("review.html")
@@ -68,7 +71,9 @@ def load_review_jobs(
     represented_memory_ids = set()
     for recommendation in recommendations:
         job = dict(recommendation)
-        job["international"] = bool(job.get("international")) or is_international_listing(job)
+        job["international"] = bool(
+            job.get("international")
+        ) or is_international_listing(job)
         represented_memory_ids.update(memory_ids_for_job(job, memory))
         memory_id, entry = memory_entry_for_job(job, memory)
         job["id"] = memory_id
@@ -88,11 +93,12 @@ def load_review_jobs(
         review_jobs.append(job)
 
     for job_id, entry in memory.items():
-        if (
-            job_id in represented_memory_ids
-            or not (entry.get("workflow_status") in PERSISTED_REVIEW_STATUSES
-                    or (entry.get("workflow_status") == "ignored"
-                        and entry.get("availability_checked_at")))
+        if job_id in represented_memory_ids or not (
+            entry.get("workflow_status") in PERSISTED_REVIEW_STATUSES
+            or (
+                entry.get("workflow_status") == "ignored"
+                and entry.get("availability_checked_at")
+            )
         ):
             continue
         review_jobs.append(remembered_review_job(job_id, entry))
@@ -102,8 +108,13 @@ def load_review_jobs(
 def remembered_review_job(job_id, entry):
     """Keep a manual shortlist entry until the user changes its status."""
     source_links = memory_source_links(entry)
-    if entry.get("availability_checked_at") and entry.get("workflow_status") == "ignored":
-        availability_warning = "Anzeige nicht mehr verfügbar; automatisch auf Nicht interessant gesetzt."
+    if (
+        entry.get("availability_checked_at")
+        and entry.get("workflow_status") == "ignored"
+    ):
+        availability_warning = (
+            "Anzeige nicht mehr verfügbar; automatisch auf Nicht interessant gesetzt."
+        )
     elif entry.get("active", True):
         availability_warning = (
             "Im aktuellen Lauf nicht gefunden; Verfügbarkeit bitte über die "
@@ -153,8 +164,7 @@ def memory_ids_for_job(job, memory):
     return [
         memory_id
         for memory_id, entry in memory.items()
-        if memory_id == job_id
-        or urls.intersection(entry.get("source_urls", []))
+        if memory_id == job_id or urls.intersection(entry.get("source_urls", []))
     ]
 
 
@@ -218,17 +228,26 @@ def undo_ignored_decision(
             raise KeyError(f"Unbekannte Job-ID: {job_id}")
         entry = memory[job_id]
         if is_application(entry):
-            raise ValueError("Bewerbungsstatus kann hier nicht rückgängig gemacht werden")
+            raise ValueError(
+                "Bewerbungsstatus kann hier nicht rückgängig gemacht werden"
+            )
         if entry.get("workflow_status") != WorkflowStatus(expected_status).value:
             raise ValueError("Die Stelle wurde zwischenzeitlich geändert")
         if expected_status != WorkflowStatus.IGNORED.value:
-            raise ValueError("Nur die letzte Nicht-interessant-Entscheidung ist rückgängig")
+            raise ValueError(
+                "Nur die letzte Nicht-interessant-Entscheidung ist rückgängig"
+            )
         history = entry.get("workflow_history")
         if not isinstance(history, list) or not history:
             raise ValueError("Keine Entscheidung zum Rückgängigmachen gefunden")
         last_event = history[-1]
-        if not isinstance(last_event, dict) or last_event.get("status") != expected_status:
-            raise ValueError("Die letzte Entscheidung hat sich zwischenzeitlich geändert")
+        if (
+            not isinstance(last_event, dict)
+            or last_event.get("status") != expected_status
+        ):
+            raise ValueError(
+                "Die letzte Entscheidung hat sich zwischenzeitlich geändert"
+            )
         history.pop()
         status = synchronize_current_status(entry)
     return {
@@ -259,7 +278,9 @@ def start_application(
                     ),
                     "application_tracked": True,
                 }
-            salary_eur = validated_salary_expectation_eur(salary_expectation_eur, salary_period)
+            salary_eur = validated_salary_expectation_eur(
+                salary_expectation_eur, salary_period
+            )
             stored_documents = store_documents(
                 job_id,
                 documents,
@@ -339,8 +360,14 @@ def update_workflow_history(
         if job_id not in memory:
             raise KeyError(f"Unbekannte Job-ID: {job_id}")
         result = update_history_event(
-            memory[job_id], event_index, previous_status, previous_occurred_on,
-            workflow_status, occurred_on, scheduled_for, previous_scheduled_for,
+            memory[job_id],
+            event_index,
+            previous_status,
+            previous_occurred_on,
+            workflow_status,
+            occurred_on,
+            scheduled_for,
+            previous_scheduled_for,
         )
     return result
 
@@ -358,7 +385,10 @@ def delete_workflow_history(
         if job_id not in memory:
             raise KeyError(f"Unbekannte Job-ID: {job_id}")
         status = delete_history_event(
-            memory[job_id], event_index, previous_status, previous_occurred_on,
+            memory[job_id],
+            event_index,
+            previous_status,
+            previous_occurred_on,
             previous_scheduled_for,
         )
     return {"workflow_status": status}
@@ -481,8 +511,10 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
                 )
             elif request_path == "/api/application-salary":
                 result = update_application_salary(
-                    payload["job_id"], payload.get("salary_expectation_eur"),
-                    payload.get("salary_period", "year"), self.memory_path,
+                    payload["job_id"],
+                    payload.get("salary_expectation_eur"),
+                    payload.get("salary_period", "year"),
+                    self.memory_path,
                 )
             elif request_path == "/api/review-status":
                 result = update_review_decision(
@@ -516,9 +548,7 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
                     payload.get("occurred_on"),
                     self.memory_path,
                     scheduled_for=payload.get("scheduled_for"),
-                    previous_scheduled_for=payload.get(
-                        "previous_scheduled_for"
-                    ),
+                    previous_scheduled_for=payload.get("previous_scheduled_for"),
                 )
             else:
                 result = delete_workflow_history(
@@ -527,9 +557,7 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
                     payload["previous_status"],
                     payload.get("previous_occurred_on"),
                     self.memory_path,
-                    previous_scheduled_for=payload.get(
-                        "previous_scheduled_for"
-                    ),
+                    previous_scheduled_for=payload.get("previous_scheduled_for"),
                 )
         except (
             TypeError,
@@ -650,10 +678,7 @@ def parse_args():
 
 def address_is_in_use(error):
     """Recognize the cross-platform error for an already running server."""
-    return (
-        error.errno == errno.EADDRINUSE
-        or getattr(error, "winerror", None) == 10048
-    )
+    return error.errno == errno.EADDRINUSE or getattr(error, "winerror", None) == 10048
 
 
 def main():

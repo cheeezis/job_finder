@@ -68,7 +68,9 @@ def collect_links():
 
 
 def extract_job_ids(html):
-    return list(dict.fromkeys(re.findall(r"jobOfferId=([a-f0-9]+)", html, re.IGNORECASE)))
+    return list(
+        dict.fromkeys(re.findall(r"jobOfferId=([a-f0-9]+)", html, re.IGNORECASE))
+    )
 
 
 def open_text(opener, url):

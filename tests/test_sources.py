@@ -11,8 +11,8 @@ from urllib.error import HTTPError
 from job_finder.config import (
     COMMUTER_SEARCH_RADIUS_KM,
     LOCAL_SEARCH_POSTAL_CODE,
-    STEPSTONE_SEARCH_RADIUS_KM,
     STEPSTONE_SEARCH_LOCATIONS,
+    STEPSTONE_SEARCH_RADIUS_KM,
     STEPSTONE_SEARCH_TERMS,
 )
 from job_finder.models import Job, JobSource, WorkMode
@@ -52,9 +52,8 @@ class CommuterSearchTests(unittest.TestCase):
             searches = list(get_in_it.build_api_searches())
 
         self.assertTrue(searches)
-        self.assertTrue(
-            all(item["location"] == "Beispielstadt" for item in searches)
-        )
+        self.assertTrue(all(item["location"] == "Beispielstadt" for item in searches))
+
 
 class StepStoneSearchTests(unittest.TestCase):
     def test_search_plan_has_unique_roles_and_local_remote_scopes(self):
@@ -81,6 +80,7 @@ class StepStoneSearchTests(unittest.TestCase):
             url,
             "https://www.stepstone.de/jobs/Python-Developer/in-Remote?page=1",
         )
+
 
 class StepStonePaginationTests(unittest.TestCase):
     def test_search_reads_pages_until_stepstone_returns_no_links(self):
@@ -125,6 +125,7 @@ class StepStonePaginationTests(unittest.TestCase):
         self.assertIn("2 Seiten", output)
         self.assertIn("1 Anzeigen", output)
         self.assertNotIn("Stopps:", output)
+
 
 class StepStoneCacheTests(unittest.TestCase):
     def test_saved_cache_contains_only_reusable_source_fields(self):
@@ -296,6 +297,7 @@ class StepStoneCacheTests(unittest.TestCase):
             fetched_at=datetime.now(timezone.utc),
         )
 
+
 class SharedDetailCacheTests(unittest.TestCase):
     def test_saved_cache_contains_only_reusable_source_fields(self):
         now = datetime(2026, 7, 17, 12, tzinfo=timezone.utc)
@@ -418,6 +420,7 @@ class SharedDetailCacheTests(unittest.TestCase):
             remote_percentage=100,
             fetched_at=fetched_at,
         )
+
 
 class StepStoneHttpClientTests(unittest.TestCase):
     def test_waits_between_requests(self):

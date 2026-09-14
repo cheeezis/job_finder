@@ -12,14 +12,14 @@ from job_finder.sources.common import load_detail_cache
 
 class ManualSourceTests(unittest.TestCase):
     def test_join_style_escaped_description_is_readable(self):
-        html = '''<script type="application/ld+json">{
+        html = """<script type="application/ld+json">{
             "@type": "JobPosting",
             "title": "Data Engineer &amp; Business Analyst",
             "description": "&lt;h2 id=&quot;aufgaben&quot;&gt;Aufgaben&lt;/h2&gt;&lt;p&gt;Python &amp;amp; SQL&lt;/p&gt;",
             "hiringOrganization": {"name": "ApoVid GmbH"},
             "jobLocationType": "TELECOMMUTE",
             "applicantLocationRequirements": {"name": "Deutschland"}
-        }</script>'''
+        }</script>"""
 
         job = manual.job_from_page("https://join.com/companies/example/12345678", html)
 
@@ -31,14 +31,14 @@ class ManualSourceTests(unittest.TestCase):
 
     def test_role_main_keeps_nested_content_and_excludes_footer(self):
         description = "Softwareentwicklung mit Python und SQL im Produktteam. " * 5
-        html = f'''<meta property="og:site_name" content="Ecoplan CRM">
+        html = f"""<meta property="og:site_name" content="Ecoplan CRM">
             <header>Navigation</header><div id="main" role="main">
             <div><h1>Softwareentwickler (m/w/d)</h1></div>
             <article><p>Standort: Fulda</p></article>
             <form><input><img src="example.png"><p>Formulartext</p></form>
             <div><p>{description}</p></div>
             <div id="footer"><p>Footertext</p></div>
-            </div><p>Außerhalb</p>'''
+            </div><p>Außerhalb</p>"""
 
         job = manual.job_from_page("https://example.com/softwareentwickler", html)
 

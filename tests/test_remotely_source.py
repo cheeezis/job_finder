@@ -14,7 +14,6 @@ from job_finder.sources.common import (
     save_detail_cache,
 )
 
-
 DETAIL_HTML = """
 <html><body>
   <p class="text-xs font-semibold uppercase tracking-wide text-foreground">
@@ -134,9 +133,7 @@ class RemotelySourceTests(unittest.TestCase):
             )
         )
         self.assertFalse(
-            remotely.entry_is_recent(
-                entries[0], date(2026, 3, 13), date(2026, 3, 20)
-            )
+            remotely.entry_is_recent(entries[0], date(2026, 3, 13), date(2026, 3, 20))
         )
 
     def test_job_from_html_reads_visible_semantic_fields(self):
@@ -221,17 +218,30 @@ class RemotelySourceTests(unittest.TestCase):
     def test_detail_cache_refreshes_at_seven_day_boundary(self):
         now = datetime(2026, 8, 28, 12, tzinfo=timezone.utc)
         url = "https://www.remotely.de/job/cached"
-        for age, refresh in [(timedelta(days=7, seconds=-1), False), (timedelta(days=7), True)]:
+        for age, refresh in [
+            (timedelta(days=7, seconds=-1), False),
+            (timedelta(days=7), True),
+        ]:
             cached = Job(
-                id="remotely:cached", title="Cached", company="Example",
-                locations=["Remote"], sources=[JobSource(source="remotely", url=url)],
-                description_raw="Python", description_clean="Python", fetched_at=now-age,
+                id="remotely:cached",
+                title="Cached",
+                company="Example",
+                locations=["Remote"],
+                sources=[JobSource(source="remotely", url=url)],
+                description_raw="Python",
+                description_clean="Python",
+                fetched_at=now - age,
             )
             with self.subTest(age=age), tempfile.TemporaryDirectory() as directory:
                 path = Path(directory) / "cache.json"
                 save_detail_cache(path, {url: cached})
-                with patch.object(remotely, "collect_links", return_value=[url]), patch.object(remotely, "fetch_job", return_value=cached) as fetch:
-                    self.assertEqual(len(remotely.fetch_jobs(path, client=Mock(), now=now)), 1)
+                with (
+                    patch.object(remotely, "collect_links", return_value=[url]),
+                    patch.object(remotely, "fetch_job", return_value=cached) as fetch,
+                ):
+                    self.assertEqual(
+                        len(remotely.fetch_jobs(path, client=Mock(), now=now)), 1
+                    )
                 self.assertEqual(fetch.called, refresh)
 
     def test_fetch_jobs_removes_closed_listing_from_stale_cache(self):

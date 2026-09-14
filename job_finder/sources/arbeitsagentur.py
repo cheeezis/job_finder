@@ -53,8 +53,7 @@ def collect_links():
     links = []
 
     searches = [
-        (term, LOCAL_SEARCH_LOCATION, LOCAL_SEARCH_RADIUS_KM)
-        for term in SEARCH_TERMS
+        (term, LOCAL_SEARCH_LOCATION, LOCAL_SEARCH_RADIUS_KM) for term in SEARCH_TERMS
     ]
     searches.extend(
         (term, location, COMMUTER_SEARCH_RADIUS_KM)

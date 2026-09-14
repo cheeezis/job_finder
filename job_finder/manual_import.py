@@ -99,15 +99,17 @@ def save_recommendation(job, path):
         for item in document.get("recommendations", [])
         if item.get("id") != recommendation["id"]
         and not urls.intersection(
-            link.get("url")
-            for link in item.get("source_links", [])
-            if link.get("url")
+            link.get("url") for link in item.get("source_links", []) if link.get("url")
         )
     ]
     retained.append(recommendation)
     retained.sort(
         key=lambda item: (
-            -(item.get("match_percent") if item.get("match_percent") is not None else -1),
+            -(
+                item.get("match_percent")
+                if item.get("match_percent") is not None
+                else -1
+            ),
             item.get("title", "").casefold(),
         )
     )

@@ -4,7 +4,6 @@ import json
 import re
 from html import unescape
 
-
 _JSON_LD_PATTERN = re.compile(
     r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
     re.DOTALL | re.IGNORECASE,

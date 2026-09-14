@@ -3,7 +3,6 @@
 import sys
 import time
 
-
 PROGRESS_WIDTH = 24
 _PROGRESS_STARTED = {}
 _PROGRESS_REPORTED = {}
@@ -34,9 +33,12 @@ def print_progress(label, current, total, detail=""):
     now = time.monotonic()
     elapsed = max(0.0, now - _PROGRESS_STARTED[label])
     terminal = bool(getattr(sys.stdout, "isatty", lambda: False)())
-    if (not terminal and 0 < current < total
-            and label in _PROGRESS_REPORTED
-            and now - _PROGRESS_REPORTED[label] < LOG_PROGRESS_INTERVAL):
+    if (
+        not terminal
+        and 0 < current < total
+        and label in _PROGRESS_REPORTED
+        and now - _PROGRESS_REPORTED[label] < LOG_PROGRESS_INTERVAL
+    ):
         return
     _PROGRESS_REPORTED[label] = now
     line = progress_line(
@@ -68,7 +70,11 @@ def progress_line(label, current, total, detail="", elapsed_seconds=0.0):
     suffix = f" · {detail}" if detail else ""
     if total == 1:
         return f"  {label}: {detail or ('fertig' if current else 'wird geladen')} · {format_clock(elapsed)}"
-    estimate = f" · Rest ca. {format_clock(eta)}" if eta is not None and elapsed >= 5 and remaining else ""
+    estimate = (
+        f" · Rest ca. {format_clock(eta)}"
+        if eta is not None and elapsed >= 5 and remaining
+        else ""
+    )
     return f"  {label}: {current}/{total} ({percent}%) · {format_clock(elapsed)}{estimate}{suffix}"
 
 

@@ -9,12 +9,16 @@ from urllib.parse import urlsplit
 
 from job_finder.applications import record_status_change
 from job_finder.http import fetch_text_with_final_url
-from job_finder.memory import edit_memory, has_application_state, inferred_sources, load_memory
+from job_finder.memory import (
+    edit_memory,
+    has_application_state,
+    inferred_sources,
+    load_memory,
+)
 from job_finder.models import WorkflowStatus
 from job_finder.sources.arbeitnow import application_page_is_missing
 from job_finder.sources.manual import VisibleJobParser, validate_public_url
 from job_finder.structured_data import extract_json_ld_job_posting
-
 
 CLOSED_MESSAGE = re.compile(
     r"^(?:(?:diese|die) (?:stelle|stellenanzeige|position|ausschreibung) "
@@ -68,7 +72,8 @@ def himalayas_listing_redirects_to_search(original_url, final_url):
     final = urlsplit(final_url)
     hosts = {"himalayas.app", "www.himalayas.app"}
     return (
-        original.hostname in hosts and final.hostname in hosts
+        original.hostname in hosts
+        and final.hostname in hosts
         and re.fullmatch(r"/companies/[^/]+/jobs/[^/]+/?", original.path) is not None
         and final.path.rstrip("/") == "/jobs"
     )
@@ -78,7 +83,9 @@ def listing_is_closed(url):
     """Return true only for a direct 404/410 or an explicit visible closure."""
     try:
         final_url, html = fetch_text_with_final_url(
-            url, timeout=10, max_bytes=2 * 1024 * 1024,
+            url,
+            timeout=10,
+            max_bytes=2 * 1024 * 1024,
             url_validator=validate_public_url,
         )
     except HTTPError as error:
@@ -99,7 +106,9 @@ def listing_is_closed(url):
         return True
     if extract_json_ld_job_posting(html):
         return False
-    return any(CLOSED_MESSAGE.fullmatch(" ".join(text.split())) for text in parser.lines)
+    return any(
+        CLOSED_MESSAGE.fullmatch(" ".join(text.split())) for text in parser.lines
+    )
 
 
 MAX_CHECK_URLS = 200
@@ -117,8 +126,14 @@ def recent_check(check, now):
 
 
 def ignore_closed_listings(
-    jobs, memory_path, *, successful_sources, progress=None,
-    max_urls=MAX_CHECK_URLS, budget_seconds=CHECK_BUDGET_SECONDS, now=None,
+    jobs,
+    memory_path,
+    *,
+    successful_sources,
+    progress=None,
+    max_urls=MAX_CHECK_URLS,
+    budget_seconds=CHECK_BUDGET_SECONDS,
+    now=None,
 ):
     """Bound requests, retain inconclusive listings, and resume old checks later."""
     now = now or datetime.now(timezone.utc)
@@ -151,13 +166,18 @@ def ignore_closed_listings(
             if recent_check(check, now):
                 continue
             # Never-checked/oldest URLs first; URL breaks ties.
-            timestamp = str(check.get("checked_at", "")) if isinstance(check, dict) else ""
+            timestamp = (
+                str(check.get("checked_at", "")) if isinstance(check, dict) else ""
+            )
             priority = (timestamp, url)
             due[url] = min(due.get(url, priority), priority)
-    selected = sorted(due, key=due.get)[:max(0, max_urls)]
+    selected = sorted(due, key=due.get)[: max(0, max_urls)]
     all_urls = {url for _, urls, _ in candidates.values() for url in urls}
-    print(f"  Offline: {len(due)} URLs fällig · {len(all_urls) - len(due)} im Prüfintervall · "
-          f"höchstens {len(selected)} in diesem Lauf", flush=True)
+    print(
+        f"  Offline: {len(due)} URLs fällig · {len(all_urls) - len(due)} im Prüfintervall · "
+        f"höchstens {len(selected)} in diesem Lauf",
+        flush=True,
+    )
     if progress is not None:
         progress(0, len(selected))
     checked_urls = {}
@@ -167,14 +187,18 @@ def ignore_closed_listings(
         if time.monotonic() - started >= budget_seconds:
             break
         checked_urls[url] = {
-            "checked_at": now.isoformat(), "closed": listing_is_closed(url),
+            "checked_at": now.isoformat(),
+            "closed": listing_is_closed(url),
         }
         if progress is not None:
             progress(len(checked_urls), len(selected))
     closed = sum(check["closed"] is True for check in checked_urls.values())
-    print(f"  Offline: {len(checked_urls)} URLs geprüft · {closed} geschlossen · "
-          f"{len(checked_urls) - closed} nicht bestätigt · "
-          f"{len(due) - len(checked_urls)} zurückgestellt", flush=True)
+    print(
+        f"  Offline: {len(checked_urls)} URLs geprüft · {closed} geschlossen · "
+        f"{len(checked_urls) - closed} nicht bestätigt · "
+        f"{len(due) - len(checked_urls)} zurückgestellt",
+        flush=True,
+    )
     if not checked_urls:
         return set()
     ignored = set()
@@ -188,8 +212,10 @@ def ignore_closed_listings(
                 continue
             updated = {url: checked_urls.get(url, checks.get(url, {})) for url in urls}
             entry["availability_checks"] = updated
-            if not all(recent_check(check, now) and check.get("closed") is True
-                       for check in updated.values()):
+            if not all(
+                recent_check(check, now) and check.get("closed") is True
+                for check in updated.values()
+            ):
                 continue
             record_status_change(entry, WorkflowStatus.IGNORED)
             entry["workflow_history"][-1]["reason"] = "listing_unavailable"

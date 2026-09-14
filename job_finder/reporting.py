@@ -4,9 +4,8 @@ import re
 from pathlib import Path
 
 from job_finder.paths import RECOMMENDATIONS_JSON
-from job_finder.text import text_is_mainly_english
 from job_finder.storage import write_json_atomic
-
+from job_finder.text import text_is_mainly_english
 
 INTERNATIONAL_LOCATION_TERMS = {
     "anywhere",
@@ -59,10 +58,7 @@ def write_recommendations(
     json_path=RECOMMENDATIONS_JSON,
 ):
     """Write every job that passed the rule-based prefilter."""
-    recommendations = [
-        recommendation_for_job(job)
-        for job in results["included"]
-    ]
+    recommendations = [recommendation_for_job(job) for job in results["included"]]
     json_file = Path(json_path)
     write_json_atomic(json_file, {"recommendations": recommendations})
 
@@ -100,9 +96,7 @@ def recommendation_for_job(job):
 def is_international_listing(job):
     """Recognize broad scopes and clearly international feed listings."""
     locations = [
-        str(value).strip()
-        for value in job.get("locations", [])
-        if str(value).strip()
+        str(value).strip() for value in job.get("locations", []) if str(value).strip()
     ]
     location = " ".join(locations)
     normalized = location.casefold()

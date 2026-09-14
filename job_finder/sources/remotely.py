@@ -7,10 +7,8 @@ from datetime import date, datetime, timedelta, timezone
 from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
-
 from urllib.parse import urljoin, urlsplit
 
-from job_finder.storage import write_json_atomic
 from job_finder.console import print_progress, progress_checkpoint
 from job_finder.http import fetch_text, fetch_text_with_final_url
 from job_finder.models import Job, JobSource
@@ -22,8 +20,8 @@ from job_finder.sources.common import (
     source_job_id,
     utc_now,
 )
+from job_finder.storage import write_json_atomic
 from job_finder.text import html_to_text
-
 
 SOURCE_NAME = "remotely"
 BASE_URL = "https://www.remotely.de"
@@ -143,9 +141,7 @@ def enrich_candidate_jobs(
     if cache_changed:
         save_linkedin_status_cache(status_path, checks)
     if closed_indices:
-        jobs[:] = [
-            job for index, job in enumerate(jobs) if index not in closed_indices
-        ]
+        jobs[:] = [job for index, job in enumerate(jobs) if index not in closed_indices]
         print(
             f"HINWEIS Remotely: {len(closed_indices)} geschlossene "
             "LinkedIn-Bewerbung(en) aus dem Review entfernt"
@@ -167,9 +163,8 @@ def linkedin_application_url(job):
         parts = urlsplit(url)
         host = (parts.hostname or "").casefold()
         if (
-            (host == "linkedin.com" or host.endswith(".linkedin.com"))
-            and "/jobs/view/" in parts.path.casefold()
-        ):
+            host == "linkedin.com" or host.endswith(".linkedin.com")
+        ) and "/jobs/view/" in parts.path.casefold():
             return url
     return ""
 
@@ -535,9 +530,7 @@ class _RemotelyListParser(HTMLParser):
     def handle_endtag(self, tag):
         if not self.in_anchor or tag != "a":
             return
-        self.entries.append(
-            (self.href, " ".join(self.text_parts), self.promoted)
-        )
+        self.entries.append((self.href, " ".join(self.text_parts), self.promoted))
         self.href = ""
         self.in_anchor = False
         self.text_parts = []

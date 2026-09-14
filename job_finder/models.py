@@ -32,6 +32,7 @@ APPLICATION_STATUSES = (
     WorkflowStatus.CLOSED.value,
 )
 
+
 class FilterStatus(str, Enum):
     """Result of the rule-based job filter."""
 

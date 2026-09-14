@@ -7,7 +7,6 @@ from dataclasses import replace
 from job_finder.models import Job, WorkMode
 from job_finder.text import normalize_text
 
-
 LEGAL_FORMS = [
     "gmbh",
     "mbh",

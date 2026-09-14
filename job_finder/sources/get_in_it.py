@@ -24,9 +24,9 @@ from job_finder.paths import GET_IN_IT_CACHE_FILE
 from job_finder.remote import classify_remote, detect_remote
 from job_finder.search_plan import iter_search_queries, unique_in_order
 from job_finder.sources.common import (
-    enrich_cached_candidates,
     canonical_detail_url,
     detail_is_fresh,
+    enrich_cached_candidates,
     extract_annual_salary_eur,
     extract_schema_locations,
     load_detail_cache,
@@ -165,8 +165,13 @@ def with_current_summary(cached_job, summary):
 def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE, now=None):
     """Fetch details only for prefiltered candidates without a fresh cache."""
     return enrich_cached_candidates(
-        jobs, candidate_ids, cache_path, SOURCE_NAME, "get-in-IT",
-        lambda job, url: fetch_job(url), now=now,
+        jobs,
+        candidate_ids,
+        cache_path,
+        SOURCE_NAME,
+        "get-in-IT",
+        lambda job, url: fetch_job(url),
+        now=now,
     )
 
 
@@ -316,10 +321,7 @@ def extract_job_posting_from_next_data(html):
     """Build a JobPosting-like dict from Next.js state when JSON-LD fails."""
     next_data = extract_next_data(html)
     job = (
-        next_data.get("props", {})
-        .get("initialState", {})
-        .get("jobJob", {})
-        .get("job")
+        next_data.get("props", {}).get("initialState", {}).get("jobJob", {}).get("job")
     )
     if not job:
         return None
@@ -358,6 +360,7 @@ def build_locations(locations):
         for location in locations
     ]
 
+
 def clean_company(company):
     return re.sub(r"\s+", " ", company).strip()
 
@@ -393,8 +396,4 @@ def extract_career_levels(description):
     )
     if not match:
         return []
-    return [
-        value.strip()
-        for value in match.group(1).split(";")
-        if value.strip()
-    ]
+    return [value.strip() for value in match.group(1).split(";") if value.strip()]

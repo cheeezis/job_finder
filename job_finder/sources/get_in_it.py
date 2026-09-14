@@ -198,6 +198,7 @@ def build_api_searches():
 
 
 def priority_ids_for_term(term):
+    """Map a search term to unique thematic priority IDs in rule order."""
     normalized = term.lower()
     priority_ids = []
 
@@ -209,6 +210,13 @@ def priority_ids_for_term(term):
 
 
 def search_api(priority_id, location):
+    """Fetch all result pages for a thematic priority and location mode.
+
+    Remote mode uses the API's home-office flag; other locations use
+    the Hessen state filter. The requested city is not sent as a radius
+    search. Return unique raw result dictionaries; fetch errors
+    propagate to the calling search collector.
+    """
     results = []
     seen_ids = set()
     start = 0
@@ -294,6 +302,7 @@ def fetch_job(url):
 
 
 def extract_next_data(html):
+    """Parse embedded Next.js JSON or raise ValueError when it is absent."""
     match = re.search(
         r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>',
         html,
@@ -348,6 +357,7 @@ def extract_job_posting_from_next_data(html):
 
 
 def build_locations(locations):
+    """Wrap location labels in schema.org Place and PostalAddress objects."""
     return [
         {
             "@type": "Place",
@@ -362,6 +372,7 @@ def build_locations(locations):
 
 
 def clean_company(company):
+    """Collapse whitespace in an employer name for consistent display."""
     return re.sub(r"\s+", " ", company).strip()
 
 

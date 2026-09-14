@@ -75,6 +75,7 @@ class IncompleteSourceSnapshotError(RuntimeError):
 
 
 def unavailable_source_count(source_reports):
+    """Count failed sources and partial sources that returned no jobs."""
     return sum(
         report.get("status") == "failed"
         or (report.get("status") == "partial" and not report.get("jobs"))
@@ -115,7 +116,7 @@ def parse_args():
 
 
 def main():
-    """Run the full pipeline: collect jobs, update memory, then score."""
+    """Run collection and scoring before persisting state and reporting."""
     configure_utf8_output()
     args = parse_args()
     with RunLog():
@@ -226,6 +227,7 @@ def run_pipeline(args):
 
 
 def print_availability_progress(current, total):
+    """Print offline-check counts or explain that no URLs need checking."""
     if total:
         print_progress("Offline-URLs", current, total)
     else:
@@ -255,7 +257,14 @@ def print_review_diagnostics(results, memory_stats):
 
 
 def collect_jobs(sources=None):
-    """Collect jobs from all configured sources and merge duplicates."""
+    """Return deduplicated jobs and coverage reports from selected sources.
+
+    Each adapter provides SOURCE_NAME and fetch_jobs(). Prefer the
+    optional fetch_jobs_with_report() when available; its result has
+    jobs, status and optional details. Catch source errors so other
+    sources can complete, and include handled partial failures in each
+    report. Reports expose name, status, job count and error details.
+    """
     jobs = []
     seen_urls = set()
     source_reports = []
@@ -335,7 +344,13 @@ def collect_jobs(sources=None):
 
 
 def enrich_candidate_jobs(jobs, candidate_ids, sources=None):
-    """Run the optional second detail step offered by individual sources."""
+    """Let selected adapters update the candidate list in place.
+
+    Each optional adapter hook receives jobs and candidate_ids and
+    returns a count of affected jobs. Hooks may replace job objects or
+    remove confirmed closed listings. Return the sum of hook counts;
+    unexpected hook errors propagate to stop the pipeline.
+    """
     enriched = 0
     for source in sources or SOURCES:
         enricher = getattr(source, "enrich_candidate_jobs", None)

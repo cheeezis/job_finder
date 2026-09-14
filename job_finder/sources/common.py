@@ -127,7 +127,20 @@ def fetch_cached_details(
     max_age=DETAIL_REFRESH_AGE,
     normalize_cached=None,
 ):
-    """Load detail pages with the shared weekly cache and stale fallback."""
+    """Load requested details with a persistent cache and bounded fallback.
+
+    links is an iterable with a length; fetch_detail(url) returns a
+    Job or raises. Fresh entries bypass fetching. now and max_age
+    control freshness; now should be timezone-aware when supplied.
+
+    A ListingUnavailableError evicts the entry. Other fetch errors
+    retain cached data only within MAX_STALE_DETAIL_AGE, mark it stale,
+    and record a partial source failure. Return the usable Job list.
+    Cache writes and progress output occur during processing.
+
+    normalize_cached(job, url), when provided, mutates cached jobs and
+    returns whether persistence is needed.
+    """
     cache_file = Path(cache_path)
     cache = load_detail_cache(cache_file)
     jobs = []

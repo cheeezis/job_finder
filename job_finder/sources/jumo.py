@@ -20,6 +20,7 @@ MAX_RESULT_BATCHES = 20
 
 
 def fetch_jobs(cache_path=CACHE_FILE, now=None):
+    """Import JUMO search results through the shared company detail cache."""
     links = collect_links()
     return fetch_company_jobs(SOURCE_NAME, COMPANY, links, cache_path, now=now)
 
@@ -68,18 +69,21 @@ def collect_links():
 
 
 def extract_job_ids(html):
+    """Return unique hexadecimal offer IDs in their first-seen order."""
     return list(
         dict.fromkeys(re.findall(r"jobOfferId=([a-f0-9]+)", html, re.IGNORECASE))
     )
 
 
 def open_text(opener, url):
+    """GET a UTF-8 page with the supplied session opener and a timeout."""
     request = Request(url, headers={"User-Agent": "job-finder/0.1"})
     with opener.open(request, timeout=20) as response:
         return response.read().decode("utf-8")
 
 
 def post_text(opener, url, values):
+    """POST form fields with the session opener and return UTF-8 text."""
     request = Request(
         url,
         data=urlencode(values).encode("utf-8"),

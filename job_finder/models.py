@@ -104,7 +104,7 @@ class Job:
     cache_stale: bool = False
 
     def __post_init__(self):
-        """Reject invalid percentages, scores, and salary ranges."""
+        """Reject invalid remote percentages and salary ranges."""
         validate_percentage("remote_percentage", self.remote_percentage)
 
         salary_values = [self.salary_min_eur, self.salary_max_eur]

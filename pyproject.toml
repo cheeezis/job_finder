@@ -14,3 +14,21 @@ dependencies = ["PyYAML>=6.0,<7"]
 
 [tool.setuptools.package-data]
 job_finder = ["*.html", "*.css", "*.js"]
+
+[tool.ruff]
+required-version = "==0.16.7"
+target-version = "py311"
+line-length = 88
+extend-exclude = ["data", "tmp", "llm_evaluation"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "D"]
+# Class docstrings describe construction; standard protocol methods need
+# no repeated documentation unless their behavior differs from the protocol.
+ignore = ["D105", "D107"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "pep257"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D"]

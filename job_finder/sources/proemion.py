@@ -11,10 +11,12 @@ CACHE_FILE = PROEMION_CACHE_FILE
 
 
 def fetch_jobs(cache_path=CACHE_FILE, now=None):
+    """Import Proemion listings through the shared company detail cache."""
     links = collect_links()
     return fetch_company_jobs(SOURCE_NAME, COMPANY, links, cache_path, now=now)
 
 
 def collect_links():
+    """Collect Proemion Personio detail links from its public board."""
     html = fetch_text(LIST_URL)
     return extract_links(html, LIST_URL, r"proemion\.jobs\.personio\.de/job/\d+$")

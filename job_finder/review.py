@@ -400,6 +400,7 @@ class LocalReviewServer(HTTPServer):
     allow_reuse_address = False
 
     def server_bind(self):
+        """Bind the server with exclusive address use when the platform supports it."""
         if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
             self.socket.setsockopt(
                 socket.SOL_SOCKET,
@@ -682,7 +683,7 @@ def address_is_in_use(error):
 
 
 def main():
-    """Start the review server on the local computer only."""
+    """Start the review server on loopback using the configured port."""
     args = parse_args()
     address = ("127.0.0.1", args.port)
     url = f"http://{address[0]}:{address[1]}"

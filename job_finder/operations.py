@@ -25,6 +25,7 @@ class TeeStream:
         self.line_start = True
 
     def write(self, text):
+        """Write text to both streams, timestamping logs and nonterminal output."""
         if self.progress_active and text:
             self.original.write("\r" + (" " * self.progress_width) + "\r")
             self.progress_active = False
@@ -65,6 +66,7 @@ class TeeStream:
             self.progress_width = 0
 
     def flush(self):
+        """Flush the original stream and log file together."""
         self.original.flush()
         self.log_file.flush()
 

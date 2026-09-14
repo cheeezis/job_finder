@@ -41,14 +41,17 @@ class MissingPageHeadingParser(HTMLParser):
         self.parts = None
 
     def handle_starttag(self, tag, attrs):
+        """Begin capturing an h1 or h2 heading in a possible error page."""
         if tag in {"h1", "h2"}:
             self.parts = []
 
     def handle_data(self, data):
+        """Append visible text while a heading is being captured."""
         if self.parts is not None:
             self.parts.append(data)
 
     def handle_endtag(self, tag):
+        """Store a completed heading in normalized form for closure checks."""
         if tag in {"h1", "h2"} and self.parts is not None:
             self.headings.append(" ".join("".join(self.parts).split()).casefold())
             self.parts = None
@@ -67,7 +70,7 @@ def arbeitnow_listing_is_missing(original_url, final_url, html):
 
 
 def himalayas_listing_redirects_to_search(original_url, final_url):
-    """A removed Himalayas detail page redirects to its general jobs index."""
+    """Recognize a Himalayas detail URL redirected to its jobs index."""
     original = urlsplit(original_url)
     final = urlsplit(final_url)
     hosts = {"himalayas.app", "www.himalayas.app"}
@@ -80,7 +83,13 @@ def himalayas_listing_redirects_to_search(original_url, final_url):
 
 
 def listing_is_closed(url):
-    """Return true only for a direct 404/410 or an explicit visible closure."""
+    """Return True only when the response provides known closure evidence.
+
+    Recognize direct 404/410 responses, supported portal redirects and
+    explicit visible closure messages. False means closure was not
+    confirmed; it also covers network failures or ambiguous responses
+    and must not be interpreted as proof that a listing is open.
+    """
     try:
         final_url, html = fetch_text_with_final_url(
             url,
@@ -135,7 +144,19 @@ def ignore_closed_listings(
     budget_seconds=CHECK_BUDGET_SECONDS,
     now=None,
 ):
-    """Bound requests, retain inconclusive listings, and resume old checks later."""
+    """Check missing shortlisted jobs and persist confirmed closures.
+
+    Consider interesting entries without application history only when
+    every known source is in successful_sources. jobs supplies current
+    sightings; stale cached sightings count as missing. Reuse recent
+    per-URL checks, and apply max_urls and budget_seconds to new work.
+
+    Network requests run outside database write transactions. Recheck
+    the current workflow state before changing an entry to ignored so
+    concurrent user decisions take precedence. All known URLs must be
+    recently confirmed closed. Return the IDs changed by this call.
+    progress, if supplied, receives completed and planned URL counts.
+    """
     now = now or datetime.now(timezone.utc)
     successful = set(successful_sources)
     present_ids = {job.id for job in jobs if not job.cache_stale}

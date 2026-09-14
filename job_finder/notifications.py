@@ -67,7 +67,18 @@ def process_notifications(
     client=None,
     now=None,
 ):
-    """Queue eligible jobs and optionally send pending Discord summaries."""
+    """Update the persistent queue and optionally send eligible Discord cards.
+
+    results contains included and excluded job dictionaries from the
+    scoring pipeline. Even send=False writes queue changes to
+    state_path; it only prevents delivery. With send=True, use client
+    when supplied or construct a client from webhook_url.
+
+    Return queue, eligibility and delivery counters together with
+    configuration_error. Missing webhook configuration is reported in
+    that field. Delivery failures remain pending for a later run and
+    increment failed; filesystem and malformed-state errors propagate.
+    """
     timestamp = (now or datetime.now(timezone.utc)).isoformat()
     state = load_notification_state(state_path)
     jobs_by_key = {}

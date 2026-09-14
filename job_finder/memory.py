@@ -45,7 +45,13 @@ def save_memory(memory, path=MEMORY_FILE):
 
 @contextmanager
 def edit_memory(path=MEMORY_FILE):
-    """Lock the entire read-modify-write sequence against concurrent updates."""
+    """Yield mutable state under a SQLite write lock and save on success.
+
+    Import legacy JSON if necessary, then hold BEGIN IMMEDIATE across
+    reading, the caller's edits and writing. Exceptions roll back the
+    transaction and propagate. Keep network requests outside this
+    context so interactive updates do not wait on remote services.
+    """
     memory_path = Path(path)
     migrate_legacy_memory(memory_path)
     with database_connection(memory_path) as connection:
@@ -175,7 +181,18 @@ def update_memory(
     successful_sources=None,
     inactive_after=INACTIVE_AFTER_MISSED_RUNS,
 ):
-    """Mark jobs as new or known and refresh their last-seen metadata."""
+    """Update job identity and discovery state in the supplied objects.
+
+    Mutate both memory and the Job objects in jobs: resolve canonical
+    IDs, restore workflow status, and update discovery timestamps and
+    is_new. Return counts keyed by new, known, inactive and reactivated.
+    This function does not write the resulting state to disk.
+
+    successful_sources=None disables missed-run accounting, as needed
+    for a single manual import. Otherwise, count an absent job only if
+    every known source completed successfully. Mark it inactive after
+    inactive_after missed runs; do not change its workflow decision.
+    """
     now = datetime.now(timezone.utc)
     new_count = 0
     known_count = 0

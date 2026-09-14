@@ -187,6 +187,7 @@ def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE):
 
 
 def is_placeholder_description(description):
+    """Recognize Arbeitnow's placeholder that requires original-page text."""
     return PLACEHOLDER_DESCRIPTION in str(description or "").lower()
 
 

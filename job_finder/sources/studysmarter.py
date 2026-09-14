@@ -55,6 +55,7 @@ def fetch_jobs_with_report(cache_path=CACHE_FILE, now=None):
 
 
 def jobs_from_records(records, cache_path):
+    """Combine current search summaries with cached details by canonical URL."""
     cache = load_detail_cache(cache_path)
     jobs = []
     for record in records:

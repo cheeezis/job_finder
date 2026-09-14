@@ -200,6 +200,7 @@ def main_fragment(html):
 
 
 def extract_labeled_values(lines, labels):
+    """Return the first labelled value as a list, or [] when absent."""
     value = first_labeled_value(lines, labels)
     return [value] if value else []
 
@@ -260,6 +261,7 @@ class VisibleJobParser(HTMLParser):
         self._in_title = False
 
     def handle_starttag(self, tag, attrs):
+        """Track the main container and skip non-job blocks, respecting void tags."""
         attributes = dict(attrs)
         if tag == "meta":
             name = attributes.get("property") or attributes.get("name")
@@ -298,6 +300,7 @@ class VisibleJobParser(HTMLParser):
             self._title_parts = []
 
     def handle_endtag(self, tag):
+        """Close nested capture scopes and record the main fragment boundary."""
         if not self._in_main:
             return
         if tag not in self._main_stack:
@@ -320,11 +323,13 @@ class VisibleJobParser(HTMLParser):
             self.fragment_end = self.getpos()
 
     def handle_startendtag(self, tag, attrs):
+        """Process self-closing elements without leaving a capture scope open."""
         self.handle_starttag(tag, attrs)
         if tag not in _VOID_TAGS:
             self.handle_endtag(tag)
 
     def handle_data(self, data):
+        """Collect readable text and title parts from unskipped main content."""
         if not self._in_main or self._skip_depth:
             return
         text = " ".join(data.split())

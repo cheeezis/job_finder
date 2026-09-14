@@ -22,6 +22,7 @@ CACHE_FILE = COMPOSE_IT_CACHE_FILE
 
 
 def fetch_jobs(cache_path=CACHE_FILE, now=None):
+    """Import Compose IT listings through the shared company detail cache."""
     links = collect_links()
     return fetch_company_jobs(
         SOURCE_NAME,
@@ -34,6 +35,7 @@ def fetch_jobs(cache_path=CACHE_FILE, now=None):
 
 
 def collect_links():
+    """Extract Compose IT detail links from the public careers page."""
     html = fetch_text(LIST_URL)
     return extract_links(html, LIST_URL, r"compose-it\.de/job/[^/?#]+/$")
 

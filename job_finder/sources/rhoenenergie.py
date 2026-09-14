@@ -11,11 +11,13 @@ CACHE_FILE = RHOENENERGIE_CACHE_FILE
 
 
 def fetch_jobs(cache_path=CACHE_FILE, now=None):
+    """Import RhönEnergie listings through the shared company detail cache."""
     links = collect_links()
     return fetch_company_jobs(SOURCE_NAME, COMPANY, links, cache_path, now=now)
 
 
 def collect_links():
+    """Collect RhönEnergie offer links from its public career portal."""
     html = fetch_text(LIST_URL)
     return extract_links(
         html,

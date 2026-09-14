@@ -118,6 +118,7 @@ def build_search_url(
     location=LOCAL_SEARCH_LOCATION,
     radius=LOCAL_SEARCH_RADIUS_KM,
 ):
+    """Encode a term, page and local search radius into a search URL."""
     query = {
         "angebotsart": "1",
         "was": term,
@@ -188,6 +189,7 @@ def extract_ng_state(html):
 
 
 def extract_jobdetail(html):
+    """Read Angular jobdetail data or raise ValueError when it is absent."""
     detail = extract_ng_state(html).get("jobdetail")
     if not detail:
         raise ValueError("jobdetail im ng-state JSON nicht gefunden")
@@ -195,6 +197,7 @@ def extract_jobdetail(html):
 
 
 def format_locations(detail):
+    """Return unique city names, falling back to the unknown-location label."""
     locations = []
     for location in detail.get("stellenlokationen", []):
         address = location.get("adresse", {})
@@ -206,6 +209,7 @@ def format_locations(detail):
 
 
 def format_remote(detail):
+    """Map home-office flags to 0%, 100% or an unspecified hybrid hint."""
     if not detail.get("homeofficemoeglich"):
         return "0%"
 

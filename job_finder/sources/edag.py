@@ -30,6 +30,7 @@ CAREER_LEVELS = {
 
 
 def fetch_jobs(cache_path=CACHE_FILE, now=None):
+    """Fetch locally relevant EDAG listings using cached visible-page details."""
     links = collect_links()
     return fetch_company_jobs(
         SOURCE_NAME,
@@ -42,6 +43,7 @@ def fetch_jobs(cache_path=CACHE_FILE, now=None):
 
 
 def collect_links():
+    """Collect unique local job links across EDAG's advertised result pages."""
     first_html = fetch_text(LIST_URL)
     pages = [
         int(value) for value in re.findall(r"currentPage(?:%5D|\])=(\d+)", first_html)
@@ -146,6 +148,7 @@ def job_from_html(source_name, fallback_company, url, html):
 
 
 def extract_facts(html):
+    """Return readable short-fact labels, or [] when the block is missing."""
     match = re.search(
         r'<div[^>]*class="[^"]*short-facts[^"]*"[^>]*>(.*?)'
         r'<div[^>]*class="[^"]*breadcrumb',
@@ -165,6 +168,7 @@ def extract_facts(html):
 
 
 def is_location_fact(fact, employment):
+    """Exclude employment, hybrid and career-level labels from location facts."""
     normalized = normalize_text(fact)
     if fact == employment or "hybrid" in normalized:
         return False
@@ -172,9 +176,11 @@ def is_location_fact(fact, employment):
 
 
 def extract_text(html, pattern):
+    """Return the first captured HTML group as compact readable text."""
     return compact_text(html_to_text(unescape(extract_html(html, pattern))))
 
 
 def extract_html(html, pattern):
+    """Return the first regex capture group, or empty text when unmatched."""
     match = re.search(pattern, html, re.IGNORECASE | re.DOTALL)
     return match.group(1).strip() if match else ""

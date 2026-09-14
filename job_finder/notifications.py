@@ -1,6 +1,7 @@
 """Queue and send compact Discord summaries for new job recommendations."""
 
 import json
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -11,12 +12,13 @@ from job_finder.paths import NOTIFICATION_STATE_FILE
 from job_finder.reporting import (
     format_remote,
     format_role_group,
-    is_international_listing,
+    is_visible_in_default_review,
     primary_url,
 )
+from job_finder.state_compat import NOTIFICATION_STATE_VERSION as STATE_VERSION
+from job_finder.state_compat import decode_notification_state
 from job_finder.storage import write_json_atomic
 
-STATE_VERSION = 3
 NOTIFIABLE_STATUSES = {"new", "review", "interesting", "inquiry"}
 MAX_EMBEDS = 10
 MAX_EMBED_CHARACTERS = 6000
@@ -81,6 +83,40 @@ def process_notifications(
     """
     timestamp = (now or datetime.now(timezone.utc)).isoformat()
     state = load_notification_state(state_path)
+    candidates, stats = _update_queue(results, state, timestamp)
+    save_notification_state(state, state_path)
+    if not send or not candidates:
+        return stats
+    if not webhook_url:
+        stats["configuration_error"] = "DISCORD_WEBHOOK_URL ist nicht gesetzt"
+        return stats
+
+    webhook_client = client or DiscordWebhookClient(webhook_url)
+    for chunk in notification_chunks(candidates):
+        keys = [key for key, _job in chunk]
+        try:
+            webhook_client.send(discord_payload([job for _key, job in chunk]))
+        except NotificationError as error:
+            for key in keys:
+                entry = state["pending"][key]
+                entry["attempts"] += 1
+                entry["last_error"] = str(error)
+                entry["updated_at"] = timestamp
+            stats["failed"] += len(keys)
+        else:
+            for key in keys:
+                entry = state["pending"].pop(key)
+                state["sent"][key] = {
+                    "job_id": entry["job_id"],
+                    "sent_at": timestamp,
+                }
+            stats["sent"] += len(keys)
+        save_notification_state(state, state_path)
+    return stats
+
+
+def _update_queue(results, state, timestamp):
+    """Update pending entries and calculate counters without sending or saving."""
     jobs_by_key = {}
     queued = 0
     current_new = 0
@@ -125,35 +161,7 @@ def process_notifications(
         "failed": 0,
         "configuration_error": None,
     }
-    save_notification_state(state, state_path)
-    if not send or not candidates:
-        return stats
-    if not webhook_url:
-        stats["configuration_error"] = "DISCORD_WEBHOOK_URL ist nicht gesetzt"
-        return stats
-
-    webhook_client = client or DiscordWebhookClient(webhook_url)
-    for chunk in notification_chunks(candidates):
-        keys = [key for key, _job in chunk]
-        try:
-            webhook_client.send(discord_payload([job for _key, job in chunk]))
-        except NotificationError as error:
-            for key in keys:
-                entry = state["pending"][key]
-                entry["attempts"] += 1
-                entry["last_error"] = str(error)
-                entry["updated_at"] = timestamp
-            stats["failed"] += len(keys)
-        else:
-            for key in keys:
-                entry = state["pending"].pop(key)
-                state["sent"][key] = {
-                    "job_id": entry["job_id"],
-                    "sent_at": timestamp,
-                }
-            stats["sent"] += len(keys)
-        save_notification_state(state, state_path)
-    return stats
+    return candidates, stats
 
 
 def send_run_summary(summary, *, webhook_url, client=None):
@@ -229,13 +237,6 @@ def run_summary_payload(summary):
 def is_notifiable(job):
     """Return whether one prefiltered result belongs in Discord notifications."""
     return job.get("workflow_status", "new") in NOTIFIABLE_STATUSES
-
-
-def is_visible_in_default_review(job):
-    """Mirror the review page's default visibility for a new job."""
-    return not is_international_listing(job) and not str(
-        job.get("location_precheck") or ""
-    ).startswith("Junior-Hybrid")
 
 
 def notification_key(job):
@@ -336,10 +337,7 @@ def format_count(value):
 
 def source_health_text(sources):
     """Summarize source coverage while keeping failures visible."""
-    counts = {
-        status: sum(source["status"] == status for source in sources)
-        for status in ("success", "partial", "empty", "failed")
-    }
+    counts = Counter(source["status"] for source in sources)
     parts = [f"{len(sources)} geprüft", f"{counts['success']} erfolgreich"]
     if counts["partial"]:
         parts.append(f"{counts['partial']} teilweise")
@@ -411,23 +409,7 @@ def load_notification_state(path=NOTIFICATION_STATE_FILE):
     if not state_path.exists():
         return {"sent": {}, "pending": {}}
     document = json.loads(state_path.read_text(encoding="utf-8"))
-    version = document.get("version")
-    if version not in {1, 2, STATE_VERSION}:
-        raise ValueError("Benachrichtigungsstatus verwendet eine unbekannte Version")
-    sent = {
-        entry.get("job_id", key): entry
-        for key, entry in document.get("sent", {}).items()
-    }
-    pending = (
-        {}
-        if version == 1
-        else {
-            entry["job_id"]: entry
-            for entry in document.get("pending", {}).values()
-            if entry.get("job_id") and entry["job_id"] not in sent
-        }
-    )
-    return {"sent": sent, "pending": pending}
+    return decode_notification_state(document)
 
 
 def save_notification_state(state, path=NOTIFICATION_STATE_FILE):

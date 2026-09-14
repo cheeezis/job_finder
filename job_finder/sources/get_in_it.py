@@ -7,7 +7,6 @@ can contain malformed escaping.
 
 import json
 import re
-from dataclasses import replace
 from html import unescape
 from pathlib import Path
 from urllib.parse import urlencode, urljoin
@@ -24,6 +23,7 @@ from job_finder.paths import GET_IN_IT_CACHE_FILE
 from job_finder.remote import classify_remote, detect_remote
 from job_finder.search_plan import iter_search_queries, unique_in_order
 from job_finder.sources.common import (
+    build_fetch_report,
     canonical_detail_url,
     detail_is_fresh,
     enrich_cached_candidates,
@@ -34,6 +34,7 @@ from job_finder.sources.common import (
     parse_published_date,
     source_job_id,
     utc_now,
+    with_current_summary,
 )
 from job_finder.structured_data import extract_json_ld_job_posting
 from job_finder.text import html_to_text
@@ -64,11 +65,7 @@ def fetch_jobs_with_report(cache_path=CACHE_FILE, now=None):
     """Return jobs plus coverage so partial searches never age out old jobs."""
     records, failed, total = collect_records(return_report=True)
     jobs = jobs_from_records(records, cache_path, now=now)
-    return {
-        "jobs": jobs,
-        "status": "partial" if failed else ("success" if jobs else "empty"),
-        "details": {"failed_segments": failed, "total_segments": total},
-    }
+    return build_fetch_report(jobs, failed, total)
 
 
 def jobs_from_records(records, cache_path=CACHE_FILE, now=None):
@@ -143,23 +140,6 @@ def summary_job_from_record(record):
         work_mode=WorkMode.REMOTE if has_home_office else WorkMode.ONSITE,
         remote_percentage=100 if has_home_office else 0,
     )
-
-
-def with_current_summary(cached_job, summary):
-    """Refresh API fields while retaining a fresh cached detail description."""
-    current = replace(
-        cached_job,
-        id=summary.id,
-        title=summary.title or cached_job.title,
-        company=summary.company or cached_job.company,
-        locations=(
-            summary.locations
-            if summary.locations != ["unbekannt"]
-            else cached_job.locations
-        ),
-        sources=summary.sources,
-    )
-    return current
 
 
 def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE, now=None):
@@ -251,7 +231,7 @@ def search_api(priority_id, location):
             results.append(job)
 
         total = int(data.get("total", 0) or 0)
-        if not page_results or not new_results or len(results) >= total:
+        if not new_results or len(results) >= total:
             return results
 
         start += len(page_results)

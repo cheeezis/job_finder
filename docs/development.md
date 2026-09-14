@@ -45,10 +45,13 @@ beschreibt Titel und Beschreibung.
 | `job_finder/sources/` | Quellen abrufen und in `Job`/`JobSource` umwandeln |
 | `job_finder/models.py` | Datenmodell, Statuswerte und Serialisierung |
 | `job_finder/deduplication.py` | Gleiche Anzeigen verschiedener Quellen zusammenführen |
-| `job_finder/scoring.py`, `profile.py`, `remote.py` | Filter, Punkte, Profilregeln und Remote-Erkennung |
+| `job_finder/scoring.py`, `profile.py`, `remote.py` | Bewertungsablauf, Profilregeln und Remote-Erkennung |
+| `job_finder/experience.py`, `location_rules.py`, `salary.py`, `matching_text.py` | Zusammenhängende Analysen und normalisierte Textvergleiche |
 | `job_finder/memory.py` | SQLite-Zustand, stabile IDs und frühere Entscheidungen |
 | `job_finder/availability.py` | Fehlende interessante Stellen auf bestätigte Schließung prüfen |
-| `job_finder/review.py`, `applications.py`, `application_documents.py` | Review, Bewerbungsverlauf und lokale Unterlagen |
+| `job_finder/review.py`, `review_data.py`, `review_actions.py` | HTTP-Server, Review-Datenaufbereitung und transaktionale Aktionen |
+| `job_finder/applications.py`, `application_documents.py`, `state_compat.py` | Bewerbungsverlauf, lokale Unterlagen und unterstützte Speicherformate |
+| `job_finder/app.js`, `landing.js`, `review.js`, `applications.js` und zugehörige HTML-Dateien | Gemeinsame Browser-Helfer, Seitenskripte und Arbeitsansichten |
 | `job_finder/reporting.py`, `notifications.py` | Review-Ausgabe und Discord-Warteschlange |
 | `job_finder/user_settings.py`, `config.py`, `paths.py` | Konfiguration, Suche und lokale Dateipfade |
 
@@ -103,11 +106,9 @@ Der vom Runner erwartete Vertrag:
 Ein Abdeckungsbericht sieht beispielsweise so aus:
 
 ```python
-return {
-    "jobs": jobs,
-    "status": "partial" if failed_segments else ("success" if jobs else "empty"),
-    "details": {"failed_segments": failed_segments},
-}
+from job_finder.sources.common import build_fetch_report
+
+return build_fetch_report(jobs, failed_segments, total_segments)
 ```
 
 Bei einem abgefangenen Teilfehler muss die Quelle diesen melden, etwa über
@@ -174,6 +175,22 @@ Ausschlussgrund; nur regulär eingeschlossene Ergebnisse besitzen zusätzlich
 Sonderbehandlung manueller Einträge. Diese Ergebnisse sind Sortierhilfen,
 keine Vorhersagen einer Einstellungschance.
 
+Die Bewertung prüft zuerst das Anzeigenalter, danach die Anforderungen und
+zuletzt den Standort. Die erste Ablehnung bleibt der sichtbare Ausschlussgrund.
+Erfahrungsjahre und Standortanalyse werden anschließend für die Punktevergabe
+wiederverwendet. Bei Änderungen diese Reihenfolge und die Grenzwerte erhalten.
+
+Die Review-API ordnet POST-Routen kurzen Aktionsmethoden zu. Host-/Origin-Prüfung,
+Größenlimit und JSON-Objektprüfung erfolgen gemeinsam vor dem Aufruf der Aktion;
+Fehlerantworten und Antwortheader bleiben zentral. Im Browser verwenden die
+Bewerbungsformulare denselben Speicherablauf, der ihre Aktionsbuttons auch nach
+einem Fehler wieder freigibt.
+
+Die ursprünglichen fachlichen Funktionen bleiben über `job_finder.review`
+importierbar. Ebenso behält `job_finder.scoring` seine bisherigen Analyse-Helfer;
+die spezialisierten Module übernehmen deren Implementierung. Standortregeln
+bekommen lokale Einstellungen explizit vom Scoring-Einstiegspunkt übergeben.
+
 ## Python-Stil und hilfreiche Dokumentation
 
 Orientierung geben [PEP 8](https://peps.python.org/pep-0008/) und
@@ -217,3 +234,44 @@ Automatisch formatieren und anschließend prüfen:
 
 Der Linter prüft Form und häufige Fehler. Ob ein Docstring das tatsächliche
 Verhalten erklärt und ob eine Fachregel sinnvoll ist, bleibt Teil des Reviews.
+
+
+## Refactoring-Verträge und Prüfungen
+
+Referenz für diese Runde ist der Branch-Stand `66fb488`. Die zuvor entfernten
+Python-Einstiegspunkte werden mit den Aufrufkonventionen von `main` erhalten.
+Die bereits vorhandene HTTP-400-Antwort für JSON-Werte, die keine Objekte sind,
+ist eine frühere Fehlerkorrektur und bleibt in dieser Runde unverändert.
+
+| Schritt | Bisheriges Verhalten | Strukturziel | Paritätsprüfung |
+| --- | --- | --- | --- |
+| Kompatibilität | Bestehende Python-Aufrufe, Rückgaben und Fehler | Alte Importpfade und Argumente erhalten | Öffentliche Einstiegspunkte mit Erfolgs- und Fehlerfällen testen |
+| Altlasten | Laufende UI ohne Verwendung alter CSS-Regeln | Ausschließlich belegbar ungenutzte private Bestandteile entfernen | Referenzsuche und Frontend-/Seitentests; öffentliche Helfer behalten |
+| Wiederholungen | Filter liefern die erste Ablehnung; Quellenberichte erhalten Teilfehler | Gemeinsame Regeln nutzen | Vollständige Filterergebnisse und Quellenfehler vergleichen |
+| Review | HTTP-Aufrufe verändern Zustand unter SQLite-Sperre | Datenaufbereitung und Aktionen vom Server trennen | Endpunkte, Undo, Verlauf und Dokument-Rollback testen |
+| Scoring | Deterministische Gründe, Grenzwerte und Punktzahlen | Zusammenhängende Analysen abgrenzen | Anonymisierte feste Ergebnisfälle sowie bestehende Grenzwerttests |
+| Legacy | JSON-Gedächtnis, alte Gehaltswerte und Notification-Versionen bleiben lesbar | Konvertierung von aktueller Verarbeitung abgrenzen | Versions-Fixtures, wiederholtes Laden und Zustandserhalt |
+| Frontend | Gleiche Filter, Navigation und Speichervorgänge | Seitenskripte auslagern und vollständige Skripte testen | DOM-/HTTP-Smoke-Tests und bestehende Interaktionstests |
+
+Zeitabhängige Tests legen ihre Referenzzeit fest und arbeiten mit temporären
+Datenpfaden. Netzwerkantworten werden ersetzt. Zu vergleichen sind auch Reihenfolge,
+fehlende Werte, Fehlermeldungen, Zeitstempel und gespeicherte Entscheidungen.
+Private Konfiguration und Bewerbungsdaten gehören nicht in Test-Fixtures.
+
+Framework-Wechsel, Dependency-Upgrades, neue Dateiformate oder Datenbankschemata
+und parallele Quellenabfragen sind separate Migrationsaufgaben. Die globale
+Quelldiagnostik setzt weiterhin sequenzielle Verarbeitung voraus.
+
+Die sieben Schritte sind auf `refactor/simplify-project` umgesetzt. Der öffentlich
+erreichbare Helfer `progress_bar` bleibt erhalten; entfernt wurde ausschließlich
+die unbelegte CSS-Regel `.salary-unit`. Unterstützte Altformate bleiben lesbar.
+
+`tests/fixtures/scoring_parity.json` hält 32 vollständige Bewertungsergebnisse mit
+anonymisierten Eingaben, festen Einstellungen und Referenzdatum fest. Diese
+Erwartungen nicht automatisch aus verändertem Produktivcode regenerieren: Eine
+abweichende Fachregel braucht eine ausdrücklich gewünschte Verhaltensänderung.
+
+Die Frontend-Tests laden HTML und alle referenzierten Skripte vollständig in einer
+kleinen simulierten DOM-Umgebung. Sie prüfen Registrierung und Ausführung von
+Interaktionen, ersetzen aber keinen visuellen Test in einem echten Browser.
+Die HTTP-Tests prüfen zusätzlich die ausgelieferten Seitenskripte und Content-Typen.

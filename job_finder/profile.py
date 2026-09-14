@@ -467,6 +467,26 @@ BLOCKED_TITLE_WORDS = [
     "professor",
 ]
 
+# Explicit junior titles may include these otherwise blocked experience labels.
+ENTRY_LEVEL_TITLE_EXCEPTIONS = {
+    "senior",
+    "sr",
+    "experte",
+    "expert",
+    "lead",
+    "principal",
+    "head",
+    "leitung",
+    "leiter",
+    "projektleiter",
+    "projektmanager",
+    "teamleiter",
+    "abteilungsleiter",
+    "manager",
+    "testmanager",
+    "test manager",
+}
+
 LOCAL_PLACES = MATCHING_SETTINGS["local_places"]
 COMMUTER_LOCATIONS = MATCHING_SETTINGS.get("commuter_locations", [])
 

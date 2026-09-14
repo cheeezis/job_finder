@@ -24,6 +24,7 @@ from job_finder.paths import STEPSTONE_CACHE_FILE
 from job_finder.remote import classify_remote, detect_remote
 from job_finder.search_plan import append_unique, iter_search_queries
 from job_finder.sources.common import (
+    build_fetch_report,
     detail_cache_job_dict,
     detail_is_fresh,
     detail_within_age,
@@ -117,43 +118,37 @@ def fetch_jobs(
         if detail_is_fresh(cached_job, now):
             cached_job.cache_stale = False
             jobs.append(cached_job)
-            if progress_checkpoint(index + 1, len(links)):
-                print_progress(
-                    "StepStone Details",
-                    index + 1,
-                    len(links),
-                    f"{len(jobs)} übernommen",
+        else:
+            try:
+                job = fetch_job(url, client)
+                job.cache_stale = False
+                jobs.append(job)
+                cache["jobs"][cache_key] = job
+                save_cache(cache_file, cache)
+            except StepStoneBlockedError as error:
+                if _coverage is not None:
+                    _coverage["failed_segments"] = max(
+                        1, _coverage.get("failed_segments", 0)
+                    )
+                print(
+                    f"WARNUNG StepStone: HTTP {error.status_code}; "
+                    "keine weiteren Detailanfragen"
                 )
-            continue
-
-        try:
-            job = fetch_job(url, client)
-            job.cache_stale = False
-            jobs.append(job)
-            cache["jobs"][cache_key] = job
-            save_cache(cache_file, cache)
-        except StepStoneBlockedError as error:
-            if _coverage is not None:
-                _coverage["failed_segments"] = max(
-                    1, _coverage.get("failed_segments", 0)
-                )
-            print(
-                f"WARNUNG StepStone: HTTP {error.status_code}; "
-                "keine weiteren Detailanfragen"
-            )
-            if cached_job and detail_within_age(cached_job, now):
-                cached_job.cache_stale = True
-                jobs.append(cached_job)
-            jobs.extend(cached_jobs(links[index + 1 :], cache, now))
-            break
-        except Exception:
-            detail_errors += 1
-            if _coverage is not None:
-                _coverage["failed_segments"] = _coverage.get("failed_segments", 0) + 1
-            if cached_job and detail_within_age(cached_job, now):
-                cached_job.cache_stale = True
-                jobs.append(cached_job)
-                stale_fallbacks += 1
+                if cached_job and detail_within_age(cached_job, now):
+                    cached_job.cache_stale = True
+                    jobs.append(cached_job)
+                jobs.extend(cached_jobs(links[index + 1 :], cache, now))
+                break
+            except Exception:
+                detail_errors += 1
+                if _coverage is not None:
+                    _coverage["failed_segments"] = (
+                        _coverage.get("failed_segments", 0) + 1
+                    )
+                if cached_job and detail_within_age(cached_job, now):
+                    cached_job.cache_stale = True
+                    jobs.append(cached_job)
+                    stale_fallbacks += 1
         if progress_checkpoint(index + 1, len(links)):
             print_progress(
                 "StepStone Details",
@@ -173,12 +168,7 @@ def fetch_jobs_with_report(cache_path=CACHE_FILE, client=None, now=None):
     """Return jobs and coverage metadata for safe inactivity tracking."""
     coverage = {"failed_segments": 0, "total_segments": 0}
     jobs = fetch_jobs(cache_path, client, now, _coverage=coverage)
-    failed = coverage["failed_segments"]
-    return {
-        "jobs": jobs,
-        "status": "partial" if failed else ("success" if jobs else "empty"),
-        "details": coverage,
-    }
+    return build_fetch_report(jobs, **coverage)
 
 
 def search_links(client=None, *, coverage=None):
@@ -214,14 +204,11 @@ def search_links(client=None, *, coverage=None):
 
             found_links = extract_detail_links(html)
             page_links = [url for url in found_links if url not in query_seen]
-            for url in page_links:
-                query_seen.add(url)
+            query_seen.update(page_links)
 
             for url in page_links:
                 append_unique(url, links, seen)
 
-            if not found_links:
-                break
             if not page_links:
                 break
 

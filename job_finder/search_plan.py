@@ -30,10 +30,4 @@ def append_unique(value, values, seen):
 
 def unique_in_order(values):
     """Return unique values without changing their first-seen order."""
-    result = []
-    seen = set()
-
-    for value in values:
-        append_unique(value, result, seen)
-
-    return result
+    return list(dict.fromkeys(values))

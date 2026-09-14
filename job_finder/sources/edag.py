@@ -161,9 +161,7 @@ def extract_facts(html):
         r"<span[^>]*>(.*?)</span>", match.group(1), re.IGNORECASE | re.DOTALL
     )
     return [
-        compact_text(html_to_text(unescape(fact)))
-        for fact in facts
-        if compact_text(html_to_text(unescape(fact)))
+        text for fact in facts if (text := compact_text(html_to_text(unescape(fact))))
     ]
 
 

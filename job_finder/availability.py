@@ -12,8 +12,8 @@ from job_finder.http import fetch_text_with_final_url
 from job_finder.memory import (
     edit_memory,
     has_application_state,
-    inferred_sources,
     load_memory,
+    sources_succeeded,
 )
 from job_finder.models import WorkflowStatus
 from job_finder.sources.arbeitnow import application_page_is_missing
@@ -158,9 +158,37 @@ def ignore_closed_listings(
     progress, if supplied, receives completed and planned URL counts.
     """
     now = now or datetime.now(timezone.utc)
+    snapshot = load_memory(memory_path)
+    candidates, due = _plan_checks(jobs, snapshot, successful_sources, now)
+    selected = sorted(due, key=due.get)[: max(0, max_urls)]
+    all_urls = {url for _, urls, _ in candidates.values() for url in urls}
+    print(
+        f"  Offline: {len(due)} URLs fällig · {len(all_urls) - len(due)} im Prüfintervall · "
+        f"höchstens {len(selected)} in diesem Lauf",
+        flush=True,
+    )
+    checked_urls = _check_urls(selected, now, budget_seconds, progress)
+    closed = sum(check["closed"] is True for check in checked_urls.values())
+    print(
+        f"  Offline: {len(checked_urls)} URLs geprüft · {closed} geschlossen · "
+        f"{len(checked_urls) - closed} nicht bestätigt · "
+        f"{len(due) - len(checked_urls)} zurückgestellt",
+        flush=True,
+    )
+    if not checked_urls:
+        return set()
+    ignored = _save_checks(candidates, checked_urls, memory_path, now)
+    for job in jobs:
+        if job.id in ignored:
+            job.workflow_status = WorkflowStatus.IGNORED
+            job.is_new = False
+    return ignored
+
+
+def _plan_checks(jobs, snapshot, successful_sources, now):
+    """Select missing shortlisted entries and prioritize their due URLs."""
     successful = set(successful_sources)
     present_ids = {job.id for job in jobs if not job.cache_stale}
-    snapshot = load_memory(memory_path)
     candidates = {}
     due = {}
     for job_id, entry in snapshot.items():
@@ -169,8 +197,7 @@ def ignore_closed_listings(
             continue
         if job_id in present_ids:
             continue
-        known_sources = set(entry.get("source_names") or inferred_sources(job_id))
-        if not known_sources or not known_sources.issubset(successful):
+        if not sources_succeeded(job_id, entry, successful):
             continue
         urls = entry.get("source_urls", [])
         if not isinstance(urls, list):
@@ -192,13 +219,11 @@ def ignore_closed_listings(
             )
             priority = (timestamp, url)
             due[url] = min(due.get(url, priority), priority)
-    selected = sorted(due, key=due.get)[: max(0, max_urls)]
-    all_urls = {url for _, urls, _ in candidates.values() for url in urls}
-    print(
-        f"  Offline: {len(due)} URLs fällig · {len(all_urls) - len(due)} im Prüfintervall · "
-        f"höchstens {len(selected)} in diesem Lauf",
-        flush=True,
-    )
+    return candidates, due
+
+
+def _check_urls(selected, now, budget_seconds, progress):
+    """Check URLs within the time budget, outside any database transaction."""
     if progress is not None:
         progress(0, len(selected))
     checked_urls = {}
@@ -213,15 +238,11 @@ def ignore_closed_listings(
         }
         if progress is not None:
             progress(len(checked_urls), len(selected))
-    closed = sum(check["closed"] is True for check in checked_urls.values())
-    print(
-        f"  Offline: {len(checked_urls)} URLs geprüft · {closed} geschlossen · "
-        f"{len(checked_urls) - closed} nicht bestätigt · "
-        f"{len(due) - len(checked_urls)} zurückgestellt",
-        flush=True,
-    )
-    if not checked_urls:
-        return set()
+    return checked_urls
+
+
+def _save_checks(candidates, checked_urls, memory_path, now):
+    """Persist checks only for unchanged entries and return confirmed closures."""
     ignored = set()
     with edit_memory(memory_path) as memory:
         for job_id, (previous, urls, checks) in candidates.items():
@@ -243,8 +264,4 @@ def ignore_closed_listings(
             entry["availability_checked_at"] = now.isoformat()
             entry["active"] = False
             ignored.add(job_id)
-    for job in jobs:
-        if job.id in ignored:
-            job.workflow_status = WorkflowStatus.IGNORED
-            job.is_new = False
     return ignored

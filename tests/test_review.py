@@ -36,6 +36,15 @@ from job_finder.review import (
 )
 
 
+def json_request(url, payload):
+    return Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+
 class ReviewTests(unittest.TestCase):
     def test_address_in_use_is_recognized_on_windows(self):
         error = OSError()
@@ -134,11 +143,7 @@ class ReviewTests(unittest.TestCase):
             for route in routes:
                 for payload in (None, [], "text", 1):
                     with self.subTest(route=route, payload=payload):
-                        request = Request(
-                            base_url + route,
-                            data=json.dumps(payload).encode("utf-8"),
-                            headers={"Content-Type": "application/json"},
-                        )
+                        request = json_request(base_url + route, payload)
                         with self.assertRaises(HTTPError) as raised:
                             urlopen(request)
                         self.assertEqual(raised.exception.code, 400)
@@ -152,11 +157,7 @@ class ReviewTests(unittest.TestCase):
                 ("/api/review-status", {"workflow_status": "ignored"}, "ignored"),
                 ("/api/review-undo", {"expected_status": "ignored"}, "interesting"),
             ):
-                request = Request(
-                    base_url + route,
-                    data=json.dumps({"job_id": "job:1", **fields}).encode("utf-8"),
-                    headers={"Content-Type": "application/json"},
-                )
+                request = json_request(base_url + route, {"job_id": "job:1", **fields})
                 with urlopen(request) as response:
                     result = json.loads(response.read())
                 self.assertEqual(result["workflow_status"], expected)
@@ -579,13 +580,9 @@ class ReviewTests(unittest.TestCase):
             manual_cache_path=self.directory / "manual.json",
             manual_importer=staticmethod(importer),
         ) as base_url:
-            request = Request(
+            request = json_request(
                 f"{base_url}/api/manual-import",
-                data=json.dumps({"url": "https://example.com/jobs/python"}).encode(
-                    "utf-8"
-                ),
-                headers={"Content-Type": "application/json"},
-                method="POST",
+                {"url": "https://example.com/jobs/python"},
             )
             with urlopen(request) as response:
                 result = json.load(response)
@@ -596,13 +593,9 @@ class ReviewTests(unittest.TestCase):
 
     def test_application_start_api_adds_job_to_overview(self):
         with self.server_context() as base_url:
-            request = Request(
+            request = json_request(
                 f"{base_url}/api/applications",
-                data=json.dumps(
-                    {"job_id": "job:1", "salary_expectation_eur": 58_000}
-                ).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
-                method="POST",
+                {"job_id": "job:1", "salary_expectation_eur": 58000},
             )
             with urlopen(request) as response:
                 result = json.load(response)
@@ -654,17 +647,13 @@ class ReviewTests(unittest.TestCase):
         original = load_memory(self.memory_path)["job:1"]
         self.assertEqual(original["salary_expectation_eur"], 54000)
         with self.server_context() as base_url:
-            request = Request(
+            request = json_request(
                 base_url + "/api/application-salary",
-                data=json.dumps(
-                    {
-                        "job_id": "job:1",
-                        "salary_expectation_eur": 5000,
-                        "salary_period": "month",
-                    }
-                ).encode(),
-                headers={"Content-Type": "application/json"},
-                method="POST",
+                {
+                    "job_id": "job:1",
+                    "salary_expectation_eur": 5000,
+                    "salary_period": "month",
+                },
             )
             with urlopen(request) as response:
                 self.assertEqual(json.load(response)["salary_expectation_eur"], 60000)
@@ -724,13 +713,9 @@ class ReviewTests(unittest.TestCase):
         with self.server_context() as base_url:
             with urlopen(f"{base_url}/api/recommendations") as response:
                 document = json.load(response)
-            request = Request(
+            request = json_request(
                 f"{base_url}/api/review-status",
-                data=json.dumps(
-                    {"job_id": "job:1", "workflow_status": "ignored"}
-                ).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
-                method="POST",
+                {"job_id": "job:1", "workflow_status": "ignored"},
             )
             with urlopen(request) as response:
                 result = json.load(response)
@@ -765,31 +750,23 @@ class ReviewTests(unittest.TestCase):
         with self.server_context() as base_url:
             with urlopen(f"{base_url}/applications") as response:
                 page = response.read().decode("utf-8")
-            request = Request(
+            request = json_request(
                 f"{base_url}/api/status",
-                data=json.dumps(
-                    {
-                        "job_id": "job:1",
-                        "workflow_status": "applied",
-                        "occurred_on": event_on,
-                    }
-                ).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
-                method="POST",
+                {
+                    "job_id": "job:1",
+                    "workflow_status": "applied",
+                    "occurred_on": event_on,
+                },
             )
             with urlopen(request):
                 pass
-            no_response_request = Request(
+            no_response_request = json_request(
                 f"{base_url}/api/status",
-                data=json.dumps(
-                    {
-                        "job_id": "job:1",
-                        "workflow_status": "no_response",
-                        "occurred_on": event_on,
-                    }
-                ).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
-                method="POST",
+                {
+                    "job_id": "job:1",
+                    "workflow_status": "no_response",
+                    "occurred_on": event_on,
+                },
             )
             with urlopen(no_response_request):
                 pass
@@ -800,52 +777,40 @@ class ReviewTests(unittest.TestCase):
                 for event in overview["completed_applications"][0]["workflow_history"]
                 if event["status"] == "no_response"
             )
-            edit_request = Request(
+            edit_request = json_request(
                 f"{base_url}/api/history",
-                data=json.dumps(
-                    {
-                        "job_id": "job:1",
-                        "event_index": no_response_event["event_index"],
-                        "previous_status": "no_response",
-                        "previous_occurred_on": event_on,
-                        "workflow_status": "response",
-                        "occurred_on": event_on,
-                    }
-                ).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
-                method="POST",
+                {
+                    "job_id": "job:1",
+                    "event_index": no_response_event["event_index"],
+                    "previous_status": "no_response",
+                    "previous_occurred_on": event_on,
+                    "workflow_status": "response",
+                    "occurred_on": event_on,
+                },
             )
             with urlopen(edit_request) as response:
                 edit_result = json.load(response)
-            delete_request = Request(
+            delete_request = json_request(
                 f"{base_url}/api/history/delete",
-                data=json.dumps(
-                    {
-                        "job_id": "job:1",
-                        "event_index": no_response_event["event_index"],
-                        "previous_status": "response",
-                        "previous_occurred_on": event_on,
-                    }
-                ).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
-                method="POST",
+                {
+                    "job_id": "job:1",
+                    "event_index": no_response_event["event_index"],
+                    "previous_status": "response",
+                    "previous_occurred_on": event_on,
+                },
             )
             with urlopen(delete_request) as response:
                 delete_result = json.load(response)
             with urlopen(f"{base_url}/api/applications") as response:
                 final_overview = json.load(response)
-            interview_request = Request(
+            interview_request = json_request(
                 f"{base_url}/api/status",
-                data=json.dumps(
-                    {
-                        "job_id": "job:1",
-                        "workflow_status": "interview",
-                        "occurred_on": event_on,
-                        "scheduled_for": "2099-08-25T10:30",
-                    }
-                ).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
-                method="POST",
+                {
+                    "job_id": "job:1",
+                    "workflow_status": "interview",
+                    "occurred_on": event_on,
+                    "scheduled_for": "2099-08-25T10:30",
+                },
             )
             with urlopen(interview_request):
                 pass

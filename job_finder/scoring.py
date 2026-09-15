@@ -170,7 +170,7 @@ def score_job(job: Job, today=None):
     ]
 
     if profile_score:
-        reasons.append(f"+{profile_score} Bezug zu bisherigen Praxisprojekten")
+        reasons.append(f"+{profile_score} Bezug zu Projekten oder Weiterbildungen")
 
     penalties = score_preferences(full_text)
     for penalty in penalties:

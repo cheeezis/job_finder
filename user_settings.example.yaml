@@ -18,7 +18,8 @@ matching:
   #     excluded_aliases: []
   #     minimum_remote_percentage: 60
   commuter_locations: []
-  # Zusätzliche Fachbegriffe, die zum transparenten Score beitragen sollen.
+  # Fachbegriffe aus Projekten oder Weiterbildungen: zusammen maximal +5 Punkte.
+  # Keine Muss-Kriterien; Treffer belegen keine praktische Berufserfahrung.
   profile_domain_keywords: []
   # Optionale Jahresbrutto-Präferenzen in Euro.
   salary_target_eur: null

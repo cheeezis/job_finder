@@ -236,42 +236,73 @@ Der Linter prüft Form und häufige Fehler. Ob ein Docstring das tatsächliche
 Verhalten erklärt und ob eine Fachregel sinnvoll ist, bleibt Teil des Reviews.
 
 
-## Refactoring-Verträge und Prüfungen
+## Vereinfachungsprüfung vom 15. September 2026
 
-Referenz für diese Runde ist der Branch-Stand `66fb488`. Die zuvor entfernten
-Python-Einstiegspunkte werden mit den Aufrufkonventionen von `main` erhalten.
-Die bereits vorhandene HTTP-400-Antwort für JSON-Werte, die keine Objekte sind,
-ist eine frühere Fehlerkorrektur und bleibt in dieser Runde unverändert.
+Ausgangspunkt ist der saubere lokale `main` bei `9e572b6`; die Änderungen liegen
+auf `refactor/reduce-codebase`. Geprüft wurden alle 107 versionierten Dateien:
+Python-Definitionen, Imports und Parameter per AST und Referenzsuche, dynamische
+Quellen-/HTTP-/Parser-Einstiege, HTML/JS/CSS-Verwendung, Tests, Dokumentation und
+Installations-/CI-Konfiguration. Ignorierte Nutzerdaten, persönliche Einstellungen,
+Caches und virtuelle Umgebungen gehören nicht zur Bilanz und wurden nicht verändert.
+Eine fehlende interne Referenz gilt ausdrücklich nicht als Löschbeleg für eine API.
 
-| Schritt | Bisheriges Verhalten | Strukturziel | Paritätsprüfung |
-| --- | --- | --- | --- |
-| Kompatibilität | Bestehende Python-Aufrufe, Rückgaben und Fehler | Alte Importpfade und Argumente erhalten | Öffentliche Einstiegspunkte mit Erfolgs- und Fehlerfällen testen |
-| Altlasten | Laufende UI ohne Verwendung alter CSS-Regeln | Ausschließlich belegbar ungenutzte private Bestandteile entfernen | Referenzsuche und Frontend-/Seitentests; öffentliche Helfer behalten |
-| Wiederholungen | Filter liefern die erste Ablehnung; Quellenberichte erhalten Teilfehler | Gemeinsame Regeln nutzen | Vollständige Filterergebnisse und Quellenfehler vergleichen |
-| Review | HTTP-Aufrufe verändern Zustand unter SQLite-Sperre | Datenaufbereitung und Aktionen vom Server trennen | Endpunkte, Undo, Verlauf und Dokument-Rollback testen |
-| Scoring | Deterministische Gründe, Grenzwerte und Punktzahlen | Zusammenhängende Analysen abgrenzen | Anonymisierte feste Ergebnisfälle sowie bestehende Grenzwerttests |
-| Legacy | JSON-Gedächtnis, alte Gehaltswerte und Notification-Versionen bleiben lesbar | Konvertierung von aktueller Verarbeitung abgrenzen | Versions-Fixtures, wiederholtes Laden und Zustandserhalt |
-| Frontend | Gleiche Filter, Navigation und Speichervorgänge | Seitenskripte auslagern und vollständige Skripte testen | DOM-/HTTP-Smoke-Tests und bestehende Interaktionstests |
+### Umgesetzte Kandidaten
 
-Zeitabhängige Tests legen ihre Referenzzeit fest und arbeiten mit temporären
-Datenpfaden. Netzwerkantworten werden ersetzt. Zu vergleichen sind auch Reihenfolge,
-fehlende Werte, Fehlermeldungen, Zeitstempel und gespeicherte Entscheidungen.
-Private Konfiguration und Bewerbungsdaten gehören nicht in Test-Fixtures.
+Die Einsparungen sind physische Zeilen einschließlich Kommentaren und Leerzeilen.
+Sie messen entfernte Wiederholungen; Formatierung und reine Dateiverschiebungen
+wurden nicht als eigene Vereinfachung vorgenommen.
 
-Framework-Wechsel, Dependency-Upgrades, neue Dateiformate oder Datenbankschemata
-und parallele Quellenabfragen sind separate Migrationsaufgaben. Die globale
-Quelldiagnostik setzt weiterhin sequenzielle Verarbeitung voraus.
+| Fundstelle | Bisheriges Verhalten | Vereinfachung | Erwartung → netto | Risiko | Validierung |
+| --- | --- | --- | --- | --- | --- |
+| `tests/fixtures/scoring_parity.json`, `test_scoring_parity.py` | 32 vollständige Eingaben wiederholen dieselben Basisfelder | Feste `job_defaults` plus explizite Abweichungen; jede Erwartung bleibt vollständig | ca. 750 → 779 Zeilen | Unbemerkte Änderung geerbter Eingaben | Alle 32 expandierten Eingaben und Ergebnisse exakt mit Git-Basis verglichen; Parität und Nichtmutation geprüft |
+| `sources/{arbeitnow,get_in_it,himalayas,jobicy,startup_jobs,studysmarter}.py:collect_records` | Liste und ID-Menge parallel; erster Treffer gewinnt | Geordnetes Dictionary mit `setdefault`, am Ausgang weiterhin Liste | ca. 15 → 16 Zeilen | Reihenfolge, Duplikate, Teilfehler | Quellen-Tests einschließlich Pagination, Überschneidungen und Abdeckungsberichten |
+| `deduplication.py:unique_sources`, `run_finder.py:build_run_summary` | Manuelle Mengen-/Listenpflege und Zähler | Geordnetes Dictionary beziehungsweise vorhandener `Counter` | ca. 8 → 8 Zeilen | Erster Quellen-Datensatz darf nicht überschrieben werden | Deduplizierungs-/Diagnosetests; zusätzlicher Identitäts- und Reihenfolgetest (+12 Testzeilen) |
+| `text.py:_TextExtractor.text`, `sources/remotely.py:_RemotelyListParser` | Einmalige private Weiterleitung; `in_anchor` spiegelt stets den nichtleeren `href` | Join direkt am Aufruf; Link selbst als Capture-Zustand verwenden | ca. 6 → 6 Zeilen | HTML-Text oder Capture-Grenzen | Quellen-, Struktur- und Remotely-Tests; Parser-Callbacks für selbstschließende Tags bleiben erhalten |
+| `experience.py:experience_is_optional/has_required_experience` | Schleifen liefern beim ersten Treffer True, sonst False | Kurzschließendes `any` mit gleicher Reihenfolge | ca. 2 → 2 Zeilen | Optionale und verpflichtende Anforderungen verwechseln | Scoring-Grenzfälle und alle 32 eingefrorenen Ergebnisse |
+| `review.js:renderSourceLinks` | Einmalige Weiterleitung plus ungenutztes `make`-Binding | Links direkt in `render` leeren und mit vorhandenem Helfer füllen | ca. 4 → 4 Zeilen | Rendering und Navigation | Alle 16 Frontend-Tests, darunter vollständiges Laden und Entscheiden |
+| `tests/test_review.py` | Elf identische JSON-Request-Konstruktionen | Lokaler Request-Helfer; Payloads, HTTP-Antworten und Assertions bleiben im Test | ca. 35 → 35 Zeilen | Ein Helfer könnte Fehlerfälle verdecken | Assertion-ASTs unverändert; alle 41 HTTP-/Review-Tests, besondere Header weiterhin explizit |
+| README und dieser Abschnitt | README behauptete weiterhin Seitencode im HTML; abgeschlossene Refactoring-Planung wiederholte Verträge | Beschreibung berichtigen, alte Planung durch belegte Bestandsaufnahme ersetzen | Keine Code-Einsparung beansprucht | Hilfreiche Verträge verlieren | Datenfluss, Schnittstellen und Kompatibilitätsregeln oben beibehalten |
 
-Die sieben Schritte sind auf `refactor/simplify-project` umgesetzt. Der öffentlich
-erreichbare Helfer `progress_bar` bleibt erhalten; entfernt wurde ausschließlich
-die unbelegte CSS-Regel `.salary-unit`. Unterstützte Altformate bleiben lesbar.
+### Bewusst beibehaltene Kandidaten
 
-`tests/fixtures/scoring_parity.json` hält 32 vollständige Bewertungsergebnisse mit
-anonymisierten Eingaben, festen Einstellungen und Referenzdatum fest. Diese
-Erwartungen nicht automatisch aus verändertem Produktivcode regenerieren: Eine
-abweichende Fachregel braucht eine ausdrücklich gewünschte Verhaltensänderung.
+Einsparungen hier sind grobe Löschpotenziale, keine empfohlenen Änderungen und
+nicht Teil der erreichten Bilanz. Es besteht jeweils ein konkreter Gegenbeleg
+oder kein Nutzen, der eine neue Abstraktion rechtfertigt.
 
-Die Frontend-Tests laden HTML und alle referenzierten Skripte vollständig in einer
-kleinen simulierten DOM-Umgebung. Sie prüfen Registrierung und Ausführung von
-Interaktionen, ersetzen aber keinen visuellen Test in einem echten Browser.
-Die HTTP-Tests prüfen zusätzlich die ausgelieferten Seitenskripte und Content-Typen.
+| Fundstelle | Bisheriges Verhalten / mögliche Vereinfachung | Potenzial | Risiko und Entscheidung | Passende Validierung |
+| --- | --- | --- | --- | --- |
+| `scoring.py`, `review.py`, `console.py:progress_bar`, `review_data.py:memory_entry_for_job` | Alte Analyse-/Aktions-Importpfade und Helfer; Reexports und Wrapper entfernen | ca. 100 Zeilen | Dokumentierte und getestete Python-Schnittstellen; interne Nutzung beweist keine externe Nichtnutzung. Behalten | `test_public_api`, Scoring-/Review-/Console-Tests |
+| `experience.py`, `location_rules.py`, `salary.py`, `matching_text.py`, `review_data.py`, `review_actions.py`, `state_compat.py` | Fachanalysen, HTTP, Transaktionen und Decoder getrennt; Module wieder zusammenführen | vor allem Verschiebung; einige Importzeilen | Zusammenlegung vergrößert zentrale Dateien; alte Importpfade müssten weiterhin funktionieren. Standort-Wrapper erhalten außerdem explizit gepatchte Einstellungen. Behalten | API-, Scoring-, Zustands- und HTTP-Tests |
+| Kleine Firmenadapter und `search_plan.py` | Registrierte Quellen mit eigenem Namen, Cache und Parser; durch Registry/Factory oder Tupel ersetzen | ca. 50–100 Zeilen | `run_finder.SOURCES` und dokumentierter Quellenvertrag nutzen diese Module; Factory schafft neue Indirektion. Behalten | Firmenquellen-, Quellenmodell- und Runner-Tests |
+| `models.py`, `operations.py`, `review.py`, HTML-Parser; StudySmarter-Parameter `now` | Framework-Callbacks und akzeptierte Aufrufsignaturen ohne direkten Namensaufruf/Parametergebrauch | wenige Zeilen | Dynamische Aufrufe, Protokolle und Keyword-Kompatibilität. Behalten; auch leere Parser-Callbacks verhindern das Standardverhalten | Modell-, Log-, HTTP- und Parser-Tests |
+| `common.py:fetch_cached_details/enrich_cached_candidates`, StepStone, Arbeitnow, Remotely, manueller Cache | Ähnliche Abrufschleifen mit unterschiedlichen Frische-, Stopp-, Redirect- und Speicherregeln | ca. 100–200 Zeilen | Vereinheitlichung benötigt zahlreiche Optionen und könnte geschlossene Anzeigen, 403/429 oder Teilfehler anders behandeln. Behalten | Frischegrenzen, Ausfall-/Schließungsfälle und Cache-Tests |
+| `remote.py:contains_any`, `matching_text.py:contains_any`, Gehalts-/Datumsparser der Quellen | Teilstring- versus Wortgrenzenvergleich; verschiedene Einheiten und Fallbacks | ca. 20–50 Zeilen | Nicht semantisch gleich: etwa Kommalisten, fehlende Jahresperioden, Unixzeit und Remote-Wörter. Keine pauschalen Aliase | Remote-, Scoring- und Quellen-Grenzfälle |
+| `state_compat.py`, `application_documents.py:document_directory`, `memory.py:inferred_sources` | Alte JSON-/Notification-/Gehalts-/Dokumentformate und Quellen-IDs lesen | über 80 Zeilen | Gespeicherte Entscheidungen, Versandzustand oder Unterlagen könnten unerreichbar werden; Migrationen sind dokumentiert. Behalten | Versions-Fixtures, Wiederladen, Migration und Dokumenttests |
+| `memory.py`, `applications.py`, `availability.py`, `review_actions.py` | Ähnliche Status-, Datums- und Transaktionsprüfungen | ca. 30–60 Zeilen | Erstfund versus Entscheidung, unbekanntes Datum versus heute, laufende Bewerbung und konkurrierende Änderungen sind unterschiedliche Fälle. Sperren, Rollback und Dateikompensation behalten | History-, Undo-, Parallelitäts-, Rollback- und Offline-Tests |
+| `app.js`, `review.js`, `applications.js`, `reporting.py` | Ähnliche Labels, Datums- und Standortanzeige | ca. 15–30 Zeilen | Unterschiedliche Fallbacks und Seitentexte; ein gemeinsames Backend-/Frontend-Format wäre eine zusätzliche Schnittstelle. Behalten | Frontend-, Ausgabe- und HTTP-Tests |
+| HTML/CSS/JS-Assets, Paketdaten | Drei Seiten laden gemeinsame und eigene Assets | keine belegte Einsparung | Alle Assets werden ausgeliefert/referenziert, alle CSS-Klassennamen sind in HTML/JS vorhanden. Keine Datei sicher ungenutzt | Referenzsuche, ausgelieferte Bytes/Content-Typen und vollständige Seitenskripte |
+| Tests, `frontend_environment.cjs`, Paritäts-Fixture | Unit-, Paritäts-, HTTP- und DOM-Tests überlappen thematisch | mehrere hundert Zeilen bei Falllöschung | Unterschiedliche Prüfaussagen: Grenzen, vollständige Ergebnisse, Transport und Interaktion. Keine Fälle gelöscht; kleiner DOM-Ersatz benötigt keine Dependency | Testnamen/Assertions erhalten; vollständige Suiten |
+| `requirements*.txt`, `pyproject.toml`, CI, README/Entwickleranleitung | PyYAML in zwei Installationswegen; Ruff nur Entwicklung; Anleitungen für Bedienung und Entwicklung | einzelne Zeilen | PyYAML wird tatsächlich geladen; beide Installationswege sind dokumentiert. Ruff-Pin und Plattformmatrix sichern reproduzierbare Prüfungen. Behalten | Importinventar, CI-Befehle und Referenzabgleich |
+
+### Bilanz und Prüfgrenzen
+
+| Bereich | Vorher | Nachher | Differenz |
+| --- | ---: | ---: | ---: |
+| Produktivcode (Paket inkl. Webassets, Runner und BAT) | 11.937 | 11.901 | −36 |
+| Tests und Testdaten | 9.350 | 8.548 | −802 |
+| Dokumentation (Markdown inkl. PR-Vorlage und LICENSE) | 591 | 622 | +31 |
+| Konfiguration | 136 | 136 | 0 |
+| Gesamt | 22.014 | 21.207 | −807 |
+
+Dateizahl unverändert: 64 Produktiv-, 33 Test-, vier Dokumentations- und sechs
+Konfigurationsdateien. Der vorherige Merge hatte netto 2.023 Zeilen ergänzt:
+218 Produktivcode, 1.747 Tests/Testdaten und 58 Dokumentation. Die größte
+vermeidbare Wiederholung lag in den Testeingaben, nicht in 2.000 neuen Codezeilen.
+Die 32 Erwartungs-Dictionaries wurden nicht aus verändertem Produktivcode erzeugt.
+
+Abschlussprüfung: Ruff-Lint und Formatprüfung, vollständige Python-Unittest-Suite,
+Node-Frontend-Suite und `git diff --check`. Lokal: Windows, Python 3.13.0 und
+Node 24.19.0; 314 Python-Tests und 16 Frontend-Tests. Die CI-Matrix mit Linux und
+Python 3.11 wurde hier nicht ausgeführt. DOM-Tests ersetzen keinen visuellen
+Browsertest. Kein vollständiger Finder-Lauf, Discord-Versand oder Zugriff auf
+Live-Quellen ist Bestandteil dieser Refactoring-Validierung.

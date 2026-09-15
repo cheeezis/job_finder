@@ -242,7 +242,7 @@ node --test tests/frontend.test.cjs
 
 Node.js wird nur für diese Tests benötigt, nicht für den Betrieb. Die drei
 Oberflächen teilen sich `app.js` und `app.css`; ihre jeweiligen Abläufe bleiben
-direkt in den Seiten.
+in den zugehörigen `landing.js`, `review.js` und `applications.js`.
 
 Die Tests bleiben absichtlich im Repository: Sie dokumentieren die Regeln und
 schützen insbesondere Deduplizierung, Quellenadapter, Review-Workflow und

@@ -50,8 +50,7 @@ def fetch_jobs(api_key=None):
 
 def collect_records(headers, scopes=SEARCH_SCOPES):
     """Fetch bounded cursor pages and merge overlaps between both scopes."""
-    records = []
-    seen = set()
+    records = {}
 
     for scope in scopes:
         cursor = None
@@ -59,16 +58,14 @@ def collect_records(headers, scopes=SEARCH_SCOPES):
             payload = fetch_json(build_search_url(scope, cursor), headers=headers)
             for record in payload.get("data") or []:
                 identifier = str(record.get("id") or record.get("url") or "").strip()
-                if not identifier or identifier in seen:
-                    continue
-                seen.add(identifier)
-                records.append(record)
+                if identifier:
+                    records.setdefault(identifier, record)
 
             cursor = payload.get("next_cursor")
             if not payload.get("has_more") or cursor is None:
                 break
 
-    return records
+    return list(records.values())
 
 
 def build_search_url(scope, cursor=None):

@@ -13,38 +13,39 @@
       "python"
     ]
   },
+  "job_defaults": {
+    "id": "fixture:1",
+    "title": "Junior Python Developer",
+    "company": "Example",
+    "locations": [
+      "Germany"
+    ],
+    "sources": [
+      {
+        "source": "test",
+        "url": "https://example.test/job",
+        "source_id": null,
+        "application_url": null
+      }
+    ],
+    "description_raw": "Keine Berufserfahrung erforderlich. Python und SQL.",
+    "description_clean": "Keine Berufserfahrung erforderlich. Python und SQL.",
+    "work_mode": "unknown",
+    "remote_percentage": 0,
+    "employment_type": null,
+    "career_levels": [],
+    "salary_min_eur": null,
+    "salary_max_eur": null,
+    "published_at": null,
+    "first_seen_at": null,
+    "last_seen_at": null,
+    "fetched_at": null,
+    "workflow_status": "new",
+    "cache_stale": false
+  },
   "cases": [
     {
-      "job": {
-        "id": "fixture:1",
-        "title": "Junior Python Developer",
-        "company": "Example",
-        "locations": [
-          "Germany"
-        ],
-        "sources": [
-          {
-            "source": "test",
-            "url": "https://example.test/job",
-            "source_id": null,
-            "application_url": null
-          }
-        ],
-        "description_raw": "Keine Berufserfahrung erforderlich. Python und SQL.",
-        "description_clean": "Keine Berufserfahrung erforderlich. Python und SQL.",
-        "work_mode": "unknown",
-        "remote_percentage": 0,
-        "employment_type": null,
-        "career_levels": [],
-        "salary_min_eur": null,
-        "salary_max_eur": null,
-        "published_at": null,
-        "first_seen_at": null,
-        "last_seen_at": null,
-        "fetched_at": null,
-        "workflow_status": "new",
-        "cache_stale": false
-      },
+      "job": {},
       "expected": {
         "filter_status": "excluded",
         "match_percent": 0,
@@ -57,34 +58,7 @@
     },
     {
       "job": {
-        "id": "fixture:1",
-        "title": "Junior Python Developer",
-        "company": "Example",
-        "locations": [
-          "Germany"
-        ],
-        "sources": [
-          {
-            "source": "test",
-            "url": "https://example.test/job",
-            "source_id": null,
-            "application_url": null
-          }
-        ],
-        "description_raw": "Keine Berufserfahrung erforderlich. Python und SQL.",
-        "description_clean": "Keine Berufserfahrung erforderlich. Python und SQL.",
-        "work_mode": "unknown",
-        "remote_percentage": 100,
-        "employment_type": null,
-        "career_levels": [],
-        "salary_min_eur": null,
-        "salary_max_eur": null,
-        "published_at": null,
-        "first_seen_at": null,
-        "last_seen_at": null,
-        "fetched_at": null,
-        "workflow_status": "new",
-        "cache_stale": false
+        "remote_percentage": 100
       },
       "expected": {
         "filter_status": "included",
@@ -104,34 +78,8 @@
     },
     {
       "job": {
-        "id": "fixture:1",
-        "title": "Junior Python Developer",
-        "company": "Example",
-        "locations": [
-          "Germany"
-        ],
-        "sources": [
-          {
-            "source": "test",
-            "url": "https://example.test/job",
-            "source_id": null,
-            "application_url": null
-          }
-        ],
         "description_raw": "3 Jahre Berufserfahrung",
-        "description_clean": "3 Jahre Berufserfahrung",
-        "work_mode": "unknown",
-        "remote_percentage": 0,
-        "employment_type": null,
-        "career_levels": [],
-        "salary_min_eur": null,
-        "salary_max_eur": null,
-        "published_at": null,
-        "first_seen_at": null,
-        "last_seen_at": null,
-        "fetched_at": null,
-        "workflow_status": "new",
-        "cache_stale": false
+        "description_clean": "3 Jahre Berufserfahrung"
       },
       "expected": {
         "filter_status": "excluded",
@@ -145,34 +93,9 @@
     },
     {
       "job": {
-        "id": "fixture:1",
-        "title": "Junior Python Developer",
-        "company": "Example",
-        "locations": [
-          "Germany"
-        ],
-        "sources": [
-          {
-            "source": "test",
-            "url": "https://example.test/job",
-            "source_id": null,
-            "application_url": null
-          }
-        ],
         "description_raw": "3 Jahre Berufserfahrung",
         "description_clean": "3 Jahre Berufserfahrung",
-        "work_mode": "unknown",
-        "remote_percentage": 100,
-        "employment_type": null,
-        "career_levels": [],
-        "salary_min_eur": null,
-        "salary_max_eur": null,
-        "published_at": null,
-        "first_seen_at": null,
-        "last_seen_at": null,
-        "fetched_at": null,
-        "workflow_status": "new",
-        "cache_stale": false
+        "remote_percentage": 100
       },
       "expected": {
         "filter_status": "included",
@@ -192,34 +115,8 @@
     },
     {
       "job": {
-        "id": "fixture:1",
-        "title": "Junior Python Developer",
-        "company": "Example",
-        "locations": [
-          "Germany"
-        ],
-        "sources": [
-          {
-            "source": "test",
-            "url": "https://example.test/job",
-            "source_id": null,
-            "application_url": null
-          }
-        ],
         "description_raw": "4 Jahre Berufserfahrung",
-        "description_clean": "4 Jahre Berufserfahrung",
-        "work_mode": "unknown",
-        "remote_percentage": 0,
-        "employment_type": null,
-        "career_levels": [],
-        "salary_min_eur": null,
-        "salary_max_eur": null,
-        "published_at": null,
-        "first_seen_at": null,
-        "last_seen_at": null,
-        "fetched_at": null,
-        "workflow_status": "new",
-        "cache_stale": false
+        "description_clean": "4 Jahre Berufserfahrung"
       },
       "expected": {
         "filter_status": "excluded",
@@ -233,34 +130,9 @@
     },
     {
       "job": {
-        "id": "fixture:1",
-        "title": "Junior Python Developer",
-        "company": "Example",
-        "locations": [
-          "Germany"
-        ],
-        "sources": [
-          {
-            "source": "test",
-            "url": "https://example.test/job",
-            "source_id": null,
-            "application_url": null
-          }
-        ],
         "description_raw": "4 Jahre Berufserfahrung",
         "description_clean": "4 Jahre Berufserfahrung",
-        "work_mode": "unknown",
-        "remote_percentage": 100,
-        "employment_type": null,
-        "career_levels": [],
-        "salary_min_eur": null,
-        "salary_max_eur": null,
-        "published_at": null,
-        "first_seen_at": null,
-        "last_seen_at": null,
-        "fetched_at": null,
-        "workflow_status": "new",
-        "cache_stale": false
+        "remote_percentage": 100
       },
       "expected": {
         "filter_status": "excluded",
@@ -274,34 +146,8 @@
     },
     {
       "job": {
-        "id": "fixture:1",
-        "title": "Junior Python Developer",
-        "company": "Example",
-        "locations": [
-          "Germany"
-        ],
-        "sources": [
-          {
-            "source": "test",
-            "url": "https://example.test/job",
-            "source_id": null,
-            "application_url": null
-          }
-        ],
         "description_raw": "Masterabschluss erforderlich.",
-        "description_clean": "Masterabschluss erforderlich.",
-        "work_mode": "unknown",
-        "remote_percentage": 0,
-        "employment_type": null,
-        "career_levels": [],
-        "salary_min_eur": null,
-        "salary_max_eur": null,
-        "published_at": null,
-        "first_seen_at": null,
-        "last_seen_at": null,
-        "fetched_at": null,
-        "workflow_status": "new",
-        "cache_stale": false
+        "description_clean": "Masterabschluss erforderlich."
       },
       "expected": {
         "filter_status": "excluded",
@@ -315,34 +161,9 @@
     },
     {
       "job": {
-        "id": "fixture:1",
-        "title": "Junior Python Developer",
-        "company": "Example",
-        "locations": [
-          "Germany"
-        ],
-        "sources": [
-          {
-            "source": "test",
-            "url": "https://example.test/job",
-            "source_id": null,
-            "application_url": null
-          }
-        ],
         "description_raw": "Masterabschluss erforderlich.",
         "description_clean": "Masterabschluss erforderlich.",
-        "work_mode": "unknown",
-        "remote_percentage": 100,
-        "employment_type": null,
-        "career_levels": [],
-        "salary_min_eur": null,
-        "salary_max_eur": null,
-        "published_at": null,
-        "first_seen_at": null,
-        "last_seen_at": null,
-        "fetched_at": null,
-        "workflow_status": "new",
-        "cache_stale": false
+        "remote_percentage": 100
       },
       "expected": {
         "filter_status": "excluded",
@@ -356,34 +177,7 @@
     },
     {
       "job": {
-        "id": "fixture:1",
-        "title": "Senior Softwareentwickler",
-        "company": "Example",
-        "locations": [
-          "Germany"
-        ],
-        "sources": [
-          {
-            "source": "test",
-            "url": "https://example.test/job",
-            "source_id": null,
-            "application_url": null
-          }
-        ],
-        "description_raw": "Keine Berufserfahrung erforderlich. Python und SQL.",
-        "description_clean": "Keine Berufserfahrung erforderlich. Python und SQL.",
-        "work_mode": "unknown",
-        "remote_percentage": 0,
-        "employment_type": null,
-        "career_levels": [],
-        "salary_min_eur": null,
-        "salary_max_eur": null,
-        "published_at": null,
-        "first_seen_at": null,
-        "last_seen_at": null,
-        "fetched_at": null,
-        "workflow_status": "new",
-        "cache_stale": false
+        "title": "Senior Softwareentwickler"
       },
       "expected": {
         "filter_status": "excluded",
@@ -397,34 +191,8 @@
     },
     {
       "job": {
-        "id": "fixture:1",
         "title": "Senior Softwareentwickler",
-        "company": "Example",
-        "locations": [
-          "Germany"
-        ],
-        "sources": [
-          {
-            "source": "test",
-            "url": "https://example.test/job",
-            "source_id": null,
-            "application_url": null
-          }
-        ],
-        "description_raw": "Keine Berufserfahrung erforderlich. Python und SQL.",
-        "description_clean": "Keine Berufserfahrung erforderlich. Python und SQL.",
-        "work_mode": "unknown",
-        "remote_percentage": 100,
-        "employment_type": null,
-        "career_levels": [],
-        "salary_min_eur": null,
-        "salary_max_eur": null,
-        "published_at": null,
-        "first_seen_at": null,
-        "last_seen_at": null,
-        "fetched_at": null,
-        "workflow_status": "new",
-        "cache_stale": false
+        "remote_percentage": 100
       },
       "expected": {
         "filter_status": "excluded",
@@ -438,34 +206,26 @@
     },
     {
       "job": {
-        "id": "fixture:1",
         "title": "Senior Softwareentwickler",
-        "company": "Example",
-        "locations": [
-          "Germany"
-        ],
-        "sources": [
-          {
-            "source": "test",
-            "url": "https://example.test/job",
-            "source_id": null,
-            "application_url": null
-          }
-        ],
+        "description_raw": "3 Jahre Berufserfahrung",
+        "description_clean": "3 Jahre Berufserfahrung"
+      },
+      "expected": {
+        "filter_status": "excluded",
+        "match_percent": 0,
+        "experience_rank": 99,
+        "experience_level": "ausgeschlossen",
+        "reasons": [
+          "Titel enthaelt Ausschlusswort: senior"
+        ]
+      }
+    },
+    {
+      "job": {
+        "title": "Senior Softwareentwickler",
         "description_raw": "3 Jahre Berufserfahrung",
         "description_clean": "3 Jahre Berufserfahrung",
-        "work_mode": "unknown",
-        "remote_percentage": 0,
-        "employment_type": null,
-        "career_levels": [],
-        "salary_min_eur": null,
-        "salary_max_eur": null,
-        "published_at": null,
-        "first_seen_at": null,
-        "last_seen_at": null,
-        "fetched_at": null,
-        "workflow_status": "new",
-        "cache_stale": false
+        "remote_percentage": 100
       },
       "expected": {
         "filter_status": "excluded",
@@ -479,34 +239,9 @@
     },
     {
       "job": {
-        "id": "fixture:1",
         "title": "Senior Softwareentwickler",
-        "company": "Example",
-        "locations": [
-          "Germany"
-        ],
-        "sources": [
-          {
-            "source": "test",
-            "url": "https://example.test/job",
-            "source_id": null,
-            "application_url": null
-          }
-        ],
-        "description_raw": "3 Jahre Berufserfahrung",
-        "description_clean": "3 Jahre Berufserfahrung",
-        "work_mode": "unknown",
-        "remote_percentage": 100,
-        "employment_type": null,
-        "career_levels": [],
-        "salary_min_eur": null,
-        "salary_max_eur": null,
-        "published_at": null,
-        "first_seen_at": null,
-        "last_seen_at": null,
-        "fetched_at": null,
-        "workflow_status": "new",
-        "cache_stale": false
+        "description_raw": "4 Jahre Berufserfahrung",
+        "description_clean": "4 Jahre Berufserfahrung"
       },
       "expected": {
         "filter_status": "excluded",
@@ -520,34 +255,10 @@
     },
     {
       "job": {
-        "id": "fixture:1",
         "title": "Senior Softwareentwickler",
-        "company": "Example",
-        "locations": [
-          "Germany"
-        ],
-        "sources": [
-          {
-            "source": "test",
-            "url": "https://example.test/job",
-            "source_id": null,
-            "application_url": null
-          }
-        ],
         "description_raw": "4 Jahre Berufserfahrung",
         "description_clean": "4 Jahre Berufserfahrung",
-        "work_mode": "unknown",
-        "remote_percentage": 0,
-        "employment_type": null,
-        "career_levels": [],
-        "salary_min_eur": null,
-        "salary_max_eur": null,
-        "published_at": null,
-        "first_seen_at": null,
-        "last_seen_at": null,
-        "fetched_at": null,
-        "workflow_status": "new",
-        "cache_stale": false
+        "remote_percentage": 100
       },
       "expected": {
         "filter_status": "excluded",
@@ -561,34 +272,9 @@
     },
     {
       "job": {
-        "id": "fixture:1",
         "title": "Senior Softwareentwickler",
-        "company": "Example",
-        "locations": [
-          "Germany"
-        ],
-        "sources": [
-          {
-            "source": "test",
-            "url": "https://example.test/job",
-            "source_id": null,
-            "application_url": null
-          }
-        ],
-        "description_raw": "4 Jahre Berufserfahrung",
-        "description_clean": "4 Jahre Berufserfahrung",
-        "work_mode": "unknown",
-        "remote_percentage": 100,
-        "employment_type": null,
-        "career_levels": [],
-        "salary_min_eur": null,
-        "salary_max_eur": null,
-        "published_at": null,
-        "first_seen_at": null,
-        "last_seen_at": null,
-        "fetched_at": null,
-        "workflow_status": "new",
-        "cache_stale": false
+        "description_raw": "Masterabschluss erforderlich.",
+        "description_clean": "Masterabschluss erforderlich."
       },
       "expected": {
         "filter_status": "excluded",
@@ -602,34 +288,10 @@
     },
     {
       "job": {
-        "id": "fixture:1",
         "title": "Senior Softwareentwickler",
-        "company": "Example",
-        "locations": [
-          "Germany"
-        ],
-        "sources": [
-          {
-            "source": "test",
-            "url": "https://example.test/job",
-            "source_id": null,
-            "application_url": null
-          }
-        ],
         "description_raw": "Masterabschluss erforderlich.",
         "description_clean": "Masterabschluss erforderlich.",
-        "work_mode": "unknown",
-        "remote_percentage": 0,
-        "employment_type": null,
-        "career_levels": [],
-        "salary_min_eur": null,
-        "salary_max_eur": null,
-        "published_at": null,
-        "first_seen_at": null,
-        "last_seen_at": null,
-        "fetched_at": null,
-        "workflow_status": "new",
-        "cache_stale": false
+        "remote_percentage": 100
       },
       "expected": {
         "filter_status": "excluded",
@@ -643,75 +305,7 @@
     },
     {
       "job": {
-        "id": "fixture:1",
-        "title": "Senior Softwareentwickler",
-        "company": "Example",
-        "locations": [
-          "Germany"
-        ],
-        "sources": [
-          {
-            "source": "test",
-            "url": "https://example.test/job",
-            "source_id": null,
-            "application_url": null
-          }
-        ],
-        "description_raw": "Masterabschluss erforderlich.",
-        "description_clean": "Masterabschluss erforderlich.",
-        "work_mode": "unknown",
-        "remote_percentage": 100,
-        "employment_type": null,
-        "career_levels": [],
-        "salary_min_eur": null,
-        "salary_max_eur": null,
-        "published_at": null,
-        "first_seen_at": null,
-        "last_seen_at": null,
-        "fetched_at": null,
-        "workflow_status": "new",
-        "cache_stale": false
-      },
-      "expected": {
-        "filter_status": "excluded",
-        "match_percent": 0,
-        "experience_rank": 99,
-        "experience_level": "ausgeschlossen",
-        "reasons": [
-          "Titel enthaelt Ausschlusswort: senior"
-        ]
-      }
-    },
-    {
-      "job": {
-        "id": "fixture:1",
-        "title": "IT Consultant",
-        "company": "Example",
-        "locations": [
-          "Germany"
-        ],
-        "sources": [
-          {
-            "source": "test",
-            "url": "https://example.test/job",
-            "source_id": null,
-            "application_url": null
-          }
-        ],
-        "description_raw": "Keine Berufserfahrung erforderlich. Python und SQL.",
-        "description_clean": "Keine Berufserfahrung erforderlich. Python und SQL.",
-        "work_mode": "unknown",
-        "remote_percentage": 0,
-        "employment_type": null,
-        "career_levels": [],
-        "salary_min_eur": null,
-        "salary_max_eur": null,
-        "published_at": null,
-        "first_seen_at": null,
-        "last_seen_at": null,
-        "fetched_at": null,
-        "workflow_status": "new",
-        "cache_stale": false
+        "title": "IT Consultant"
       },
       "expected": {
         "filter_status": "excluded",
@@ -725,34 +319,8 @@
     },
     {
       "job": {
-        "id": "fixture:1",
         "title": "IT Consultant",
-        "company": "Example",
-        "locations": [
-          "Germany"
-        ],
-        "sources": [
-          {
-            "source": "test",
-            "url": "https://example.test/job",
-            "source_id": null,
-            "application_url": null
-          }
-        ],
-        "description_raw": "Keine Berufserfahrung erforderlich. Python und SQL.",
-        "description_clean": "Keine Berufserfahrung erforderlich. Python und SQL.",
-        "work_mode": "unknown",
-        "remote_percentage": 100,
-        "employment_type": null,
-        "career_levels": [],
-        "salary_min_eur": null,
-        "salary_max_eur": null,
-        "published_at": null,
-        "first_seen_at": null,
-        "last_seen_at": null,
-        "fetched_at": null,
-        "workflow_status": "new",
-        "cache_stale": false
+        "remote_percentage": 100
       },
       "expected": {
         "filter_status": "included",
@@ -772,34 +340,9 @@
     },
     {
       "job": {
-        "id": "fixture:1",
         "title": "IT Consultant",
-        "company": "Example",
-        "locations": [
-          "Germany"
-        ],
-        "sources": [
-          {
-            "source": "test",
-            "url": "https://example.test/job",
-            "source_id": null,
-            "application_url": null
-          }
-        ],
         "description_raw": "3 Jahre Berufserfahrung",
-        "description_clean": "3 Jahre Berufserfahrung",
-        "work_mode": "unknown",
-        "remote_percentage": 0,
-        "employment_type": null,
-        "career_levels": [],
-        "salary_min_eur": null,
-        "salary_max_eur": null,
-        "published_at": null,
-        "first_seen_at": null,
-        "last_seen_at": null,
-        "fetched_at": null,
-        "workflow_status": "new",
-        "cache_stale": false
+        "description_clean": "3 Jahre Berufserfahrung"
       },
       "expected": {
         "filter_status": "excluded",
@@ -813,34 +356,10 @@
     },
     {
       "job": {
-        "id": "fixture:1",
         "title": "IT Consultant",
-        "company": "Example",
-        "locations": [
-          "Germany"
-        ],
-        "sources": [
-          {
-            "source": "test",
-            "url": "https://example.test/job",
-            "source_id": null,
-            "application_url": null
-          }
-        ],
         "description_raw": "3 Jahre Berufserfahrung",
         "description_clean": "3 Jahre Berufserfahrung",
-        "work_mode": "unknown",
-        "remote_percentage": 100,
-        "employment_type": null,
-        "career_levels": [],
-        "salary_min_eur": null,
-        "salary_max_eur": null,
-        "published_at": null,
-        "first_seen_at": null,
-        "last_seen_at": null,
-        "fetched_at": null,
-        "workflow_status": "new",
-        "cache_stale": false
+        "remote_percentage": 100
       },
       "expected": {
         "filter_status": "included",
@@ -859,34 +378,9 @@
     },
     {
       "job": {
-        "id": "fixture:1",
         "title": "IT Consultant",
-        "company": "Example",
-        "locations": [
-          "Germany"
-        ],
-        "sources": [
-          {
-            "source": "test",
-            "url": "https://example.test/job",
-            "source_id": null,
-            "application_url": null
-          }
-        ],
         "description_raw": "4 Jahre Berufserfahrung",
-        "description_clean": "4 Jahre Berufserfahrung",
-        "work_mode": "unknown",
-        "remote_percentage": 0,
-        "employment_type": null,
-        "career_levels": [],
-        "salary_min_eur": null,
-        "salary_max_eur": null,
-        "published_at": null,
-        "first_seen_at": null,
-        "last_seen_at": null,
-        "fetched_at": null,
-        "workflow_status": "new",
-        "cache_stale": false
+        "description_clean": "4 Jahre Berufserfahrung"
       },
       "expected": {
         "filter_status": "excluded",
@@ -900,34 +394,10 @@
     },
     {
       "job": {
-        "id": "fixture:1",
         "title": "IT Consultant",
-        "company": "Example",
-        "locations": [
-          "Germany"
-        ],
-        "sources": [
-          {
-            "source": "test",
-            "url": "https://example.test/job",
-            "source_id": null,
-            "application_url": null
-          }
-        ],
         "description_raw": "4 Jahre Berufserfahrung",
         "description_clean": "4 Jahre Berufserfahrung",
-        "work_mode": "unknown",
-        "remote_percentage": 100,
-        "employment_type": null,
-        "career_levels": [],
-        "salary_min_eur": null,
-        "salary_max_eur": null,
-        "published_at": null,
-        "first_seen_at": null,
-        "last_seen_at": null,
-        "fetched_at": null,
-        "workflow_status": "new",
-        "cache_stale": false
+        "remote_percentage": 100
       },
       "expected": {
         "filter_status": "excluded",
@@ -941,34 +411,9 @@
     },
     {
       "job": {
-        "id": "fixture:1",
         "title": "IT Consultant",
-        "company": "Example",
-        "locations": [
-          "Germany"
-        ],
-        "sources": [
-          {
-            "source": "test",
-            "url": "https://example.test/job",
-            "source_id": null,
-            "application_url": null
-          }
-        ],
         "description_raw": "Masterabschluss erforderlich.",
-        "description_clean": "Masterabschluss erforderlich.",
-        "work_mode": "unknown",
-        "remote_percentage": 0,
-        "employment_type": null,
-        "career_levels": [],
-        "salary_min_eur": null,
-        "salary_max_eur": null,
-        "published_at": null,
-        "first_seen_at": null,
-        "last_seen_at": null,
-        "fetched_at": null,
-        "workflow_status": "new",
-        "cache_stale": false
+        "description_clean": "Masterabschluss erforderlich."
       },
       "expected": {
         "filter_status": "excluded",
@@ -982,34 +427,10 @@
     },
     {
       "job": {
-        "id": "fixture:1",
         "title": "IT Consultant",
-        "company": "Example",
-        "locations": [
-          "Germany"
-        ],
-        "sources": [
-          {
-            "source": "test",
-            "url": "https://example.test/job",
-            "source_id": null,
-            "application_url": null
-          }
-        ],
         "description_raw": "Masterabschluss erforderlich.",
         "description_clean": "Masterabschluss erforderlich.",
-        "work_mode": "unknown",
-        "remote_percentage": 100,
-        "employment_type": null,
-        "career_levels": [],
-        "salary_min_eur": null,
-        "salary_max_eur": null,
-        "published_at": null,
-        "first_seen_at": null,
-        "last_seen_at": null,
-        "fetched_at": null,
-        "workflow_status": "new",
-        "cache_stale": false
+        "remote_percentage": 100
       },
       "expected": {
         "filter_status": "excluded",
@@ -1023,34 +444,7 @@
     },
     {
       "job": {
-        "id": "fixture:1",
-        "title": "Koch",
-        "company": "Example",
-        "locations": [
-          "Germany"
-        ],
-        "sources": [
-          {
-            "source": "test",
-            "url": "https://example.test/job",
-            "source_id": null,
-            "application_url": null
-          }
-        ],
-        "description_raw": "Keine Berufserfahrung erforderlich. Python und SQL.",
-        "description_clean": "Keine Berufserfahrung erforderlich. Python und SQL.",
-        "work_mode": "unknown",
-        "remote_percentage": 0,
-        "employment_type": null,
-        "career_levels": [],
-        "salary_min_eur": null,
-        "salary_max_eur": null,
-        "published_at": null,
-        "first_seen_at": null,
-        "last_seen_at": null,
-        "fetched_at": null,
-        "workflow_status": "new",
-        "cache_stale": false
+        "title": "Koch"
       },
       "expected": {
         "filter_status": "excluded",
@@ -1064,34 +458,8 @@
     },
     {
       "job": {
-        "id": "fixture:1",
         "title": "Koch",
-        "company": "Example",
-        "locations": [
-          "Germany"
-        ],
-        "sources": [
-          {
-            "source": "test",
-            "url": "https://example.test/job",
-            "source_id": null,
-            "application_url": null
-          }
-        ],
-        "description_raw": "Keine Berufserfahrung erforderlich. Python und SQL.",
-        "description_clean": "Keine Berufserfahrung erforderlich. Python und SQL.",
-        "work_mode": "unknown",
-        "remote_percentage": 100,
-        "employment_type": null,
-        "career_levels": [],
-        "salary_min_eur": null,
-        "salary_max_eur": null,
-        "published_at": null,
-        "first_seen_at": null,
-        "last_seen_at": null,
-        "fetched_at": null,
-        "workflow_status": "new",
-        "cache_stale": false
+        "remote_percentage": 100
       },
       "expected": {
         "filter_status": "excluded",
@@ -1105,34 +473,26 @@
     },
     {
       "job": {
-        "id": "fixture:1",
         "title": "Koch",
-        "company": "Example",
-        "locations": [
-          "Germany"
-        ],
-        "sources": [
-          {
-            "source": "test",
-            "url": "https://example.test/job",
-            "source_id": null,
-            "application_url": null
-          }
-        ],
+        "description_raw": "3 Jahre Berufserfahrung",
+        "description_clean": "3 Jahre Berufserfahrung"
+      },
+      "expected": {
+        "filter_status": "excluded",
+        "match_percent": 0,
+        "experience_rank": 99,
+        "experience_level": "ausgeschlossen",
+        "reasons": [
+          "Titel ist keine erkennbare IT-Rolle"
+        ]
+      }
+    },
+    {
+      "job": {
+        "title": "Koch",
         "description_raw": "3 Jahre Berufserfahrung",
         "description_clean": "3 Jahre Berufserfahrung",
-        "work_mode": "unknown",
-        "remote_percentage": 0,
-        "employment_type": null,
-        "career_levels": [],
-        "salary_min_eur": null,
-        "salary_max_eur": null,
-        "published_at": null,
-        "first_seen_at": null,
-        "last_seen_at": null,
-        "fetched_at": null,
-        "workflow_status": "new",
-        "cache_stale": false
+        "remote_percentage": 100
       },
       "expected": {
         "filter_status": "excluded",
@@ -1146,34 +506,9 @@
     },
     {
       "job": {
-        "id": "fixture:1",
         "title": "Koch",
-        "company": "Example",
-        "locations": [
-          "Germany"
-        ],
-        "sources": [
-          {
-            "source": "test",
-            "url": "https://example.test/job",
-            "source_id": null,
-            "application_url": null
-          }
-        ],
-        "description_raw": "3 Jahre Berufserfahrung",
-        "description_clean": "3 Jahre Berufserfahrung",
-        "work_mode": "unknown",
-        "remote_percentage": 100,
-        "employment_type": null,
-        "career_levels": [],
-        "salary_min_eur": null,
-        "salary_max_eur": null,
-        "published_at": null,
-        "first_seen_at": null,
-        "last_seen_at": null,
-        "fetched_at": null,
-        "workflow_status": "new",
-        "cache_stale": false
+        "description_raw": "4 Jahre Berufserfahrung",
+        "description_clean": "4 Jahre Berufserfahrung"
       },
       "expected": {
         "filter_status": "excluded",
@@ -1187,34 +522,10 @@
     },
     {
       "job": {
-        "id": "fixture:1",
         "title": "Koch",
-        "company": "Example",
-        "locations": [
-          "Germany"
-        ],
-        "sources": [
-          {
-            "source": "test",
-            "url": "https://example.test/job",
-            "source_id": null,
-            "application_url": null
-          }
-        ],
         "description_raw": "4 Jahre Berufserfahrung",
         "description_clean": "4 Jahre Berufserfahrung",
-        "work_mode": "unknown",
-        "remote_percentage": 0,
-        "employment_type": null,
-        "career_levels": [],
-        "salary_min_eur": null,
-        "salary_max_eur": null,
-        "published_at": null,
-        "first_seen_at": null,
-        "last_seen_at": null,
-        "fetched_at": null,
-        "workflow_status": "new",
-        "cache_stale": false
+        "remote_percentage": 100
       },
       "expected": {
         "filter_status": "excluded",
@@ -1228,34 +539,9 @@
     },
     {
       "job": {
-        "id": "fixture:1",
         "title": "Koch",
-        "company": "Example",
-        "locations": [
-          "Germany"
-        ],
-        "sources": [
-          {
-            "source": "test",
-            "url": "https://example.test/job",
-            "source_id": null,
-            "application_url": null
-          }
-        ],
-        "description_raw": "4 Jahre Berufserfahrung",
-        "description_clean": "4 Jahre Berufserfahrung",
-        "work_mode": "unknown",
-        "remote_percentage": 100,
-        "employment_type": null,
-        "career_levels": [],
-        "salary_min_eur": null,
-        "salary_max_eur": null,
-        "published_at": null,
-        "first_seen_at": null,
-        "last_seen_at": null,
-        "fetched_at": null,
-        "workflow_status": "new",
-        "cache_stale": false
+        "description_raw": "Masterabschluss erforderlich.",
+        "description_clean": "Masterabschluss erforderlich."
       },
       "expected": {
         "filter_status": "excluded",
@@ -1269,75 +555,10 @@
     },
     {
       "job": {
-        "id": "fixture:1",
         "title": "Koch",
-        "company": "Example",
-        "locations": [
-          "Germany"
-        ],
-        "sources": [
-          {
-            "source": "test",
-            "url": "https://example.test/job",
-            "source_id": null,
-            "application_url": null
-          }
-        ],
         "description_raw": "Masterabschluss erforderlich.",
         "description_clean": "Masterabschluss erforderlich.",
-        "work_mode": "unknown",
-        "remote_percentage": 0,
-        "employment_type": null,
-        "career_levels": [],
-        "salary_min_eur": null,
-        "salary_max_eur": null,
-        "published_at": null,
-        "first_seen_at": null,
-        "last_seen_at": null,
-        "fetched_at": null,
-        "workflow_status": "new",
-        "cache_stale": false
-      },
-      "expected": {
-        "filter_status": "excluded",
-        "match_percent": 0,
-        "experience_rank": 99,
-        "experience_level": "ausgeschlossen",
-        "reasons": [
-          "Titel ist keine erkennbare IT-Rolle"
-        ]
-      }
-    },
-    {
-      "job": {
-        "id": "fixture:1",
-        "title": "Koch",
-        "company": "Example",
-        "locations": [
-          "Germany"
-        ],
-        "sources": [
-          {
-            "source": "test",
-            "url": "https://example.test/job",
-            "source_id": null,
-            "application_url": null
-          }
-        ],
-        "description_raw": "Masterabschluss erforderlich.",
-        "description_clean": "Masterabschluss erforderlich.",
-        "work_mode": "unknown",
-        "remote_percentage": 100,
-        "employment_type": null,
-        "career_levels": [],
-        "salary_min_eur": null,
-        "salary_max_eur": null,
-        "published_at": null,
-        "first_seen_at": null,
-        "last_seen_at": null,
-        "fetched_at": null,
-        "workflow_status": "new",
-        "cache_stale": false
+        "remote_percentage": 100
       },
       "expected": {
         "filter_status": "excluded",

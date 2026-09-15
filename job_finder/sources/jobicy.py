@@ -40,8 +40,7 @@ def fetch_jobs():
 
 def collect_records(scopes=SEARCH_SCOPES):
     """Fetch a bounded set of official feeds and remove their overlaps."""
-    records = []
-    seen = set()
+    records = {}
 
     for index, scope in enumerate(scopes):
         if index:
@@ -49,12 +48,10 @@ def collect_records(scopes=SEARCH_SCOPES):
         payload = fetch_json(build_search_url(scope))
         for record in payload.get("jobs") or []:
             identifier = record_identifier(record)
-            if not identifier or identifier in seen:
-                continue
-            seen.add(identifier)
-            records.append(record)
+            if identifier:
+                records.setdefault(identifier, record)
 
-    return records
+    return list(records.values())
 
 
 def build_search_url(scope):

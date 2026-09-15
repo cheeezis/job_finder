@@ -4,7 +4,7 @@ import unittest
 from datetime import date, timedelta
 from unittest.mock import patch
 
-from job_finder.deduplication import deduplicate_jobs
+from job_finder.deduplication import deduplicate_jobs, unique_sources
 from job_finder.main import score_jobs
 from job_finder.models import Job, JobSource
 from job_finder.profile import LOCAL_PLACES
@@ -805,6 +805,18 @@ class ScoringTests(unittest.TestCase):
 
 
 class DeduplicationTests(unittest.TestCase):
+    def test_duplicate_source_keeps_first_object_and_distinct_portals(self):
+        first = JobSource("portal", "https://example.test/job", source_id="first")
+        duplicate = JobSource("portal", first.url, source_id="later")
+        other = JobSource("other", first.url)
+
+        result = unique_sources([first, other, duplicate])
+
+        self.assertEqual(len(result), 2)
+        self.assertIs(result[0], first)
+        self.assertIs(result[1], other)
+        self.assertEqual(unique_sources([]), [])
+
     def test_equal_title_and_company_at_different_locations_stay_separate(self):
         first = make_job(
             company="Example GmbH",

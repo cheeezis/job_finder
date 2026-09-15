@@ -185,12 +185,7 @@ def clone_job(job):
 
 def unique_sources(sources):
     """Return portal listings once, preserving source order."""
-    result = []
-    seen = set()
+    result = {}
     for source in sources:
-        key = (source.source, source.url)
-        if key in seen:
-            continue
-        seen.add(key)
-        result.append(source)
-    return result
+        result.setdefault((source.source, source.url), source)
+    return list(result.values())

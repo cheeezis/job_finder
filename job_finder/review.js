@@ -20,16 +20,10 @@
   let routeOrigin = "";
   let undoDecision = null;
 
-  const {element, make, addOptions, appendSourceLinks, postJson, showError} = JobFinder;
+  const {element, addOptions, appendSourceLinks, postJson, showError} = JobFinder;
 
   function setText(id, value) {
     element(id).textContent = value || "";
-  }
-
-  function renderSourceLinks(job) {
-    const container = element("job-links");
-    container.replaceChildren();
-    appendSourceLinks(container, job, sourceLabels, true);
   }
 
   function routeDestination(job) {
@@ -152,7 +146,9 @@
     warning.textContent = job.prefilter_warning
       ? `Hinweis aus dem Vorfilter: ${job.prefilter_warning}`
       : "";
-    renderSourceLinks(job);
+    const links = element("job-links");
+    links.replaceChildren();
+    appendSourceLinks(links, job, sourceLabels, true);
     renderRouteLink(job);
     element("previous").disabled = currentIndex === 0;
     element("next").disabled = currentIndex === visibleJobs.length - 1;

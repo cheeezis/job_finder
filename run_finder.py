@@ -387,12 +387,9 @@ def build_run_summary(
     notification_stats=None,
 ):
     """Collect the reliable counts shown in Discord after one complete run."""
-    new_by_source = {}
-    for job in jobs:
-        if not job.is_new:
-            continue
-        for source in job.sources:
-            new_by_source[source.source] = new_by_source.get(source.source, 0) + 1
+    new_by_source = Counter(
+        source.source for job in jobs if job.is_new for source in job.sources
+    )
 
     review_new = sum(bool(job.get("is_new")) for job in results["included"])
     summary_sources = [

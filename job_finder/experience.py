@@ -127,20 +127,18 @@ def extract_required_years(text):
 
 def experience_is_optional(text):
     """Detect an experience mention whose surrounding sentence is optional."""
-    experience_pattern = re.compile(EXPERIENCE_TERM)
-    for match in experience_pattern.finditer(text):
-        if match_is_optional(text, match):
-            return True
-    return False
+    return any(
+        match_is_optional(text, match) for match in re.finditer(EXPERIENCE_TERM, text)
+    )
 
 
 def has_required_experience(text):
     """Return whether applicant experience is stated as a requirement."""
-    for pattern in REQUIRED_EXPERIENCE_PATTERNS:
-        for match in re.finditer(pattern, text):
-            if not match_is_optional(text, match):
-                return True
-    return False
+    return any(
+        not match_is_optional(text, match)
+        for pattern in REQUIRED_EXPERIENCE_PATTERNS
+        for match in re.finditer(pattern, text)
+    )
 
 
 def strong_experience_is_required(title, description):

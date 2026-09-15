@@ -100,8 +100,7 @@ def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE, now=None):
 
 def collect_records(searches=None, *, return_report=False):
     """Collect bounded local and remote searches without duplicate listings."""
-    records = []
-    seen = set()
+    records = {}
     search_errors = 0
     first_request = True
 
@@ -116,10 +115,8 @@ def collect_records(searches=None, *, return_report=False):
                 page_records = payload.get("data") or []
                 for record in page_records:
                     identifier = record_identifier(record)
-                    if not identifier or identifier in seen:
-                        continue
-                    seen.add(identifier)
-                    records.append(record)
+                    if identifier:
+                        records.setdefault(identifier, record)
                 if page >= integer(payload.get("total_pages"), 0):
                     break
         except Exception:
@@ -127,6 +124,7 @@ def collect_records(searches=None, *, return_report=False):
 
     if search_errors:
         print(f"WARNUNG StudySmarter: {search_errors} Suche(n) fehlgeschlagen")
+    records = list(records.values())
     result = (records, search_errors, len(selected_searches))
     return result if return_report else records
 

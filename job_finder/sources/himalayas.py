@@ -43,8 +43,7 @@ def fetch_jobs():
 
 def collect_records(search_terms=SEARCH_TERMS):
     """Fetch bounded filtered searches and remove cross-query duplicates."""
-    records = []
-    seen = set()
+    records = {}
     first_request = True
 
     for search_term in search_terms:
@@ -56,15 +55,13 @@ def collect_records(search_terms=SEARCH_TERMS):
             page_records = payload.get("jobs") or []
             for record in page_records:
                 identifier = record_identifier(record)
-                if not identifier or identifier in seen:
-                    continue
-                seen.add(identifier)
-                records.append(record)
+                if identifier:
+                    records.setdefault(identifier, record)
 
             if page_is_complete(payload, page_records):
                 break
 
-    return records
+    return list(records.values())
 
 
 def build_search_url(search_term, page=1):

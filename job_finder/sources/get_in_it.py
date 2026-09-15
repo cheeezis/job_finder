@@ -84,8 +84,7 @@ def jobs_from_records(records, cache_path=CACHE_FILE, now=None):
 
 def collect_records(*, return_report=False):
     """Collect unique lightweight records from all generated API searches."""
-    records = []
-    seen = set()
+    records = {}
     search_errors = 0
 
     searches = list(build_api_searches())
@@ -98,13 +97,12 @@ def collect_records(*, return_report=False):
 
         for record in results:
             identifier = str(record.get("id") or record.get("url") or "")
-            if not identifier or identifier in seen:
-                continue
-            seen.add(identifier)
-            records.append(record)
+            if identifier:
+                records.setdefault(identifier, record)
 
     if search_errors:
         print(f"WARNUNG get-in-IT: {search_errors} Suche(n) fehlgeschlagen")
+    records = list(records.values())
     result = (records, search_errors, len(searches))
     return result if return_report else records
 

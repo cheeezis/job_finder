@@ -523,13 +523,12 @@ class _RemotelyListParser(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.entries = []
         self.href = ""
-        self.in_anchor = False
         self.text_parts = []
         self.promoted = False
 
     def handle_starttag(self, tag, attrs):
         values = {name: value or "" for name, value in attrs}
-        if self.in_anchor:
+        if self.href:
             classes = values.get("class", "").casefold()
             if "featured" in classes or "sponsored" in classes:
                 self.promoted = True
@@ -537,7 +536,6 @@ class _RemotelyListParser(HTMLParser):
         href = values.get("href", "") if tag == "a" else ""
         if "/job/" in href:
             self.href = href
-            self.in_anchor = True
             self.text_parts = []
             self.promoted = False
 
@@ -545,16 +543,15 @@ class _RemotelyListParser(HTMLParser):
         return
 
     def handle_endtag(self, tag):
-        if not self.in_anchor or tag != "a":
+        if not self.href or tag != "a":
             return
         self.entries.append((self.href, " ".join(self.text_parts), self.promoted))
         self.href = ""
-        self.in_anchor = False
         self.text_parts = []
         self.promoted = False
 
     def handle_data(self, data):
-        if self.in_anchor and clean_text(data):
+        if self.href and clean_text(data):
             self.text_parts.append(data)
             if clean_text(data).casefold() == "gesponsert":
                 self.promoted = True

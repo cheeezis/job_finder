@@ -88,8 +88,7 @@ def fetch_jobs(cache_path=CACHE_FILE):
 
 def collect_records():
     """Fetch each API page once and discard repeated slugs."""
-    records = []
-    seen = set()
+    records = {}
 
     for page in range(1, MAX_PAGES + 1):
         payload = fetch_json(
@@ -99,16 +98,14 @@ def collect_records():
         page_records = payload.get("data") or []
         for record in page_records:
             slug = str(record.get("slug") or "").strip()
-            if not slug or slug in seen:
-                continue
-            seen.add(slug)
-            records.append(record)
+            if slug:
+                records.setdefault(slug, record)
 
         if not page_records or not (payload.get("links") or {}).get("next"):
             break
         time.sleep(REQUEST_PAUSE_SECONDS)
 
-    return records
+    return list(records.values())
 
 
 def fresh_cached_jobs(cache):

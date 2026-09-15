@@ -20,9 +20,6 @@ class _TextExtractor(HTMLParser):
         if text:
             self.parts.append(text)
 
-    def text(self):
-        return " ".join(self.parts)
-
 
 def normalize_text(text):
     """Lowercase text and make German umlauts searchable with ASCII keywords."""
@@ -35,7 +32,7 @@ def html_to_text(html):
     """Convert an HTML fragment to compact plain text."""
     parser = _TextExtractor()
     parser.feed(str(html or ""))
-    return parser.text()
+    return " ".join(parser.parts)
 
 
 def compact_text(value):

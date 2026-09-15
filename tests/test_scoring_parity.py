@@ -21,7 +21,7 @@ class ScoringParityTests(unittest.TestCase):
         with patch.multiple(scoring, **fixture["settings"]):
             for index, case in enumerate(fixture["cases"]):
                 with self.subTest(case=index):
-                    job = Job.from_dict(case["job"])
+                    job = Job.from_dict({**fixture["job_defaults"], **case["job"]})
                     before = job.to_dict()
                     self.assertEqual(
                         scoring.score_job(

@@ -1,8 +1,14 @@
 .venv/
 .git/
+.ruff_cache/
 __pycache__/
 *.pyc
+# Personal configuration and runtime data are supplied at runtime.
 .env
 .env.*
-user_settings.local.yaml
+*.local.yaml
+*.local.yml
+profile.yaml
 data/
+tmp/
+llm_evaluation/

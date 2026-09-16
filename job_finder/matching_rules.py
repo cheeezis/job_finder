@@ -1,27 +1,15 @@
-"""Personal matching profile for deterministic job scoring.
+"""Recognize job roles and requirements independently of personal preferences.
 
-Sources only collect job data. This module describes which roles, skills and
-working conditions fit the current profile.
+ROLE_GROUPS are ordered: the first matching specific rule wins, followed
+by GENERAL_IT_ROLE. The order is classification precedence, not a ranking.
+Points and local preferences are applied by scoring.py. This module does
+not load user settings or the personal facts in profile.local.yaml.
 """
-
-from job_finder.user_settings import USER_SETTINGS
-
-MATCHING_SETTINGS = USER_SETTINGS["matching"]
-
-# The five score categories add up to exactly 100 points.
-SCORE_LIMITS = {
-    "role": 30,
-    "skills": 25,
-    "experience": 25,
-    "location": 15,
-    "profile": 5,
-}
 
 ROLE_GROUPS = [
     {
         "id": "python_ai_data",
         "label": "Python/AI/Data-Kernrolle",
-        "points": 30,
         "patterns": [
             ["python", "developer"],
             ["python", "dev"],
@@ -46,7 +34,6 @@ ROLE_GROUPS = [
     {
         "id": "ai_business_analysis",
         "label": "KI Business Analysis",
-        "points": 24,
         "patterns": [
             ["ai", "business analyst"],
             ["ki", "business analyst"],
@@ -56,7 +43,6 @@ ROLE_GROUPS = [
     {
         "id": "junior_sap",
         "label": "SAP-Einstiegsrolle",
-        "points": 14,
         "entry_only": True,
         "patterns": [
             ["sap", "consultant"],
@@ -70,7 +56,6 @@ ROLE_GROUPS = [
     {
         "id": "software_development",
         "label": "Softwareentwicklung",
-        "points": 27,
         "patterns": [
             ["backend", "developer"],
             ["backend", "dev"],
@@ -102,7 +87,6 @@ ROLE_GROUPS = [
     {
         "id": "testing",
         "label": "Software-Testautomatisierung/QA",
-        "points": 23,
         "patterns": [
             ["test automation", "engineer"],
             ["testautomatisierung"],
@@ -117,7 +101,6 @@ ROLE_GROUPS = [
     {
         "id": "technical_consulting",
         "label": "Technisches IT-Consulting",
-        "points": 23,
         "patterns": [
             ["it", "consultant"],
             ["technical", "consultant"],
@@ -134,7 +117,6 @@ ROLE_GROUPS = [
     {
         "id": "infrastructure_automation",
         "label": "Infrastruktur-Automatisierung",
-        "points": 20,
         "context_keywords": [
             "infrastructure as code",
             "infrastrukturautomatisierung",
@@ -163,7 +145,6 @@ ROLE_GROUPS = [
     {
         "id": "rpa_automation",
         "label": "RPA/Prozessautomatisierung",
-        "points": 14,
         "context_keywords": [
             "rpa",
             "uipath",
@@ -183,7 +164,6 @@ ROLE_GROUPS = [
     {
         "id": "junior_modern_workplace",
         "label": "Junior Microsoft Cloud/Modern Workplace",
-        "points": 14,
         "entry_only": True,
         "context_keywords": [
             "automation",
@@ -205,7 +185,6 @@ ROLE_GROUPS = [
     {
         "id": "junior_requirements",
         "label": "Junior Requirements/Business Analysis",
-        "points": 14,
         "entry_only": True,
         "patterns": [
             ["requirements", "engineer"],
@@ -217,7 +196,6 @@ ROLE_GROUPS = [
     {
         "id": "junior_administration",
         "label": "Junior IT-Administration mit Technikfokus",
-        "points": 12,
         "entry_only": True,
         "context_keywords": [
             "automation",
@@ -242,7 +220,6 @@ ROLE_GROUPS = [
     {
         "id": "infrastructure",
         "label": "DevOps/Cloud/Security/Network",
-        "points": 20,
         "patterns": [
             ["cloud", "engineer"],
             ["cloud", "entwickler"],
@@ -263,7 +240,6 @@ ROLE_GROUPS = [
     {
         "id": "trainee",
         "label": "Technisches Traineeprogramm",
-        "points": 23,
         "patterns": [
             ["trainee", "it"],
             ["trainee", "software"],
@@ -318,125 +294,7 @@ GENERAL_IT_TITLE_KEYWORDS = [
 GENERAL_IT_ROLE = {
     "id": "general_it",
     "label": "Allgemeine IT-Rolle",
-    "points": 10,
 }
-
-SKILL_GROUPS = [
-    {
-        "id": "python",
-        "label": "Python",
-        "points": 10,
-        "keywords": ["python"],
-    },
-    {
-        "id": "ai_ml",
-        "label": "AI/ML/RAG/Agenten",
-        "points": 10,
-        "keywords": [
-            "ai",
-            "ki",
-            "ml",
-            "artificial intelligence",
-            "machine learning",
-            "llm",
-            "large language model",
-            "rag",
-            "agentic",
-            "ki-agent",
-            "ki agent",
-            "ai agent",
-        ],
-    },
-    {
-        "id": "data",
-        "label": "Data/Analytics",
-        "points": 7,
-        "keywords": [
-            "data analyst",
-            "data analytics",
-            "data engineer",
-            "data science",
-            "datenanalyse",
-            "datenanalyst",
-            "business intelligence",
-            "zeitreihe",
-            "time series",
-        ],
-    },
-    {
-        "id": "testing",
-        "label": "Testautomatisierung",
-        "points": 6,
-        "keywords": [
-            "test automation",
-            "testautomatisierung",
-            "playwright",
-            "jest",
-            "mocha",
-            "chai",
-            "unit-test",
-            "unit test",
-            "api-test",
-            "api test",
-            "end-to-end",
-            "e2e",
-        ],
-    },
-    {
-        "id": "javascript",
-        "label": "JavaScript/TypeScript/Node.js",
-        "points": 5,
-        "keywords": ["javascript", "typescript", "node.js", "nodejs"],
-    },
-    {
-        "id": "java",
-        "label": "Java",
-        "points": 4,
-        "keywords": ["java"],
-    },
-    {
-        "id": "devops",
-        "label": "DevOps/Cloud-Automatisierung",
-        "points": 5,
-        "keywords": [
-            "ci/cd",
-            "continuous integration",
-            "docker",
-            "kubernetes",
-            "terraform",
-            "infrastructure as code",
-            "ansible",
-            "deployment",
-            "automatisierung",
-            "automation",
-        ],
-    },
-    {
-        "id": "security",
-        "label": "Security/Network",
-        "points": 4,
-        "keywords": [
-            "cybersecurity",
-            "cyber security",
-            "it-security",
-            "informationssicherheit",
-            "network security",
-            "firewall",
-        ],
-    },
-    {
-        "id": "web_api",
-        "label": "Web/API",
-        "points": 3,
-        "keywords": [
-            "rest api",
-            "rest-api",
-            "backend",
-            "webanwendung",
-            "web application",
-        ],
-    },
-]
 
 # Seniority and non-vacancy titles that are incompatible with the target search.
 BLOCKED_TITLE_WORDS = [
@@ -487,8 +345,6 @@ ENTRY_LEVEL_TITLE_EXCEPTIONS = {
     "test manager",
 }
 
-LOCAL_PLACES = MATCHING_SETTINGS["local_places"]
-COMMUTER_LOCATIONS = MATCHING_SETTINGS.get("commuter_locations", [])
 
 GERMANY_LOCATION_WORDS = [
     "deutschland",
@@ -587,7 +443,6 @@ STRONG_EXPERIENCE_PHRASES = [
     "worked in a similar",
 ]
 
-PROFILE_DOMAIN_KEYWORDS = MATCHING_SETTINGS["profile_domain_keywords"]
 
 HIGH_TRAVEL_PHRASES = [
     "hohe reisebereitschaft",
@@ -606,6 +461,3 @@ MANDATORY_ADVANCED_DEGREE_PATTERNS = [
     r"(?:promotion|doktorgrad|phd)[^.]{0,50}(?:erforderlich|vorausgesetzt|required|must)",
     r"(?:erforderlich|vorausgesetzt|required|must)[^.]{0,50}(?:promotion|doktorgrad|phd)",
 ]
-
-SALARY_TARGET = MATCHING_SETTINGS["salary_target_eur"]
-SALARY_MINIMUM = MATCHING_SETTINGS["salary_minimum_eur"]

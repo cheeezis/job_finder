@@ -6,6 +6,10 @@ search:
   local_radius_km: 25
 
 matching:
+  # Bevorzugte Rollen erhalten 15 statt 10 Richtungspunkte. Andere IT-Rollen
+  # bleiben zugelassen. Ohne Angabe oder mit [] gibt es keinen Richtungsbonus.
+  # IDs und Erkennungsregeln: job_finder/matching_rules.py (ROLE_GROUPS).
+  preferred_role_groups: []
   # Lesbare Ortsbezeichnung für Review und StudySmarter-Suche.
   preferred_location_label: Musterstadt
   # Kleingeschriebene Ortsnamen, die im Anzeigentext als lokal gelten.

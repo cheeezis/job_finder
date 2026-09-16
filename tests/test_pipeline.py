@@ -8,8 +8,8 @@ from pathlib import Path
 from job_finder.main import load_jobs, score_jobs
 from job_finder.memory import update_memory
 from job_finder.models import Job, JobSource, WorkMode
-from job_finder.profile import LOCAL_PLACES
 from job_finder.reporting import write_recommendations
+from job_finder.scoring import LOCAL_PLACES
 
 
 class PipelineTests(unittest.TestCase):

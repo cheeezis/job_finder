@@ -45,7 +45,7 @@ beschreibt Titel und Beschreibung.
 | `job_finder/sources/` | Quellen abrufen und in `Job`/`JobSource` umwandeln |
 | `job_finder/models.py` | Datenmodell, Statuswerte und Serialisierung |
 | `job_finder/deduplication.py` | Gleiche Anzeigen verschiedener Quellen zusammenführen |
-| `job_finder/scoring.py`, `profile.py`, `remote.py` | Bewertungsablauf, Profilregeln und Remote-Erkennung |
+| `job_finder/scoring.py`, `matching_rules.py`, `remote.py` | Bewertungsablauf, Erkennungsregeln und Remote-Erkennung |
 | `job_finder/experience.py`, `location_rules.py`, `salary.py`, `matching_text.py` | Zusammenhängende Analysen und normalisierte Textvergleiche |
 | `job_finder/memory.py` | SQLite-Zustand, stabile IDs und frühere Entscheidungen |
 | `job_finder/availability.py` | Fehlende interessante Stellen auf bestätigte Schließung prüfen |
@@ -179,6 +179,44 @@ Die Bewertung prüft zuerst das Anzeigenalter, danach die Anforderungen und
 zuletzt den Standort. Die erste Ablehnung bleibt der sichtbare Ausschlussgrund.
 Erfahrungsjahre und Standortanalyse werden anschließend für die Punktevergabe
 wiederverwendet. Bei Änderungen diese Reihenfolge und die Grenzwerte erhalten.
+
+### Eigenständiger Vorfilter und persönliche Präferenzen
+
+`matching_rules.py` enthält Rollenbegriffe, Kontextbedingungen und
+Ausschlussmerkmale ohne persönliche Werte oder Punkte. Die erste passende
+Rollengruppe gewinnt; ihre Reihenfolge ist fachliche Erkennungspriorität und
+wird nicht durch persönliche Vorlieben umsortiert.
+
+`user_settings.local.yaml` steuert Standort, Gehalt, bevorzugte Rollengruppen
+und den Bezug zu Projekten oder Weiterbildungen. Unbekannte IDs in
+`matching.preferred_role_groups` werden beim Laden abgelehnt. Ein fehlender
+Eintrag ist für ältere Konfigurationen zulässig und entspricht einer leeren
+Liste. `profile.local.yaml` ist davon unabhängig und wird nicht automatisch
+eingelesen. Die alte Python-Datei `profile.py` wurde durch `matching_rules.py`
+abgelöst; interne Imports verwenden die neuen Zuständigkeiten.
+
+Die Bewertung bleibt eine vollständige, regelbasierte Sortierhilfe:
+
+| Bestandteil | Punkte |
+| --- | --- |
+| Klare Einstiegsstelle oder erste Erfahrung ausreichend | 50 |
+| Erfahrung nur wünschenswert / keine klare Anforderung | 35 / 30 |
+| Ein / zwei / drei Jahre gefordert | 25 / 15 / 5 |
+| Technologische Vorerfahrung / mehrjährige Erfahrung ohne Jahreszahl | 15 / 10 |
+| Vollständig remote / lokal hybrid / lokal vor Ort / erlaubter Pendelort | 30 / 26 / 20 / 16 |
+| Bevorzugte / andere erkannte IT-Richtung | 15 / 10 |
+| Mindestens ein konfigurierter Begriff im Titel oder Beschreibung | 5 insgesamt |
+
+Die Junior-Hybrid-Ausnahme außerhalb des Suchgebiets bleibt mit null
+Standortpunkten sichtbar zuschaltbar. Bestehende Präferenzabzüge folgen auf
+die Summe; das Ergebnis bleibt auf 0 bis 100 begrenzt. Es gibt keinen
+Mindestscore für die Aufnahme ins Review. Technologiestichwörter werden
+nicht mehr zusätzlich über eine feste Skill-Tabelle aufsummiert.
+
+Die 32 festen Vergleichsfälle behalten ihre Eingaben und Ausschlussentscheidungen;
+die vier zugelassenen Erwartungen wurden für diese bewusst neue Punktevergabe
+angepasst. Zusätzliche Rangfolgetests sichern den Vorrang des Einstiegs und
+den begrenzten Einfluss von Richtungs- und Stichwortboni ab.
 
 Die Review-API ordnet POST-Routen kurzen Aktionsmethoden zu. Host-/Origin-Prüfung,
 Größenlimit und JSON-Objektprüfung erfolgen gemeinsam vor dem Aufruf der Aktion;

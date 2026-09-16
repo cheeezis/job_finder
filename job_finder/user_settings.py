@@ -4,6 +4,8 @@ from pathlib import Path
 
 import yaml
 
+from job_finder.matching_rules import GENERAL_IT_ROLE, ROLE_GROUPS
+
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 LOCAL_SETTINGS_PATH = PROJECT_DIR / "user_settings.local.yaml"
 EXAMPLE_SETTINGS_PATH = PROJECT_DIR / "user_settings.example.yaml"
@@ -16,7 +18,8 @@ def load_user_settings(path=SETTINGS_PATH):
     """Load and validate the search and matching sections of a YAML file.
 
     Return the parsed mapping without filling in missing optional
-    keys. Raise ValueError for unreadable files, invalid YAML or invalid
+    keys. Missing preferred_role_groups means no preferred role families.
+    Raise ValueError for unreadable files, invalid YAML or invalid
     field values. See user_settings.example.yaml for the input schema.
 
     The default path is selected at module import: use the local file
@@ -48,6 +51,18 @@ def load_user_settings(path=SETTINGS_PATH):
         "matching.preferred_location_label",
     )
     require_text_list(matching.get("local_places"), "matching.local_places")
+    preferred_roles = require_text_list(
+        matching.get("preferred_role_groups", []),
+        "matching.preferred_role_groups",
+        allow_empty=True,
+    )
+    known_roles = {role["id"] for role in [*ROLE_GROUPS, GENERAL_IT_ROLE]}
+    unknown_roles = set(preferred_roles) - known_roles
+    if unknown_roles:
+        raise ValueError(
+            "Unbekannte matching.preferred_role_groups: "
+            + ", ".join(sorted(unknown_roles))
+        )
     require_commuter_locations(
         matching.get("commuter_locations", []),
         "matching.commuter_locations",

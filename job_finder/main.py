@@ -100,7 +100,7 @@ def print_results(results):
     for job in included:
         new_marker = "NEU | " if job.get("is_new") else ""
         summary = (
-            f"{job['match_percent']:>3}% | "
+            f"Vorfilter {job['match_percent']:>3}/100 | "
             f"{job['title']} | {job['company']} | "
             f"{format_locations(job)} | Remote: {format_remote(job)}"
         )

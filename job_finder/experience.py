@@ -2,13 +2,13 @@
 
 import re
 
-from job_finder.matching_text import contains_any, is_entry_level
-from job_finder.profile import (
+from job_finder.matching_rules import (
     BODY_ENTRY_LEVEL_PHRASES,
     FIRST_EXPERIENCE_PHRASES,
     OPTIONAL_EXPERIENCE_PHRASES,
     STRONG_EXPERIENCE_PHRASES,
 )
+from job_finder.matching_text import contains_any, is_entry_level
 
 EXPERIENCE_TERM = (
     r"(?:berufserfahrung|arbeitserfahrung|entwicklungserfahrung|"
@@ -51,7 +51,7 @@ def analyze_experience(title, full_text, required_years=None):
         required_years = extract_required_years(full_text)
 
     if required_years:
-        points = {1: 14, 2: 8, 3: 3}[required_years]
+        points = {1: 25, 2: 15, 3: 5}[required_years]
         return {
             "rank": required_years + 1,
             "points": points,
@@ -59,32 +59,32 @@ def analyze_experience(title, full_text, required_years=None):
         }
 
     if contains_any(full_text, BODY_ENTRY_LEVEL_PHRASES):
-        return {"rank": 0, "points": 25, "label": "klare Einstiegsstelle"}
+        return {"rank": 0, "points": 50, "label": "klare Einstiegsstelle"}
 
     if contains_any(full_text, STRONG_EXPERIENCE_PHRASES):
         return {
             "rank": 5,
-            "points": 6,
+            "points": 10,
             "label": "mehrjaehrige/fundierte Erfahrung ohne Jahreszahl",
         }
 
     if is_entry_level(title, full_text):
-        return {"rank": 0, "points": 25, "label": "klare Einstiegsstelle"}
+        return {"rank": 0, "points": 50, "label": "klare Einstiegsstelle"}
 
     if contains_any(full_text, FIRST_EXPERIENCE_PHRASES):
-        return {"rank": 0, "points": 25, "label": "erste Erfahrung reicht aus"}
+        return {"rank": 0, "points": 50, "label": "erste Erfahrung reicht aus"}
 
     if has_required_experience(full_text):
         return {
             "rank": 4,
-            "points": 8,
+            "points": 15,
             "label": "praktische Vorerfahrung mit Technologien vorausgesetzt",
         }
 
     if experience_is_optional(full_text):
-        return {"rank": 1, "points": 18, "label": "Erfahrung nur wuenschenswert"}
+        return {"rank": 1, "points": 35, "label": "Erfahrung nur wuenschenswert"}
 
-    return {"rank": 1, "points": 20, "label": "keine klare Jahresanforderung"}
+    return {"rank": 1, "points": 30, "label": "keine klare Jahresanforderung"}
 
 
 def extract_required_years(text):

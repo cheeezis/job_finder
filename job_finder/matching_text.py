@@ -2,7 +2,7 @@
 
 import re
 
-from job_finder.profile import (
+from job_finder.matching_rules import (
     BODY_ENTRY_LEVEL_PHRASES,
     ENTRY_LEVEL_WORDS,
 )
@@ -37,5 +37,5 @@ def keyword_pattern(keyword):
 
 
 def matches_pattern(text, pattern):
-    """Require every keyword in a profile pattern to match normalized text."""
+    """Require every keyword in a role pattern to match normalized text."""
     return all(contains_keyword(text, part) for part in pattern)

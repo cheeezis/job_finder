@@ -84,6 +84,24 @@ lokale Datei wird die anonymisierte Beispielkonfiguration verwendet.
 Die Einstellungen werden beim Start geladen. Nach Änderungen die laufende
 Review-Anwendung neu starten; ein Neuladen der Browserseite genügt nicht.
 
+Der Finder bewertet und sortiert Stellen eigenständig, auch ohne KI-Stufe.
+Der Vorfilter vergibt bis zu 50 Punkte für den Berufseinstieg, 30 für den
+Standort, 15 für die fachliche Richtung und insgesamt fünf für Stichwörter
+aus Projekten oder Weiterbildungen. Bestehende Abzüge für Arbeitsbedingungen
+werden danach angewendet. `matching.preferred_role_groups` gibt bevorzugten
+IT-Richtungen 15 statt zehn Punkte; andere IT-Rollen bleiben zugelassen.
+`matching.profile_domain_keywords` steuert den einmaligen Stichwortbonus.
+Die bisherige summierte Technologiegewichtung entfällt: Eine lange Liste
+von Technologien ist kein Nachweis persönlicher Eignung.
+
+`job_finder/matching_rules.py` enthält die Erkennungs- und Ausschlussregeln,
+`job_finder/scoring.py` setzt daraus die Bewertung zusammen. Ein optionales
+`profile.local.yaml` dient als persönliche Faktenbasis für eine spätere
+agentische Stufe und wird vom aktuellen Finder nicht geladen. Die frühere
+Python-Datei `job_finder/profile.py` wurde durch diese Trennung abgelöst.
+Neue Bewertungen erscheinen beim nächsten Finder-Lauf; bereits gespeicherte
+Review-Ergebnisse werden durch einen Neustart allein nicht neu bewertet.
+
 Für Discord kann `DISCORD_WEBHOOK_URL` als Umgebungsvariable gesetzt werden.
 Lokale Geheimnisse gehören nicht in YAML-Dateien oder ins Repository.
 

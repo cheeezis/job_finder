@@ -6,10 +6,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
-from job_finder.models import Job, JobSource, WorkMode, WorkflowStatus
+from job_finder.models import Job, JobSource, WorkflowStatus, WorkMode
 from job_finder.sources import get_in_it
 from job_finder.sources.common import load_detail_cache, save_detail_cache
-
 
 API_RECORD = {
     "id": 311970,

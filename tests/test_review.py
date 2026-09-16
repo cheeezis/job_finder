@@ -1,35 +1,48 @@
 """Tests for the local recommendation review workflow."""
 
 import base64
-from contextlib import contextmanager
-from datetime import date
 import json
 import socket
 import tempfile
 import threading
 import unittest
+from contextlib import contextmanager
+from datetime import date
 from http.server import HTTPServer
 from pathlib import Path
-from urllib.parse import urlencode
+from unittest import mock
 from urllib.error import HTTPError
+from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+from job_finder.config import LOCAL_SEARCH_LOCATION, LOCAL_SEARCH_POSTAL_CODE
 from job_finder.memory import load_memory, save_memory
 from job_finder.review import (
-    APP_STYLES,
     APP_SCRIPT,
-    LocalReviewServer,
+    APP_STYLES,
+    APPLICATIONS_SCRIPT,
+    LANDING_SCRIPT,
     REVIEW_PAGE,
+    REVIEW_SCRIPT,
+    LocalReviewServer,
     ReviewRequestHandler,
     address_is_in_use,
     load_review_jobs,
     start_application,
+    undo_ignored_decision,
     update_application_salary,
     update_review_decision,
-    undo_ignored_decision,
     update_workflow_status,
 )
-from job_finder.config import LOCAL_SEARCH_LOCATION, LOCAL_SEARCH_POSTAL_CODE
+
+
+def json_request(url, payload):
+    return Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
 
 
 class ReviewTests(unittest.TestCase):
@@ -44,9 +57,9 @@ class ReviewTests(unittest.TestCase):
         if not hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
             self.skipTest("SO_EXCLUSIVEADDRUSE is Windows-specific")
         server = object.__new__(LocalReviewServer)
-        server.socket = unittest.mock.Mock()
+        server.socket = mock.Mock()
 
-        with unittest.mock.patch.object(HTTPServer, "server_bind") as parent_bind:
+        with mock.patch.object(HTTPServer, "server_bind") as parent_bind:
             server.server_bind()
 
         server.socket.setsockopt.assert_called_once_with(
@@ -95,11 +108,15 @@ class ReviewTests(unittest.TestCase):
 
     @contextmanager
     def server_context(self, **attributes):
-        handler = type("TemporaryReviewHandler", (ReviewRequestHandler,), {
-            "recommendations_path": self.recommendations_path,
-            "memory_path": self.memory_path,
-            **attributes,
-        })
+        handler = type(
+            "TemporaryReviewHandler",
+            (ReviewRequestHandler,),
+            {
+                "recommendations_path": self.recommendations_path,
+                "memory_path": self.memory_path,
+                **attributes,
+            },
+        )
         server = HTTPServer(("127.0.0.1", 0), handler)
         thread = threading.Thread(target=server.serve_forever)
         thread.start()
@@ -109,6 +126,45 @@ class ReviewTests(unittest.TestCase):
             server.shutdown()
             server.server_close()
             thread.join()
+
+    def test_json_actions_reject_non_object_payloads_without_changing_memory(self):
+        original = load_memory(self.memory_path)
+        routes = (
+            "/api/status",
+            "/api/applications",
+            "/api/application-salary",
+            "/api/review-status",
+            "/api/review-undo",
+            "/api/history",
+            "/api/history/delete",
+            "/api/manual-import",
+        )
+        with self.server_context() as base_url:
+            for route in routes:
+                for payload in (None, [], "text", 1):
+                    with self.subTest(route=route, payload=payload):
+                        request = json_request(base_url + route, payload)
+                        with self.assertRaises(HTTPError) as raised:
+                            urlopen(request)
+                        self.assertEqual(raised.exception.code, 400)
+                        result = json.loads(raised.exception.read())
+                        self.assertEqual(result["error"], "JSON-Objekt erforderlich")
+        self.assertEqual(load_memory(self.memory_path), original)
+
+    def test_review_routes_ignore_and_undo_the_same_job(self):
+        with self.server_context() as base_url:
+            for route, fields, expected in (
+                ("/api/review-status", {"workflow_status": "ignored"}, "ignored"),
+                ("/api/review-undo", {"expected_status": "ignored"}, "interesting"),
+            ):
+                request = json_request(base_url + route, {"job_id": "job:1", **fields})
+                with urlopen(request) as response:
+                    result = json.loads(response.read())
+                self.assertEqual(result["workflow_status"], expected)
+                self.assertFalse(result["application_tracked"])
+                self.assertEqual(
+                    load_memory(self.memory_path)["job:1"]["workflow_status"], expected
+                )
 
     def test_review_jobs_include_persisted_workflow_status(self):
         jobs = load_review_jobs(self.recommendations_path, self.memory_path)
@@ -291,9 +347,7 @@ class ReviewTests(unittest.TestCase):
         )
         memory["portal:applied"] = {
             "workflow_status": "applied",
-            "workflow_history": [
-                {"status": "applied", "occurred_on": "2026-08-12"}
-            ],
+            "workflow_history": [{"status": "applied", "occurred_on": "2026-08-12"}],
             "source_urls": ["https://portal.test/job"],
             "source_names": ["arbeitsagentur", "test"],
         }
@@ -302,9 +356,7 @@ class ReviewTests(unittest.TestCase):
         document["recommendations"][0].update(
             {
                 "url": "https://portal.test/job",
-                "source_links": [
-                    {"source": "test", "url": "https://portal.test/job"}
-                ],
+                "source_links": [{"source": "test", "url": "https://portal.test/job"}],
             }
         )
         self.recommendations_path.write_text(json.dumps(document), encoding="utf-8")
@@ -344,9 +396,7 @@ class ReviewTests(unittest.TestCase):
 
         entry = load_memory(self.memory_path)["job:1"]
         applied_events = [
-            event
-            for event in entry["workflow_history"]
-            if event["status"] == "applied"
+            event for event in entry["workflow_history"] if event["status"] == "applied"
         ]
         self.assertEqual(result["workflow_status"], "applied")
         self.assertTrue(result["application_tracked"])
@@ -366,17 +416,13 @@ class ReviewTests(unittest.TestCase):
                 {
                     "kind": "cover_letter",
                     "name": "Anschreiben.pdf",
-                    "content": base64.b64encode(b"%PDF application").decode(
-                        "ascii"
-                    ),
+                    "content": base64.b64encode(b"%PDF application").decode("ascii"),
                 }
             ],
             documents_directory,
         )
 
-        document = load_memory(self.memory_path)["job:1"][
-            "application_documents"
-        ][0]
+        document = load_memory(self.memory_path)["job:1"]["application_documents"][0]
         stored_files = list(documents_directory.rglob("*.pdf"))
         self.assertEqual(document["name"], "Anschreiben.pdf")
         self.assertEqual(len(stored_files), 1)
@@ -447,7 +493,6 @@ class ReviewTests(unittest.TestCase):
             "inquiry",
         )
 
-
     def test_latest_ignored_decision_can_be_undone(self):
         update_review_decision("job:1", "ignored", self.memory_path)
 
@@ -502,7 +547,10 @@ class ReviewTests(unittest.TestCase):
                     self.assertNotIn("<style", page)
                     self.assertNotIn("style=", page)
                     self.assertEqual(response.headers["Cache-Control"], "no-store")
-                    self.assertIn("frame-ancestors 'none'", response.headers["Content-Security-Policy"])
+                    self.assertIn(
+                        "frame-ancestors 'none'",
+                        response.headers["Content-Security-Policy"],
+                    )
             with urlopen(base_url + "/review?job=job%3A1") as response:
                 targeted = response.read()
             self.assertEqual(targeted, REVIEW_PAGE.read_bytes())
@@ -512,6 +560,9 @@ class ReviewTests(unittest.TestCase):
             for route, content_type, path in [
                 ("/app.css", "text/css", APP_STYLES),
                 ("/app.js", "text/javascript", APP_SCRIPT),
+                ("/landing.js", "text/javascript", LANDING_SCRIPT),
+                ("/review.js", "text/javascript", REVIEW_SCRIPT),
+                ("/applications.js", "text/javascript", APPLICATIONS_SCRIPT),
             ]:
                 with self.subTest(route=route), urlopen(base_url + route) as response:
                     self.assertIn(content_type, response.headers["Content-Type"])
@@ -525,17 +576,13 @@ class ReviewTests(unittest.TestCase):
             return {"job_id": "manual:python", "analyzed": 1}
 
         with self.server_context(
-            jobs_path=self.directory / 'jobs.json',
-            manual_cache_path=self.directory / 'manual.json',
+            jobs_path=self.directory / "jobs.json",
+            manual_cache_path=self.directory / "manual.json",
             manual_importer=staticmethod(importer),
         ) as base_url:
-            request = Request(
+            request = json_request(
                 f"{base_url}/api/manual-import",
-                data=json.dumps(
-                    {"url": "https://example.com/jobs/python"}
-                ).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
-                method="POST",
+                {"url": "https://example.com/jobs/python"},
             )
             with urlopen(request) as response:
                 result = json.load(response)
@@ -546,13 +593,9 @@ class ReviewTests(unittest.TestCase):
 
     def test_application_start_api_adds_job_to_overview(self):
         with self.server_context() as base_url:
-            request = Request(
+            request = json_request(
                 f"{base_url}/api/applications",
-                data=json.dumps(
-                    {"job_id": "job:1", "salary_expectation_eur": 58_000}
-                ).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
-                method="POST",
+                {"job_id": "job:1", "salary_expectation_eur": 58000},
             )
             with urlopen(request) as response:
                 result = json.load(response)
@@ -582,17 +625,12 @@ class ReviewTests(unittest.TestCase):
             ],
             documents_directory,
         )
-        document = load_memory(self.memory_path)["job:1"][
-            "application_documents"
-        ][0]
+        document = load_memory(self.memory_path)["job:1"]["application_documents"][0]
         query = urlencode({"job_id": "job:1", "document_id": document["id"]})
         with self.server_context(
             application_documents_dir=documents_directory,
         ) as base_url:
-            with urlopen(
-                f"{base_url}"
-                f"/api/application-document?{query}"
-            ) as response:
+            with urlopen(f"{base_url}/api/application-document?{query}") as response:
                 content = response.read()
                 disposition = response.headers["Content-Disposition"]
 
@@ -600,25 +638,43 @@ class ReviewTests(unittest.TestCase):
         self.assertIn("Lebenslauf.pdf", disposition)
 
     def test_monthly_salary_and_edits_preserve_application_history(self):
-        start_application("job:1", self.memory_path,
-                          salary_expectation_eur=4500, salary_period="month")
+        start_application(
+            "job:1",
+            self.memory_path,
+            salary_expectation_eur=4500,
+            salary_period="month",
+        )
         original = load_memory(self.memory_path)["job:1"]
         self.assertEqual(original["salary_expectation_eur"], 54000)
         with self.server_context() as base_url:
-            request = Request(base_url + "/api/application-salary",
-                data=json.dumps({"job_id": "job:1", "salary_expectation_eur": 5000,
-                                 "salary_period": "month"}).encode(),
-                headers={"Content-Type": "application/json"}, method="POST")
+            request = json_request(
+                base_url + "/api/application-salary",
+                {
+                    "job_id": "job:1",
+                    "salary_expectation_eur": 5000,
+                    "salary_period": "month",
+                },
+            )
             with urlopen(request) as response:
                 self.assertEqual(json.load(response)["salary_expectation_eur"], 60000)
         updated = load_memory(self.memory_path)["job:1"]
         self.assertEqual(updated["workflow_history"], original["workflow_history"])
-        for value, period in [(900000, "month"), (0, "year"), (True, "month"), (4500, "week")]:
-            with self.subTest(value=value, period=period), self.assertRaises(ValueError):
+        for value, period in [
+            (900000, "month"),
+            (0, "year"),
+            (True, "month"),
+            (4500, "week"),
+        ]:
+            with (
+                self.subTest(value=value, period=period),
+                self.assertRaises(ValueError),
+            ):
                 update_application_salary("job:1", value, period, self.memory_path)
             self.assertEqual(load_memory(self.memory_path)["job:1"], updated)
         update_application_salary("job:1", None, memory_path=self.memory_path)
-        self.assertNotIn("salary_expectation_eur", load_memory(self.memory_path)["job:1"])
+        self.assertNotIn(
+            "salary_expectation_eur", load_memory(self.memory_path)["job:1"]
+        )
 
     def test_application_can_store_optional_salary_expectation(self):
         result = start_application(
@@ -657,13 +713,9 @@ class ReviewTests(unittest.TestCase):
         with self.server_context() as base_url:
             with urlopen(f"{base_url}/api/recommendations") as response:
                 document = json.load(response)
-            request = Request(
+            request = json_request(
                 f"{base_url}/api/review-status",
-                data=json.dumps(
-                    {"job_id": "job:1", "workflow_status": "ignored"}
-                ).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
-                method="POST",
+                {"job_id": "job:1", "workflow_status": "ignored"},
             )
             with urlopen(request) as response:
                 result = json.load(response)
@@ -698,31 +750,23 @@ class ReviewTests(unittest.TestCase):
         with self.server_context() as base_url:
             with urlopen(f"{base_url}/applications") as response:
                 page = response.read().decode("utf-8")
-            request = Request(
+            request = json_request(
                 f"{base_url}/api/status",
-                data=json.dumps(
-                    {
-                        "job_id": "job:1",
-                        "workflow_status": "applied",
-                        "occurred_on": event_on,
-                    }
-                ).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
-                method="POST",
+                {
+                    "job_id": "job:1",
+                    "workflow_status": "applied",
+                    "occurred_on": event_on,
+                },
             )
             with urlopen(request):
                 pass
-            no_response_request = Request(
+            no_response_request = json_request(
                 f"{base_url}/api/status",
-                data=json.dumps(
-                    {
-                        "job_id": "job:1",
-                        "workflow_status": "no_response",
-                        "occurred_on": event_on,
-                    }
-                ).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
-                method="POST",
+                {
+                    "job_id": "job:1",
+                    "workflow_status": "no_response",
+                    "occurred_on": event_on,
+                },
             )
             with urlopen(no_response_request):
                 pass
@@ -730,57 +774,43 @@ class ReviewTests(unittest.TestCase):
                 overview = json.load(response)
             no_response_event = next(
                 event
-                for event in overview["completed_applications"][0][
-                    "workflow_history"
-                ]
+                for event in overview["completed_applications"][0]["workflow_history"]
                 if event["status"] == "no_response"
             )
-            edit_request = Request(
+            edit_request = json_request(
                 f"{base_url}/api/history",
-                data=json.dumps(
-                    {
-                        "job_id": "job:1",
-                        "event_index": no_response_event["event_index"],
-                        "previous_status": "no_response",
-                        "previous_occurred_on": event_on,
-                        "workflow_status": "response",
-                        "occurred_on": event_on,
-                    }
-                ).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
-                method="POST",
+                {
+                    "job_id": "job:1",
+                    "event_index": no_response_event["event_index"],
+                    "previous_status": "no_response",
+                    "previous_occurred_on": event_on,
+                    "workflow_status": "response",
+                    "occurred_on": event_on,
+                },
             )
             with urlopen(edit_request) as response:
                 edit_result = json.load(response)
-            delete_request = Request(
+            delete_request = json_request(
                 f"{base_url}/api/history/delete",
-                data=json.dumps(
-                    {
-                        "job_id": "job:1",
-                        "event_index": no_response_event["event_index"],
-                        "previous_status": "response",
-                        "previous_occurred_on": event_on,
-                    }
-                ).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
-                method="POST",
+                {
+                    "job_id": "job:1",
+                    "event_index": no_response_event["event_index"],
+                    "previous_status": "response",
+                    "previous_occurred_on": event_on,
+                },
             )
             with urlopen(delete_request) as response:
                 delete_result = json.load(response)
             with urlopen(f"{base_url}/api/applications") as response:
                 final_overview = json.load(response)
-            interview_request = Request(
+            interview_request = json_request(
                 f"{base_url}/api/status",
-                data=json.dumps(
-                    {
-                        "job_id": "job:1",
-                        "workflow_status": "interview",
-                        "occurred_on": event_on,
-                        "scheduled_for": "2099-08-25T10:30",
-                    }
-                ).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
-                method="POST",
+                {
+                    "job_id": "job:1",
+                    "workflow_status": "interview",
+                    "occurred_on": event_on,
+                    "scheduled_for": "2099-08-25T10:30",
+                },
             )
             with urlopen(interview_request):
                 pass
@@ -789,8 +819,13 @@ class ReviewTests(unittest.TestCase):
 
         self.assertIn("Bewerbungsübersicht", page)
         self.assertIn("Abgeschlossene Bewerbungen bearbeiten", page)
-        self.assertIn('input.type = "datetime-local"', page)
-        self.assertIn("Nächstes Gespräch", page)
+        self.assertIn(
+            'input.type = "datetime-local"',
+            APPLICATIONS_SCRIPT.read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "Nächstes Gespräch", APPLICATIONS_SCRIPT.read_text(encoding="utf-8")
+        )
         self.assertEqual(overview["statistics"]["total"], 1)
         self.assertEqual(overview["applications"], [])
         self.assertEqual(
@@ -805,17 +840,29 @@ class ReviewTests(unittest.TestCase):
         )
         self.assertEqual(final_overview["statistics"]["open"], 1)
 
-
     def test_cross_origin_and_non_json_mutations_are_rejected(self):
         before = load_memory(self.memory_path)
         with self.server_context() as base_url:
             for headers, code in [
-                ({"Content-Type": "application/json", "Origin": "https://attacker.example"}, 403),
+                (
+                    {
+                        "Content-Type": "application/json",
+                        "Origin": "https://attacker.example",
+                    },
+                    403,
+                ),
                 ({"Content-Type": "text/plain"}, 415),
             ]:
-                request = Request(base_url + "/api/review-status", method="POST",
-                    data=b'{"job_id":"job:1","workflow_status":"ignored"}', headers=headers)
-                with self.subTest(headers=headers), self.assertRaises(HTTPError) as caught:
+                request = Request(
+                    base_url + "/api/review-status",
+                    method="POST",
+                    data=b'{"job_id":"job:1","workflow_status":"ignored"}',
+                    headers=headers,
+                )
+                with (
+                    self.subTest(headers=headers),
+                    self.assertRaises(HTTPError) as caught,
+                ):
                     urlopen(request)
                 self.assertEqual(caught.exception.code, code)
                 caught.exception.close()
@@ -824,14 +871,28 @@ class ReviewTests(unittest.TestCase):
     def test_database_failure_removes_new_application_documents(self):
         before = load_memory(self.memory_path)
         root = self.directory / "documents"
-        with unittest.mock.patch("job_finder.memory.replace_sqlite_memory", side_effect=OSError("commit failed")):
+        with mock.patch(
+            "job_finder.memory.replace_sqlite_memory",
+            side_effect=OSError("commit failed"),
+        ):
             with self.assertRaises(OSError):
-                start_application("job:1", self.memory_path, [{
-                    "kind": "resume", "name": "CV.pdf",
-                    "content": base64.b64encode(b"test document").decode("ascii"),
-                }], root)
+                start_application(
+                    "job:1",
+                    self.memory_path,
+                    [
+                        {
+                            "kind": "resume",
+                            "name": "CV.pdf",
+                            "content": base64.b64encode(b"test document").decode(
+                                "ascii"
+                            ),
+                        }
+                    ],
+                    root,
+                )
         self.assertEqual(load_memory(self.memory_path), before)
         self.assertEqual([p for p in root.rglob("*") if p.is_file()], [])
+
 
 if __name__ == "__main__":
     unittest.main()

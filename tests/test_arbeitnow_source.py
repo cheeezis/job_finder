@@ -33,7 +33,9 @@ class ArbeitnowTests(unittest.TestCase):
         ):
             records = arbeitnow.collect_records()
 
-        self.assertEqual([record["slug"] for record in records], ["one", "two", "three"])
+        self.assertEqual(
+            [record["slug"] for record in records], ["one", "two", "three"]
+        )
         self.assertEqual(fetch.call_count, 2)
         sleep.assert_called_once_with(arbeitnow.REQUEST_PAUSE_SECONDS)
 
@@ -251,9 +253,9 @@ class ArbeitnowTests(unittest.TestCase):
         }
         previous = arbeitnow.job_from_record(record)
         previous.description_clean = "Cached but invalid description " * 20
-        previous.sources[0].application_url = (
-            "https://company.test/jobs/missing?not_found=true"
-        )
+        previous.sources[
+            0
+        ].application_url = "https://company.test/jobs/missing?not_found=true"
         current = arbeitnow.job_from_record(record)
 
         reused = arbeitnow.reuse_cached_enrichment(current, previous)
@@ -274,7 +276,9 @@ class ArbeitnowTests(unittest.TestCase):
                 "location": "Fulda",
             }
         )
-        html = '<meta property="og:description" content="' + ("Python APIs " * 30) + '">'
+        html = (
+            '<meta property="og:description" content="' + ("Python APIs " * 30) + '">'
+        )
 
         with tempfile.TemporaryDirectory() as directory:
             cache_path = Path(directory) / "arbeitnow.json"
@@ -288,7 +292,9 @@ class ArbeitnowTests(unittest.TestCase):
                 )
 
         self.assertEqual(count, 1)
-        self.assertEqual(job.sources[0].application_url, "https://company.test/jobs/one")
+        self.assertEqual(
+            job.sources[0].application_url, "https://company.test/jobs/one"
+        )
         self.assertIn("Python APIs", job.description_clean)
 
     def test_external_description_prefers_structured_job_posting(self):
@@ -354,6 +360,7 @@ class ArbeitnowTests(unittest.TestCase):
         self.assertEqual(short_count, 0)
         self.assertIsNone(job.sources[0].application_url)
         self.assertTrue(arbeitnow.is_placeholder_description(job.description_clean))
+
 
 if __name__ == "__main__":
     unittest.main()

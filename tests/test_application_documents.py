@@ -48,11 +48,13 @@ class ApplicationDocumentTests(unittest.TestCase):
         )
 
     def test_equal_titles_for_different_jobs_use_distinct_folders(self):
-        payload = [{
-            "kind": "resume",
-            "name": "Lebenslauf.pdf",
-            "content": base64.b64encode(b"first").decode("ascii"),
-        }]
+        payload = [
+            {
+                "kind": "resume",
+                "name": "Lebenslauf.pdf",
+                "content": base64.b64encode(b"first").decode("ascii"),
+            }
+        ]
         first = store_documents(
             "source:1", payload, self.directory, company="Example", title="Developer"
         )

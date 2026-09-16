@@ -107,9 +107,7 @@ def extract_remote_percent(text):
     for pattern in presence_patterns:
         matches.extend((5 - int(days)) * 20 for days in re.findall(pattern, day_text))
 
-    if not matches:
-        return 0
-    return max(matches)
+    return max(matches, default=0)
 
 
 def classify_remote(remote):

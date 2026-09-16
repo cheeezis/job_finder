@@ -6,15 +6,14 @@ from urllib.parse import urlencode
 from job_finder.http import fetch_json
 from job_finder.models import Job, JobSource, WorkMode
 from job_finder.sources.common import (
-    numeric_salary,
     normalize_employment_type,
+    numeric_salary,
     parse_published_date,
     remote_region_allows_germany,
     source_job_id,
     utc_now,
 )
 from job_finder.text import html_to_text
-
 
 SOURCE_NAME = "startup_jobs"
 API_URL = "https://api.startup.jobs/v1/jobs"
@@ -51,8 +50,7 @@ def fetch_jobs(api_key=None):
 
 def collect_records(headers, scopes=SEARCH_SCOPES):
     """Fetch bounded cursor pages and merge overlaps between both scopes."""
-    records = []
-    seen = set()
+    records = {}
 
     for scope in scopes:
         cursor = None
@@ -60,16 +58,14 @@ def collect_records(headers, scopes=SEARCH_SCOPES):
             payload = fetch_json(build_search_url(scope, cursor), headers=headers)
             for record in payload.get("data") or []:
                 identifier = str(record.get("id") or record.get("url") or "").strip()
-                if not identifier or identifier in seen:
-                    continue
-                seen.add(identifier)
-                records.append(record)
+                if identifier:
+                    records.setdefault(identifier, record)
 
             cursor = payload.get("next_cursor")
             if not payload.get("has_more") or cursor is None:
                 break
 
-    return records
+    return list(records.values())
 
 
 def build_search_url(scope, cursor=None):

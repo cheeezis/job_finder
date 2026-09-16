@@ -3,6 +3,7 @@
 import argparse
 import os
 import time
+from collections import Counter
 
 from job_finder.availability import ignore_closed_listings
 from job_finder.console import configure_utf8_output, print_phase, print_progress
@@ -16,33 +17,36 @@ from job_finder.paths import (
     MEMORY_FILE,
     NOTIFICATION_STATE_FILE,
 )
-from job_finder.reporting import is_international_listing, write_recommendations
-from job_finder.storage import write_json_atomic
-from job_finder.sources import arbeitnow
-from job_finder.sources import arbeitsagentur
-from job_finder.sources import bytewerk
-from job_finder.sources import css
-from job_finder.sources import compose_it
-from job_finder.sources import edag
-from job_finder.sources import get_in_it
-from job_finder.sources import german_tech_jobs
-from job_finder.sources import himalayas
-from job_finder.sources import jumo
-from job_finder.sources import jobicy
-from job_finder.sources import manual
-from job_finder.sources import nethinks
-from job_finder.sources import proemion
-from job_finder.sources import remotely
-from job_finder.sources import rhoenenergie
-from job_finder.sources import stepstone
-from job_finder.sources import startup_jobs
-from job_finder.sources import studysmarter
+from job_finder.reporting import is_visible_in_default_review, write_recommendations
+from job_finder.sources import (
+    arbeitnow,
+    arbeitsagentur,
+    bytewerk,
+    compose_it,
+    css,
+    edag,
+    german_tech_jobs,
+    get_in_it,
+    himalayas,
+    jobicy,
+    jumo,
+    manual,
+    nethinks,
+    proemion,
+    remotely,
+    rhoenenergie,
+    startup_jobs,
+    stepstone,
+    studysmarter,
+)
 from job_finder.sources.common import (
     canonical_detail_url as canonical_url,
+)
+from job_finder.sources.common import (
     fetch_diagnostics,
     reset_fetch_diagnostics,
 )
-
+from job_finder.storage import write_json_atomic
 
 SOURCES = [
     arbeitsagentur,
@@ -72,6 +76,7 @@ class IncompleteSourceSnapshotError(RuntimeError):
 
 
 def unavailable_source_count(source_reports):
+    """Count failed sources and partial sources that returned no jobs."""
     return sum(
         report.get("status") == "failed"
         or (report.get("status") == "partial" and not report.get("jobs"))
@@ -99,6 +104,7 @@ def require_usable_source_snapshot(source_reports):
         "verwendbar; vorhandene Jobs und Review-Ausgabe bleiben unverändert"
     )
 
+
 def parse_args():
     """Parse command-line options for one Job Finder run."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -111,7 +117,7 @@ def parse_args():
 
 
 def main():
-    """Run the full pipeline: collect jobs, update memory, then score."""
+    """Run collection and scoring before persisting state and reporting."""
     configure_utf8_output()
     args = parse_args()
     with RunLog():
@@ -121,26 +127,26 @@ def main():
 def run_pipeline(args):
     """Execute one logged run of the complete job-finding pipeline."""
     started = time.monotonic()
-    with timed_step('Backup'):
+    with timed_step("Backup"):
         create_backup([MEMORY_FILE, NOTIFICATION_STATE_FILE])
 
     print_phase(1, 4, "Quellen")
-    with timed_step('Quellen und Deduplizierung'):
+    with timed_step("Quellen und Deduplizierung"):
         jobs, source_reports = collect_jobs()
         print_source_summary(source_reports, len(jobs))
         require_usable_source_snapshot(source_reports)
 
     print_phase(2, 4, "Bewertung")
-    with timed_step('Vorfilter'):
+    with timed_step("Vorfilter"):
         results = score_jobs(jobs)
 
     candidate_ids = {job["id"] for job in results["included"]}
-    with timed_step('Detailanreicherung'):
+    with timed_step("Detailanreicherung"):
         enrich_candidate_jobs(jobs, candidate_ids)
 
     # Validate final details before committing any workflow state. The score
     # stays attached to the job as memory resolves its ID and timestamps.
-    with timed_step('Endgültige Bewertung'):
+    with timed_step("Endgültige Bewertung"):
         evaluated_jobs = evaluate_jobs(jobs)
 
     # Persist only the final post-enrichment set; enrichers may remove closed ads.
@@ -150,7 +156,7 @@ def run_pipeline(args):
         for report in source_reports
         if report["status"] in {"success", "empty"}
     }
-    with timed_step('Gedächtnis speichern'):
+    with timed_step("Gedächtnis speichern"):
         with edit_memory(MEMORY_FILE) as memory:
             memory_stats = update_memory(
                 jobs,
@@ -158,20 +164,24 @@ def run_pipeline(args):
                 successful_sources=complete_sources,
             )
 
-    with timed_step('Offline-Prüfung'):
+    with timed_step("Offline-Prüfung"):
         closed_ids = ignore_closed_listings(
-            jobs, MEMORY_FILE, successful_sources=complete_sources,
+            jobs,
+            MEMORY_FILE,
+            successful_sources=complete_sources,
             progress=print_availability_progress,
         )
 
     if closed_ids:
-        print(f"Nicht mehr verfügbar: {len(closed_ids)} Stelle(n) auf Nicht interessant gesetzt")
+        print(
+            f"Nicht mehr verfügbar: {len(closed_ids)} Stelle(n) auf Nicht interessant gesetzt"
+        )
     results = build_score_results(evaluated_jobs)
     print(
-        f'{memory_stats["inactive"]} neu inaktiv · '
-        f'{memory_stats["reactivated"]} reaktiviert'
+        f"{memory_stats['inactive']} neu inaktiv · "
+        f"{memory_stats['reactivated']} reaktiviert"
     )
-    with timed_step('Ergebnisdateien schreiben'):
+    with timed_step("Ergebnisdateien schreiben"):
         write_json_atomic(JOBS_FILE, [job.to_dict() for job in jobs])
         print(
             f"Vorfilter: {len(results['included'])} weiter · "
@@ -180,7 +190,7 @@ def run_pipeline(args):
         write_recommendations(results)
 
     print_phase(4, 4, "Ausgabe und Benachrichtigungen")
-    with timed_step('Benachrichtigungen'):
+    with timed_step("Benachrichtigungen"):
         notification_stats = process_notifications(
             results,
             send=args.notify,
@@ -194,10 +204,7 @@ def run_pipeline(args):
                 f"{notification_stats['failed']} fehlgeschlagen"
             )
         else:
-            print(
-                f"Discord: {notification_stats['ready']} bereit; "
-                "mit --notify senden"
-            )
+            print(f"Discord: {notification_stats['ready']} bereit; mit --notify senden")
 
         if args.notify:
             summary_error = send_run_summary(
@@ -221,6 +228,7 @@ def run_pipeline(args):
 
 
 def print_availability_progress(current, total):
+    """Print offline-check counts or explain that no URLs need checking."""
     if total:
         print_progress("Offline-URLs", current, total)
     else:
@@ -233,9 +241,7 @@ def print_review_diagnostics(results, memory_stats):
     new_excluded = sum(bool(job.get("is_new")) for job in results["excluded"])
     pending = sum(job.get("workflow_status") == "new" for job in results["included"])
     standard_new = sum(
-        job.get("workflow_status") == "new"
-        and not is_international_listing(job)
-        and not str(job.get("location_precheck") or "").startswith("Junior-Hybrid")
+        job.get("workflow_status") == "new" and is_visible_in_default_review(job)
         for job in results["included"]
     )
     print(
@@ -244,12 +250,20 @@ def print_review_diagnostics(results, memory_stats):
         f"{new_included} davon passend · "
         f"{new_excluded} davon ausgeschlossen\n"
         f"  Review Neu: {standard_new} im Standardfilter · "
-        f"{pending} unbearbeitet einschließlich Sonderfilter", flush=True,
+        f"{pending} unbearbeitet einschließlich Sonderfilter",
+        flush=True,
     )
 
 
 def collect_jobs(sources=None):
-    """Collect jobs from all configured sources and merge duplicates."""
+    """Return deduplicated jobs and coverage reports from selected sources.
+
+    Each adapter provides SOURCE_NAME and fetch_jobs(). Prefer the
+    optional fetch_jobs_with_report() when available; its result has
+    jobs, status and optional details. Catch source errors so other
+    sources can complete, and include handled partial failures in each
+    report. Reports expose name, status, job count and error details.
+    """
     jobs = []
     seen_urls = set()
     source_reports = []
@@ -265,23 +279,7 @@ def collect_jobs(sources=None):
         )
         reset_fetch_diagnostics()
         try:
-            report_fetcher = getattr(source, "fetch_jobs_with_report", None)
-            if report_fetcher is None:
-                source_jobs = source.fetch_jobs()
-                source_status = "success" if source_jobs else "empty"
-                report_details = {}
-            else:
-                source_result = report_fetcher()
-                source_jobs = source_result["jobs"]
-                source_status = source_result["status"]
-                report_details = source_result.get("details", {})
-            handled_failures = fetch_diagnostics()["failed_segments"]
-            if handled_failures and source_status != "partial":
-                source_status = "partial"
-                report_details = {
-                    **report_details,
-                    "failed_segments": handled_failures,
-                }
+            source_jobs, source_status, report_details = fetch_source_jobs(source)
         except Exception as error:
             source_reports.append(
                 {
@@ -310,7 +308,12 @@ def collect_jobs(sources=None):
             label,
             1,
             1,
-            f"{len(source_jobs)} Stellen" + (f" · Teilergebnis ({report_details.get('failed_segments', '?')} Segment(e) fehlgeschlagen)" if source_status == "partial" else ""),
+            f"{len(source_jobs)} Stellen"
+            + (
+                f" · Teilergebnis ({report_details.get('failed_segments', '?')} Segment(e) fehlgeschlagen)"
+                if source_status == "partial"
+                else ""
+            ),
         )
         for job in source_jobs:
             url = job.primary_url
@@ -323,8 +326,36 @@ def collect_jobs(sources=None):
     return deduplicate_jobs(jobs), source_reports
 
 
+def fetch_source_jobs(source):
+    """Apply the optional coverage report and include internally handled failures."""
+    report_fetcher = getattr(source, "fetch_jobs_with_report", None)
+    if report_fetcher is None:
+        source_jobs = source.fetch_jobs()
+        source_status = "success" if source_jobs else "empty"
+        report_details = {}
+    else:
+        source_result = report_fetcher()
+        source_jobs = source_result["jobs"]
+        source_status = source_result["status"]
+        report_details = source_result.get("details", {})
+    handled_failures = fetch_diagnostics()["failed_segments"]
+    if handled_failures and source_status != "partial":
+        source_status = "partial"
+        report_details = {
+            **report_details,
+            "failed_segments": handled_failures,
+        }
+    return source_jobs, source_status, report_details
+
+
 def enrich_candidate_jobs(jobs, candidate_ids, sources=None):
-    """Run the optional second detail step offered by individual sources."""
+    """Let selected adapters update the candidate list in place.
+
+    Each optional adapter hook receives jobs and candidate_ids and
+    returns a count of affected jobs. Hooks may replace job objects or
+    remove confirmed closed listings. Return the sum of hook counts;
+    unexpected hook errors propagate to stop the pipeline.
+    """
     enriched = 0
     for source in sources or SOURCES:
         enricher = getattr(source, "enrich_candidate_jobs", None)
@@ -337,10 +368,7 @@ def enrich_candidate_jobs(jobs, candidate_ids, sources=None):
 
 def print_source_summary(source_reports, total_jobs):
     """Print one source total plus exceptional source states."""
-    counts = {
-        status: sum(report["status"] == status for report in source_reports)
-        for status in ("success", "partial", "empty", "failed")
-    }
+    counts = Counter(report["status"] for report in source_reports)
     print(
         f"  Quellen: {counts['success']} vollständig · "
         f"{counts['partial']} teilweise · {counts['empty']} ohne Treffer · "
@@ -359,17 +387,11 @@ def build_run_summary(
     notification_stats=None,
 ):
     """Collect the reliable counts shown in Discord after one complete run."""
-    new_by_source = {}
-    for job in jobs:
-        if not job.is_new:
-            continue
-        for source in job.sources:
-            new_by_source[source.source] = new_by_source.get(source.source, 0) + 1
-
-    review_new = sum(
-        bool(job.get("is_new"))
-        for job in results["included"]
+    new_by_source = Counter(
+        source.source for job in jobs if job.is_new for source in job.sources
     )
+
+    review_new = sum(bool(job.get("is_new")) for job in results["included"])
     summary_sources = [
         {
             "label": source_label(report["name"]),
@@ -395,7 +417,9 @@ def build_run_summary(
 def source_error_label(error):
     """Describe a source failure without leaking request URLs or messages."""
     status_code = getattr(error, "code", None) or getattr(error, "status_code", None)
-    return f"HTTP {status_code}" if isinstance(status_code, int) else type(error).__name__
+    return (
+        f"HTTP {status_code}" if isinstance(status_code, int) else type(error).__name__
+    )
 
 
 def format_duration(duration_seconds):

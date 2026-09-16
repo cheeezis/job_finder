@@ -1,18 +1,19 @@
 """Local application history and derived workflow statistics."""
 
-import re
 from datetime import date, datetime, timedelta
 
 from job_finder.application_documents import public_documents
 from job_finder.memory import (
-    has_application_state as is_application,
-    load_memory,
     first_seen_date,
+    load_memory,
     memory_source_links,
+)
+from job_finder.memory import (
+    has_application_state as is_application,
 )
 from job_finder.models import APPLICATION_STATUSES, WorkflowStatus
 from job_finder.paths import MEMORY_FILE
-
+from job_finder.state_compat import legacy_salary_expectation
 
 OPEN_APPLICATION_STATUSES = {
     WorkflowStatus.APPLIED.value,
@@ -64,7 +65,9 @@ def record_status_change(
             history.append(
                 {
                     "status": previous_status,
-                    "occurred_on": first_seen_date(entry) if previous_status == "new" else None,
+                    "occurred_on": first_seen_date(entry)
+                    if previous_status == "new"
+                    else None,
                 }
             )
             history_changed = True
@@ -139,12 +142,7 @@ def update_history_event(
         previous_occurred_on,
         previous_scheduled_for,
     )
-    status = WorkflowStatus(workflow_status).value
-    event_date = validated_optional_date(occurred_on)
-    appointment = validated_scheduled_for(status, scheduled_for)
-    updated_event = {"status": status, "occurred_on": event_date}
-    if appointment is not None:
-        updated_event["scheduled_for"] = appointment
+    updated_event = history_event(workflow_status, occurred_on, scheduled_for)
     for other_index, other_event in enumerate(history):
         if other_index == index:
             continue
@@ -157,9 +155,9 @@ def update_history_event(
     current_status = synchronize_current_status(entry)
     return {
         "event_index": index,
-        "status": status,
-        "occurred_on": event_date,
-        "scheduled_for": appointment,
+        "status": updated_event["status"],
+        "occurred_on": updated_event["occurred_on"],
+        "scheduled_for": updated_event.get("scheduled_for"),
         "workflow_status": current_status,
     }
 
@@ -201,32 +199,21 @@ def editable_history_event(
     current_event = normalized_history_event(history[event_index])
     if current_event is None:
         raise ValueError("Verlaufsereignis ist ungültig")
-    expected_event = {
-        "status": WorkflowStatus(previous_status).value,
-        "occurred_on": validated_optional_date(previous_occurred_on),
-    }
-    appointment = validated_scheduled_for(
-        expected_event["status"],
+    expected_event = history_event(
+        previous_status,
+        previous_occurred_on,
         previous_scheduled_for,
     )
-    if appointment is not None:
-        expected_event["scheduled_for"] = appointment
     current_event.pop("reason", None)
     if current_event != expected_event:
-        raise ValueError(
-            "Verlauf wurde zwischenzeitlich geändert; Seite neu laden"
-        )
+        raise ValueError("Verlauf wurde zwischenzeitlich geändert; Seite neu laden")
     return history, event_index
 
 
 def synchronize_current_status(entry):
     """Use the chronologically latest valid event as current status."""
     history = valid_history(entry.get("workflow_history", []))
-    status = (
-        history[-1]["status"]
-        if history
-        else WorkflowStatus.NEW.value
-    )
+    status = history[-1]["status"] if history else WorkflowStatus.NEW.value
     entry["workflow_status"] = status
     return status
 
@@ -245,16 +232,13 @@ def application_row(job_id, entry, as_of=None):
         current_status == WorkflowStatus.APPLIED.value
         and applied_on is not None
         and not statuses.intersection(RESPONSE_STATUSES)
-        and date.fromisoformat(applied_on)
-        + timedelta(days=NO_RESPONSE_AFTER_DAYS)
+        and date.fromisoformat(applied_on) + timedelta(days=NO_RESPONSE_AFTER_DAYS)
         <= reference_date
     ):
         current_status = WorkflowStatus.NO_RESPONSE.value
     days_to_response = None
     if applied_on and response_on:
-        difference = date.fromisoformat(response_on) - date.fromisoformat(
-            applied_on
-        )
+        difference = date.fromisoformat(response_on) - date.fromisoformat(applied_on)
         if difference.days >= 0:
             days_to_response = difference.days
     source_links = memory_source_links(entry, validate_names=True)
@@ -309,13 +293,7 @@ def application_salary_expectation_eur(entry):
     value = entry.get("salary_expectation_eur")
     if isinstance(value, int) and not isinstance(value, bool) and value > 0:
         return value
-    legacy = entry.get("salary_expectation")
-    if not isinstance(legacy, str):
-        return None
-    match = re.search(r"\b(\d{2,3}(?:[.\s]\d{3})+|\d{4,7})\b", legacy)
-    if not match:
-        return None
-    return int(re.sub(r"\D", "", match.group(1)))
+    return legacy_salary_expectation(entry.get("salary_expectation"))
 
 
 def valid_history(history):
@@ -342,22 +320,28 @@ def normalized_history_event(event, event_index=None):
     if not isinstance(event, dict):
         return None
     try:
-        status = WorkflowStatus(event.get("status")).value
-        occurred_on = validated_optional_date(event.get("occurred_on"))
-        appointment = validated_scheduled_for(
-            status,
+        normalized = history_event(
+            event.get("status"),
+            event.get("occurred_on"),
             event.get("scheduled_for"),
         )
     except (TypeError, ValueError):
         return None
-    normalized = {"status": status, "occurred_on": occurred_on}
-    if appointment is not None:
-        normalized["scheduled_for"] = appointment
     if event.get("reason") == "listing_unavailable":
         normalized["reason"] = "listing_unavailable"
     if event_index is not None:
         normalized["event_index"] = event_index
     return normalized
+
+
+def history_event(workflow_status, occurred_on, scheduled_for=None):
+    """Build one validated event while preserving an unknown event date."""
+    status = WorkflowStatus(workflow_status).value
+    event = {"status": status, "occurred_on": validated_optional_date(occurred_on)}
+    appointment = validated_scheduled_for(status, scheduled_for)
+    if appointment is not None:
+        event["scheduled_for"] = appointment
+    return event
 
 
 def validated_optional_date(value):
@@ -401,8 +385,7 @@ def first_event_date(history, statuses):
     dates = [
         event["occurred_on"]
         for event in history
-        if event["status"] in statuses
-        and event["occurred_on"] is not None
+        if event["status"] in statuses and event["occurred_on"] is not None
     ]
     return min(dates, default=None)
 
@@ -429,8 +412,7 @@ def application_statistics(applications):
     ]
     responses = sum(item["has_response"] for item in applications)
     open_count = sum(
-        item["workflow_status"] in OPEN_APPLICATION_STATUSES
-        for item in applications
+        item["workflow_status"] in OPEN_APPLICATION_STATUSES for item in applications
     )
     completed = [
         item
@@ -445,20 +427,13 @@ def application_statistics(applications):
         "responses": responses,
         "interviews": sum(item["has_interview"] for item in applications),
         "rejections": sum(item["has_rejection"] for item in applications),
-        "no_responses": sum(
-            item["has_no_response"]
-            for item in applications
-        ),
+        "no_responses": sum(item["has_no_response"] for item in applications),
         "offers": sum(item["has_offer"] for item in applications),
         "response_rate_percent": (
-            round(completed_responses / len(completed) * 100)
-            if completed
-            else 0
+            round(completed_responses / len(completed) * 100) if completed else 0
         ),
         "average_response_days": (
-            round(sum(response_days) / len(response_days), 1)
-            if response_days
-            else None
+            round(sum(response_days) / len(response_days), 1) if response_days else None
         ),
         "response_time_samples": len(response_days),
     }

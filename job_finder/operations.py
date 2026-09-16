@@ -8,9 +8,8 @@ from contextlib import AbstractContextManager, contextmanager
 from datetime import datetime
 from pathlib import Path
 
-from job_finder.paths import BACKUP_DIR, LOG_DIR
 from job_finder.console import format_clock
-
+from job_finder.paths import BACKUP_DIR, LOG_DIR
 
 BACKUP_FILES_TO_KEEP = 7
 
@@ -26,15 +25,18 @@ class TeeStream:
         self.line_start = True
 
     def write(self, text):
+        """Write text to both streams, timestamping logs and nonterminal output."""
         if self.progress_active and text:
-            self.original.write(
-                "\r" + (" " * self.progress_width) + "\r"
-            )
+            self.original.write("\r" + (" " * self.progress_width) + "\r")
             self.progress_active = False
             self.progress_width = 0
         terminal = bool(getattr(self.original, "isatty", lambda: False)())
         for part in text.splitlines(keepends=True):
-            prefix = datetime.now().astimezone().isoformat(timespec="seconds") + " " if self.line_start and part.strip() else ""
+            prefix = (
+                datetime.now().astimezone().isoformat(timespec="seconds") + " "
+                if self.line_start and part.strip()
+                else ""
+            )
             self.original.write(part if terminal else prefix + part)
             self.log_file.write(prefix + part)
             self.line_start = part.endswith("\n")
@@ -44,9 +46,7 @@ class TeeStream:
 
     def write_progress(self, text, complete=False):
         """Update one terminal line while keeping logs free of redraws."""
-        is_terminal = bool(
-            getattr(self.original, "isatty", lambda: False)()
-        )
+        is_terminal = bool(getattr(self.original, "isatty", lambda: False)())
         if not is_terminal:
             self.write(f"{text}\n")
             return
@@ -59,11 +59,14 @@ class TeeStream:
         if complete:
             self.original.write("\n")
             self.original.flush()
-            self.log_file.write(f"{datetime.now().astimezone().isoformat(timespec='seconds')} {text}\n")
+            self.log_file.write(
+                f"{datetime.now().astimezone().isoformat(timespec='seconds')} {text}\n"
+            )
             self.log_file.flush()
             self.progress_width = 0
 
     def flush(self):
+        """Flush the original stream and log file together."""
         self.original.flush()
         self.log_file.flush()
 
@@ -98,7 +101,9 @@ class RunLog(AbstractContextManager):
     def __exit__(self, error_type, error, traceback):
         finished_at = datetime.now().astimezone()
         if error is None:
-            print(f"Lauf erfolgreich beendet · Gesamtdauer {format_clock(time.monotonic() - self.started_monotonic)}")
+            print(
+                f"Lauf erfolgreich beendet · Gesamtdauer {format_clock(time.monotonic() - self.started_monotonic)}"
+            )
         else:
             print(f"Lauf fehlgeschlagen: {type(error).__name__}: {error}")
             traceback_module.print_exception(error_type, error, traceback)
@@ -124,7 +129,7 @@ def create_backup(files, backup_dir=BACKUP_DIR, keep=BACKUP_FILES_TO_KEEP, now=N
             bundle.write(path, arcname=path.name)
 
     backups = sorted(directory.glob("state-*.zip"), reverse=True)
-    for old_backup in backups[max(keep, 1):]:
+    for old_backup in backups[max(keep, 1) :]:
         old_backup.unlink()
     return archive
 
@@ -144,4 +149,7 @@ def timed_step(label):
         completed = True
     finally:
         outcome = "fertig" if completed else "abgebrochen/fehlgeschlagen"
-        print(f"  {label}: {format_clock(time.monotonic() - started)} · {outcome}", flush=True)
+        print(
+            f"  {label}: {format_clock(time.monotonic() - started)} · {outcome}",
+            flush=True,
+        )

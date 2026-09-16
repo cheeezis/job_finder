@@ -7,7 +7,6 @@ can contain malformed escaping.
 
 import json
 import re
-from dataclasses import replace
 from html import unescape
 from pathlib import Path
 from urllib.parse import urlencode, urljoin
@@ -24,9 +23,10 @@ from job_finder.paths import GET_IN_IT_CACHE_FILE
 from job_finder.remote import classify_remote, detect_remote
 from job_finder.search_plan import iter_search_queries, unique_in_order
 from job_finder.sources.common import (
-    enrich_cached_candidates,
+    build_fetch_report,
     canonical_detail_url,
     detail_is_fresh,
+    enrich_cached_candidates,
     extract_annual_salary_eur,
     extract_schema_locations,
     load_detail_cache,
@@ -34,6 +34,7 @@ from job_finder.sources.common import (
     parse_published_date,
     source_job_id,
     utc_now,
+    with_current_summary,
 )
 from job_finder.structured_data import extract_json_ld_job_posting
 from job_finder.text import html_to_text
@@ -64,11 +65,7 @@ def fetch_jobs_with_report(cache_path=CACHE_FILE, now=None):
     """Return jobs plus coverage so partial searches never age out old jobs."""
     records, failed, total = collect_records(return_report=True)
     jobs = jobs_from_records(records, cache_path, now=now)
-    return {
-        "jobs": jobs,
-        "status": "partial" if failed else ("success" if jobs else "empty"),
-        "details": {"failed_segments": failed, "total_segments": total},
-    }
+    return build_fetch_report(jobs, failed, total)
 
 
 def jobs_from_records(records, cache_path=CACHE_FILE, now=None):
@@ -87,8 +84,7 @@ def jobs_from_records(records, cache_path=CACHE_FILE, now=None):
 
 def collect_records(*, return_report=False):
     """Collect unique lightweight records from all generated API searches."""
-    records = []
-    seen = set()
+    records = {}
     search_errors = 0
 
     searches = list(build_api_searches())
@@ -101,13 +97,12 @@ def collect_records(*, return_report=False):
 
         for record in results:
             identifier = str(record.get("id") or record.get("url") or "")
-            if not identifier or identifier in seen:
-                continue
-            seen.add(identifier)
-            records.append(record)
+            if identifier:
+                records.setdefault(identifier, record)
 
     if search_errors:
         print(f"WARNUNG get-in-IT: {search_errors} Suche(n) fehlgeschlagen")
+    records = list(records.values())
     result = (records, search_errors, len(searches))
     return result if return_report else records
 
@@ -145,28 +140,16 @@ def summary_job_from_record(record):
     )
 
 
-def with_current_summary(cached_job, summary):
-    """Refresh API fields while retaining a fresh cached detail description."""
-    current = replace(
-        cached_job,
-        id=summary.id,
-        title=summary.title or cached_job.title,
-        company=summary.company or cached_job.company,
-        locations=(
-            summary.locations
-            if summary.locations != ["unbekannt"]
-            else cached_job.locations
-        ),
-        sources=summary.sources,
-    )
-    return current
-
-
 def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE, now=None):
     """Fetch details only for prefiltered candidates without a fresh cache."""
     return enrich_cached_candidates(
-        jobs, candidate_ids, cache_path, SOURCE_NAME, "get-in-IT",
-        lambda job, url: fetch_job(url), now=now,
+        jobs,
+        candidate_ids,
+        cache_path,
+        SOURCE_NAME,
+        "get-in-IT",
+        lambda job, url: fetch_job(url),
+        now=now,
     )
 
 
@@ -193,6 +176,7 @@ def build_api_searches():
 
 
 def priority_ids_for_term(term):
+    """Map a search term to unique thematic priority IDs in rule order."""
     normalized = term.lower()
     priority_ids = []
 
@@ -204,6 +188,13 @@ def priority_ids_for_term(term):
 
 
 def search_api(priority_id, location):
+    """Fetch all result pages for a thematic priority and location mode.
+
+    Remote mode uses the API's home-office flag; other locations use
+    the Hessen state filter. The requested city is not sent as a radius
+    search. Return unique raw result dictionaries; fetch errors
+    propagate to the calling search collector.
+    """
     results = []
     seen_ids = set()
     start = 0
@@ -238,7 +229,7 @@ def search_api(priority_id, location):
             results.append(job)
 
         total = int(data.get("total", 0) or 0)
-        if not page_results or not new_results or len(results) >= total:
+        if not new_results or len(results) >= total:
             return results
 
         start += len(page_results)
@@ -289,6 +280,7 @@ def fetch_job(url):
 
 
 def extract_next_data(html):
+    """Parse embedded Next.js JSON or raise ValueError when it is absent."""
     match = re.search(
         r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>',
         html,
@@ -316,10 +308,7 @@ def extract_job_posting_from_next_data(html):
     """Build a JobPosting-like dict from Next.js state when JSON-LD fails."""
     next_data = extract_next_data(html)
     job = (
-        next_data.get("props", {})
-        .get("initialState", {})
-        .get("jobJob", {})
-        .get("job")
+        next_data.get("props", {}).get("initialState", {}).get("jobJob", {}).get("job")
     )
     if not job:
         return None
@@ -346,6 +335,7 @@ def extract_job_posting_from_next_data(html):
 
 
 def build_locations(locations):
+    """Wrap location labels in schema.org Place and PostalAddress objects."""
     return [
         {
             "@type": "Place",
@@ -358,7 +348,9 @@ def build_locations(locations):
         for location in locations
     ]
 
+
 def clean_company(company):
+    """Collapse whitespace in an employer name for consistent display."""
     return re.sub(r"\s+", " ", company).strip()
 
 
@@ -393,8 +385,4 @@ def extract_career_levels(description):
     )
     if not match:
         return []
-    return [
-        value.strip()
-        for value in match.group(1).split(";")
-        if value.strip()
-    ]
+    return [value.strip() for value in match.group(1).split(";") if value.strip()]

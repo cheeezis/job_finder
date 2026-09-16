@@ -19,8 +19,8 @@ from run_finder import (
     format_duration,
     print_source_summary,
     run_pipeline,
-    source_snapshot_is_usable,
     source_error_label,
+    source_snapshot_is_usable,
 )
 
 
@@ -30,7 +30,9 @@ def make_job(job_id):
         title="Junior Developer",
         company="Example GmbH",
         locations=["Fulda"],
-        sources=[JobSource(source=job_id.split(":")[0], url=f"https://example.test/{job_id}")],
+        sources=[
+            JobSource(source=job_id.split(":")[0], url=f"https://example.test/{job_id}")
+        ],
         description_raw="Python",
         description_clean="Python",
     )
@@ -72,13 +74,21 @@ class RunFinderTests(unittest.TestCase):
                 patch("run_finder.MEMORY_FILE", Path(directory) / "state.sqlite3"),
                 patch("run_finder.create_backup"),
                 patch("run_finder.SOURCES", [source]),
-                patch("run_finder.collect_jobs", return_value=(
-                    [job], [{"name": "arbeitnow", "status": "success", "jobs": 1}]
-                )),
+                patch(
+                    "run_finder.collect_jobs",
+                    return_value=(
+                        [job],
+                        [{"name": "arbeitnow", "status": "success", "jobs": 1}],
+                    ),
+                ),
                 patch("run_finder.write_recommendations") as recommendations,
-                patch("run_finder.process_notifications", return_value={
-                    "ready": 0, "configuration_error": None,
-                }),
+                patch(
+                    "run_finder.process_notifications",
+                    return_value={
+                        "ready": 0,
+                        "configuration_error": None,
+                    },
+                ),
                 redirect_stdout(io.StringIO()),
             ):
                 run_pipeline(SimpleNamespace(notify=False))
@@ -95,11 +105,17 @@ class RunFinderTests(unittest.TestCase):
         job = make_job("source:1")
         with (
             patch("run_finder.create_backup"),
-            patch("run_finder.collect_jobs", return_value=(
-                [job], [{"name": "source", "status": "success", "jobs": 1}]
-            )),
+            patch(
+                "run_finder.collect_jobs",
+                return_value=(
+                    [job],
+                    [{"name": "source", "status": "success", "jobs": 1}],
+                ),
+            ),
             patch("run_finder.enrich_candidate_jobs"),
-            patch("run_finder.evaluate_jobs", side_effect=ValueError("invalid details")),
+            patch(
+                "run_finder.evaluate_jobs", side_effect=ValueError("invalid details")
+            ),
             patch("run_finder.edit_memory") as memory,
             patch("run_finder.write_json_atomic") as output,
             self.assertRaises(ValueError),
@@ -118,7 +134,10 @@ class RunFinderTests(unittest.TestCase):
         ]
         with (
             patch("run_finder.create_backup"),
-            patch("run_finder.collect_jobs", return_value=([make_job("working:1")], reports)),
+            patch(
+                "run_finder.collect_jobs",
+                return_value=([make_job("working:1")], reports),
+            ),
             patch("run_finder.edit_memory") as edit_memory,
             patch("run_finder.write_json_atomic") as write_jobs,
             patch("run_finder.write_recommendations") as write_recommendations,
@@ -165,15 +184,22 @@ class RunFinderTests(unittest.TestCase):
         )
 
     def test_failed_source_does_not_stop_following_sources(self):
-        failing = SimpleNamespace(SOURCE_NAME="broken", fetch_jobs=lambda: (_ for _ in ()).throw(RuntimeError("kaputt")))
-        working = SimpleNamespace(SOURCE_NAME="working", fetch_jobs=lambda: [make_job("working:1")])
+        failing = SimpleNamespace(
+            SOURCE_NAME="broken",
+            fetch_jobs=lambda: (_ for _ in ()).throw(RuntimeError("kaputt")),
+        )
+        working = SimpleNamespace(
+            SOURCE_NAME="working", fetch_jobs=lambda: [make_job("working:1")]
+        )
         jobs, reports = collect_jobs([failing, working])
         self.assertEqual([job.id for job in jobs], ["working:1"])
         self.assertEqual(reports[0]["error"], "RuntimeError")
         self.assertEqual(reports[1]["status"], "success")
 
     def test_empty_source_is_reported_as_a_complete_empty_snapshot(self):
-        jobs, reports = collect_jobs([SimpleNamespace(SOURCE_NAME="empty", fetch_jobs=lambda: [])])
+        jobs, reports = collect_jobs(
+            [SimpleNamespace(SOURCE_NAME="empty", fetch_jobs=lambda: [])]
+        )
         self.assertEqual(jobs, [])
         self.assertEqual(reports, [{"name": "empty", "status": "empty", "jobs": 0}])
 
@@ -199,7 +225,10 @@ class RunFinderTests(unittest.TestCase):
         summary = build_run_summary(
             duration_seconds=125.4,
             jobs=[job],
-            results={"included": [{"is_new": True}, {"is_new": False}], "excluded": [{}]},
+            results={
+                "included": [{"is_new": True}, {"is_new": False}],
+                "excluded": [{}],
+            },
             memory_stats={"new": 1, "known": 0},
             source_reports=[
                 {"name": "working", "status": "success", "jobs": 1},
@@ -214,8 +243,12 @@ class RunFinderTests(unittest.TestCase):
         self.assertEqual(format_duration(5), "5 Sek.")
 
     def test_canonical_url_keeps_jumo_job_offer_id(self):
-        first = canonical_url("https://jobs.jumo.de/engage/jobexchange/showJobOfferDetail.do?jobOfferId=first&j=jobexchange")
-        second = canonical_url("https://jobs.jumo.de/engage/jobexchange/showJobOfferDetail.do?jobOfferId=second&j=jobexchange")
+        first = canonical_url(
+            "https://jobs.jumo.de/engage/jobexchange/showJobOfferDetail.do?jobOfferId=first&j=jobexchange"
+        )
+        second = canonical_url(
+            "https://jobs.jumo.de/engage/jobexchange/showJobOfferDetail.do?jobOfferId=second&j=jobexchange"
+        )
         self.assertNotEqual(first, second)
 
     def test_source_error_label_uses_http_status_without_printing_urls(self):

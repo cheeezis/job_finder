@@ -2,8 +2,8 @@
 
 import io
 import unittest
-from unittest.mock import patch
 from contextlib import redirect_stdout
+from unittest.mock import patch
 
 from job_finder.console import (
     print_phase,
@@ -75,10 +75,12 @@ class ConsoleProgressTests(unittest.TestCase):
         self.assertRegex(terminal.getvalue(), r"\r +\rWARNUNG\n")
         self.assertTrue(log.getvalue().endswith(" WARNUNG\n"))
 
-
     def test_nonterminal_progress_is_throttled_but_completion_is_always_printed(self):
         output = io.StringIO()
-        with redirect_stdout(output), patch("job_finder.console.time.monotonic", return_value=100):
+        with (
+            redirect_stdout(output),
+            patch("job_finder.console.time.monotonic", return_value=100),
+        ):
             print_progress("Synthetic", 0, 100)
             for count in range(1, 100):
                 print_progress("Synthetic", count, 100)

@@ -7,15 +7,14 @@ from urllib.parse import urlencode
 from job_finder.http import fetch_json
 from job_finder.models import Job, JobSource, WorkMode
 from job_finder.sources.common import (
-    numeric_salary,
     integer,
     normalize_employment_type,
+    numeric_salary,
     parse_published_date,
     source_job_id,
     utc_now,
 )
 from job_finder.text import html_to_text
-
 
 SOURCE_NAME = "himalayas"
 API_URL = "https://himalayas.app/jobs/api/search"
@@ -44,8 +43,7 @@ def fetch_jobs():
 
 def collect_records(search_terms=SEARCH_TERMS):
     """Fetch bounded filtered searches and remove cross-query duplicates."""
-    records = []
-    seen = set()
+    records = {}
     first_request = True
 
     for search_term in search_terms:
@@ -57,15 +55,13 @@ def collect_records(search_terms=SEARCH_TERMS):
             page_records = payload.get("jobs") or []
             for record in page_records:
                 identifier = record_identifier(record)
-                if not identifier or identifier in seen:
-                    continue
-                seen.add(identifier)
-                records.append(record)
+                if identifier:
+                    records.setdefault(identifier, record)
 
             if page_is_complete(payload, page_records):
                 break
 
-    return records
+    return list(records.values())
 
 
 def build_search_url(search_term, page=1):
@@ -112,7 +108,9 @@ def job_from_record(record):
         title=title,
         company=company,
         locations=locations,
-        sources=[JobSource(source=SOURCE_NAME, source_id=record_identifier(record), url=url)],
+        sources=[
+            JobSource(source=SOURCE_NAME, source_id=record_identifier(record), url=url)
+        ],
         description_raw=raw_description,
         description_clean=html_to_text(raw_description),
         work_mode=WorkMode.REMOTE,
@@ -146,7 +144,9 @@ def annual_salary_eur(record):
         return None, None
     if str(record.get("salaryPeriod") or "annual").casefold() != "annual":
         return None, None
-    return numeric_salary(record.get("minSalary")), numeric_salary(record.get("maxSalary"))
+    return numeric_salary(record.get("minSalary")), numeric_salary(
+        record.get("maxSalary")
+    )
 
 
 def parse_api_date(value):

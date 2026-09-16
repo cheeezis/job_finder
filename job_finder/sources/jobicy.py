@@ -6,15 +6,14 @@ from urllib.parse import urlencode
 from job_finder.http import fetch_json
 from job_finder.models import Job, JobSource, WorkMode
 from job_finder.sources.common import (
-    numeric_salary,
     normalize_employment_type,
+    numeric_salary,
     parse_published_date,
     remote_region_allows_germany,
     source_job_id,
     utc_now,
 )
 from job_finder.text import html_to_text
-
 
 SOURCE_NAME = "jobicy"
 API_URL = "https://jobicy.com/api/v2/remote-jobs"
@@ -41,8 +40,7 @@ def fetch_jobs():
 
 def collect_records(scopes=SEARCH_SCOPES):
     """Fetch a bounded set of official feeds and remove their overlaps."""
-    records = []
-    seen = set()
+    records = {}
 
     for index, scope in enumerate(scopes):
         if index:
@@ -50,12 +48,10 @@ def collect_records(scopes=SEARCH_SCOPES):
         payload = fetch_json(build_search_url(scope))
         for record in payload.get("jobs") or []:
             identifier = record_identifier(record)
-            if not identifier or identifier in seen:
-                continue
-            seen.add(identifier)
-            records.append(record)
+            if identifier:
+                records.setdefault(identifier, record)
 
-    return records
+    return list(records.values())
 
 
 def build_search_url(scope):
@@ -128,4 +124,6 @@ def annual_salary_eur(record):
     period = str(record.get("salaryPeriod") or "").casefold()
     if period not in {"annual", "year", "yearly"}:
         return None, None
-    return numeric_salary(record.get("salaryMin")), numeric_salary(record.get("salaryMax"))
+    return numeric_salary(record.get("salaryMin")), numeric_salary(
+        record.get("salaryMax")
+    )

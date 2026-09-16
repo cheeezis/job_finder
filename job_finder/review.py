@@ -15,21 +15,15 @@ from urllib.parse import parse_qs, quote, urlsplit
 from job_finder.application_documents import (
     document_path,
     find_document,
-    remove_documents,
-    store_documents,
 )
-
 from job_finder.applications import (
-    delete_history_event,
-    is_application,
     load_application_overview,
-    record_status_change,
-    synchronize_current_status,
-    update_history_event,
 )
 from job_finder.config import LOCAL_SEARCH_LOCATION, LOCAL_SEARCH_POSTAL_CODE
 from job_finder.manual_import import import_manual_url
-from job_finder.memory import edit_memory, load_memory, memory_source_links, preferred_memory_id
+from job_finder.memory import (
+    load_memory,
+)
 from job_finder.models import WorkflowStatus
 from job_finder.paths import (
     APPLICATION_DOCUMENTS_DIR,
@@ -38,330 +32,57 @@ from job_finder.paths import (
     MEMORY_FILE,
     RECOMMENDATIONS_JSON,
 )
-from job_finder.reporting import is_international_listing
-
+from job_finder.review_actions import (
+    delete_workflow_history as delete_workflow_history,
+)
+from job_finder.review_actions import (
+    start_application as start_application,
+)
+from job_finder.review_actions import (
+    undo_ignored_decision as undo_ignored_decision,
+)
+from job_finder.review_actions import (
+    update_application_salary as update_application_salary,
+)
+from job_finder.review_actions import (
+    update_review_decision as update_review_decision,
+)
+from job_finder.review_actions import (
+    update_workflow_history as update_workflow_history,
+)
+from job_finder.review_actions import (
+    update_workflow_status as update_workflow_status,
+)
+from job_finder.review_actions import (
+    validated_salary_expectation_eur as validated_salary_expectation_eur,
+)
+from job_finder.review_data import (
+    PERSISTED_REVIEW_STATUSES as PERSISTED_REVIEW_STATUSES,
+)
+from job_finder.review_data import (
+    load_review_jobs as load_review_jobs,
+)
+from job_finder.review_data import (
+    memory_entry_for_job as memory_entry_for_job,
+)
+from job_finder.review_data import (
+    memory_ids_for_job as memory_ids_for_job,
+)
+from job_finder.review_data import (
+    remembered_review_job as remembered_review_job,
+)
 
 LANDING_PAGE = Path(__file__).with_name("landing.html")
 REVIEW_PAGE = Path(__file__).with_name("review.html")
 APPLICATIONS_PAGE = Path(__file__).with_name("applications.html")
 APP_STYLES = Path(__file__).with_name("app.css")
 APP_SCRIPT = Path(__file__).with_name("app.js")
+LANDING_SCRIPT = Path(__file__).with_name("landing.js")
+REVIEW_SCRIPT = Path(__file__).with_name("review.js")
+APPLICATIONS_SCRIPT = Path(__file__).with_name("applications.js")
 ROUTE_ORIGIN = f"{LOCAL_SEARCH_POSTAL_CODE} {LOCAL_SEARCH_LOCATION}".strip()
 MAX_REQUEST_BYTES = 45 * 1024 * 1024
 LOCAL_HOST_PATTERN = re.compile(r"^(?:127\.0\.0\.1|localhost)(?::\d{1,5})?$")
-PERSISTED_REVIEW_STATUSES = {
-    WorkflowStatus.INTERESTING.value,
-    WorkflowStatus.INQUIRY.value,
-}
-
-
-def load_review_jobs(
-    recommendations_path=RECOMMENDATIONS_JSON,
-    memory_path=MEMORY_FILE,
-):
-    """Combine compact review jobs with their persisted workflow status."""
-    path = Path(recommendations_path)
-    document = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
-    recommendations = document.get("recommendations", [])
-    memory = load_memory(memory_path)
-    review_jobs = []
-    represented_memory_ids = set()
-    for recommendation in recommendations:
-        job = dict(recommendation)
-        job["international"] = bool(job.get("international")) or is_international_listing(job)
-        represented_memory_ids.update(memory_ids_for_job(job, memory))
-        memory_id, entry = memory_entry_for_job(job, memory)
-        job["id"] = memory_id
-        job["workflow_status"] = entry.get(
-            "workflow_status",
-            WorkflowStatus.NEW.value,
-        )
-        # ``is_new`` describes the collection run, while a persisted workflow
-        # status records that the user has already decided on the job. Never
-        # resurrect that transient run marker after the review page reloads.
-        job["is_new"] = bool(job.get("is_new")) and (
-            job["workflow_status"] == WorkflowStatus.NEW.value
-        )
-        job["application_tracked"] = is_application(entry)
-        if not job.get("source_links"):
-            job["source_links"] = memory_source_links(entry)
-        review_jobs.append(job)
-
-    for job_id, entry in memory.items():
-        if (
-            job_id in represented_memory_ids
-            or not (entry.get("workflow_status") in PERSISTED_REVIEW_STATUSES
-                    or (entry.get("workflow_status") == "ignored"
-                        and entry.get("availability_checked_at")))
-        ):
-            continue
-        review_jobs.append(remembered_review_job(job_id, entry))
-    return review_jobs
-
-
-def remembered_review_job(job_id, entry):
-    """Keep a manual shortlist entry until the user changes its status."""
-    source_links = memory_source_links(entry)
-    if entry.get("availability_checked_at") and entry.get("workflow_status") == "ignored":
-        availability_warning = "Anzeige nicht mehr verfügbar; automatisch auf Nicht interessant gesetzt."
-    elif entry.get("active", True):
-        availability_warning = (
-            "Im aktuellen Lauf nicht gefunden; Verfügbarkeit bitte über die "
-            "Anzeige prüfen."
-        )
-    else:
-        availability_warning = (
-            "Seit mehreren vollständigen Läufen nicht gefunden; die Stelle ist "
-            "möglicherweise nicht mehr verfügbar."
-        )
-    job = {
-        "id": job_id,
-        "title": entry.get("title", "Unbekannte Stelle"),
-        "company": entry.get("company", "Unbekanntes Unternehmen"),
-        "locations": list(entry.get("locations") or []),
-        "source_links": source_links,
-        "url": source_links[0]["url"] if source_links else "",
-        "workflow_status": entry["workflow_status"],
-        "is_new": False,
-        "application_tracked": is_application(entry),
-        "current_snapshot_missing": True,
-        "prefilter_warning": availability_warning,
-    }
-    job["international"] = is_international_listing(job)
-    return job
-
-
-def memory_entry_for_job(job, memory):
-    """Resolve stale recommendation IDs through an exact known source URL."""
-    candidates = memory_ids_for_job(job, memory)
-    if not candidates:
-        return job["id"], {}
-    memory_id = preferred_memory_id(candidates, memory, job["id"])
-    return memory_id, memory[memory_id]
-
-
-def memory_ids_for_job(job, memory):
-    """Return every memory row represented by one merged recommendation."""
-    job_id = job["id"]
-    urls = {
-        link.get("url")
-        for link in job.get("source_links", [])
-        if isinstance(link, dict) and link.get("url")
-    }
-    if job.get("url"):
-        urls.add(job["url"])
-    return [
-        memory_id
-        for memory_id, entry in memory.items()
-        if memory_id == job_id
-        or urls.intersection(entry.get("source_urls", []))
-    ]
-
-
-def update_workflow_status(
-    job_id,
-    workflow_status,
-    memory_path=MEMORY_FILE,
-    occurred_on=None,
-    scheduled_for=None,
-):
-    """Validate and persist one manual workflow decision."""
-    status = WorkflowStatus(workflow_status)
-    with edit_memory(memory_path) as memory:
-        if job_id not in memory:
-            raise KeyError(f"Unbekannte Job-ID: {job_id}")
-        current_status = record_status_change(
-            memory[job_id], status, occurred_on, scheduled_for
-        )
-    return current_status
-
-
-def update_review_decision(
-    job_id,
-    workflow_status,
-    memory_path=MEMORY_FILE,
-):
-    """Persist a review decision without changing an existing application."""
-    status = WorkflowStatus(workflow_status)
-    if status not in {
-        WorkflowStatus.INTERESTING,
-        WorkflowStatus.INQUIRY,
-        WorkflowStatus.IGNORED,
-    }:
-        raise ValueError("Ungueltiger Review-Status")
-    with edit_memory(memory_path) as memory:
-        if job_id not in memory:
-            raise KeyError(f"Unbekannte Job-ID: {job_id}")
-        entry = memory[job_id]
-        if is_application(entry):
-            return {
-                "workflow_status": entry.get(
-                    "workflow_status", WorkflowStatus.APPLIED.value
-                ),
-                "application_tracked": True,
-            }
-        current_status = record_status_change(entry, status)
-    return {
-        "workflow_status": current_status,
-        "application_tracked": False,
-    }
-
-
-def undo_ignored_decision(
-    job_id,
-    expected_status,
-    memory_path=MEMORY_FILE,
-):
-    """Remove the latest ignored transition and restore its prior status."""
-    with edit_memory(memory_path) as memory:
-        if job_id not in memory:
-            raise KeyError(f"Unbekannte Job-ID: {job_id}")
-        entry = memory[job_id]
-        if is_application(entry):
-            raise ValueError("Bewerbungsstatus kann hier nicht rückgängig gemacht werden")
-        if entry.get("workflow_status") != WorkflowStatus(expected_status).value:
-            raise ValueError("Die Stelle wurde zwischenzeitlich geändert")
-        if expected_status != WorkflowStatus.IGNORED.value:
-            raise ValueError("Nur die letzte Nicht-interessant-Entscheidung ist rückgängig")
-        history = entry.get("workflow_history")
-        if not isinstance(history, list) or not history:
-            raise ValueError("Keine Entscheidung zum Rückgängigmachen gefunden")
-        last_event = history[-1]
-        if not isinstance(last_event, dict) or last_event.get("status") != expected_status:
-            raise ValueError("Die letzte Entscheidung hat sich zwischenzeitlich geändert")
-        history.pop()
-        status = synchronize_current_status(entry)
-    return {
-        "workflow_status": status,
-        "application_tracked": False,
-    }
-
-
-def start_application(
-    job_id,
-    memory_path=MEMORY_FILE,
-    documents=None,
-    documents_dir=APPLICATION_DOCUMENTS_DIR,
-    salary_expectation_eur=None,
-    salary_period="year",
-):
-    """Record the first application without overwriting later progress."""
-    stored_documents = []
-    try:
-        with edit_memory(memory_path) as memory:
-            if job_id not in memory:
-                raise KeyError(f"Unbekannte Job-ID: {job_id}")
-            entry = memory[job_id]
-            if is_application(entry):
-                return {
-                    "workflow_status": entry.get(
-                        "workflow_status", WorkflowStatus.APPLIED.value
-                    ),
-                    "application_tracked": True,
-                }
-            salary_eur = validated_salary_expectation_eur(salary_expectation_eur, salary_period)
-            stored_documents = store_documents(
-                job_id,
-                documents,
-                documents_dir,
-                company=entry.get("company", ""),
-                title=entry.get("title", ""),
-            )
-            if stored_documents:
-                entry["application_documents"] = stored_documents
-            if salary_eur is not None:
-                entry["salary_expectation_eur"] = salary_eur
-                entry.pop("salary_expectation", None)
-            status = record_status_change(entry, WorkflowStatus.APPLIED)
-    except Exception:
-        # Files are created before the database commit and must not survive a
-        # failed transaction as unreferenced application documents.
-        remove_documents(job_id, stored_documents, documents_dir)
-        raise
-    return {
-        "workflow_status": status,
-        "application_tracked": True,
-    }
-
-
-def validated_salary_expectation_eur(value, period="year"):
-    """Return one optional positive annual gross salary in whole euros."""
-    if period not in {"year", "month"}:
-        raise ValueError("Gehaltszeitraum muss Jahr oder Monat sein")
-    if value is None or value == "":
-        return None
-    if isinstance(value, bool):
-        raise ValueError("Gehaltsvorstellung muss eine ganze Zahl sein")
-    if isinstance(value, str):
-        normalized = value.strip()
-        if not normalized.isdecimal():
-            raise ValueError("Gehaltsvorstellung muss eine ganze Zahl sein")
-        salary = int(normalized)
-    elif isinstance(value, int):
-        salary = value
-    else:
-        raise ValueError("Gehaltsvorstellung muss eine ganze Zahl sein")
-    if period == "month":
-        salary *= 12
-    if salary <= 0 or salary > 10_000_000:
-        raise ValueError("Gehaltsvorstellung liegt außerhalb des gültigen Bereichs")
-    return salary
-
-
-def update_application_salary(job_id, value, period="year", memory_path=MEMORY_FILE):
-    """Change the salary without changing application status or history."""
-    salary = validated_salary_expectation_eur(value, period)
-    with edit_memory(memory_path) as memory:
-        entry = memory[job_id]
-        if not is_application(entry):
-            raise ValueError("Für diese Stelle ist noch keine Bewerbung gespeichert")
-        if salary is None:
-            entry.pop("salary_expectation_eur", None)
-        else:
-            entry["salary_expectation_eur"] = salary
-        entry.pop("salary_expectation", None)
-    return {"salary_expectation_eur": salary}
-
-
-def update_workflow_history(
-    job_id,
-    event_index,
-    previous_status,
-    previous_occurred_on,
-    workflow_status,
-    occurred_on,
-    memory_path=MEMORY_FILE,
-    scheduled_for=None,
-    previous_scheduled_for=None,
-):
-    """Edit one manual workflow event."""
-    with edit_memory(memory_path) as memory:
-        if job_id not in memory:
-            raise KeyError(f"Unbekannte Job-ID: {job_id}")
-        result = update_history_event(
-            memory[job_id], event_index, previous_status, previous_occurred_on,
-            workflow_status, occurred_on, scheduled_for, previous_scheduled_for,
-        )
-    return result
-
-
-def delete_workflow_history(
-    job_id,
-    event_index,
-    previous_status,
-    previous_occurred_on,
-    memory_path=MEMORY_FILE,
-    previous_scheduled_for=None,
-):
-    """Delete one manual workflow event."""
-    with edit_memory(memory_path) as memory:
-        if job_id not in memory:
-            raise KeyError(f"Unbekannte Job-ID: {job_id}")
-        status = delete_history_event(
-            memory[job_id], event_index, previous_status, previous_occurred_on,
-            previous_scheduled_for,
-        )
-    return {"workflow_status": status}
 
 
 class LocalReviewServer(HTTPServer):
@@ -370,6 +91,7 @@ class LocalReviewServer(HTTPServer):
     allow_reuse_address = False
 
     def server_bind(self):
+        """Bind the server with exclusive address use when the platform supports it."""
         if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
             self.socket.setsockopt(
                 socket.SOL_SOCKET,
@@ -393,6 +115,9 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
     applications_page_path = APPLICATIONS_PAGE
     styles_path = APP_STYLES
     script_path = APP_SCRIPT
+    landing_script_path = LANDING_SCRIPT
+    review_script_path = REVIEW_SCRIPT
+    applications_script_path = APPLICATIONS_SCRIPT
 
     def do_GET(self):
         """Return the page or the current joined recommendation data."""
@@ -414,8 +139,14 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
         if request_path == "/app.css":
             self.send_file(self.styles_path, "text/css; charset=utf-8")
             return
-        if request_path == "/app.js":
-            self.send_file(self.script_path, "text/javascript; charset=utf-8")
+        scripts = {
+            "/app.js": self.script_path,
+            "/landing.js": self.landing_script_path,
+            "/review.js": self.review_script_path,
+            "/applications.js": self.applications_script_path,
+        }
+        if request_path in scripts:
+            self.send_file(scripts[request_path], "text/javascript; charset=utf-8")
             return
         if request_path == "/api/recommendations":
             self.send_json(
@@ -438,20 +169,21 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
         self.send_error(404)
 
     def do_POST(self):
-        """Persist a workflow status selected in the browser."""
+        """Validate a local JSON request and dispatch its application action."""
         if not self.accept_local_request(require_json=True):
             return
-        request_path = urlsplit(self.path).path
-        if request_path not in {
-            "/api/status",
-            "/api/applications",
-            "/api/application-salary",
-            "/api/review-status",
-            "/api/review-undo",
-            "/api/history",
-            "/api/history/delete",
-            "/api/manual-import",
-        }:
+        actions = {
+            "/api/manual-import": self._import_manual,
+            "/api/applications": self._start_application,
+            "/api/application-salary": self._update_salary,
+            "/api/review-status": self._review_status,
+            "/api/review-undo": self._undo_review,
+            "/api/status": self._update_status,
+            "/api/history": self._update_history,
+            "/api/history/delete": self._delete_history,
+        }
+        action = actions.get(urlsplit(self.path).path)
+        if action is None:
             self.send_error(404)
             return
         try:
@@ -459,88 +191,91 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
             if length <= 0 or length > MAX_REQUEST_BYTES:
                 raise ValueError("Anfrage ist leer oder zu groß")
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-            if request_path == "/api/manual-import":
-                result = type(self).manual_importer(
-                    payload.get("url"),
-                    cache_path=self.manual_cache_path,
-                    jobs_path=self.jobs_path,
-                    memory_path=self.memory_path,
-                    recommendations_path=self.recommendations_path,
-                )
-            elif request_path == "/api/applications":
-                result = start_application(
-                    payload["job_id"],
-                    self.memory_path,
-                    payload.get("documents"),
-                    self.application_documents_dir,
-                    salary_expectation_eur=payload.get(
-                        "salary_expectation_eur",
-                        payload.get("salary_expectation"),
-                    ),
-                    salary_period=payload.get("salary_period", "year"),
-                )
-            elif request_path == "/api/application-salary":
-                result = update_application_salary(
-                    payload["job_id"], payload.get("salary_expectation_eur"),
-                    payload.get("salary_period", "year"), self.memory_path,
-                )
-            elif request_path == "/api/review-status":
-                result = update_review_decision(
-                    payload["job_id"],
-                    payload["workflow_status"],
-                    self.memory_path,
-                )
-            elif request_path == "/api/review-undo":
-                result = undo_ignored_decision(
-                    payload["job_id"],
-                    payload["expected_status"],
-                    self.memory_path,
-                )
-            elif request_path == "/api/status":
-                result = {
-                    "workflow_status": update_workflow_status(
-                        payload["job_id"],
-                        payload["workflow_status"],
-                        self.memory_path,
-                        payload.get("occurred_on"),
-                        payload.get("scheduled_for"),
-                    )
-                }
-            elif request_path == "/api/history":
-                result = update_workflow_history(
-                    payload["job_id"],
-                    payload["event_index"],
-                    payload["previous_status"],
-                    payload.get("previous_occurred_on"),
-                    payload["workflow_status"],
-                    payload.get("occurred_on"),
-                    self.memory_path,
-                    scheduled_for=payload.get("scheduled_for"),
-                    previous_scheduled_for=payload.get(
-                        "previous_scheduled_for"
-                    ),
-                )
-            else:
-                result = delete_workflow_history(
-                    payload["job_id"],
-                    payload["event_index"],
-                    payload["previous_status"],
-                    payload.get("previous_occurred_on"),
-                    self.memory_path,
-                    previous_scheduled_for=payload.get(
-                        "previous_scheduled_for"
-                    ),
-                )
-        except (
-            TypeError,
-            ValueError,
-            KeyError,
-            OSError,
-            RuntimeError,
-        ) as error:
+            if not isinstance(payload, dict):
+                raise ValueError("JSON-Objekt erforderlich")
+            result = action(payload)
+        except (TypeError, ValueError, KeyError, OSError, RuntimeError) as error:
             self.send_json({"error": str(error)}, status=400)
             return
         self.send_json(result)
+
+    def _import_manual(self, payload):
+        return type(self).manual_importer(
+            payload.get("url"),
+            cache_path=self.manual_cache_path,
+            jobs_path=self.jobs_path,
+            memory_path=self.memory_path,
+            recommendations_path=self.recommendations_path,
+        )
+
+    def _start_application(self, payload):
+        return start_application(
+            payload["job_id"],
+            self.memory_path,
+            payload.get("documents"),
+            self.application_documents_dir,
+            salary_expectation_eur=payload.get(
+                "salary_expectation_eur",
+                payload.get("salary_expectation"),
+            ),
+            salary_period=payload.get("salary_period", "year"),
+        )
+
+    def _update_salary(self, payload):
+        return update_application_salary(
+            payload["job_id"],
+            payload.get("salary_expectation_eur"),
+            payload.get("salary_period", "year"),
+            self.memory_path,
+        )
+
+    def _review_status(self, payload):
+        return update_review_decision(
+            payload["job_id"],
+            payload["workflow_status"],
+            self.memory_path,
+        )
+
+    def _undo_review(self, payload):
+        return undo_ignored_decision(
+            payload["job_id"],
+            payload["expected_status"],
+            self.memory_path,
+        )
+
+    def _update_status(self, payload):
+        return {
+            "workflow_status": update_workflow_status(
+                payload["job_id"],
+                payload["workflow_status"],
+                self.memory_path,
+                payload.get("occurred_on"),
+                payload.get("scheduled_for"),
+            )
+        }
+
+    def _update_history(self, payload):
+        return update_workflow_history(
+            payload["job_id"],
+            payload["event_index"],
+            payload["previous_status"],
+            payload.get("previous_occurred_on"),
+            payload["workflow_status"],
+            payload.get("occurred_on"),
+            self.memory_path,
+            scheduled_for=payload.get("scheduled_for"),
+            previous_scheduled_for=payload.get("previous_scheduled_for"),
+        )
+
+    def _delete_history(self, payload):
+        return delete_workflow_history(
+            payload["job_id"],
+            payload["event_index"],
+            payload["previous_status"],
+            payload.get("previous_occurred_on"),
+            self.memory_path,
+            previous_scheduled_for=payload.get("previous_scheduled_for"),
+        )
 
     def send_application_document(self):
         """Return one document referenced by the matching memory entry."""
@@ -561,15 +296,11 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
             self.send_error(404)
             return
         content_type = mimetypes.guess_type(metadata["name"])[0]
-        self.send_response(200)
-        self.send_header("Content-Type", content_type or "application/octet-stream")
-        self.send_header("Content-Length", str(len(content)))
-        self.send_header(
-            "Content-Disposition",
-            f"attachment; filename*=UTF-8''{quote(metadata['name'])}",
+        self.send_content(
+            content,
+            content_type or "application/octet-stream",
+            disposition=f"attachment; filename*=UTF-8''{quote(metadata['name'])}",
         )
-        self.end_headers()
-        self.wfile.write(content)
 
     def accept_local_request(self, *, require_json=False):
         """Reject DNS rebinding and cross-site mutation attempts.
@@ -613,18 +344,20 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
         except FileNotFoundError:
             self.send_error(404)
             return
-        self.send_response(200)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(content)))
-        self.end_headers()
-        self.wfile.write(content)
+        self.send_content(content, content_type)
 
     def send_json(self, value, status=200):
         """Return one JSON response."""
         content = json.dumps(value, ensure_ascii=False).encode("utf-8")
+        self.send_content(content, "application/json; charset=utf-8", status)
+
+    def send_content(self, content, content_type, status=200, *, disposition=None):
+        """Send bytes with shared response headers and an optional download name."""
         self.send_response(status)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(content)))
+        if disposition is not None:
+            self.send_header("Content-Disposition", disposition)
         self.end_headers()
         self.wfile.write(content)
 
@@ -651,14 +384,11 @@ def parse_args():
 
 def address_is_in_use(error):
     """Recognize the cross-platform error for an already running server."""
-    return (
-        error.errno == errno.EADDRINUSE
-        or getattr(error, "winerror", None) == 10048
-    )
+    return error.errno == errno.EADDRINUSE or getattr(error, "winerror", None) == 10048
 
 
 def main():
-    """Start the review server on the local computer only."""
+    """Start the review server on loopback using the configured port."""
     args = parse_args()
     address = (args.host, args.port)
     url = f"http://{address[0]}:{address[1]}"

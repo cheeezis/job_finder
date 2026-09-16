@@ -4,7 +4,6 @@ import json
 import re
 from html import unescape
 
-
 _JSON_LD_PATTERN = re.compile(
     r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
     re.DOTALL | re.IGNORECASE,
@@ -37,15 +36,15 @@ def find_job_posting(data):
         if data.get("@type") == "JobPosting":
             return data
 
-        for value in data.values():
-            posting = find_job_posting(value)
-            if posting:
-                return posting
+        children = data.values()
+    elif isinstance(data, list):
+        children = data
+    else:
+        return None
 
-    if isinstance(data, list):
-        for item in data:
-            posting = find_job_posting(item)
-            if posting:
-                return posting
+    for child in children:
+        posting = find_job_posting(child)
+        if posting:
+            return posting
 
     return None

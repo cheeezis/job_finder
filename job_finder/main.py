@@ -45,14 +45,10 @@ def build_score_results(evaluated_jobs):
 
     # Preserve exclusion reasons for console diagnostics and notifications.
     included = [
-        job
-        for job in results
-        if job["filter_status"] == FilterStatus.INCLUDED.value
+        job for job in results if job["filter_status"] == FilterStatus.INCLUDED.value
     ]
     excluded = [
-        job
-        for job in results
-        if job["filter_status"] == FilterStatus.EXCLUDED.value
+        job for job in results if job["filter_status"] == FilterStatus.EXCLUDED.value
     ]
 
     included.sort(
@@ -104,9 +100,9 @@ def print_results(results):
     for job in included:
         new_marker = "NEU | " if job.get("is_new") else ""
         summary = (
-            f'{job["match_percent"]:>3}% | '
-            f'{job["title"]} | {job["company"]} | '
-            f'{format_locations(job)} | Remote: {format_remote(job)}'
+            f"Vorfilter {job['match_percent']:>3}/100 | "
+            f"{job['title']} | {job['company']} | "
+            f"{format_locations(job)} | Remote: {format_remote(job)}"
         )
         print(new_marker + summary)
         for reason in job["reasons"]:
@@ -116,8 +112,8 @@ def print_results(results):
     print(f"AUSGESCHLOSSENE JOBS: {len(excluded)}")
     print("=" * 60)
     for job in excluded[:30]:
-        print(f'{job["title"]} | {job["company"]} | {format_locations(job)}')
-        print(f'      - {job["reasons"][0]}')
+        print(f"{job['title']} | {job['company']} | {format_locations(job)}")
+        print(f"      - {job['reasons'][0]}")
         print()
 
     if len(excluded) > 30:

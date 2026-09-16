@@ -49,6 +49,7 @@ class ValidatingRedirectHandler(HTTPRedirectHandler):
         self.validator = validator
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
+        """Validate each redirect target before urllib creates its next request."""
         if self.validator is not None:
             newurl = self.validator(newurl)
         return super().redirect_request(req, fp, code, msg, headers, newurl)
@@ -67,6 +68,4 @@ def _read_bounded(response, max_bytes):
 
 def _build_headers(headers=None):
     """Merge optional request headers with the Job Finder defaults."""
-    merged = dict(DEFAULT_HEADERS)
-    merged.update(headers or {})
-    return merged
+    return {**DEFAULT_HEADERS, **(headers or {})}

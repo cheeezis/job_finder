@@ -1,24 +1,24 @@
 """Queue and send compact Discord summaries for new job recommendations."""
 
 import json
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
-
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
-from job_finder.storage import write_json_atomic
 from job_finder.paths import NOTIFICATION_STATE_FILE
 from job_finder.reporting import (
     format_remote,
     format_role_group,
-    is_international_listing,
+    is_visible_in_default_review,
     primary_url,
 )
+from job_finder.state_compat import NOTIFICATION_STATE_VERSION as STATE_VERSION
+from job_finder.state_compat import decode_notification_state
+from job_finder.storage import write_json_atomic
 
-
-STATE_VERSION = 3
 NOTIFIABLE_STATUSES = {"new", "review", "interesting", "inquiry"}
 MAX_EMBEDS = 10
 MAX_EMBED_CHARACTERS = 6000
@@ -69,57 +69,21 @@ def process_notifications(
     client=None,
     now=None,
 ):
-    """Queue eligible jobs and optionally send pending Discord summaries."""
+    """Update the persistent queue and optionally send eligible Discord cards.
+
+    results contains included and excluded job dictionaries from the
+    scoring pipeline. Even send=False writes queue changes to
+    state_path; it only prevents delivery. With send=True, use client
+    when supplied or construct a client from webhook_url.
+
+    Return queue, eligibility and delivery counters together with
+    configuration_error. Missing webhook configuration is reported in
+    that field. Delivery failures remain pending for a later run and
+    increment failed; filesystem and malformed-state errors propagate.
+    """
     timestamp = (now or datetime.now(timezone.utc)).isoformat()
     state = load_notification_state(state_path)
-    jobs_by_key = {}
-    queued = 0
-    current_new = 0
-    eligible_new = 0
-    default_review_new = 0
-
-    # A job may have been queued in an earlier run but be excluded after a
-    # stricter general rule or an updated posting. It must not remain queued.
-    for job in results.get("excluded", []):
-        state["pending"].pop(notification_key(job), None)
-
-    for job in results["included"]:
-        key = notification_key(job)
-        jobs_by_key[key] = job
-        is_new_job = bool(job.get("is_new"))
-        if is_new_job:
-            current_new += 1
-        if not is_notifiable(job):
-            state["pending"].pop(key, None)
-            continue
-        if is_new_job:
-            eligible_new += 1
-            if is_visible_in_default_review(job):
-                default_review_new += 1
-        if (
-            is_new_job
-            and key not in state["sent"]
-            and key not in state["pending"]
-        ):
-            state["pending"][key] = pending_entry(job, timestamp)
-            queued += 1
-
-    candidates = [
-        (key, jobs_by_key[key])
-        for key in state["pending"]
-        if key in jobs_by_key and is_notifiable(jobs_by_key[key])
-    ]
-    stats = {
-        "queued": queued,
-        "ready": len(candidates),
-        "current_new": current_new,
-        "eligible_new": eligible_new,
-        "default_review_new": default_review_new,
-        "already_notified": max(eligible_new - len(candidates), 0),
-        "sent": 0,
-        "failed": 0,
-        "configuration_error": None,
-    }
+    candidates, stats = _update_queue(results, state, timestamp)
     save_notification_state(state, state_path)
     if not send or not candidates:
         return stats
@@ -151,6 +115,55 @@ def process_notifications(
     return stats
 
 
+def _update_queue(results, state, timestamp):
+    """Update pending entries and calculate counters without sending or saving."""
+    jobs_by_key = {}
+    queued = 0
+    current_new = 0
+    eligible_new = 0
+    default_review_new = 0
+
+    # A job may have been queued in an earlier run but be excluded after a
+    # stricter general rule or an updated posting. It must not remain queued.
+    for job in results.get("excluded", []):
+        state["pending"].pop(notification_key(job), None)
+
+    for job in results["included"]:
+        key = notification_key(job)
+        jobs_by_key[key] = job
+        is_new_job = bool(job.get("is_new"))
+        if is_new_job:
+            current_new += 1
+        if not is_notifiable(job):
+            state["pending"].pop(key, None)
+            continue
+        if is_new_job:
+            eligible_new += 1
+            if is_visible_in_default_review(job):
+                default_review_new += 1
+        if is_new_job and key not in state["sent"] and key not in state["pending"]:
+            state["pending"][key] = pending_entry(job, timestamp)
+            queued += 1
+
+    candidates = [
+        (key, jobs_by_key[key])
+        for key in state["pending"]
+        if key in jobs_by_key and is_notifiable(jobs_by_key[key])
+    ]
+    stats = {
+        "queued": queued,
+        "ready": len(candidates),
+        "current_new": current_new,
+        "eligible_new": eligible_new,
+        "default_review_new": default_review_new,
+        "already_notified": max(eligible_new - len(candidates), 0),
+        "sent": 0,
+        "failed": 0,
+        "configuration_error": None,
+    }
+    return candidates, stats
+
+
 def send_run_summary(summary, *, webhook_url, client=None):
     """Send one compact operational summary after a requested Job Finder run."""
     if not webhook_url:
@@ -174,9 +187,12 @@ def run_summary_payload(summary):
     default_review = notifications.get("default_review_new", eligible)
     hidden_by_default = max(eligible - default_review, 0)
     source_warnings = exceptional_source_text(sources)
-    color = 0xD99A2B if failed or any(
-        source["status"] in {"failed", "partial"} for source in sources
-    ) else 0x2E8B57
+    color = (
+        0xD99A2B
+        if failed
+        or any(source["status"] in {"failed", "partial"} for source in sources)
+        else 0x2E8B57
+    )
     lines = [
         f"Laufzeit: **{summary['duration']}**",
         "",
@@ -221,13 +237,6 @@ def run_summary_payload(summary):
 def is_notifiable(job):
     """Return whether one prefiltered result belongs in Discord notifications."""
     return job.get("workflow_status", "new") in NOTIFIABLE_STATUSES
-
-
-def is_visible_in_default_review(job):
-    """Mirror the review page's default visibility for a new job."""
-    return not is_international_listing(job) and not str(
-        job.get("location_precheck") or ""
-    ).startswith("Junior-Hybrid")
 
 
 def notification_key(job):
@@ -328,10 +337,7 @@ def format_count(value):
 
 def source_health_text(sources):
     """Summarize source coverage while keeping failures visible."""
-    counts = {
-        status: sum(source["status"] == status for source in sources)
-        for status in ("success", "partial", "empty", "failed")
-    }
+    counts = Counter(source["status"] for source in sources)
     parts = [f"{len(sources)} geprüft", f"{counts['success']} erfolgreich"]
     if counts["partial"]:
         parts.append(f"{counts['partial']} teilweise")
@@ -403,16 +409,7 @@ def load_notification_state(path=NOTIFICATION_STATE_FILE):
     if not state_path.exists():
         return {"sent": {}, "pending": {}}
     document = json.loads(state_path.read_text(encoding="utf-8"))
-    version = document.get("version")
-    if version not in {1, 2, STATE_VERSION}:
-        raise ValueError("Benachrichtigungsstatus verwendet eine unbekannte Version")
-    sent = {entry.get("job_id", key): entry
-            for key, entry in document.get("sent", {}).items()}
-    pending = {} if version == 1 else {
-        entry["job_id"]: entry for entry in document.get("pending", {}).values()
-        if entry.get("job_id") and entry["job_id"] not in sent
-    }
-    return {"sent": sent, "pending": pending}
+    return decode_notification_state(document)
 
 
 def save_notification_state(state, path=NOTIFICATION_STATE_FILE):

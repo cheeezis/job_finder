@@ -1,0 +1,574 @@
+{
+  "reference": "08afd45 inputs and exclusions; entry-first ranking revision 2026-09-15",
+  "today": "2026-09-14",
+  "settings": {
+    "LOCAL_PLACES": [
+      "teststadt"
+    ],
+    "COMMUTER_LOCATIONS": [],
+    "LOCAL_SEARCH_RADIUS_KM": 30,
+    "SALARY_TARGET": 60000,
+    "SALARY_MINIMUM": 45000,
+    "PROFILE_DOMAIN_KEYWORDS": [
+      "python"
+    ],
+    "PREFERRED_ROLE_GROUPS": [
+      "python_ai_data",
+      "software_development"
+    ]
+  },
+  "job_defaults": {
+    "id": "fixture:1",
+    "title": "Junior Python Developer",
+    "company": "Example",
+    "locations": [
+      "Germany"
+    ],
+    "sources": [
+      {
+        "source": "test",
+        "url": "https://example.test/job",
+        "source_id": null,
+        "application_url": null
+      }
+    ],
+    "description_raw": "Keine Berufserfahrung erforderlich. Python und SQL.",
+    "description_clean": "Keine Berufserfahrung erforderlich. Python und SQL.",
+    "work_mode": "unknown",
+    "remote_percentage": 0,
+    "employment_type": null,
+    "career_levels": [],
+    "salary_min_eur": null,
+    "salary_max_eur": null,
+    "published_at": null,
+    "first_seen_at": null,
+    "last_seen_at": null,
+    "fetched_at": null,
+    "workflow_status": "new",
+    "cache_stale": false
+  },
+  "cases": [
+    {
+      "job": {},
+      "expected": {
+        "filter_status": "excluded",
+        "match_percent": 0,
+        "experience_rank": 99,
+        "experience_level": "ausgeschlossen",
+        "reasons": [
+          "Ort/Remote passt nicht"
+        ]
+      }
+    },
+    {
+      "job": {
+        "remote_percentage": 100
+      },
+      "expected": {
+        "filter_status": "included",
+        "match_percent": 100,
+        "experience_rank": 0,
+        "experience_level": "klare Einstiegsstelle",
+        "role_group": "python_ai_data",
+        "location_precheck": "100% Remote aus Deutschland",
+        "reasons": [
+          "+15 Richtung: Python/AI/Data-Kernrolle",
+          "+50 Erfahrung: klare Einstiegsstelle",
+          "+30 Standort: 100% Remote aus Deutschland",
+          "+5 Bezug zu Projekten oder Weiterbildungen"
+        ]
+      }
+    },
+    {
+      "job": {
+        "description_raw": "3 Jahre Berufserfahrung",
+        "description_clean": "3 Jahre Berufserfahrung"
+      },
+      "expected": {
+        "filter_status": "excluded",
+        "match_percent": 0,
+        "experience_rank": 99,
+        "experience_level": "ausgeschlossen",
+        "reasons": [
+          "Ort/Remote passt nicht"
+        ]
+      }
+    },
+    {
+      "job": {
+        "description_raw": "3 Jahre Berufserfahrung",
+        "description_clean": "3 Jahre Berufserfahrung",
+        "remote_percentage": 100
+      },
+      "expected": {
+        "filter_status": "included",
+        "match_percent": 55,
+        "experience_rank": 4,
+        "experience_level": "3 Jahr(e) gefordert",
+        "role_group": "python_ai_data",
+        "location_precheck": "100% Remote aus Deutschland",
+        "reasons": [
+          "+15 Richtung: Python/AI/Data-Kernrolle",
+          "+5 Erfahrung: 3 Jahr(e) gefordert",
+          "+30 Standort: 100% Remote aus Deutschland",
+          "+5 Bezug zu Projekten oder Weiterbildungen"
+        ]
+      }
+    },
+    {
+      "job": {
+        "description_raw": "4 Jahre Berufserfahrung",
+        "description_clean": "4 Jahre Berufserfahrung"
+      },
+      "expected": {
+        "filter_status": "excluded",
+        "match_percent": 0,
+        "experience_rank": 99,
+        "experience_level": "ausgeschlossen",
+        "reasons": [
+          "Mehr als 3 Jahre Erfahrung gefordert: 4 Jahre"
+        ]
+      }
+    },
+    {
+      "job": {
+        "description_raw": "4 Jahre Berufserfahrung",
+        "description_clean": "4 Jahre Berufserfahrung",
+        "remote_percentage": 100
+      },
+      "expected": {
+        "filter_status": "excluded",
+        "match_percent": 0,
+        "experience_rank": 99,
+        "experience_level": "ausgeschlossen",
+        "reasons": [
+          "Mehr als 3 Jahre Erfahrung gefordert: 4 Jahre"
+        ]
+      }
+    },
+    {
+      "job": {
+        "description_raw": "Masterabschluss erforderlich.",
+        "description_clean": "Masterabschluss erforderlich."
+      },
+      "expected": {
+        "filter_status": "excluded",
+        "match_percent": 0,
+        "experience_rank": 99,
+        "experience_level": "ausgeschlossen",
+        "reasons": [
+          "Verpflichtender Master- oder Promotionsabschluss"
+        ]
+      }
+    },
+    {
+      "job": {
+        "description_raw": "Masterabschluss erforderlich.",
+        "description_clean": "Masterabschluss erforderlich.",
+        "remote_percentage": 100
+      },
+      "expected": {
+        "filter_status": "excluded",
+        "match_percent": 0,
+        "experience_rank": 99,
+        "experience_level": "ausgeschlossen",
+        "reasons": [
+          "Verpflichtender Master- oder Promotionsabschluss"
+        ]
+      }
+    },
+    {
+      "job": {
+        "title": "Senior Softwareentwickler"
+      },
+      "expected": {
+        "filter_status": "excluded",
+        "match_percent": 0,
+        "experience_rank": 99,
+        "experience_level": "ausgeschlossen",
+        "reasons": [
+          "Titel enthaelt Ausschlusswort: senior"
+        ]
+      }
+    },
+    {
+      "job": {
+        "title": "Senior Softwareentwickler",
+        "remote_percentage": 100
+      },
+      "expected": {
+        "filter_status": "excluded",
+        "match_percent": 0,
+        "experience_rank": 99,
+        "experience_level": "ausgeschlossen",
+        "reasons": [
+          "Titel enthaelt Ausschlusswort: senior"
+        ]
+      }
+    },
+    {
+      "job": {
+        "title": "Senior Softwareentwickler",
+        "description_raw": "3 Jahre Berufserfahrung",
+        "description_clean": "3 Jahre Berufserfahrung"
+      },
+      "expected": {
+        "filter_status": "excluded",
+        "match_percent": 0,
+        "experience_rank": 99,
+        "experience_level": "ausgeschlossen",
+        "reasons": [
+          "Titel enthaelt Ausschlusswort: senior"
+        ]
+      }
+    },
+    {
+      "job": {
+        "title": "Senior Softwareentwickler",
+        "description_raw": "3 Jahre Berufserfahrung",
+        "description_clean": "3 Jahre Berufserfahrung",
+        "remote_percentage": 100
+      },
+      "expected": {
+        "filter_status": "excluded",
+        "match_percent": 0,
+        "experience_rank": 99,
+        "experience_level": "ausgeschlossen",
+        "reasons": [
+          "Titel enthaelt Ausschlusswort: senior"
+        ]
+      }
+    },
+    {
+      "job": {
+        "title": "Senior Softwareentwickler",
+        "description_raw": "4 Jahre Berufserfahrung",
+        "description_clean": "4 Jahre Berufserfahrung"
+      },
+      "expected": {
+        "filter_status": "excluded",
+        "match_percent": 0,
+        "experience_rank": 99,
+        "experience_level": "ausgeschlossen",
+        "reasons": [
+          "Titel enthaelt Ausschlusswort: senior"
+        ]
+      }
+    },
+    {
+      "job": {
+        "title": "Senior Softwareentwickler",
+        "description_raw": "4 Jahre Berufserfahrung",
+        "description_clean": "4 Jahre Berufserfahrung",
+        "remote_percentage": 100
+      },
+      "expected": {
+        "filter_status": "excluded",
+        "match_percent": 0,
+        "experience_rank": 99,
+        "experience_level": "ausgeschlossen",
+        "reasons": [
+          "Titel enthaelt Ausschlusswort: senior"
+        ]
+      }
+    },
+    {
+      "job": {
+        "title": "Senior Softwareentwickler",
+        "description_raw": "Masterabschluss erforderlich.",
+        "description_clean": "Masterabschluss erforderlich."
+      },
+      "expected": {
+        "filter_status": "excluded",
+        "match_percent": 0,
+        "experience_rank": 99,
+        "experience_level": "ausgeschlossen",
+        "reasons": [
+          "Titel enthaelt Ausschlusswort: senior"
+        ]
+      }
+    },
+    {
+      "job": {
+        "title": "Senior Softwareentwickler",
+        "description_raw": "Masterabschluss erforderlich.",
+        "description_clean": "Masterabschluss erforderlich.",
+        "remote_percentage": 100
+      },
+      "expected": {
+        "filter_status": "excluded",
+        "match_percent": 0,
+        "experience_rank": 99,
+        "experience_level": "ausgeschlossen",
+        "reasons": [
+          "Titel enthaelt Ausschlusswort: senior"
+        ]
+      }
+    },
+    {
+      "job": {
+        "title": "IT Consultant"
+      },
+      "expected": {
+        "filter_status": "excluded",
+        "match_percent": 0,
+        "experience_rank": 99,
+        "experience_level": "ausgeschlossen",
+        "reasons": [
+          "Ort/Remote passt nicht"
+        ]
+      }
+    },
+    {
+      "job": {
+        "title": "IT Consultant",
+        "remote_percentage": 100
+      },
+      "expected": {
+        "filter_status": "included",
+        "match_percent": 95,
+        "experience_rank": 0,
+        "experience_level": "klare Einstiegsstelle",
+        "role_group": "technical_consulting",
+        "location_precheck": "100% Remote aus Deutschland",
+        "reasons": [
+          "+10 Richtung: Technisches IT-Consulting",
+          "+50 Erfahrung: klare Einstiegsstelle",
+          "+30 Standort: 100% Remote aus Deutschland",
+          "+5 Bezug zu Projekten oder Weiterbildungen"
+        ]
+      }
+    },
+    {
+      "job": {
+        "title": "IT Consultant",
+        "description_raw": "3 Jahre Berufserfahrung",
+        "description_clean": "3 Jahre Berufserfahrung"
+      },
+      "expected": {
+        "filter_status": "excluded",
+        "match_percent": 0,
+        "experience_rank": 99,
+        "experience_level": "ausgeschlossen",
+        "reasons": [
+          "Ort/Remote passt nicht"
+        ]
+      }
+    },
+    {
+      "job": {
+        "title": "IT Consultant",
+        "description_raw": "3 Jahre Berufserfahrung",
+        "description_clean": "3 Jahre Berufserfahrung",
+        "remote_percentage": 100
+      },
+      "expected": {
+        "filter_status": "included",
+        "match_percent": 45,
+        "experience_rank": 4,
+        "experience_level": "3 Jahr(e) gefordert",
+        "role_group": "technical_consulting",
+        "location_precheck": "100% Remote aus Deutschland",
+        "reasons": [
+          "+10 Richtung: Technisches IT-Consulting",
+          "+5 Erfahrung: 3 Jahr(e) gefordert",
+          "+30 Standort: 100% Remote aus Deutschland"
+        ]
+      }
+    },
+    {
+      "job": {
+        "title": "IT Consultant",
+        "description_raw": "4 Jahre Berufserfahrung",
+        "description_clean": "4 Jahre Berufserfahrung"
+      },
+      "expected": {
+        "filter_status": "excluded",
+        "match_percent": 0,
+        "experience_rank": 99,
+        "experience_level": "ausgeschlossen",
+        "reasons": [
+          "Mehr als 3 Jahre Erfahrung gefordert: 4 Jahre"
+        ]
+      }
+    },
+    {
+      "job": {
+        "title": "IT Consultant",
+        "description_raw": "4 Jahre Berufserfahrung",
+        "description_clean": "4 Jahre Berufserfahrung",
+        "remote_percentage": 100
+      },
+      "expected": {
+        "filter_status": "excluded",
+        "match_percent": 0,
+        "experience_rank": 99,
+        "experience_level": "ausgeschlossen",
+        "reasons": [
+          "Mehr als 3 Jahre Erfahrung gefordert: 4 Jahre"
+        ]
+      }
+    },
+    {
+      "job": {
+        "title": "IT Consultant",
+        "description_raw": "Masterabschluss erforderlich.",
+        "description_clean": "Masterabschluss erforderlich."
+      },
+      "expected": {
+        "filter_status": "excluded",
+        "match_percent": 0,
+        "experience_rank": 99,
+        "experience_level": "ausgeschlossen",
+        "reasons": [
+          "Verpflichtender Master- oder Promotionsabschluss"
+        ]
+      }
+    },
+    {
+      "job": {
+        "title": "IT Consultant",
+        "description_raw": "Masterabschluss erforderlich.",
+        "description_clean": "Masterabschluss erforderlich.",
+        "remote_percentage": 100
+      },
+      "expected": {
+        "filter_status": "excluded",
+        "match_percent": 0,
+        "experience_rank": 99,
+        "experience_level": "ausgeschlossen",
+        "reasons": [
+          "Verpflichtender Master- oder Promotionsabschluss"
+        ]
+      }
+    },
+    {
+      "job": {
+        "title": "Koch"
+      },
+      "expected": {
+        "filter_status": "excluded",
+        "match_percent": 0,
+        "experience_rank": 99,
+        "experience_level": "ausgeschlossen",
+        "reasons": [
+          "Titel ist keine erkennbare IT-Rolle"
+        ]
+      }
+    },
+    {
+      "job": {
+        "title": "Koch",
+        "remote_percentage": 100
+      },
+      "expected": {
+        "filter_status": "excluded",
+        "match_percent": 0,
+        "experience_rank": 99,
+        "experience_level": "ausgeschlossen",
+        "reasons": [
+          "Titel ist keine erkennbare IT-Rolle"
+        ]
+      }
+    },
+    {
+      "job": {
+        "title": "Koch",
+        "description_raw": "3 Jahre Berufserfahrung",
+        "description_clean": "3 Jahre Berufserfahrung"
+      },
+      "expected": {
+        "filter_status": "excluded",
+        "match_percent": 0,
+        "experience_rank": 99,
+        "experience_level": "ausgeschlossen",
+        "reasons": [
+          "Titel ist keine erkennbare IT-Rolle"
+        ]
+      }
+    },
+    {
+      "job": {
+        "title": "Koch",
+        "description_raw": "3 Jahre Berufserfahrung",
+        "description_clean": "3 Jahre Berufserfahrung",
+        "remote_percentage": 100
+      },
+      "expected": {
+        "filter_status": "excluded",
+        "match_percent": 0,
+        "experience_rank": 99,
+        "experience_level": "ausgeschlossen",
+        "reasons": [
+          "Titel ist keine erkennbare IT-Rolle"
+        ]
+      }
+    },
+    {
+      "job": {
+        "title": "Koch",
+        "description_raw": "4 Jahre Berufserfahrung",
+        "description_clean": "4 Jahre Berufserfahrung"
+      },
+      "expected": {
+        "filter_status": "excluded",
+        "match_percent": 0,
+        "experience_rank": 99,
+        "experience_level": "ausgeschlossen",
+        "reasons": [
+          "Titel ist keine erkennbare IT-Rolle"
+        ]
+      }
+    },
+    {
+      "job": {
+        "title": "Koch",
+        "description_raw": "4 Jahre Berufserfahrung",
+        "description_clean": "4 Jahre Berufserfahrung",
+        "remote_percentage": 100
+      },
+      "expected": {
+        "filter_status": "excluded",
+        "match_percent": 0,
+        "experience_rank": 99,
+        "experience_level": "ausgeschlossen",
+        "reasons": [
+          "Titel ist keine erkennbare IT-Rolle"
+        ]
+      }
+    },
+    {
+      "job": {
+        "title": "Koch",
+        "description_raw": "Masterabschluss erforderlich.",
+        "description_clean": "Masterabschluss erforderlich."
+      },
+      "expected": {
+        "filter_status": "excluded",
+        "match_percent": 0,
+        "experience_rank": 99,
+        "experience_level": "ausgeschlossen",
+        "reasons": [
+          "Titel ist keine erkennbare IT-Rolle"
+        ]
+      }
+    },
+    {
+      "job": {
+        "title": "Koch",
+        "description_raw": "Masterabschluss erforderlich.",
+        "description_clean": "Masterabschluss erforderlich.",
+        "remote_percentage": 100
+      },
+      "expected": {
+        "filter_status": "excluded",
+        "match_percent": 0,
+        "experience_rank": 99,
+        "experience_level": "ausgeschlossen",
+        "reasons": [
+          "Titel ist keine erkennbare IT-Rolle"
+        ]
+      }
+    }
+  ]
+}

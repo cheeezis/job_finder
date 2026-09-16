@@ -88,8 +88,7 @@ def fetch_jobs(cache_path=CACHE_FILE):
 
 def collect_records():
     """Fetch each API page once and discard repeated slugs."""
-    records = []
-    seen = set()
+    records = {}
 
     for page in range(1, MAX_PAGES + 1):
         payload = fetch_json(
@@ -99,16 +98,14 @@ def collect_records():
         page_records = payload.get("data") or []
         for record in page_records:
             slug = str(record.get("slug") or "").strip()
-            if not slug or slug in seen:
-                continue
-            seen.add(slug)
-            records.append(record)
+            if slug:
+                records.setdefault(slug, record)
 
         if not page_records or not (payload.get("links") or {}).get("next"):
             break
         time.sleep(REQUEST_PAUSE_SECONDS)
 
-    return records
+    return list(records.values())
 
 
 def fresh_cached_jobs(cache):
@@ -118,10 +115,7 @@ def fresh_cached_jobs(cache):
 
 def reuse_cached_enrichment(job, previous):
     """Keep a confirmed original link and bridge later placeholder responses."""
-    if (
-        previous is None
-        or is_placeholder_description(previous.description_clean)
-    ):
+    if previous is None or is_placeholder_description(previous.description_clean):
         return False
 
     previous_source = next(
@@ -154,13 +148,19 @@ def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE):
     enriched = 0
     enrichment_errors = 0
     for job in jobs:
-        if job.id not in candidate_ids or not is_placeholder_description(job.description_clean):
+        if job.id not in candidate_ids or not is_placeholder_description(
+            job.description_clean
+        ):
             continue
-        source = next((item for item in job.sources if item.source == SOURCE_NAME), None)
+        source = next(
+            (item for item in job.sources if item.source == SOURCE_NAME), None
+        )
         if source is None:
             continue
         try:
-            target_url, html = fetch_text_with_final_url(f"{source.url.rstrip('/')}/apply")
+            target_url, html = fetch_text_with_final_url(
+                f"{source.url.rstrip('/')}/apply"
+            )
             if application_page_is_missing(target_url):
                 continue
             description = external_description(html)
@@ -184,6 +184,7 @@ def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE):
 
 
 def is_placeholder_description(description):
+    """Recognize Arbeitnow's placeholder that requires original-page text."""
     return PLACEHOLDER_DESCRIPTION in str(description or "").lower()
 
 

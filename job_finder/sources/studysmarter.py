@@ -1,7 +1,6 @@
 """StudySmarter source adapter using its public read-only jobs API."""
 
 import time
-from dataclasses import replace
 from urllib.parse import urlencode
 
 from job_finder.config import (
@@ -12,16 +11,17 @@ from job_finder.http import fetch_json, fetch_text
 from job_finder.models import Job, JobSource, WorkMode
 from job_finder.paths import STUDYSMARTER_CACHE_FILE
 from job_finder.sources.common import (
-    enrich_cached_candidates,
+    build_fetch_report,
     canonical_detail_url,
-    load_detail_cache,
+    enrich_cached_candidates,
     integer,
+    load_detail_cache,
     normalize_employment_type,
     parse_published_date,
     source_job_id,
 )
+from job_finder.sources.common import with_current_summary as refresh_summary
 from job_finder.sources.company_careers import job_from_json_ld
-
 
 SOURCE_NAME = "studysmarter"
 API_URL = "https://talents.studysmarter.de/wp-json/studysmarter/v1/jobs/"
@@ -48,37 +48,28 @@ def fetch_jobs_with_report(cache_path=CACHE_FILE, now=None):
     """Return lightweight jobs and explicit search coverage metadata."""
     records, failed, total = collect_records(return_report=True)
     jobs = jobs_from_records(records, cache_path)
-    return {
-        "jobs": jobs,
-        "status": "partial" if failed else ("success" if jobs else "empty"),
-        "details": {"failed_segments": failed, "total_segments": total},
-    }
+    return build_fetch_report(jobs, failed, total)
 
 
 def jobs_from_records(records, cache_path):
+    """Combine current search summaries with cached details by canonical URL."""
     cache = load_detail_cache(cache_path)
     jobs = []
     for record in records:
         url = canonical_detail_url(record.get("link", ""))
         if url:
             summary = summary_job_from_record(record)
-            jobs.append(with_current_summary(cache[url], summary) if url in cache else summary)
+            jobs.append(
+                with_current_summary(cache[url], summary) if url in cache else summary
+            )
     return jobs
 
 
 def with_current_summary(cached_job, summary):
     """Keep cached detail text but refresh fields exposed by the search API."""
-    current = replace(
+    return refresh_summary(
         cached_job,
-        id=summary.id,
-        title=summary.title or cached_job.title,
-        company=summary.company or cached_job.company,
-        locations=(
-            summary.locations
-            if summary.locations != ["unbekannt"]
-            else cached_job.locations
-        ),
-        sources=summary.sources,
+        summary,
         work_mode=(
             summary.work_mode
             if summary.work_mode is not WorkMode.UNKNOWN
@@ -92,21 +83,24 @@ def with_current_summary(cached_job, summary):
         employment_type=summary.employment_type or cached_job.employment_type,
         published_at=summary.published_at or cached_job.published_at,
     )
-    return current
 
 
 def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE, now=None):
     """Fetch details only for prefiltered candidates without a fresh cache."""
     return enrich_cached_candidates(
-        jobs, candidate_ids, cache_path, SOURCE_NAME, "StudySmarter",
-        lambda job, url: enrich_summary_job(job, fetch_text(url)), now=now,
+        jobs,
+        candidate_ids,
+        cache_path,
+        SOURCE_NAME,
+        "StudySmarter",
+        lambda job, url: enrich_summary_job(job, fetch_text(url)),
+        now=now,
     )
 
 
 def collect_records(searches=None, *, return_report=False):
     """Collect bounded local and remote searches without duplicate listings."""
-    records = []
-    seen = set()
+    records = {}
     search_errors = 0
     first_request = True
 
@@ -121,10 +115,8 @@ def collect_records(searches=None, *, return_report=False):
                 page_records = payload.get("data") or []
                 for record in page_records:
                     identifier = record_identifier(record)
-                    if not identifier or identifier in seen:
-                        continue
-                    seen.add(identifier)
-                    records.append(record)
+                    if identifier:
+                        records.setdefault(identifier, record)
                 if page >= integer(payload.get("total_pages"), 0):
                     break
         except Exception:
@@ -132,6 +124,7 @@ def collect_records(searches=None, *, return_report=False):
 
     if search_errors:
         print(f"WARNUNG StudySmarter: {search_errors} Suche(n) fehlgeschlagen")
+    records = list(records.values())
     result = (records, search_errors, len(selected_searches))
     return result if return_report else records
 
@@ -195,7 +188,8 @@ def summary_job_from_record(record):
             str(location).strip()
             for location in record.get("locations") or []
             if str(location).strip()
-        ] or ["unbekannt"],
+        ]
+        or ["unbekannt"],
         sources=[JobSource(source=SOURCE_NAME, source_id=identifier, url=url)],
         description_raw="",
         description_clean="",

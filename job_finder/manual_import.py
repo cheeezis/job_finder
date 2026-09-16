@@ -21,7 +21,20 @@ def import_manual_url(
     memory_path=MEMORY_FILE,
     recommendations_path=RECOMMENDATIONS_JSON,
 ):
-    """Import, remember, and score exactly one supplied listing."""
+    """Fetch, remember and score one user-supplied public listing URL.
+
+    Write the manual cache, update SQLite state, and replace the job's
+    entries in the job snapshot and recommendations. Unrelated review
+    results are retained. These writes do not share one transaction;
+    a later error can leave earlier writes in place.
+
+    Return job_id, title, company, match_percent and prefilter_warning.
+    Manual submissions remain reviewable even when the filter rejects
+    them; prefilter_warning explains that conflict.
+
+    Invalid URLs or unrecognized pages raise ValueError. Network,
+    filesystem and database failures propagate to the caller.
+    """
     imported = manual.add_url(url, cache_path=cache_path)
     jobs = load_current_jobs(jobs_path)
     target = replace_or_add_job(jobs, imported)
@@ -49,6 +62,7 @@ def import_manual_url(
 
 
 def load_current_jobs(path):
+    """Load the current JSON snapshot, or return [] before the first run."""
     path = Path(path)
     return load_jobs(path) if path.exists() else []
 
@@ -77,6 +91,7 @@ def replace_or_add_job(jobs, imported):
 
 
 def save_jobs(jobs, path):
+    """Atomically replace the JSON snapshot with serialized Job objects."""
     path = Path(path)
     write_json_atomic(path, [job.to_dict() for job in jobs])
 
@@ -99,15 +114,17 @@ def save_recommendation(job, path):
         for item in document.get("recommendations", [])
         if item.get("id") != recommendation["id"]
         and not urls.intersection(
-            link.get("url")
-            for link in item.get("source_links", [])
-            if link.get("url")
+            link.get("url") for link in item.get("source_links", []) if link.get("url")
         )
     ]
     retained.append(recommendation)
     retained.sort(
         key=lambda item: (
-            -(item.get("match_percent") if item.get("match_percent") is not None else -1),
+            -(
+                item.get("match_percent")
+                if item.get("match_percent") is not None
+                else -1
+            ),
             item.get("title", "").casefold(),
         )
     )

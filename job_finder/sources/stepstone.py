@@ -9,11 +9,9 @@ import re
 import time
 from html import unescape
 from pathlib import Path
-
 from urllib.error import HTTPError
 from urllib.parse import quote, urlencode, urljoin, urlsplit, urlunsplit
 
-from job_finder.storage import write_json_atomic
 from job_finder.config import (
     STEPSTONE_SEARCH_LOCATIONS,
     STEPSTONE_SEARCH_RADIUS_KM,
@@ -26,6 +24,7 @@ from job_finder.paths import STEPSTONE_CACHE_FILE
 from job_finder.remote import classify_remote, detect_remote
 from job_finder.search_plan import append_unique, iter_search_queries
 from job_finder.sources.common import (
+    build_fetch_report,
     detail_cache_job_dict,
     detail_is_fresh,
     detail_within_age,
@@ -36,6 +35,7 @@ from job_finder.sources.common import (
     source_job_id,
     utc_now,
 )
+from job_finder.storage import write_json_atomic
 from job_finder.structured_data import extract_json_ld_job_posting
 from job_finder.text import html_to_text
 
@@ -71,6 +71,7 @@ class StepStoneHttpClient:
         self.has_requested = False
 
     def get(self, url):
+        """Fetch paced requests and raise StepStoneBlockedError for HTTP 403/429."""
         if self.has_requested:
             self.sleeper(self.delay)
         self.has_requested = True
@@ -98,13 +99,8 @@ def fetch_jobs(
         links = search_links(client, coverage=_coverage)
     except StepStoneBlockedError as error:
         if _coverage is not None:
-            _coverage["failed_segments"] = max(
-                1, _coverage.get("failed_segments", 0)
-            )
-        print(
-            f"WARNUNG StepStone: HTTP {error.status_code}; "
-            "nutze letzten Cache-Stand"
-        )
+            _coverage["failed_segments"] = max(1, _coverage.get("failed_segments", 0))
+        print(f"WARNUNG StepStone: HTTP {error.status_code}; nutze letzten Cache-Stand")
         return cached_jobs(cache.get("last_links", []), cache, now)
 
     if not links:
@@ -122,45 +118,37 @@ def fetch_jobs(
         if detail_is_fresh(cached_job, now):
             cached_job.cache_stale = False
             jobs.append(cached_job)
-            if progress_checkpoint(index + 1, len(links)):
-                print_progress(
-                    "StepStone Details",
-                    index + 1,
-                    len(links),
-                    f"{len(jobs)} übernommen",
+        else:
+            try:
+                job = fetch_job(url, client)
+                job.cache_stale = False
+                jobs.append(job)
+                cache["jobs"][cache_key] = job
+                save_cache(cache_file, cache)
+            except StepStoneBlockedError as error:
+                if _coverage is not None:
+                    _coverage["failed_segments"] = max(
+                        1, _coverage.get("failed_segments", 0)
+                    )
+                print(
+                    f"WARNUNG StepStone: HTTP {error.status_code}; "
+                    "keine weiteren Detailanfragen"
                 )
-            continue
-
-        try:
-            job = fetch_job(url, client)
-            job.cache_stale = False
-            jobs.append(job)
-            cache["jobs"][cache_key] = job
-            save_cache(cache_file, cache)
-        except StepStoneBlockedError as error:
-            if _coverage is not None:
-                _coverage["failed_segments"] = max(
-                    1, _coverage.get("failed_segments", 0)
-                )
-            print(
-                f"WARNUNG StepStone: HTTP {error.status_code}; "
-                "keine weiteren Detailanfragen"
-            )
-            if cached_job and detail_within_age(cached_job, now):
-                cached_job.cache_stale = True
-                jobs.append(cached_job)
-            jobs.extend(cached_jobs(links[index + 1 :], cache, now))
-            break
-        except Exception:
-            detail_errors += 1
-            if _coverage is not None:
-                _coverage["failed_segments"] = (
-                    _coverage.get("failed_segments", 0) + 1
-                )
-            if cached_job and detail_within_age(cached_job, now):
-                cached_job.cache_stale = True
-                jobs.append(cached_job)
-                stale_fallbacks += 1
+                if cached_job and detail_within_age(cached_job, now):
+                    cached_job.cache_stale = True
+                    jobs.append(cached_job)
+                jobs.extend(cached_jobs(links[index + 1 :], cache, now))
+                break
+            except Exception:
+                detail_errors += 1
+                if _coverage is not None:
+                    _coverage["failed_segments"] = (
+                        _coverage.get("failed_segments", 0) + 1
+                    )
+                if cached_job and detail_within_age(cached_job, now):
+                    cached_job.cache_stale = True
+                    jobs.append(cached_job)
+                    stale_fallbacks += 1
         if progress_checkpoint(index + 1, len(links)):
             print_progress(
                 "StepStone Details",
@@ -180,12 +168,7 @@ def fetch_jobs_with_report(cache_path=CACHE_FILE, client=None, now=None):
     """Return jobs and coverage metadata for safe inactivity tracking."""
     coverage = {"failed_segments": 0, "total_segments": 0}
     jobs = fetch_jobs(cache_path, client, now, _coverage=coverage)
-    failed = coverage["failed_segments"]
-    return {
-        "jobs": jobs,
-        "status": "partial" if failed else ("success" if jobs else "empty"),
-        "details": coverage,
-    }
+    return build_fetch_report(jobs, **coverage)
 
 
 def search_links(client=None, *, coverage=None):
@@ -196,9 +179,7 @@ def search_links(client=None, *, coverage=None):
     search_errors = 0
     processed_queries = 0
     requested_pages = 0
-    planned_queries = len(STEPSTONE_SEARCH_TERMS) * len(
-        STEPSTONE_SEARCH_LOCATIONS
-    )
+    planned_queries = len(STEPSTONE_SEARCH_TERMS) * len(STEPSTONE_SEARCH_LOCATIONS)
     if coverage is not None:
         coverage["total_segments"] = planned_queries
 
@@ -223,14 +204,11 @@ def search_links(client=None, *, coverage=None):
 
             found_links = extract_detail_links(html)
             page_links = [url for url in found_links if url not in query_seen]
-            for url in page_links:
-                query_seen.add(url)
+            query_seen.update(page_links)
 
             for url in page_links:
                 append_unique(url, links, seen)
 
-            if not found_links:
-                break
             if not page_links:
                 break
 
@@ -250,6 +228,7 @@ def search_links(client=None, *, coverage=None):
 
 
 def build_search_url(term, location, page=1):
+    """Build a paginated search URL with a radius for nonremote locations."""
     base_url = f"{SEARCH_BASE_URL}/{quote(term.replace(' ', '-'))}/in-{quote(location)}"
     query = {"page": page}
     if location.lower() != "remote":
@@ -258,6 +237,7 @@ def build_search_url(term, location, page=1):
 
 
 def extract_detail_links(html):
+    """Collect unique absolute detail URLs from absolute and relative links."""
     matches = re.findall(
         r'https://www\.stepstone\.de/stellenangebote--[^"\'<> ]+?\.html[^"\'<> ]*'
         r'|/stellenangebote--[^"\'<> ]+?\.html[^"\'<> ]*',
@@ -274,6 +254,7 @@ def extract_detail_links(html):
 
 
 def normalize_detail_url(url):
+    """Remove query and fragment from a StepStone detail URL."""
     parts = urlsplit(url)
     return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
 
@@ -336,22 +317,24 @@ def load_cache(path):
     cache.setdefault("last_links", [])
     cache.setdefault("jobs", {})
     cache["jobs"] = {
-        url: Job.from_dict(job_values)
-        for url, job_values in cache["jobs"].items()
+        url: Job.from_dict(job_values) for url, job_values in cache["jobs"].items()
     }
     return cache
 
 
 def save_cache(path, cache):
     """Persist cache updates atomically so interrupted runs keep valid JSON."""
-    write_json_atomic(path, {
-        "version": CACHE_VERSION,
-        "last_links": cache.get("last_links", []),
-        "jobs": {
-            url: detail_cache_job_dict(job)
-            for url, job in cache.get("jobs", {}).items()
+    write_json_atomic(
+        path,
+        {
+            "version": CACHE_VERSION,
+            "last_links": cache.get("last_links", []),
+            "jobs": {
+                url: detail_cache_job_dict(job)
+                for url, job in cache.get("jobs", {}).items()
+            },
         },
-    })
+    )
 
 
 def cached_jobs(links, cache, now=None):
@@ -366,6 +349,7 @@ def cached_jobs(links, cache, now=None):
 
 
 def clean_company(company):
+    """Remove StepStone's year-tagged suffix from an employer name."""
     return re.sub(r"_20\d{2}-.+$", "", company).strip()
 
 

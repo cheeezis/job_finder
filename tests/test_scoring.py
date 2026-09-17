@@ -52,6 +52,31 @@ def make_job(**overrides):
 
 
 class ScoringTests(unittest.TestCase):
+    def test_offered_training_does_not_reduce_a_regular_job_score(self):
+        base = score_job(make_job(description="Python APIs. Erste Erfahrung reicht."))
+        benefits = score_job(
+            make_job(
+                description=(
+                    "Python APIs. Erste Erfahrung reicht. "
+                    "Wir bieten Weiterbildung und Mentoring."
+                )
+            )
+        )
+        self.assertEqual(benefits, base)
+
+    def test_actual_apprenticeship_still_receives_training_penalty(self):
+        regular = score_job(make_job(employment_type="Vollzeit"))
+        training = score_job(make_job(employment_type="Ausbildung"))
+        self.assertEqual(regular["match_percent"] - training["match_percent"], 12)
+        self.assertTrue(
+            any("Ausbildungs-/Studienformat" in r for r in training["reasons"])
+        )
+
+    def test_training_course_title_stays_excluded(self):
+        result = score_job(make_job(title="Weiterbildung Python Developer"))
+        self.assertEqual(result["filter_status"], "excluded")
+        self.assertIn("weiterbildung", result["reasons"][0])
+
     def test_named_scoring_cases(self):
         cases = [
             (

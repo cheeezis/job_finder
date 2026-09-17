@@ -97,6 +97,10 @@ Suchradius, Ortsliste und Pendlergrenzen kommen unverändert aus den aktuellen
 persönlichen Einstellungen. Der Score ist eine regelbasierte Sortierhilfe,
 kein Nachweis persönlicher Eignung.
 
+Das Wort „Weiterbildung“ löst im Beschreibungstext keinen Ausbildungsabzug
+mehr aus, damit reguläre Stellen mit Weiterbildungsangeboten nicht schlechter
+abschneiden. Ausbildungsstellen und Weiterbildungstitel werden weiterhin erkannt.
+
 `job_finder/matching_rules.py` enthält die Erkennungs- und Ausschlussregeln,
 `job_finder/scoring.py` setzt daraus die Bewertung zusammen. Ein optionales
 `profile.local.yaml` dient als persönliche Faktenbasis für eine spätere

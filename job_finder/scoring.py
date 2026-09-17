@@ -411,7 +411,6 @@ def score_preferences(full_text):
             "abschlussarbeit",
             "bachelorarbeit",
             "thesis",
-            "weiterbildung",
         ],
     ):
         penalties.append({"points": 12, "label": "Ausbildungs-/Studienformat"})

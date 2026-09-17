@@ -85,14 +85,21 @@ Die Einstellungen werden beim Start geladen. Nach Änderungen die laufende
 Review-Anwendung neu starten; ein Neuladen der Browserseite genügt nicht.
 
 Der Finder bewertet und sortiert Stellen eigenständig, auch ohne KI-Stufe.
-Der Vorfilter vergibt bis zu 50 Punkte für den Berufseinstieg, 30 für den
-Standort, 15 für die fachliche Richtung und insgesamt fünf für Stichwörter
-aus Projekten oder Weiterbildungen. Bestehende Abzüge für Arbeitsbedingungen
-werden danach angewendet. `matching.preferred_role_groups` gibt bevorzugten
-IT-Richtungen 15 statt zehn Punkte; andere IT-Rollen bleiben zugelassen.
+Der Vorfilter verwendet wieder die bewährte Punkteverteilung: bis zu 30 für
+die Rolle, 25 für Technologien, 25 für Einstiegseignung, 15 für den Standort
+und fünf für den Bezug zu Projekten oder Weiterbildungen. Abzüge für
+Arbeitsbedingungen werden danach angewendet. Die Rollen- und Technologiegewichte
+stehen getrennt von den Erkennungsregeln in `job_finder/ranking_weights.py`.
 `matching.profile_domain_keywords` steuert den einmaligen Stichwortbonus.
-Die bisherige summierte Technologiegewichtung entfällt: Eine lange Liste
-von Technologien ist kein Nachweis persönlicher Eignung.
+`matching.preferred_role_groups` wird aus Kompatibilitätsgründen weiterhin
+akzeptiert, hat in dieser wiederhergestellten Sortierung aber keinen Einfluss.
+Suchradius, Ortsliste und Pendlergrenzen kommen unverändert aus den aktuellen
+persönlichen Einstellungen. Der Score ist eine regelbasierte Sortierhilfe,
+kein Nachweis persönlicher Eignung.
+
+Das Wort „Weiterbildung“ löst im Beschreibungstext keinen Ausbildungsabzug
+mehr aus, damit reguläre Stellen mit Weiterbildungsangeboten nicht schlechter
+abschneiden. Ausbildungsstellen und Weiterbildungstitel werden weiterhin erkannt.
 
 `job_finder/matching_rules.py` enthält die Erkennungs- und Ausschlussregeln,
 `job_finder/scoring.py` setzt daraus die Bewertung zusammen. Ein optionales

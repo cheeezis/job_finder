@@ -4,7 +4,6 @@ import unittest
 from datetime import date, timedelta
 from unittest.mock import patch
 
-from job_finder import scoring
 from job_finder.deduplication import deduplicate_jobs, unique_sources
 from job_finder.main import score_jobs
 from job_finder.models import Job, JobSource
@@ -52,93 +51,32 @@ def make_job(**overrides):
     )
 
 
-class RankingPriorityTests(unittest.TestCase):
-    def setUp(self):
-        settings = patch.multiple(
-            scoring,
-            LOCAL_PLACES=["teststadt"],
-            COMMUTER_LOCATIONS=[],
-            PREFERRED_ROLE_GROUPS=["python_ai_data", "software_development"],
-            PROFILE_DOMAIN_KEYWORDS=["python", "react", "azure", "rag"],
-            SALARY_TARGET=None,
-            SALARY_MINIMUM=None,
-        )
-        settings.start()
-        self.addCleanup(settings.stop)
-
-    def test_clear_entry_role_beats_keyword_rich_roles_with_weaker_entry_evidence(self):
-        entry = make_job(
-            title="Junior IT Support",
-            description="Einarbeitung in die Betreuung der IT-Anwendungen.",
-            location="teststadt",
-            remote="100%",
-        )
-        for requirement in [
-            "Entwicklung von Anwendungen.",
-            "Ein Jahr Berufserfahrung ist erforderlich.",
-            "Erfahrung ist wuenschenswert.",
-        ]:
-            with self.subTest(requirement=requirement):
-                other = make_job(
-                    title="Python Developer",
-                    description=f"{requirement} Python, React, Azure, RAG und Kubernetes.",
-                    location="teststadt",
-                    remote="100%",
-                    url="https://example.test/other",
-                )
-                ranked = score_jobs([other, entry])["included"]
-                self.assertEqual(len(ranked), 2)
-                self.assertEqual(ranked[0]["id"], entry.id)
-
-    def test_keyword_overlap_is_one_bonus_and_unlisted_tools_add_no_points(self):
-        def score(description):
-            return score_job(
-                make_job(
-                    description=description,
-                    title="Junior IT Support",
-                    location="teststadt",
-                )
-            )
-
-        base = score("Einarbeitung in die IT-Anwendungen.")
-        single = score("Einarbeitung in Python.")
-        many = score("Einarbeitung in Python, React, Azure und RAG.")
-        unlisted = score("Einarbeitung in Kubernetes, Terraform und Firewall-Betrieb.")
-        self.assertEqual(single["match_percent"] - base["match_percent"], 5)
-        self.assertEqual(many["match_percent"], single["match_percent"])
-        self.assertEqual(unlisted["match_percent"], base["match_percent"])
-
-    def test_preferences_change_bonus_without_reclassifying_or_excluding_role(self):
-        job = make_job(title="Junior Cloud Consultant", location="teststadt")
-        normal = score_job(job)
-        with patch.object(scoring, "PREFERRED_ROLE_GROUPS", ["technical_consulting"]):
-            preferred = score_job(job)
-        self.assertEqual(normal["filter_status"], "included")
-        self.assertEqual(preferred["role_group"], normal["role_group"])
-        self.assertEqual(preferred["match_percent"] - normal["match_percent"], 5)
-
-    def test_keywords_do_not_override_hard_filters(self):
-        for title in ["Senior Python Developer", "Koch"]:
-            with self.subTest(title=title):
-                result = score_job(
-                    make_job(title=title, description="Python React Azure RAG")
-                )
-                self.assertEqual(result["filter_status"], "excluded")
-
-    def test_remote_preference_outweighs_keyword_bonus_at_same_entry_level(self):
-        onsite = make_job(location="teststadt", description="Python React Azure RAG")
-        remote = make_job(
-            location="teststadt", remote="100%", description="Einarbeitung."
-        )
-        with patch.object(
-            scoring, "PROFILE_DOMAIN_KEYWORDS", ["react", "azure", "rag"]
-        ):
-            self.assertGreater(
-                score_job(remote)["match_percent"], score_job(onsite)["match_percent"]
-            )
-
-
 class ScoringTests(unittest.TestCase):
+    def test_offered_training_does_not_reduce_a_regular_job_score(self):
+        base = score_job(make_job(description="Python APIs. Erste Erfahrung reicht."))
+        benefits = score_job(
+            make_job(
+                description=(
+                    "Python APIs. Erste Erfahrung reicht. "
+                    "Wir bieten Weiterbildung und Mentoring."
+                )
+            )
+        )
+        self.assertEqual(benefits, base)
+
+    def test_actual_apprenticeship_still_receives_training_penalty(self):
+        regular = score_job(make_job(employment_type="Vollzeit"))
+        training = score_job(make_job(employment_type="Ausbildung"))
+        self.assertEqual(regular["match_percent"] - training["match_percent"], 12)
+        self.assertTrue(
+            any("Ausbildungs-/Studienformat" in r for r in training["reasons"])
+        )
+
+    def test_training_course_title_stays_excluded(self):
+        result = score_job(make_job(title="Weiterbildung Python Developer"))
+        self.assertEqual(result["filter_status"], "excluded")
+        self.assertIn("weiterbildung", result["reasons"][0])
+
     def test_named_scoring_cases(self):
         cases = [
             (
@@ -412,7 +350,7 @@ class ScoringTests(unittest.TestCase):
             )
 
         self.assertEqual(accepted["filter_status"], "included")
-        self.assertIn("Pendelort Beispielstadt", accepted["location_precheck"])
+        self.assertIn("Pendelort Beispielstadt", accepted["reasons"][3])
         self.assertEqual(rejected["filter_status"], "excluded")
 
     def test_remote_days_are_converted_to_weekly_percentage(self):
@@ -446,7 +384,7 @@ class ScoringTests(unittest.TestCase):
             result = score_job(job)
 
         self.assertEqual(result["filter_status"], "included")
-        self.assertIn("60% Remote", result["location_precheck"])
+        self.assertIn("60% Remote", result["reasons"][3])
 
     def test_fixed_score_is_between_zero_and_one_hundred(self):
         result = score_job(
@@ -557,7 +495,7 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(result["filter_status"], "included")
         self.assertEqual(result["experience_rank"], 4)
         self.assertTrue(
-            any(reason.startswith("+5 Erfahrung") for reason in result["reasons"])
+            any(reason.startswith("+3 Erfahrung") for reason in result["reasons"])
         )
 
     def test_required_experience_wins_over_separate_optional_experience(self):
@@ -575,7 +513,7 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(result["filter_status"], "included")
         self.assertEqual(result["experience_rank"], 4)
         self.assertTrue(
-            any(reason.startswith("+15 Erfahrung") for reason in result["reasons"])
+            any(reason.startswith("+8 Erfahrung") for reason in result["reasons"])
         )
 
     def test_non_junior_strong_experience_is_excluded(self):
@@ -621,7 +559,7 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(result["filter_status"], "included")
         self.assertEqual(result["experience_level"], "2 Jahr(e) gefordert")
         self.assertTrue(
-            any(reason.startswith("+15 Erfahrung") for reason in result["reasons"])
+            any(reason.startswith("+8 Erfahrung") for reason in result["reasons"])
         )
 
     def test_senior_is_excluded_but_mixed_junior_senior_is_reviewable(self):
@@ -706,7 +644,7 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(sre["filter_status"], "included")
         self.assertEqual(netops["filter_status"], "included")
 
-    def test_rpa_is_allowed_without_special_role_penalty(self):
+    def test_rpa_is_allowed_with_lower_role_score(self):
         result = score_job(
             make_job(
                 title="Junior Automation Engineer",
@@ -716,7 +654,7 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(result["filter_status"], "included")
         self.assertEqual(result["role_group"], "rpa_automation")
         self.assertTrue(
-            any(reason.startswith("+10 Richtung") for reason in result["reasons"])
+            any(reason.startswith("+14 Rolle") for reason in result["reasons"])
         )
 
     def test_microsoft_365_roles_reach_personal_review(self):
@@ -873,7 +811,7 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(result["filter_status"], "included")
         self.assertFalse(any("Gehalt unter" in reason for reason in result["reasons"]))
 
-    def test_entry_role_ranks_above_experienced_keyword_match(self):
+    def test_jobs_sort_by_score_before_experience_level(self):
         entry = make_job(
             title="Junior Java Software Developer",
             company="Entry GmbH",
@@ -887,7 +825,7 @@ class ScoringTests(unittest.TestCase):
             url="https://example.test/experienced",
         )
         results = score_jobs([experienced, entry])
-        self.assertEqual(results["included"][0]["company"], "Entry GmbH")
+        self.assertEqual(results["included"][0]["company"], "Experienced GmbH")
 
 
 class DeduplicationTests(unittest.TestCase):

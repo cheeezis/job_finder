@@ -18,7 +18,8 @@ def load_user_settings(path=SETTINGS_PATH):
     """Load and validate the search and matching sections of a YAML file.
 
     Return the parsed mapping without filling in missing optional
-    keys. Missing preferred_role_groups means no preferred role families.
+    keys. preferred_role_groups is retained and validated for compatibility;
+    the restored ranking uses fixed role weights instead.
     Raise ValueError for unreadable files, invalid YAML or invalid
     field values. See user_settings.example.yaml for the input schema.
 

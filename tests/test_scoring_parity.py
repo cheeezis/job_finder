@@ -1,4 +1,4 @@
-"""Fixed scoring inputs and reviewed expectations for the entry-first ranking."""
+"""Frozen anonymized scoring outputs captured before module extraction."""
 
 import json
 import unittest

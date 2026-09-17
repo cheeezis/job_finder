@@ -50,15 +50,8 @@ def analyze_experience(title, full_text, required_years=None):
     if required_years is None:
         required_years = extract_required_years(full_text)
 
-    if required_years <= 3 and project_experience_suffices(full_text):
-        return {
-            "rank": 0,
-            "points": 50,
-            "label": "Studien-/Projekterfahrung reicht aus",
-        }
-
     if required_years:
-        points = {1: 25, 2: 15, 3: 5}[required_years]
+        points = {1: 14, 2: 8, 3: 3}[required_years]
         return {
             "rank": required_years + 1,
             "points": points,
@@ -66,34 +59,32 @@ def analyze_experience(title, full_text, required_years=None):
         }
 
     if contains_any(full_text, BODY_ENTRY_LEVEL_PHRASES):
-        return {"rank": 0, "points": 50, "label": "klare Einstiegsstelle"}
+        return {"rank": 0, "points": 25, "label": "klare Einstiegsstelle"}
 
-    if required_strong_experience(full_text):
+    if contains_any(full_text, STRONG_EXPERIENCE_PHRASES):
         return {
             "rank": 5,
-            "points": 10,
+            "points": 6,
             "label": "mehrjaehrige/fundierte Erfahrung ohne Jahreszahl",
         }
 
     if is_entry_level(title, full_text):
-        return {"rank": 0, "points": 50, "label": "klare Einstiegsstelle"}
+        return {"rank": 0, "points": 25, "label": "klare Einstiegsstelle"}
 
-    if contains_any(
-        full_text, FIRST_EXPERIENCE_PHRASES
-    ) and not has_required_experience(full_text):
-        return {"rank": 0, "points": 50, "label": "erste Erfahrung reicht aus"}
+    if contains_any(full_text, FIRST_EXPERIENCE_PHRASES):
+        return {"rank": 0, "points": 25, "label": "erste Erfahrung reicht aus"}
 
     if has_required_experience(full_text):
         return {
             "rank": 4,
-            "points": 15,
+            "points": 8,
             "label": "praktische Vorerfahrung mit Technologien vorausgesetzt",
         }
 
     if experience_is_optional(full_text):
-        return {"rank": 1, "points": 35, "label": "Erfahrung nur wuenschenswert"}
+        return {"rank": 1, "points": 18, "label": "Erfahrung nur wuenschenswert"}
 
-    return {"rank": 1, "points": 30, "label": "keine klare Jahresanforderung"}
+    return {"rank": 1, "points": 20, "label": "keine klare Jahresanforderung"}
 
 
 def extract_required_years(text):
@@ -145,9 +136,6 @@ def has_required_experience(text):
     """Return whether applicant experience is stated as a requirement."""
     return any(
         not match_is_optional(text, match)
-        and not contains_any(
-            text[max(0, match.start() - 20) : match.end()], FIRST_EXPERIENCE_PHRASES
-        )
         for pattern in REQUIRED_EXPERIENCE_PATTERNS
         for match in re.finditer(pattern, text)
     )
@@ -157,34 +145,14 @@ def strong_experience_is_required(title, description):
     """Reject vague seniority requirements unless the vacancy is entry-level."""
     if is_entry_level(title, description):
         return False
-    return required_strong_experience(description)
-
-
-def required_strong_experience(text):
-    """Check every strong requirement within its own clause, including repeats."""
-    phrases = [*STRONG_EXPERIENCE_PHRASES, "fundierte praxis-erfahrung"]
-    return any(
-        not match_is_optional(text, match)
-        for phrase in phrases
-        for match in re.finditer(re.escape(phrase), text)
-    )
-
-
-def project_experience_suffices(text):
-    """Recognize explicitly accepted study/project experience, not job tasks."""
-    if re.search(
-        r"\b(?:berufserfahrung|professional experience|commercial experience)\b", text
-    ):
-        return False
-    text = re.sub(r"\bz\.\s*b\.", "zum beispiel", text)
-    return bool(
-        re.search(
-            r"(?:erfahrung(?:en)?|experience)[^.!?;\n]{0,160}"
-            r"(?:durch|aus|waehrend|im rahmen|gained (?:in|through))\s+"
-            r"(?:dein(?:es|er)?\s+)?(?:studium|studien|universit|projects?|projekte|praktik)",
-            text,
-        )
-    )
+    for phrase in STRONG_EXPERIENCE_PHRASES:
+        position = description.find(phrase)
+        if position < 0:
+            continue
+        context = description[max(0, position - 55) : position + len(phrase) + 55]
+        if not contains_any(context, OPTIONAL_EXPERIENCE_PHRASES):
+            return True
+    return False
 
 
 def match_is_optional(text, match, context_size=55):

@@ -38,13 +38,6 @@ from job_finder.experience import (
 from job_finder.experience import (
     strong_experience_is_required as strong_experience_is_required,
 )
-from job_finder.job_context import (
-    employment_evidence,
-    leadership_required,
-    non_it_title,
-    plain_description,
-    requirement_text,
-)
 from job_finder.location_rules import (
     is_full_remote as is_full_remote,
 )
@@ -82,7 +75,8 @@ from job_finder.matching_text import (
     matches_pattern as matches_pattern,
 )
 from job_finder.models import FilterStatus, Job
-from job_finder.remote import assess_remote, classify_remote
+from job_finder.ranking_weights import ROLE_POINTS, SCORE_LIMITS, SKILL_GROUPS
+from job_finder.remote import detect_remote
 from job_finder.salary import (
     extract_annual_salary as extract_annual_salary,
 )
@@ -96,13 +90,7 @@ from job_finder.text import normalize_text, text_is_mainly_english
 from job_finder.user_settings import USER_SETTINGS
 
 MAX_JOB_AGE_DAYS = 60
-
-# Entry suitability and working conditions dominate the independent prefilter.
-# Role preferences add only five points over any other recognized IT role.
-# Keyword overlap is one capped bonus, never evidence of proficiency.
-SCORE_LIMITS = {"experience": 50, "location": 30, "role": 15, "profile": 5}
 MATCHING_SETTINGS = USER_SETTINGS["matching"]
-PREFERRED_ROLE_GROUPS = MATCHING_SETTINGS.get("preferred_role_groups", [])
 LOCAL_PLACES = MATCHING_SETTINGS["local_places"]
 COMMUTER_LOCATIONS = MATCHING_SETTINGS.get("commuter_locations", [])
 PROFILE_DOMAIN_KEYWORDS = MATCHING_SETTINGS["profile_domain_keywords"]
@@ -113,7 +101,7 @@ SALARY_MINIMUM = MATCHING_SETTINGS["salary_minimum_eur"]
 def score_job(job: Job, today=None):
     """Return a filter decision, match score and reasons for one Job.
 
-    Read the configured search preferences without changing the job or performing
+    Read the configured profile without changing the job or performing
     I/O. today optionally supplies the reference date for the age check.
     Missing publication dates do not cause exclusion by themselves.
 
@@ -133,9 +121,12 @@ def score_job(job: Job, today=None):
 
     title = normalize_text(job.title)
     location = normalize_text(job.location_text)
-    description = strip_platform_boilerplate(plain_description(job.description_clean))
-    requirements = requirement_text(description)
+    description = strip_platform_boilerplate(normalize_text(job.description_clean))
     remote = normalize_text(job.remote_text)
+    if job.remote_percentage is None:
+        remote = normalize_text(
+            detect_remote(title, location, description, structured_remote=remote)
+        )
     salary_text = structured_salary_text(job)
     employment = normalize_text(job.employment_type or "")
     # Structured employment data must influence preferences even when portals
@@ -145,7 +136,7 @@ def score_job(job: Job, today=None):
     )
 
     role = find_role(title, description)
-    required_years = extract_required_years(requirements)
+    required_years = extract_required_years(full_text)
     filter_reason = hard_filter_reason(
         title=title,
         description=description,
@@ -157,42 +148,25 @@ def score_job(job: Job, today=None):
     if filter_reason:
         return excluded_result(filter_reason)
 
-    remote, remote_warning = assess_remote(
-        title,
-        description,
-        location,
-        remote,
-        broad_portal_flag=job.source_names == ["arbeitnow"],
-    )
     location_score = analyze_location_for_role(
         title,
         location,
         remote,
         description,
     )
-    # A broad portal flag alone keeps a candidate reviewable, with no remote
-    # points and no invented percentage. Explicit geographic limits still apply.
-    if (
-        remote_warning.startswith("Remote-Umfang unklar")
-        and not is_local_area(location)
-        and remote_possible_from_germany(location, description)
-    ):
-        location_score = {
-            "allowed": True,
-            "points": 0,
-            "label": "Remote-Umfang unklar; Standort/Präsenz prüfen",
-        }
     if not location_score["allowed"]:
         return excluded_result(location_score["label"])
 
-    experience = analyze_experience(title, requirements, required_years)
-    role_score = score_role_preference(role)
-    profile_score = score_profile_connection(f"{title} {description}")
+    experience = analyze_experience(title, full_text, required_years)
+    skill_score, skill_labels = score_skills(f"{title} {description}")
+    profile_score = score_profile_connection(full_text)
 
-    score = role_score + experience["points"]
+    role_points = ROLE_POINTS[role["id"]]
+    score = role_points + skill_score + experience["points"]
     score += location_score["points"] + profile_score
     reasons = [
-        f"+{role_score} Richtung: {role['label']}",
+        f"+{role_points} Rolle: {role['label']}",
+        format_skill_reason(skill_score, skill_labels),
         f"+{experience['points']} Erfahrung: {experience['label']}",
         f"+{location_score['points']} Standort: {location_score['label']}",
     ]
@@ -200,15 +174,13 @@ def score_job(job: Job, today=None):
     if profile_score:
         reasons.append(f"+{profile_score} Bezug zu Projekten oder Weiterbildungen")
 
-    penalties = score_preferences(
-        full_text, employment_text=employment_evidence(title, employment, description)
-    )
+    penalties = score_preferences(full_text)
     for penalty in penalties:
         score -= penalty["points"]
         reasons.append(f"-{penalty['points']} {penalty['label']}")
 
     score = max(0, min(100, score))
-    result = {
+    return {
         "filter_status": FilterStatus.INCLUDED.value,
         "match_percent": score,
         "experience_rank": experience["rank"],
@@ -217,17 +189,6 @@ def score_job(job: Job, today=None):
         "location_precheck": location_score["label"],
         "reasons": reasons,
     }
-    if remote_warning or (
-        job.remote_percentage is not None and job.remote_text != remote
-    ):
-        work_mode, percentage = classify_remote(remote)
-        result.update(
-            work_mode=work_mode.value,
-            remote_percentage=percentage,
-        )
-    if remote_warning:
-        result["prefilter_warning"] = remote_warning
-    return result
 
 
 def excluded_result(reason):
@@ -276,7 +237,7 @@ def hard_filter_reason(
 ):
     """Return the first blocking job requirement, or an empty string.
 
-    Inputs use normalize_text; role is a recognized role dictionary
+    Inputs use normalize_text; role is a matching profile dictionary
     or None. required_years is extracted once for filtering and scoring.
     score_job checks age before these rules and location after them.
     """
@@ -287,21 +248,16 @@ def hard_filter_reason(
     if not role:
         return "Titel ist keine erkennbare IT-Rolle"
 
-    if leadership_required(title, description):
-        return "Personalführung oder Führungserfahrung gefordert"
-
-    requirements = requirement_text(description)
-
     advanced_level = structured_advanced_level(career_levels)
-    if advanced_level and not is_entry_level(title, requirements):
+    if advanced_level and not is_entry_level(title, description):
         return f"Portal-Karrierestufe ist nicht fuer den Einstieg: {advanced_level}"
 
     if required_years is None:
-        required_years = extract_required_years(requirements)
+        required_years = extract_required_years(full_text)
     if required_years > 3:
         return f"Mehr als 3 Jahre Erfahrung gefordert: {required_years} Jahre"
 
-    if strong_experience_is_required(title, requirements):
+    if strong_experience_is_required(title, description):
         return "Mehrjaehrige oder fundierte Erfahrung gefordert"
 
     if any(
@@ -317,16 +273,12 @@ def hard_filter_reason(
 
 def find_role(title, description):
     """Require an allowed role in the title; body keywords alone never suffice."""
-    if non_it_title(title):
-        return None
     full_text = f"{title} {description}"
     for role in ROLE_GROUPS:
         if not any(matches_pattern(title, pattern) for pattern in role["patterns"]):
             continue
 
-        if role.get("entry_only") and not is_entry_level(
-            title, requirement_text(description)
-        ):
+        if role.get("entry_only") and not is_entry_level(title, description):
             continue
 
         context_keywords = role.get("context_keywords", [])
@@ -393,9 +345,18 @@ def structured_advanced_level(career_levels):
     return None
 
 
-def score_role_preference(role):
-    """Give every recognized IT role ten points and preferred families fifteen."""
-    return SCORE_LIMITS["role"] if role["id"] in PREFERRED_ROLE_GROUPS else 10
+def score_skills(text):
+    """Return capped skill points and labels matched in normalized text."""
+    matched = [group for group in SKILL_GROUPS if contains_any(text, group["keywords"])]
+    points = min(SCORE_LIMITS["skills"], sum(group["points"] for group in matched))
+    return points, [group["label"] for group in matched]
+
+
+def format_skill_reason(points, labels):
+    """Format skill points and matched labels for the visible score reasons."""
+    if not labels:
+        return "+0 Technologien: keine direkte Profilueberschneidung"
+    return f"+{points} Technologien: {', '.join(labels)}"
 
 
 def score_profile_connection(text):
@@ -421,22 +382,21 @@ def analyze_location_for_role(title, location, remote, description):
     return result
 
 
-def score_preferences(full_text, *, employment_text=None):
+def score_preferences(full_text):
     """Return point deductions and labels for normalized preference conflicts."""
     penalties = []
-    employment_text = full_text if employment_text is None else employment_text
 
-    if "teilzeit" in employment_text and "vollzeit" not in employment_text:
+    if "teilzeit" in full_text and "vollzeit" not in full_text:
         penalties.append({"points": 4, "label": "reine Teilzeitstelle"})
 
-    if re.search(r"\b(?:freelanc\w*|freiberuflich\w*)\b", employment_text):
+    if contains_any(full_text, ["freelance", "freelancer", "freiberuflich"]):
         penalties.append({"points": 8, "label": "freiberufliche Beschäftigung"})
 
-    if re.search(r"\b(?:werkstudent\w*|working student)\b", employment_text):
+    if contains_any(full_text, ["werkstudent", "working student"]):
         penalties.append({"points": 8, "label": "Werkstudentenstelle"})
 
-    if re.search(r"\bpraktikant\w*\b", employment_text) or contains_any(
-        employment_text,
+    if contains_any(
+        full_text,
         [
             "praktikum",
             "praktikant",
@@ -447,22 +407,14 @@ def score_preferences(full_text, *, employment_text=None):
             "auszubildenden",
             "azubi",
             "duales studium",
-            "dualer student",
             "dual study",
             "abschlussarbeit",
             "bachelorarbeit",
             "thesis",
+            "weiterbildung",
         ],
     ):
         penalties.append({"points": 12, "label": "Ausbildungs-/Studienformat"})
-
-    if re.search(
-        r"\bbefristet\w*\s+(?:(?:auf|fuer)\s+)?(?:[1-6]|ein|zwei|drei|vier|fuenf|sechs)\s+monat",
-        employment_text,
-    ):
-        penalties.append(
-            {"points": 12, "label": "kurzfristige Befristung bis sechs Monate"}
-        )
 
     if contains_any(
         full_text, ["arbeitnehmerueberlassung", "zeitarbeit", "personaldienstleister"]
@@ -494,7 +446,7 @@ def passes_hard_filters(
 ):
     """Return (allowed, reason) for normalized job text and role data.
 
-    Inputs use normalize_text; role is a recognized role dictionary
+    Inputs use normalize_text; role is a matching profile dictionary
     or None. Return the first blocking reason, or (True, "") when title,
     experience, degree, travel and location requirements pass. The age
     check is performed separately by score_job.

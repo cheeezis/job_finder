@@ -85,25 +85,17 @@ Die Einstellungen werden beim Start geladen. Nach Änderungen die laufende
 Review-Anwendung neu starten; ein Neuladen der Browserseite genügt nicht.
 
 Der Finder bewertet und sortiert Stellen eigenständig, auch ohne KI-Stufe.
-Der Vorfilter vergibt bis zu 50 Punkte für den Berufseinstieg, 30 für den
-Standort, 15 für die fachliche Richtung und insgesamt fünf für Stichwörter
-aus Projekten oder Weiterbildungen. Bestehende Abzüge für Arbeitsbedingungen
-werden danach angewendet. `matching.preferred_role_groups` gibt bevorzugten
-IT-Richtungen 15 statt zehn Punkte; andere IT-Rollen bleiben zugelassen.
+Der Vorfilter verwendet wieder die bewährte Punkteverteilung: bis zu 30 für
+die Rolle, 25 für Technologien, 25 für Einstiegseignung, 15 für den Standort
+und fünf für den Bezug zu Projekten oder Weiterbildungen. Abzüge für
+Arbeitsbedingungen werden danach angewendet. Die Rollen- und Technologiegewichte
+stehen getrennt von den Erkennungsregeln in `job_finder/ranking_weights.py`.
 `matching.profile_domain_keywords` steuert den einmaligen Stichwortbonus.
-Die bisherige summierte Technologiegewichtung entfällt: Eine lange Liste
-von Technologien ist kein Nachweis persönlicher Eignung.
-
-Die Bewertung trennt erkannte Anforderungsabschnitte von Aufgaben und Benefits.
-Eine abgeschlossene Ausbildung und angebotene Weiterbildung gelten dadurch
-nicht als Ausbildungsstelle. Explizit akzeptierte Studien-/Projekterfahrung
-zählt als Einstieg; Personalführung wird durch einzelne Junior-Stichwörter
-nicht aufgehoben. Kurze Befristungen werden als Nachteil ausgewiesen.
-Konkrete Remote-Grenzen im Text gehen pauschalen Portalangaben vor. Unklare
-Remote-Angaben bleiben mit einem Prüfhinweis und ohne Remote-Punkte sichtbar;
-die Anzeige behauptet dafür keine 100 Prozent. Suchradius und Pendlergrenzen
-werden weiterhin aus denselben persönlichen Einstellungen geladen.
-Das bleibt eine regelbasierte Näherung, keine vollständige Analyse der Anzeige.
+`matching.preferred_role_groups` wird aus Kompatibilitätsgründen weiterhin
+akzeptiert, hat in dieser wiederhergestellten Sortierung aber keinen Einfluss.
+Suchradius, Ortsliste und Pendlergrenzen kommen unverändert aus den aktuellen
+persönlichen Einstellungen. Der Score ist eine regelbasierte Sortierhilfe,
+kein Nachweis persönlicher Eignung.
 
 `job_finder/matching_rules.py` enthält die Erkennungs- und Ausschlussregeln,
 `job_finder/scoring.py` setzt daraus die Bewertung zusammen. Ein optionales

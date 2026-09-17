@@ -187,11 +187,12 @@ Ausschlussmerkmale ohne persönliche Werte oder Punkte. Die erste passende
 Rollengruppe gewinnt; ihre Reihenfolge ist fachliche Erkennungspriorität und
 wird nicht durch persönliche Vorlieben umsortiert.
 
-`user_settings.local.yaml` steuert Standort, Gehalt, bevorzugte Rollengruppen
+`user_settings.local.yaml` steuert Standort, Gehalt
 und den Bezug zu Projekten oder Weiterbildungen. Unbekannte IDs in
 `matching.preferred_role_groups` werden beim Laden abgelehnt. Ein fehlender
 Eintrag ist für ältere Konfigurationen zulässig und entspricht einer leeren
-Liste. `profile.local.yaml` ist davon unabhängig und wird nicht automatisch
+Liste. Das Feld bleibt kompatibel, beeinflusst die wiederhergestellte
+Sortierung aber nicht. `profile.local.yaml` ist davon unabhängig und wird nicht automatisch
 eingelesen. Die alte Python-Datei `profile.py` wurde durch `matching_rules.py`
 abgelöst; interne Imports verwenden die neuen Zuständigkeiten.
 
@@ -199,24 +200,27 @@ Die Bewertung bleibt eine vollständige, regelbasierte Sortierhilfe:
 
 | Bestandteil | Punkte |
 | --- | --- |
-| Klare Einstiegsstelle oder erste Erfahrung ausreichend | 50 |
-| Erfahrung nur wünschenswert / keine klare Anforderung | 35 / 30 |
-| Ein / zwei / drei Jahre gefordert | 25 / 15 / 5 |
-| Technologische Vorerfahrung / mehrjährige Erfahrung ohne Jahreszahl | 15 / 10 |
-| Vollständig remote / lokal hybrid / lokal vor Ort / erlaubter Pendelort | 30 / 26 / 20 / 16 |
-| Bevorzugte / andere erkannte IT-Richtung | 15 / 10 |
-| Mindestens ein konfigurierter Begriff im Titel oder Beschreibung | 5 insgesamt |
+| Klare Einstiegsstelle oder erste Erfahrung ausreichend | 25 |
+| Erfahrung nur wünschenswert / keine klare Anforderung | 18 / 20 |
+| Ein / zwei / drei Jahre gefordert | 14 / 8 / 3 |
+| Technologische Vorerfahrung / mehrjährige Erfahrung ohne Jahreszahl | 8 / 6 |
+| Vollständig remote / lokal hybrid / lokal vor Ort / erlaubter Pendelort | 15 / 13 / 10 / 8 |
+| Erkannte IT-Richtung | 10 bis 30, nach Rolle |
+| Technologien im Titel oder Beschreibung | bis 25 insgesamt |
+| Mindestens ein konfigurierter Profilbegriff im Anzeigentext | 5 insgesamt |
 
 Die Junior-Hybrid-Ausnahme außerhalb des Suchgebiets bleibt mit null
 Standortpunkten sichtbar zuschaltbar. Bestehende Präferenzabzüge folgen auf
 die Summe; das Ergebnis bleibt auf 0 bis 100 begrenzt. Es gibt keinen
-Mindestscore für die Aufnahme ins Review. Technologiestichwörter werden
-nicht mehr zusätzlich über eine feste Skill-Tabelle aufsummiert.
+Mindestscore für die Aufnahme ins Review. `ranking_weights.py` enthält die
+wiederhergestellten Rollen- und Technologiegewichte aus `201417f`; die
+Erkennungsregeln und persönlichen Einstellungen bleiben davon getrennt.
 
 Die 32 festen Vergleichsfälle behalten ihre Eingaben und Ausschlussentscheidungen;
-die vier zugelassenen Erwartungen wurden für diese bewusst neue Punktevergabe
-angepasst. Zusätzliche Rangfolgetests sichern den Vorrang des Einstiegs und
-den begrenzten Einfluss von Richtungs- und Stichwortboni ab.
+die Erwartungen entsprechen wieder der Sortierung vor der Umgewichtung.
+Änderungen an einzelnen Erkennungsfehlern werden separat getestet und mit
+gespeicherten Entscheidungen verglichen. Persönliche Anzeigen und Bewertungen
+bleiben dabei lokal außerhalb des Repositories.
 
 Die Review-API ordnet POST-Routen kurzen Aktionsmethoden zu. Host-/Origin-Prüfung,
 Größenlimit und JSON-Objektprüfung erfolgen gemeinsam vor dem Aufruf der Aktion;

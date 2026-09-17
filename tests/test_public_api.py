@@ -11,7 +11,7 @@ class PublicApiTests(unittest.TestCase):
     def test_experience_accepts_original_two_argument_call(self):
         self.assertEqual(
             analyze_experience("developer", "2 jahre erfahrung"),
-            {"rank": 3, "points": 15, "label": "2 Jahr(e) gefordert"},
+            {"rank": 3, "points": 8, "label": "2 Jahr(e) gefordert"},
         )
 
     def test_filter_returns_original_tuple_and_first_reason(self):

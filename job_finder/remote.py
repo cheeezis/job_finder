@@ -65,45 +65,8 @@ def detect_remote(*text_parts, structured_remote=""):
     return "0%"
 
 
-def assess_remote(title, description, location, structured, *, broad_portal_flag=False):
-    """Resolve explicit limits before portal flags; expose uncertain remote scope."""
-    text = normalize_text(f"{title}\n{description}")
-    percentages = remote_percentages(text)
-    warning = ""
-    if percentages:
-        remote = f"{min(percentages)}%"
-        if structured not in {"0%", remote} and re.fullmatch(r"\d+%", structured):
-            warning = (
-                "Remote-Angaben widersprechen sich; konkreter Textumfang verwendet."
-            )
-    elif contains_any(text, NO_REMOTE_PHRASES):
-        remote = "0%"
-        if structured not in {"0%", ""}:
-            warning = "Portal meldet Remote, Anzeigentext schließt Homeoffice aus."
-    elif contains_any(text, FULL_REMOTE_PHRASES + ["remote-first", "remote first"]):
-        remote = "100%"
-    elif structured == "100%" and (
-        broad_portal_flag
-        or contains_any(text, ["hybrid", "home-office-option", "homeoffice-option"])
-    ):
-        remote = "homeoffice"
-        warning = "Remote-Umfang unklar; Portalangabe bestätigt keine 100 % Remote."
-    elif structured != "0%":
-        remote = structured
-    else:
-        remote = detect_remote(
-            title, location, description, structured_remote=structured
-        )
-    return remote, warning
-
-
 def extract_remote_percent(text):
     """Find the highest percentage that is clearly connected to remote work."""
-    return max(remote_percentages(text), default=0)
-
-
-def remote_percentages(text):
-    """Collect concrete percentages, including explicit zero and weekly days."""
     day_text = text
     for word, number in {
         "ein": "1",
@@ -117,12 +80,12 @@ def remote_percentages(text):
         day_text = re.sub(rf"\b{word}\b", number, day_text)
     patterns = [
         (
-            r"(?:bis zu|up to)?\s*\b(100|[1-9]?\d)\s*%\s*"
-            r"(?:remote|homeoffice|home[- ]office|mobiles arbeiten|hybrid)"
+            r"(?:bis zu|up to)?\s*(100|[1-9]\d)\s*%\s*"
+            r"(?:remote|homeoffice|home office|mobiles arbeiten|hybrid)"
         ),
         (
-            r"(?:remote|homeoffice|home[- ]office|mobiles arbeiten|hybrid)"
-            r"[^\d%.!?\n]{0,25}\b(100|[1-9]?\d)\s*%"
+            r"(?:remote|homeoffice|home office|mobiles arbeiten|hybrid)"
+            r"[^\d%]{0,40}(100|[1-9]\d)\s*%"
         ),
     ]
     matches = []
@@ -131,21 +94,20 @@ def remote_percentages(text):
 
     remote_day_patterns = [
         r"(?:bis zu\s+)?([1-5])\s+(?:tage?n?\s+)?(?:pro|je)\s+woche\s+(?:im\s+)?(?:homeoffice|home office|remote|mobil)",
-        r"(?:homeoffice|home office|remote|mobiles arbeiten)\s*[:(-]?\s*(?:bis zu\s+)?([1-5])\s+tage?n?(?:\s+(?:pro|je)\s+woche)?",
+        r"(?:homeoffice|home office|remote|mobiles arbeiten)[^.!?\n]{0,35}(?:bis zu\s+)?([1-5])\s+tage?n?(?:\s+(?:pro|je)\s+woche)?",
         r"(?:bis zu\s+)?([1-5])\s+tage?n?(?:\s+(?:pro|je)\s+woche)?\s+(?:im\s+)?(?:homeoffice|home office|remote|mobil)",
     ]
     for pattern in remote_day_patterns:
         matches.extend(int(days) * 20 for days in re.findall(pattern, day_text))
 
     presence_patterns = [
-        r"([1-5])\s+praesenztage?n?\s+(?:pro|je)\s+woche",
-        r"([1-5])\s+tage?n?\s+(?:pro|je)\s+woche\s+(?:vor ort|im buero|im office)",
-        r"([1-5])\s+days?\s+(?:a|per)\s+week\s+(?:onsite|on-site|in (?:the )?office)",
+        r"([1-5])\s+praesenztage?n?(?:\s+(?:pro|je)\s+woche)?",
+        r"([1-5])\s+tage?n?(?:\s+(?:pro|je)\s+woche)?\s+(?:vor ort|im buero|im office)",
     ]
     for pattern in presence_patterns:
         matches.extend((5 - int(days)) * 20 for days in re.findall(pattern, day_text))
 
-    return matches
+    return max(matches, default=0)
 
 
 def classify_remote(remote):

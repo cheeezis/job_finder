@@ -32,17 +32,17 @@ def analyze_location(
     if is_local_area(location, local_places):
         radius_label = f"{radius}-km-Radius"
         if full_remote:
-            return {"allowed": True, "points": 30, "label": "lokal und 100% Remote"}
+            return {"allowed": True, "points": 15, "label": "lokal und 100% Remote"}
         if is_hybrid(remote):
             return {
                 "allowed": True,
-                "points": 26,
+                "points": 13,
                 "label": f"{radius_label} und Hybrid",
             }
-        return {"allowed": True, "points": 20, "label": f"im {radius_label}"}
+        return {"allowed": True, "points": 10, "label": f"im {radius_label}"}
 
     if full_remote:
-        return {"allowed": True, "points": 30, "label": "100% Remote aus Deutschland"}
+        return {"allowed": True, "points": 15, "label": "100% Remote aus Deutschland"}
 
     commuter_location = find_commuter_location(location, commuter_locations)
     if commuter_location:
@@ -51,7 +51,7 @@ def analyze_location(
         if percentage >= minimum:
             return {
                 "allowed": True,
-                "points": 16,
+                "points": 8,
                 "label": (
                     f"Pendelort {commuter_location['search_location']} mit "
                     f"{percentage}% Remote"

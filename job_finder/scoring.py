@@ -75,6 +75,7 @@ from job_finder.matching_text import (
     matches_pattern as matches_pattern,
 )
 from job_finder.models import FilterStatus, Job
+from job_finder.ranking_weights import ROLE_POINTS, SCORE_LIMITS, SKILL_GROUPS
 from job_finder.remote import detect_remote
 from job_finder.salary import (
     extract_annual_salary as extract_annual_salary,
@@ -89,13 +90,7 @@ from job_finder.text import normalize_text, text_is_mainly_english
 from job_finder.user_settings import USER_SETTINGS
 
 MAX_JOB_AGE_DAYS = 60
-
-# Entry suitability and working conditions dominate the independent prefilter.
-# Role preferences add only five points over any other recognized IT role.
-# Keyword overlap is one capped bonus, never evidence of proficiency.
-SCORE_LIMITS = {"experience": 50, "location": 30, "role": 15, "profile": 5}
 MATCHING_SETTINGS = USER_SETTINGS["matching"]
-PREFERRED_ROLE_GROUPS = MATCHING_SETTINGS.get("preferred_role_groups", [])
 LOCAL_PLACES = MATCHING_SETTINGS["local_places"]
 COMMUTER_LOCATIONS = MATCHING_SETTINGS.get("commuter_locations", [])
 PROFILE_DOMAIN_KEYWORDS = MATCHING_SETTINGS["profile_domain_keywords"]
@@ -106,7 +101,7 @@ SALARY_MINIMUM = MATCHING_SETTINGS["salary_minimum_eur"]
 def score_job(job: Job, today=None):
     """Return a filter decision, match score and reasons for one Job.
 
-    Read the configured search preferences without changing the job or performing
+    Read the configured profile without changing the job or performing
     I/O. today optionally supplies the reference date for the age check.
     Missing publication dates do not cause exclusion by themselves.
 
@@ -163,13 +158,15 @@ def score_job(job: Job, today=None):
         return excluded_result(location_score["label"])
 
     experience = analyze_experience(title, full_text, required_years)
-    role_score = score_role_preference(role)
-    profile_score = score_profile_connection(f"{title} {description}")
+    skill_score, skill_labels = score_skills(f"{title} {description}")
+    profile_score = score_profile_connection(full_text)
 
-    score = role_score + experience["points"]
+    role_points = ROLE_POINTS[role["id"]]
+    score = role_points + skill_score + experience["points"]
     score += location_score["points"] + profile_score
     reasons = [
-        f"+{role_score} Richtung: {role['label']}",
+        f"+{role_points} Rolle: {role['label']}",
+        format_skill_reason(skill_score, skill_labels),
         f"+{experience['points']} Erfahrung: {experience['label']}",
         f"+{location_score['points']} Standort: {location_score['label']}",
     ]
@@ -240,7 +237,7 @@ def hard_filter_reason(
 ):
     """Return the first blocking job requirement, or an empty string.
 
-    Inputs use normalize_text; role is a recognized role dictionary
+    Inputs use normalize_text; role is a matching profile dictionary
     or None. required_years is extracted once for filtering and scoring.
     score_job checks age before these rules and location after them.
     """
@@ -348,9 +345,18 @@ def structured_advanced_level(career_levels):
     return None
 
 
-def score_role_preference(role):
-    """Give every recognized IT role ten points and preferred families fifteen."""
-    return SCORE_LIMITS["role"] if role["id"] in PREFERRED_ROLE_GROUPS else 10
+def score_skills(text):
+    """Return capped skill points and labels matched in normalized text."""
+    matched = [group for group in SKILL_GROUPS if contains_any(text, group["keywords"])]
+    points = min(SCORE_LIMITS["skills"], sum(group["points"] for group in matched))
+    return points, [group["label"] for group in matched]
+
+
+def format_skill_reason(points, labels):
+    """Format skill points and matched labels for the visible score reasons."""
+    if not labels:
+        return "+0 Technologien: keine direkte Profilueberschneidung"
+    return f"+{points} Technologien: {', '.join(labels)}"
 
 
 def score_profile_connection(text):
@@ -405,7 +411,6 @@ def score_preferences(full_text):
             "abschlussarbeit",
             "bachelorarbeit",
             "thesis",
-            "weiterbildung",
         ],
     ):
         penalties.append({"points": 12, "label": "Ausbildungs-/Studienformat"})
@@ -440,7 +445,7 @@ def passes_hard_filters(
 ):
     """Return (allowed, reason) for normalized job text and role data.
 
-    Inputs use normalize_text; role is a recognized role dictionary
+    Inputs use normalize_text; role is a matching profile dictionary
     or None. Return the first blocking reason, or (True, "") when title,
     experience, degree, travel and location requirements pass. The age
     check is performed separately by score_job.

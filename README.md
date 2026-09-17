@@ -94,6 +94,17 @@ IT-Richtungen 15 statt zehn Punkte; andere IT-Rollen bleiben zugelassen.
 Die bisherige summierte Technologiegewichtung entfällt: Eine lange Liste
 von Technologien ist kein Nachweis persönlicher Eignung.
 
+Die Bewertung trennt erkannte Anforderungsabschnitte von Aufgaben und Benefits.
+Eine abgeschlossene Ausbildung und angebotene Weiterbildung gelten dadurch
+nicht als Ausbildungsstelle. Explizit akzeptierte Studien-/Projekterfahrung
+zählt als Einstieg; Personalführung wird durch einzelne Junior-Stichwörter
+nicht aufgehoben. Kurze Befristungen werden als Nachteil ausgewiesen.
+Konkrete Remote-Grenzen im Text gehen pauschalen Portalangaben vor. Unklare
+Remote-Angaben bleiben mit einem Prüfhinweis und ohne Remote-Punkte sichtbar;
+die Anzeige behauptet dafür keine 100 Prozent. Suchradius und Pendlergrenzen
+werden weiterhin aus denselben persönlichen Einstellungen geladen.
+Das bleibt eine regelbasierte Näherung, keine vollständige Analyse der Anzeige.
+
 `job_finder/matching_rules.py` enthält die Erkennungs- und Ausschlussregeln,
 `job_finder/scoring.py` setzt daraus die Bewertung zusammen. Ein optionales
 `profile.local.yaml` dient als persönliche Faktenbasis für eine spätere

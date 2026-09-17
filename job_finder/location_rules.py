@@ -82,6 +82,8 @@ def find_commuter_location(location, commuter_locations):
 
 def is_full_remote(location, remote):
     """Recognize full remote evidence in normalized work-mode or location text."""
+    if remote in {"homeoffice", "hybrid"} or re.fullmatch(r"\d+%", remote):
+        return remote_percent(remote) >= 100
     if remote_percent(remote) >= 100:
         return True
     if remote in ["remote", "fully remote", "full remote"]:

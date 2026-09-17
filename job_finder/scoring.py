@@ -38,6 +38,13 @@ from job_finder.experience import (
 from job_finder.experience import (
     strong_experience_is_required as strong_experience_is_required,
 )
+from job_finder.job_context import (
+    employment_evidence,
+    leadership_required,
+    non_it_title,
+    plain_description,
+    requirement_text,
+)
 from job_finder.location_rules import (
     is_full_remote as is_full_remote,
 )
@@ -75,7 +82,7 @@ from job_finder.matching_text import (
     matches_pattern as matches_pattern,
 )
 from job_finder.models import FilterStatus, Job
-from job_finder.remote import detect_remote
+from job_finder.remote import assess_remote, classify_remote
 from job_finder.salary import (
     extract_annual_salary as extract_annual_salary,
 )
@@ -126,12 +133,9 @@ def score_job(job: Job, today=None):
 
     title = normalize_text(job.title)
     location = normalize_text(job.location_text)
-    description = strip_platform_boilerplate(normalize_text(job.description_clean))
+    description = strip_platform_boilerplate(plain_description(job.description_clean))
+    requirements = requirement_text(description)
     remote = normalize_text(job.remote_text)
-    if job.remote_percentage is None:
-        remote = normalize_text(
-            detect_remote(title, location, description, structured_remote=remote)
-        )
     salary_text = structured_salary_text(job)
     employment = normalize_text(job.employment_type or "")
     # Structured employment data must influence preferences even when portals
@@ -141,7 +145,7 @@ def score_job(job: Job, today=None):
     )
 
     role = find_role(title, description)
-    required_years = extract_required_years(full_text)
+    required_years = extract_required_years(requirements)
     filter_reason = hard_filter_reason(
         title=title,
         description=description,
@@ -153,16 +157,35 @@ def score_job(job: Job, today=None):
     if filter_reason:
         return excluded_result(filter_reason)
 
+    remote, remote_warning = assess_remote(
+        title,
+        description,
+        location,
+        remote,
+        broad_portal_flag=job.source_names == ["arbeitnow"],
+    )
     location_score = analyze_location_for_role(
         title,
         location,
         remote,
         description,
     )
+    # A broad portal flag alone keeps a candidate reviewable, with no remote
+    # points and no invented percentage. Explicit geographic limits still apply.
+    if (
+        remote_warning.startswith("Remote-Umfang unklar")
+        and not is_local_area(location)
+        and remote_possible_from_germany(location, description)
+    ):
+        location_score = {
+            "allowed": True,
+            "points": 0,
+            "label": "Remote-Umfang unklar; Standort/Präsenz prüfen",
+        }
     if not location_score["allowed"]:
         return excluded_result(location_score["label"])
 
-    experience = analyze_experience(title, full_text, required_years)
+    experience = analyze_experience(title, requirements, required_years)
     role_score = score_role_preference(role)
     profile_score = score_profile_connection(f"{title} {description}")
 
@@ -177,13 +200,15 @@ def score_job(job: Job, today=None):
     if profile_score:
         reasons.append(f"+{profile_score} Bezug zu Projekten oder Weiterbildungen")
 
-    penalties = score_preferences(full_text)
+    penalties = score_preferences(
+        full_text, employment_text=employment_evidence(title, employment, description)
+    )
     for penalty in penalties:
         score -= penalty["points"]
         reasons.append(f"-{penalty['points']} {penalty['label']}")
 
     score = max(0, min(100, score))
-    return {
+    result = {
         "filter_status": FilterStatus.INCLUDED.value,
         "match_percent": score,
         "experience_rank": experience["rank"],
@@ -192,6 +217,17 @@ def score_job(job: Job, today=None):
         "location_precheck": location_score["label"],
         "reasons": reasons,
     }
+    if remote_warning or (
+        job.remote_percentage is not None and job.remote_text != remote
+    ):
+        work_mode, percentage = classify_remote(remote)
+        result.update(
+            work_mode=work_mode.value,
+            remote_percentage=percentage,
+        )
+    if remote_warning:
+        result["prefilter_warning"] = remote_warning
+    return result
 
 
 def excluded_result(reason):
@@ -251,16 +287,21 @@ def hard_filter_reason(
     if not role:
         return "Titel ist keine erkennbare IT-Rolle"
 
+    if leadership_required(title, description):
+        return "Personalführung oder Führungserfahrung gefordert"
+
+    requirements = requirement_text(description)
+
     advanced_level = structured_advanced_level(career_levels)
-    if advanced_level and not is_entry_level(title, description):
+    if advanced_level and not is_entry_level(title, requirements):
         return f"Portal-Karrierestufe ist nicht fuer den Einstieg: {advanced_level}"
 
     if required_years is None:
-        required_years = extract_required_years(full_text)
+        required_years = extract_required_years(requirements)
     if required_years > 3:
         return f"Mehr als 3 Jahre Erfahrung gefordert: {required_years} Jahre"
 
-    if strong_experience_is_required(title, description):
+    if strong_experience_is_required(title, requirements):
         return "Mehrjaehrige oder fundierte Erfahrung gefordert"
 
     if any(
@@ -276,12 +317,16 @@ def hard_filter_reason(
 
 def find_role(title, description):
     """Require an allowed role in the title; body keywords alone never suffice."""
+    if non_it_title(title):
+        return None
     full_text = f"{title} {description}"
     for role in ROLE_GROUPS:
         if not any(matches_pattern(title, pattern) for pattern in role["patterns"]):
             continue
 
-        if role.get("entry_only") and not is_entry_level(title, description):
+        if role.get("entry_only") and not is_entry_level(
+            title, requirement_text(description)
+        ):
             continue
 
         context_keywords = role.get("context_keywords", [])
@@ -376,21 +421,22 @@ def analyze_location_for_role(title, location, remote, description):
     return result
 
 
-def score_preferences(full_text):
+def score_preferences(full_text, *, employment_text=None):
     """Return point deductions and labels for normalized preference conflicts."""
     penalties = []
+    employment_text = full_text if employment_text is None else employment_text
 
-    if "teilzeit" in full_text and "vollzeit" not in full_text:
+    if "teilzeit" in employment_text and "vollzeit" not in employment_text:
         penalties.append({"points": 4, "label": "reine Teilzeitstelle"})
 
-    if contains_any(full_text, ["freelance", "freelancer", "freiberuflich"]):
+    if re.search(r"\b(?:freelanc\w*|freiberuflich\w*)\b", employment_text):
         penalties.append({"points": 8, "label": "freiberufliche Beschäftigung"})
 
-    if contains_any(full_text, ["werkstudent", "working student"]):
+    if re.search(r"\b(?:werkstudent\w*|working student)\b", employment_text):
         penalties.append({"points": 8, "label": "Werkstudentenstelle"})
 
-    if contains_any(
-        full_text,
+    if re.search(r"\bpraktikant\w*\b", employment_text) or contains_any(
+        employment_text,
         [
             "praktikum",
             "praktikant",
@@ -401,14 +447,22 @@ def score_preferences(full_text):
             "auszubildenden",
             "azubi",
             "duales studium",
+            "dualer student",
             "dual study",
             "abschlussarbeit",
             "bachelorarbeit",
             "thesis",
-            "weiterbildung",
         ],
     ):
         penalties.append({"points": 12, "label": "Ausbildungs-/Studienformat"})
+
+    if re.search(
+        r"\bbefristet\w*\s+(?:(?:auf|fuer)\s+)?(?:[1-6]|ein|zwei|drei|vier|fuenf|sechs)\s+monat",
+        employment_text,
+    ):
+        penalties.append(
+            {"points": 12, "label": "kurzfristige Befristung bis sechs Monate"}
+        )
 
     if contains_any(
         full_text, ["arbeitnehmerueberlassung", "zeitarbeit", "personaldienstleister"]

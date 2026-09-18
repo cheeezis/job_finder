@@ -1,10 +1,10 @@
+# Lokale Python-Umgebung, Bytecode und Werkzeug-Caches
+.venv/
 __pycache__/
 *.pyc
-.venv/
 .ruff_cache/
-tmp/
-data/
-llm_evaluation/
+
+# Persönliche Konfiguration; die gemeinsame .env.example bleibt versioniert.
 profile.yaml
 profile.local.yaml
 user_settings.local.yaml
@@ -13,16 +13,37 @@ user_settings.local.yaml
 .env
 .env.*
 !.env.example
+
+# Laufzeitdaten, lokale Datenbanken, Logs und temporäre Auswertungen
+data/
+tmp/
+llm_evaluation/
 *.log
+*.sqlite
+*.sqlite3
+*.db
+
+# Lokale Schlüssel und Zertifikate
 *.pem
 *.key
 *.p12
 *.pfx
-*.sqlite
-*.sqlite3
-*.db
+
+# Lokale Bewerbungsunterlagen und andere Dokumentdateien
 *.pdf
 *.doc
 *.docx
 *.odt
 *.rtf
+
+# Lokale Terraform-Downloads und Zustandsdateien
+**/.terraform/
+*.tfstate
+*.tfstate.*
+
+# Lokale Eingabewerte und gespeicherte Ausführungspläne
+*.tfvars
+*.tfvars.json
+*.tfplan
+
+# Terraform-Quellcode (.tf) und .terraform.lock.hcl bleiben versioniert.

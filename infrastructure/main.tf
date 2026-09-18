@@ -43,3 +43,18 @@ resource "azurerm_container_app_environment" "jobfinder" {
 
   tags = azurerm_resource_group.jobfinder.tags
 }
+
+resource "azurerm_user_assigned_identity" "jobfinder" {
+  name                = "id-jobfinder-pull"
+  resource_group_name = azurerm_resource_group.jobfinder.name
+  location            = azurerm_resource_group.jobfinder.location
+
+  tags = azurerm_resource_group.jobfinder.tags
+}
+
+resource "azurerm_role_assignment" "acr_pull" {
+  scope                = azurerm_container_registry.jobfinder.id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_user_assigned_identity.jobfinder.principal_id
+  principal_type       = "ServicePrincipal"
+}

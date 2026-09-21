@@ -166,9 +166,17 @@ def _apply_grants(connection, database, admin_role):
             "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO {}"
         ).format(sql.Identifier(APP_ROLE))
     )
-    connection.execute(
-        sql.SQL("REVOKE ALL ON schema_version FROM {}").format(sql.Identifier(APP_ROLE))
-    )
+    # Schema may not be initialized yet (job_finder.db init runs independently
+    # of this script); skip the revoke rather than fail on a missing table.
+    schema_version_exists = connection.execute(
+        "SELECT to_regclass('public.schema_version')"
+    ).fetchone()[0]
+    if schema_version_exists:
+        connection.execute(
+            sql.SQL("REVOKE ALL ON schema_version FROM {}").format(
+                sql.Identifier(APP_ROLE)
+            )
+        )
     connection.execute(
         sql.SQL(
             "ALTER DEFAULT PRIVILEGES FOR ROLE {} IN SCHEMA public "

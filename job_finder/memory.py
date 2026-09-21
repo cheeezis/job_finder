@@ -1,158 +1,68 @@
-"""Local memory for tracking jobs across Job Finder runs."""
+"""PostgreSQL memory and source-independent job lifecycle rules."""
 
-import json
-import sqlite3
 from collections import defaultdict
 from contextlib import contextmanager
+from copy import deepcopy
 from datetime import datetime, timezone
-from pathlib import Path
 
+from job_finder.database import lock, memory_scope, snapshot, transaction
 from job_finder.deduplication import normalize_company, normalize_title
 from job_finder.models import APPLICATION_STATUSES, WorkflowStatus
-from job_finder.paths import LEGACY_MEMORY_FILE, MEMORY_FILE
+from job_finder.paths import MEMORY_FILE
+from job_finder.postgres_store import read_memory, write_memory
 from job_finder.state_compat import MEMORY_VERSION as MEMORY_VERSION
-from job_finder.state_compat import decode_legacy_memory, restore_initial_discovery_date
 from job_finder.state_compat import first_seen_date as first_seen_date
+from job_finder.state_compat import restore_initial_discovery_date
 
-DATABASE_SCHEMA_VERSION = 1
 INACTIVE_AFTER_MISSED_RUNS = 3
 
 
 def load_memory(path=MEMORY_FILE):
-    """Load SQLite state, importing an existing legacy JSON file once."""
-    memory_path = Path(path)
-    migrate_legacy_memory(memory_path)
-    with database_connection(memory_path) as connection:
-        return load_sqlite_memory(connection)
-
-
-def load_json_memory(memory_path):
-    """Read the legacy JSON format solely for one-time migration."""
-    if not memory_path.exists():
-        return {}
-    values = json.loads(memory_path.read_text(encoding="utf-8"))
-    return decode_legacy_memory(values)
+    """Read a consistent PostgreSQL snapshot of the remembered jobs."""
+    scope = memory_scope(path)
+    with snapshot() as connection:
+        memory = read_memory(connection, scope)
+        for entry in memory.values():
+            restore_initial_discovery_date(entry)
+        return memory
 
 
 def save_memory(memory, path=MEMORY_FILE):
-    """Replace SQLite state in one transaction."""
-    with database_connection(path) as connection:
-        replace_sqlite_memory(connection, memory)
+    """Explicitly replace a scope; ordinary edits use edit_memory or edit_job."""
+    with edit_memory(path) as current:
+        current.clear()
+        current.update(memory)
 
 
 @contextmanager
 def edit_memory(path=MEMORY_FILE):
-    """Yield mutable state under a SQLite write lock and save on success.
-
-    Import legacy JSON if necessary, then hold BEGIN IMMEDIATE across
-    reading, the caller's edits and writing. Exceptions roll back the
-    transaction and propagate. Keep network requests outside this
-    context so interactive updates do not wait on remote services.
-    """
-    memory_path = Path(path)
-    migrate_legacy_memory(memory_path)
-    with database_connection(memory_path) as connection:
-        connection.execute("BEGIN IMMEDIATE")
-        memory = load_sqlite_memory(connection)
-        try:
-            yield memory
-        except Exception:
-            connection.rollback()
-            raise
-        replace_sqlite_memory(connection, memory, commit=False)
-        connection.commit()
+    """Serialize bulk matching/merging and persist only changed job records."""
+    scope = memory_scope(path)
+    with transaction() as connection:
+        lock(connection, "memory:" + scope)
+        memory = read_memory(connection, scope)
+        original = deepcopy(memory)
+        for entry in memory.values():
+            restore_initial_discovery_date(entry)
+        yield memory
+        write_memory(connection, scope, original, memory)
 
 
 @contextmanager
-def database_connection(path):
-    """Open the local state database with safe concurrency defaults."""
-    database_path = Path(path)
-    database_path.parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(database_path, timeout=20, isolation_level=None)
-    try:
-        connection.execute("PRAGMA journal_mode=WAL")
-        connection.execute("PRAGMA foreign_keys=ON")
-        connection.execute("PRAGMA busy_timeout=20000")
-        initialize_database(connection)
-        yield connection
-    finally:
-        connection.close()
-
-
-def initialize_database(connection):
-    """Create the minimal versioned schema used for mutable job state."""
-    connection.executescript(
-        """
-        CREATE TABLE IF NOT EXISTS metadata (
-            key TEXT PRIMARY KEY,
-            value TEXT NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS job_state (
-            job_id TEXT PRIMARY KEY,
-            payload_json TEXT NOT NULL
-        );
-        """
-    )
-    connection.execute(
-        "INSERT OR IGNORE INTO metadata(key, value) VALUES('schema_version', ?)",
-        (str(DATABASE_SCHEMA_VERSION),),
-    )
-    version = connection.execute(
-        "SELECT value FROM metadata WHERE key='schema_version'"
-    ).fetchone()[0]
-    if version != str(DATABASE_SCHEMA_VERSION):
-        raise ValueError(f"Nicht unterstützte Datenbankversion: {version}")
-
-
-def load_sqlite_memory(connection):
-    """Decode every state row while rejecting malformed database content."""
-    memory = {}
-    for job_id, payload in connection.execute(
-        "SELECT job_id, payload_json FROM job_state"
-    ):
-        entry = json.loads(payload)
-        if not isinstance(entry, dict):
-            raise ValueError(f"Ungültiger Zustand für Job {job_id}")
-        restore_initial_discovery_date(entry)
-        memory[job_id] = entry
-    return memory
-
-
-def replace_sqlite_memory(connection, memory, *, commit=True):
-    """Replace all state rows inside one SQLite transaction."""
-    if commit:
-        connection.execute("BEGIN IMMEDIATE")
-    connection.execute("DELETE FROM job_state")
-    connection.executemany(
-        "INSERT INTO job_state(job_id, payload_json) VALUES(?, ?)",
-        [
-            (job_id, json.dumps(entry, ensure_ascii=False, separators=(",", ":")))
-            for job_id, entry in memory.items()
-        ],
-    )
-    if commit:
-        connection.commit()
-
-
-def migrate_legacy_memory(database_path, legacy_path=None):
-    """Import the old JSON state once, preserving that file as a fallback."""
-    database_path = Path(database_path)
-    if legacy_path is not None:
-        source = Path(legacy_path)
-    elif database_path.resolve() == Path(MEMORY_FILE).resolve():
-        source = Path(LEGACY_MEMORY_FILE)
-    else:
-        source = database_path.with_name("seen_jobs.json")
-    if database_path.exists() or not source.exists():
-        return False
-    memory = load_json_memory(source)
-    with database_connection(database_path) as connection:
-        replace_sqlite_memory(connection, memory)
-        connection.execute(
-            "INSERT OR REPLACE INTO metadata(key, value) VALUES('migrated_from', ?)",
-            (source.name,),
-        )
-    return True
+def edit_job(job_id, path=MEMORY_FILE):
+    """Lock one job, allowing unrelated review edits to proceed concurrently."""
+    scope = memory_scope(path)
+    with transaction() as connection:
+        # Bulk discovery takes the exclusive version of this lock. Individual
+        # edits share it and then lock their own row, always in that order.
+        lock(connection, "memory:" + scope, shared=True)
+        memory = read_memory(connection, scope, job_id, for_update=True)
+        if job_id not in memory:
+            raise KeyError(f"Unbekannte Job-ID: {job_id}")
+        original = deepcopy(memory)
+        restore_initial_discovery_date(memory[job_id])
+        yield memory[job_id]
+        write_memory(connection, scope, original, memory)
 
 
 def update_memory(

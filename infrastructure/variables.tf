@@ -16,6 +16,12 @@ variable "postgres_admin_password" {
   ephemeral   = true
 }
 
+variable "review_aad_client_id" {
+  description = "App-ID der per az ad app create angelegten Entra-ID-Registrierung für Easy Auth."
+  type        = string
+  default     = "323cccd5-c4d1-4380-a5c7-818cc20ffb0b"
+}
+
 variable "postgres_client_ipv4" {
   description = "Aktuelle öffentliche IPv4 des Rechners für den gezielten Datenbankzugriff."
   type        = string

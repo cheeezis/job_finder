@@ -7,6 +7,7 @@ import re
 import uuid
 from pathlib import Path
 
+from job_finder import document_store
 from job_finder.paths import APPLICATION_DOCUMENTS_DIR
 
 ALLOWED_KINDS = {"cover_letter", "resume"}
@@ -29,20 +30,16 @@ def store_documents(
     if not prepared:
         return []
     folder_name = application_folder_name(company, title, job_id)
-    directory = document_directory(job_id, root, folder_name)
     written = []
     try:
-        directory.mkdir(parents=True, exist_ok=True)
         for metadata, content in prepared:
             metadata["folder_name"] = folder_name
-            destination = directory / metadata["stored_name"]
-            temporary = destination.with_suffix(f"{destination.suffix}.tmp")
-            temporary.write_bytes(content)
-            temporary.replace(destination)
-            written.append(destination)
-    except OSError:
-        for path in written:
-            path.unlink(missing_ok=True)
+            key = resolve_document_key(job_id, metadata)
+            document_store.write(key, content, root)
+            written.append(key)
+    except Exception:
+        for key in written:
+            document_store.delete(key, root)
         raise
     return [metadata for metadata, _ in prepared]
 
@@ -102,6 +99,21 @@ def document_path(job_id, metadata, root=APPLICATION_DOCUMENTS_DIR):
     return path
 
 
+def resolve_document_key(job_id, metadata):
+    """Compute one document's storage key without touching either backend.
+
+    Shares document_directory()'s folder validation so the key matches
+    exactly what document_path() would resolve on the local backend.
+    """
+    if not isinstance(metadata, dict):
+        raise ValueError("Bewerbungsunterlage wurde nicht gefunden")
+    stored_name = str(metadata.get("stored_name") or "")
+    if Path(stored_name).name != stored_name or not stored_name:
+        raise ValueError("Ungültiger Dokumentpfad")
+    directory = document_directory(job_id, "", metadata.get("folder_name"))
+    return (directory / stored_name).as_posix()
+
+
 def public_documents(entry):
     """Return document metadata without exposing local storage names or paths."""
     documents = entry.get("application_documents", [])
@@ -130,16 +142,11 @@ def find_document(entry, document_id):
 
 
 def remove_documents(job_id, documents, root=APPLICATION_DOCUMENTS_DIR):
-    """Clean up files if saving their matching memory entry fails."""
+    """Clean up stored documents if saving their matching memory entry fails."""
     for document in documents:
         stored_name = str(document.get("stored_name") or "")
         if stored_name and Path(stored_name).name == stored_name:
-            directory = document_directory(
-                job_id,
-                root,
-                document.get("folder_name"),
-            )
-            (directory / stored_name).unlink(missing_ok=True)
+            document_store.delete(resolve_document_key(job_id, document), root)
 
 
 def document_directory(job_id, root=APPLICATION_DOCUMENTS_DIR, folder_name=None):

@@ -1,3 +1,5 @@
 PyYAML>=6.0,<7
 psycopg[binary]>=3.2,<4
 python-dotenv>=1.0,<2
+azure-storage-blob>=12.24,<13
+azure-identity>=1.19,<2

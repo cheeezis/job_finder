@@ -14,9 +14,10 @@ from urllib.parse import parse_qs, quote, urlsplit
 
 import psycopg
 
+from job_finder import document_store
 from job_finder.application_documents import (
-    document_path,
     find_document,
+    resolve_document_key,
 )
 from job_finder.applications import (
     load_application_overview,
@@ -303,12 +304,8 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
             memory = load_memory(self.memory_path)
             entry = memory[job_id]
             metadata = find_document(entry, document_id)
-            path = document_path(
-                job_id,
-                metadata,
-                self.application_documents_dir,
-            )
-            content = path.read_bytes()
+            key = resolve_document_key(job_id, metadata)
+            content = document_store.read(key, self.application_documents_dir)
         except (KeyError, ValueError, OSError):
             self.send_error(404)
             return

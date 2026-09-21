@@ -5,14 +5,14 @@ from contextlib import contextmanager
 from copy import deepcopy
 from datetime import datetime, timezone
 
-from job_finder.database import lock, memory_scope, snapshot, transaction
-from job_finder.deduplication import normalize_company, normalize_title
+from job_finder.matching.deduplication import normalize_company, normalize_title
 from job_finder.models import APPLICATION_STATUSES, WorkflowStatus
 from job_finder.paths import MEMORY_FILE
-from job_finder.postgres_store import read_memory, write_memory
-from job_finder.state_compat import MEMORY_VERSION as MEMORY_VERSION
-from job_finder.state_compat import first_seen_date as first_seen_date
-from job_finder.state_compat import restore_initial_discovery_date
+from job_finder.persistence.database import lock, memory_scope, snapshot, transaction
+from job_finder.persistence.postgres_store import read_memory, write_memory
+from job_finder.persistence.state_compat import MEMORY_VERSION as MEMORY_VERSION
+from job_finder.persistence.state_compat import first_seen_date as first_seen_date
+from job_finder.persistence.state_compat import restore_initial_discovery_date
 
 INACTIVE_AFTER_MISSED_RUNS = 3
 

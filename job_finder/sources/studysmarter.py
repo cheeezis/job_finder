@@ -3,11 +3,11 @@
 import time
 from urllib.parse import urlencode
 
-from job_finder.config import (
+from job_finder.http import fetch_json, fetch_text
+from job_finder.matching.config import (
     LOCAL_SEARCH_RADIUS_KM,
     STUDYSMARTER_LOCAL_SEARCH_LOCATION,
 )
-from job_finder.http import fetch_json, fetch_text
 from job_finder.models import Job, JobSource, WorkMode
 from job_finder.paths import STUDYSMARTER_CACHE_FILE
 from job_finder.sources.common import (

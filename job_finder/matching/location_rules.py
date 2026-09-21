@@ -2,11 +2,11 @@
 
 import re
 
-from job_finder.matching_rules import (
+from job_finder.matching.matching_rules import (
     FOREIGN_ONLY_LOCATION_WORDS,
     GERMANY_LOCATION_WORDS,
 )
-from job_finder.matching_text import contains_any, contains_keyword
+from job_finder.matching.matching_text import contains_any, contains_keyword
 from job_finder.text import normalize_text
 
 

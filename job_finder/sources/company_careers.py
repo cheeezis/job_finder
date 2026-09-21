@@ -5,8 +5,8 @@ from html import unescape
 from urllib.parse import urljoin, urlsplit
 
 from job_finder.http import fetch_text
+from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource
-from job_finder.remote import classify_remote, detect_remote
 from job_finder.sources.common import (
     canonical_detail_url,
     extract_annual_salary_eur,

@@ -9,7 +9,8 @@ import re
 from html import unescape
 from urllib.parse import urlencode
 
-from job_finder.config import (
+from job_finder.http import fetch_text
+from job_finder.matching.config import (
     COMMUTER_SEARCH_LOCATIONS,
     COMMUTER_SEARCH_RADIUS_KM,
     COMMUTER_SEARCH_TERMS,
@@ -17,10 +18,9 @@ from job_finder.config import (
     LOCAL_SEARCH_RADIUS_KM,
     SEARCH_TERMS,
 )
-from job_finder.http import fetch_text
+from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource
 from job_finder.paths import ARBEITSAGENTUR_CACHE_FILE
-from job_finder.remote import classify_remote, detect_remote
 from job_finder.sources.common import (
     fetch_cached_details,
     normalize_employment_type,

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import yaml
 
-from job_finder.user_settings import EXAMPLE_SETTINGS_PATH, load_user_settings
+from job_finder.matching.user_settings import EXAMPLE_SETTINGS_PATH, load_user_settings
 
 
 class UserSettingsTests(unittest.TestCase):

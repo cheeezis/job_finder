@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from psycopg.conninfo import conninfo_to_dict
 
-from job_finder.database import database_url, initialize, transaction
+from job_finder.persistence.database import database_url, initialize, transaction
 
 
 def main():

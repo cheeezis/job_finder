@@ -4,9 +4,9 @@ import re
 from html import unescape
 
 from job_finder.http import fetch_text
+from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource
 from job_finder.paths import COMPOSE_IT_CACHE_FILE
-from job_finder.remote import classify_remote, detect_remote
 from job_finder.sources.common import normalize_employment_type, source_job_id, utc_now
 from job_finder.sources.company_careers import (
     extract_links,

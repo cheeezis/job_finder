@@ -117,7 +117,7 @@ class RunLog(AbstractContextManager):
 def create_backup(files, backup_dir=BACKUP_DIR, keep=BACKUP_FILES_TO_KEEP, now=None):
     """Archive existing persistent state and retain only recent backups."""
     if any(Path(path).resolve() == MEMORY_FILE.resolve() for path in files):
-        from job_finder.postgres_backup import create_postgres_backup
+        from job_finder.persistence.postgres_backup import create_postgres_backup
 
         archive = create_postgres_backup(backup_dir)
         backups = sorted(Path(backup_dir).glob("postgres-*.zip"), reverse=True)

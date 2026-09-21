@@ -1,4 +1,4 @@
-# PostgreSQL lokal betreiben
+# PostgreSQL betreiben
 
 PostgreSQL ist der einzige Laufzeitspeicher für den Stellenbestand, Entscheidungen,
 Bewerbungsverläufe, Empfehlungen, Discord-Versandstatus und Quellencaches.
@@ -20,14 +20,25 @@ Der Setup-Befehl erzeugt einmalig ein zufälliges Passwort in `.env.postgres`.
 Die Datei ist von Git und Docker-Builds ausgeschlossen. Vorhandene Einstellungen
 werden nicht überschrieben. Die Anwendung lädt sie automatisch; bereits gesetzte
 Umgebungsvariablen haben Vorrang. Im Cloud-Betrieb wird `JOBFINDER_DATABASE_URL`
-als Secret bereitgestellt. Für Azure ist später TLS mit Zertifikatsprüfung
-einzurichten; diese lokale Umstellung erzeugt keine neuen Azure-Ressourcen.
+als Secret bereitgestellt.
 
 Die Datenbank ist nur unter `127.0.0.1:55432` erreichbar. Der separate Compose-Name
 `jobfinder` vermeidet Konflikte mit anderen Projekten. Das Docker-Volume
 `jobfinder_postgres_data` übersteht das Ersetzen des Containers. PostgreSQL 18
 verwendet dafür den Mount `/var/lib/postgresql`. `docker compose down` erhält
 das Volume; `down -v` würde es löschen und gehört nicht zum normalen Ablauf.
+
+Worker und Review verbinden sich nicht mit dem Admin-Benutzer `jobfinder`,
+sondern über die eigens angelegte Rolle `jobfinder_app` mit eingeschränkten
+Rechten (kein Zugriff auf `schema_version`). Einmalig einrichten:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/create_app_role.py
+```
+
+Der Befehl legt die Rolle an beziehungsweise aktualisiert ihre Rechte, setzt
+`JOBFINDER_DATABASE_URL` in `.env.postgres` auf die neue Rolle und ist beliebig
+oft wiederholbar. Passwörter werden dabei nie ausgegeben.
 
 ## Vorhandene Daten übernehmen
 
@@ -129,6 +140,68 @@ ein leeres Dokumentziel. Zuerst `JOBFINDER_DATABASE_URL` auf dieses Ziel setzen:
 Die Anwendung prüft die Prüfsummen und vergleicht die zurückgeschriebenen Daten.
 Bestehende Daten werden nicht überschrieben. Das ist ein Anwendungsbackup, kein
 Ersatz für spätere Azure-Serverbackups, Rollen- oder Infrastruktur-Sicherungen.
+
+## Azure
+
+`infrastructure/postgresql.tf` verwaltet den produktiven Server: einen PostgreSQL-
+Flexible-Server (`B_Standard_B1ms`, 32 GiB, France Central), die leere Datenbank
+`jobfinder`, eine Firewallregel für genau eine öffentliche IPv4 und
+`require_secure_transport`. Worker und Review verbinden sich dort nicht mit
+Passwort, sondern über ihre Managed Identity und ein Key-Vault-Secret
+(`infrastructure/keyvault.tf`, `main.tf`, `review.tf`); die folgenden Schritte
+betreffen nur den administrativen Zugriff von einem lokalen Rechner aus.
+
+Admin-Passwort und die freizugebende IP liegen lokal in
+`infrastructure/postgres.auto.tfvars.json` (von Git ausgeschlossen). Planen und
+anwenden aus dem Repository-Stamm:
+
+```powershell
+terraform -chdir=infrastructure fmt -check
+terraform -chdir=infrastructure validate
+terraform -chdir=infrastructure plan "-out=postgresql.tfplan"
+
+$env:TF_VAR_postgres_admin_password = (Get-Content infrastructure/postgres.auto.tfvars.json -Raw | ConvertFrom-Json).postgres_admin_password
+try {
+    terraform -chdir=infrastructure apply "postgresql.tfplan"
+} finally {
+    Remove-Item Env:TF_VAR_postgres_admin_password -ErrorAction SilentlyContinue
+}
+```
+
+Ändert sich die eigene Internetverbindung, muss `postgres_client_ipv4` in
+`infrastructure/postgres.auto.tfvars.json` aktualisiert und neu geplant/angewendet
+werden; eine IP-Freigabe ersetzt weder Passwort noch TLS.
+
+Lesender Zugriffstest mit Zertifikatsprüfung (`sslmode=verify-full`), ohne lokale
+Konfiguration oder Datenbestände zu verändern:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/check_azure_postgres.py
+```
+
+Die App-Rolle für Azure einrichten beziehungsweise aktualisieren (analog zur
+lokalen Rolle oben, aber gegen den Azure-Server):
+
+```powershell
+.\.venv\Scripts\python.exe scripts/create_app_role.py --azure
+```
+
+Laufende Kosten: B1MS-Rechenleistung und Standardspeicher zusammen etwa
+15 EUR/Monat (France Central, Stand der letzten Preisabfrage), vor Steuern und
+weiteren Ressourcen wie Registry oder Logs. Der Server läuft auch außerhalb von
+Finder-Läufen weiter. Pausieren spart nur Rechenleistung, nicht den Speicher:
+
+```powershell
+$jobfinderPostgresServer = terraform -chdir=infrastructure output -raw postgres_server_name
+az postgres flexible-server stop --resource-group rg-jobfinder --name $jobfinderPostgresServer
+# Für die Weiterarbeit:
+az postgres flexible-server start --resource-group rg-jobfinder --name $jobfinderPostgresServer
+```
+
+Ein gestoppter Server startet nach sieben Tagen automatisch wieder. Ein
+späteres Löschen benötigt vorher eine geprüfte Datensicherung;
+`terraform destroy` im Ordner betrifft die gesamte dort verwaltete
+Infrastruktur, nicht nur PostgreSQL.
 
 ## Tests
 

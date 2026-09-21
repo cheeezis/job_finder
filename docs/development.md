@@ -43,19 +43,19 @@ beschreibt Titel und Beschreibung.
 | Bereich | Zuständigkeit |
 | --- | --- |
 | `run_finder.py` | CLI, Quellenkoordination und Reihenfolge der Pipeline |
-| `job_finder/main.py` | Vorhandene Jobs bewerten und Ergebnisse zusammenstellen |
+| `job_finder/workflow/main.py` | Vorhandene Jobs bewerten und Ergebnisse zusammenstellen |
 | `job_finder/sources/` | Quellen abrufen und in `Job`/`JobSource` umwandeln |
 | `job_finder/models.py` | Datenmodell, Statuswerte und Serialisierung |
-| `job_finder/deduplication.py` | Gleiche Anzeigen verschiedener Quellen zusammenführen |
-| `job_finder/scoring.py`, `matching_rules.py`, `remote.py` | Bewertungsablauf, Erkennungsregeln und Remote-Erkennung |
-| `job_finder/experience.py`, `location_rules.py`, `salary.py`, `matching_text.py` | Zusammenhängende Analysen und normalisierte Textvergleiche |
-| `job_finder/memory.py` | SQLite-Zustand, stabile IDs und frühere Entscheidungen |
-| `job_finder/availability.py` | Fehlende interessante Stellen auf bestätigte Schließung prüfen |
-| `job_finder/review.py`, `review_data.py`, `review_actions.py` | HTTP-Server, Review-Datenaufbereitung und transaktionale Aktionen |
-| `job_finder/applications.py`, `application_documents.py`, `state_compat.py` | Bewerbungsverlauf, lokale Unterlagen und unterstützte Speicherformate |
+| `job_finder/matching/deduplication.py` | Gleiche Anzeigen verschiedener Quellen zusammenführen |
+| `job_finder/matching/scoring.py`, `matching_rules.py`, `remote.py` | Bewertungsablauf, Erkennungsregeln und Remote-Erkennung |
+| `job_finder/matching/experience.py`, `location_rules.py`, `salary.py`, `matching_text.py` | Zusammenhängende Analysen und normalisierte Textvergleiche |
+| `job_finder/workflow/memory.py` | PostgreSQL-Zustand, stabile IDs und frühere Entscheidungen |
+| `job_finder/workflow/availability.py` | Fehlende interessante Stellen auf bestätigte Schließung prüfen |
+| `job_finder/review.py`, `job_finder/workflow/review_data.py`, `review_actions.py` | HTTP-Server, Review-Datenaufbereitung und transaktionale Aktionen |
+| `job_finder/workflow/applications.py`; `job_finder/persistence/application_documents.py`, `state_compat.py` | Bewerbungsverlauf, lokale Unterlagen und unterstützte Speicherformate |
 | `job_finder/app.js`, `landing.js`, `review.js`, `applications.js` und zugehörige HTML-Dateien | Gemeinsame Browser-Helfer, Seitenskripte und Arbeitsansichten |
-| `job_finder/reporting.py`, `notifications.py` | Review-Ausgabe und Discord-Warteschlange |
-| `job_finder/user_settings.py`, `config.py`, `paths.py` | Konfiguration, Suche und lokale Dateipfade |
+| `job_finder/workflow/reporting.py`, `notifications.py` | Review-Ausgabe und Discord-Warteschlange |
+| `job_finder/matching/user_settings.py`, `config.py`; `job_finder/paths.py` | Konfiguration, Suche und lokale Dateipfade |
 
 ### Datenfluss eines Finder-Laufs
 
@@ -86,7 +86,7 @@ Diese Merkmale dürfen bei Änderungen nicht gleichgesetzt werden.
 `manual_import.import_manual_url` verarbeitet genau die eingereichte URL und
 behält die übrigen Empfehlungen. Ein Vorfilterkonflikt bleibt als Warnung
 sichtbar; er verhindert die manuelle Sichtung nicht. Die Funktion schreibt
-Cache, SQLite-Zustand, Job-Snapshot und Empfehlungen nacheinander. Diese
+Cache, PostgreSQL-Zustand, Job-Snapshot und Empfehlungen nacheinander. Diese
 Speicheroperationen bilden keine gemeinsame Transaktion über alle Dateien.
 
 ## Eine Quelle ergänzen

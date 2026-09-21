@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from job_finder.application_documents import (
+from job_finder.persistence.application_documents import (
     document_path,
     public_documents,
     store_documents,

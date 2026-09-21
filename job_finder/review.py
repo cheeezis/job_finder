@@ -15,19 +15,7 @@ from urllib.parse import parse_qs, quote, urlsplit
 
 import psycopg
 
-from job_finder import document_store
-from job_finder.application_documents import (
-    find_document,
-    resolve_document_key,
-)
-from job_finder.applications import (
-    load_application_overview,
-)
-from job_finder.config import LOCAL_SEARCH_LOCATION, LOCAL_SEARCH_POSTAL_CODE
-from job_finder.manual_import import import_manual_url
-from job_finder.memory import (
-    load_memory,
-)
+from job_finder.matching.config import LOCAL_SEARCH_LOCATION, LOCAL_SEARCH_POSTAL_CODE
 from job_finder.models import WorkflowStatus
 from job_finder.paths import (
     APPLICATION_DOCUMENTS_DIR,
@@ -36,43 +24,55 @@ from job_finder.paths import (
     MEMORY_FILE,
     RECOMMENDATIONS_JSON,
 )
-from job_finder.review_actions import (
+from job_finder.persistence import document_store
+from job_finder.persistence.application_documents import (
+    find_document,
+    resolve_document_key,
+)
+from job_finder.workflow.applications import (
+    load_application_overview,
+)
+from job_finder.workflow.manual_import import import_manual_url
+from job_finder.workflow.memory import (
+    load_memory,
+)
+from job_finder.workflow.review_actions import (
     delete_workflow_history as delete_workflow_history,
 )
-from job_finder.review_actions import (
+from job_finder.workflow.review_actions import (
     start_application as start_application,
 )
-from job_finder.review_actions import (
+from job_finder.workflow.review_actions import (
     undo_ignored_decision as undo_ignored_decision,
 )
-from job_finder.review_actions import (
+from job_finder.workflow.review_actions import (
     update_application_salary as update_application_salary,
 )
-from job_finder.review_actions import (
+from job_finder.workflow.review_actions import (
     update_review_decision as update_review_decision,
 )
-from job_finder.review_actions import (
+from job_finder.workflow.review_actions import (
     update_workflow_history as update_workflow_history,
 )
-from job_finder.review_actions import (
+from job_finder.workflow.review_actions import (
     update_workflow_status as update_workflow_status,
 )
-from job_finder.review_actions import (
+from job_finder.workflow.review_actions import (
     validated_salary_expectation_eur as validated_salary_expectation_eur,
 )
-from job_finder.review_data import (
+from job_finder.workflow.review_data import (
     PERSISTED_REVIEW_STATUSES as PERSISTED_REVIEW_STATUSES,
 )
-from job_finder.review_data import (
+from job_finder.workflow.review_data import (
     load_review_jobs as load_review_jobs,
 )
-from job_finder.review_data import (
+from job_finder.workflow.review_data import (
     memory_entry_for_job as memory_entry_for_job,
 )
-from job_finder.review_data import (
+from job_finder.workflow.review_data import (
     memory_ids_for_job as memory_ids_for_job,
 )
-from job_finder.review_data import (
+from job_finder.workflow.review_data import (
     remembered_review_job as remembered_review_job,
 )
 

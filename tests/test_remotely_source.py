@@ -16,14 +16,16 @@ from job_finder.sources.common import (
 
 DETAIL_HTML = """
 <html><body>
-  <p class="text-xs font-semibold uppercase tracking-wide text-foreground">
-    Example GmbH
-  </p>
+  <div class="h-14 w-14 rounded-[14px] bg-company-mark"><span>E-</span></div>
+  <div class="min-w-0 flex-1">
+    <p class="flex flex-wrap items-center gap-2 text-body font-semibold text-foreground">
+      Example GmbH
+    </p>
+  </div>
+  <span class="text-meta text-text-muted sm:ml-auto">vor 6 Tagen</span>
   <h1>Junior Python Developer (m/w/d)</h1>
   <h3>Eckdaten</h3>
-  <div><svg class="lucide lucide-map-pin"></svg>Berlin</div>
-  <div><svg class="lucide lucide-tag"></svg>Computer Software</div>
-  <div><svg class="lucide lucide-calendar-days"></svg>vor 6 Tagen</div>
+  <div><span>Berlin</span><span>Computer Software</span></div>
   <h3>Arbeitsmodell</h3>
   <span><svg class="lucide lucide-globe"></svg>Vollständig remote</span>
   <a data-apply-cta="true" href="https://example.test/apply?from=remotely">

@@ -8,9 +8,9 @@ from types import SimpleNamespace
 from unittest.mock import patch
 from urllib.error import HTTPError
 
-from job_finder.availability import ignore_closed_listings, listing_is_closed
-from job_finder.memory import edit_memory, load_memory, save_memory
 from job_finder.review import load_review_jobs, undo_ignored_decision
+from job_finder.workflow.availability import ignore_closed_listings, listing_is_closed
+from job_finder.workflow.memory import edit_memory, load_memory, save_memory
 
 
 class AvailabilityTests(unittest.TestCase):
@@ -26,7 +26,7 @@ class AvailabilityTests(unittest.TestCase):
             with (
                 self.subTest(final_url=final_url),
                 patch(
-                    "job_finder.availability.fetch_text_with_final_url",
+                    "job_finder.workflow.availability.fetch_text_with_final_url",
                     return_value=(final_url, "<main><h1>Remote jobs</h1></main>"),
                 ),
             ):
@@ -40,7 +40,7 @@ class AvailabilityTests(unittest.TestCase):
             {"@type":"JobPosting","title":"An unrelated suggested job"}
             </script></body>"""
         with patch(
-            "job_finder.availability.fetch_text_with_final_url",
+            "job_finder.workflow.availability.fetch_text_with_final_url",
             return_value=(url, html),
         ):
             self.assertTrue(listing_is_closed(url))
@@ -68,7 +68,7 @@ class AvailabilityTests(unittest.TestCase):
             with (
                 self.subTest(final_url=final_url, html=html),
                 patch(
-                    "job_finder.availability.fetch_text_with_final_url",
+                    "job_finder.workflow.availability.fetch_text_with_final_url",
                     return_value=(final_url, html),
                 ),
             ):
@@ -88,13 +88,13 @@ class AvailabilityTests(unittest.TestCase):
             with (
                 self.subTest(code=code, host=host),
                 patch(
-                    "job_finder.availability.fetch_text_with_final_url",
+                    "job_finder.workflow.availability.fetch_text_with_final_url",
                     side_effect=error,
                 ),
             ):
                 self.assertEqual(listing_is_closed(url), expected)
         with patch(
-            "job_finder.availability.fetch_text_with_final_url",
+            "job_finder.workflow.availability.fetch_text_with_final_url",
             side_effect=TimeoutError,
         ):
             self.assertFalse(listing_is_closed(url))
@@ -117,7 +117,7 @@ class AvailabilityTests(unittest.TestCase):
             with (
                 self.subTest(html=html),
                 patch(
-                    "job_finder.availability.fetch_text_with_final_url",
+                    "job_finder.workflow.availability.fetch_text_with_final_url",
                     return_value=(url, html),
                 ),
             ):
@@ -139,7 +139,9 @@ class AvailabilityTests(unittest.TestCase):
                 },
                 path,
             )
-            with patch("job_finder.availability.listing_is_closed", return_value=True):
+            with patch(
+                "job_finder.workflow.availability.listing_is_closed", return_value=True
+            ):
                 self.assertEqual(
                     ignore_closed_listings([], path, successful_sources={"job"}),
                     {"job:1"},
@@ -169,7 +171,8 @@ class AvailabilityTests(unittest.TestCase):
             }
             save_memory(original, path)
             with patch(
-                "job_finder.availability.listing_is_closed", side_effect=[True, False]
+                "job_finder.workflow.availability.listing_is_closed",
+                side_effect=[True, False],
             ):
                 self.assertEqual(
                     ignore_closed_listings([], path, successful_sources={"job"}), set()
@@ -204,7 +207,7 @@ class AvailabilityTests(unittest.TestCase):
                 return True
 
             with patch(
-                "job_finder.availability.listing_is_closed",
+                "job_finder.workflow.availability.listing_is_closed",
                 side_effect=change_during_request,
             ) as check:
                 self.assertEqual(
@@ -260,7 +263,8 @@ class AvailabilityTests(unittest.TestCase):
                         ]
                     )
                     with patch(
-                        "job_finder.availability.listing_is_closed", return_value=True
+                        "job_finder.workflow.availability.listing_is_closed",
+                        return_value=True,
                     ) as check:
                         result = ignore_closed_listings(
                             jobs, path, successful_sources=complete
@@ -286,7 +290,7 @@ class AvailabilityTests(unittest.TestCase):
                 }
             }
             save_memory(original, path)
-            with patch("job_finder.availability.listing_is_closed") as check:
+            with patch("job_finder.workflow.availability.listing_is_closed") as check:
                 self.assertEqual(
                     ignore_closed_listings(
                         [],
@@ -314,7 +318,7 @@ class AvailabilityTests(unittest.TestCase):
             )
             updates = []
             with patch(
-                "job_finder.availability.listing_is_closed", return_value=False
+                "job_finder.workflow.availability.listing_is_closed", return_value=False
             ) as check:
                 ignore_closed_listings(
                     [],
@@ -347,7 +351,7 @@ class AvailabilityTests(unittest.TestCase):
                 path,
             )
             with patch(
-                "job_finder.availability.listing_is_closed", return_value=False
+                "job_finder.workflow.availability.listing_is_closed", return_value=False
             ) as check:
                 for _ in range(3):
                     ignore_closed_listings(
@@ -382,10 +386,11 @@ class AvailabilityTests(unittest.TestCase):
             )
             with (
                 patch(
-                    "job_finder.availability.time.monotonic", side_effect=[0, 0, 121]
+                    "job_finder.workflow.availability.time.monotonic",
+                    side_effect=[0, 0, 121],
                 ),
                 patch(
-                    "job_finder.availability.listing_is_closed",
+                    "job_finder.workflow.availability.listing_is_closed",
                     return_value=False,
                 ) as check,
             ):
@@ -409,7 +414,7 @@ class AvailabilityTests(unittest.TestCase):
                 path,
             )
             with patch(
-                "job_finder.availability.listing_is_closed", return_value=True
+                "job_finder.workflow.availability.listing_is_closed", return_value=True
             ) as check:
                 self.assertEqual(
                     ignore_closed_listings(
@@ -442,7 +447,8 @@ class AvailabilityTests(unittest.TestCase):
                 path,
             )
             with patch(
-                "job_finder.availability.listing_is_closed", side_effect=[False, True]
+                "job_finder.workflow.availability.listing_is_closed",
+                side_effect=[False, True],
             ) as check:
                 self.assertEqual(
                     ignore_closed_listings(
@@ -481,7 +487,7 @@ class AvailabilityTests(unittest.TestCase):
                 }
             }
             save_memory(original, path)
-            with patch("job_finder.availability.listing_is_closed") as check:
+            with patch("job_finder.workflow.availability.listing_is_closed") as check:
                 self.assertEqual(
                     ignore_closed_listings(
                         [], path, successful_sources={"feed"}, budget_seconds=0
@@ -512,7 +518,7 @@ class AvailabilityTests(unittest.TestCase):
                 path,
             )
             with patch(
-                "job_finder.availability.listing_is_closed", return_value=True
+                "job_finder.workflow.availability.listing_is_closed", return_value=True
             ) as check:
                 self.assertEqual(
                     ignore_closed_listings(

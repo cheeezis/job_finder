@@ -3,12 +3,12 @@
 import sys
 
 from job_finder.console import configure_utf8_output
-from job_finder.deduplication import deduplicate_jobs
+from job_finder.matching.deduplication import deduplicate_jobs
+from job_finder.matching.scoring import score_job
 from job_finder.models import FilterStatus, Job
 from job_finder.paths import JOBS_FILE
-from job_finder.reporting import format_locations, format_remote
-from job_finder.scoring import score_job
-from job_finder.storage import read_json
+from job_finder.persistence.storage import read_json
+from job_finder.workflow.reporting import format_locations, format_remote
 
 
 def main():

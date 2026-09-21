@@ -1,23 +1,23 @@
 """Transactional actions for review decisions and application history."""
 
-from job_finder.application_documents import (
+from job_finder.models import WorkflowStatus
+from job_finder.paths import (
+    APPLICATION_DOCUMENTS_DIR,
+    MEMORY_FILE,
+)
+from job_finder.persistence.application_documents import (
     remove_documents,
     store_documents,
 )
-from job_finder.applications import (
+from job_finder.workflow.applications import (
     delete_history_event,
     is_application,
     record_status_change,
     synchronize_current_status,
     update_history_event,
 )
-from job_finder.memory import (
+from job_finder.workflow.memory import (
     edit_job,
-)
-from job_finder.models import WorkflowStatus
-from job_finder.paths import (
-    APPLICATION_DOCUMENTS_DIR,
-    MEMORY_FILE,
 )
 
 

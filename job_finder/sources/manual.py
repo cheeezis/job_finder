@@ -8,9 +8,9 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from job_finder.http import fetch_text_with_final_url
+from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource
 from job_finder.paths import MANUAL_CACHE_FILE
-from job_finder.remote import classify_remote, detect_remote
 from job_finder.sources.common import (
     canonical_detail_url,
     detail_is_fresh,

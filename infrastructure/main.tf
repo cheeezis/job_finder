@@ -85,8 +85,11 @@ resource "azurerm_container_app_job" "finder" {
   replica_timeout_in_seconds = 3600
   replica_retry_limit        = 0
 
-  # Zunächst manuell starten, um das Deployment kontrolliert zu prüfen.
-  manual_trigger_config {
+  # 08:00 und 18:00 MESZ = 06:00 und 16:00 UTC. Läuft ganzjährig auf fixer
+  # UTC-Zeit; die tatsächliche lokale Uhrzeit verschiebt sich beim Wechsel
+  # zwischen MESZ und MEZ um eine Stunde.
+  schedule_trigger_config {
+    cron_expression = "0 6,16 * * *"
     # Pro Ausführung eine Replik; ihr erfolgreicher Abschluss beendet die Ausführung.
     parallelism              = 1
     replica_completion_count = 1
@@ -122,12 +125,17 @@ resource "azurerm_container_app_job" "finder" {
     identity            = azurerm_user_assigned_identity.jobfinder.id
   }
 
-  # Ohne eigenen command-Block gilt der Startbefehl aus dem Image: python run_finder.py.
+  # Hybrid-Aufteilung: StepStone und Remotely liefern aus Azure heraus keine
+  # Treffer (Bot-Abwehr blockiert bekannte Cloud-IP-Bereiche); diese beiden
+  # laufen stattdessen einmal täglich vom lokalen Rechner aus gegen dieselbe
+  # Datenbank. Ohne diesen command-Block gälte der Startbefehl aus dem Image:
+  # python run_finder.py.
   template {
     container {
-      name = "jobfinder-worker"
+      name    = "jobfinder-worker"
+      command = ["python", "run_finder.py", "--exclude-sources", "stepstone,remotely"]
       # Dieses Tag wurde zuvor hochgeladen; Terraform baut oder pusht das Image nicht.
-      image  = "${azurerm_container_registry.jobfinder.login_server}/jobfinder:azure-v5"
+      image  = "${azurerm_container_registry.jobfinder.login_server}/jobfinder:azure-v6"
       cpu    = 0.5
       memory = "1Gi"
 

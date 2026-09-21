@@ -2,7 +2,7 @@
 
 import re
 
-from job_finder.matching_rules import (
+from job_finder.matching.matching_rules import (
     BODY_ENTRY_LEVEL_PHRASES,
     ENTRY_LEVEL_WORDS,
 )

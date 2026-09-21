@@ -6,9 +6,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from job_finder.http import fetch_text
+from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource
 from job_finder.paths import GERMAN_TECH_JOBS_CACHE_FILE
-from job_finder.remote import classify_remote, detect_remote
+from job_finder.persistence.storage import read_json, write_json_atomic
 from job_finder.sources.common import (
     build_fetch_report,
     normalize_employment_type,
@@ -16,7 +17,6 @@ from job_finder.sources.common import (
     source_job_id,
     utc_now,
 )
-from job_finder.storage import read_json, write_json_atomic
 from job_finder.text import html_to_text
 
 SOURCE_NAME = "german_tech_jobs"

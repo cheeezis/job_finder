@@ -10,16 +10,16 @@ from pathlib import Path
 
 from psycopg.types.json import Jsonb
 
-from job_finder.application_documents import document_path
-from job_finder.database import initialize, lock, transaction, worker_lock
 from job_finder.paths import DATA_DIR
-from job_finder.postgres_store import (
+from job_finder.persistence.application_documents import document_path
+from job_finder.persistence.database import initialize, lock, transaction, worker_lock
+from job_finder.persistence.postgres_store import (
     read_dataset,
     read_memory,
     write_dataset,
     write_memory,
 )
-from job_finder.state_compat import decode_legacy_memory
+from job_finder.persistence.state_compat import decode_legacy_memory
 
 
 def digest(value):

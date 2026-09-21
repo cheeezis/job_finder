@@ -13,16 +13,23 @@ from copy import deepcopy
 from pathlib import Path
 from unittest.mock import patch
 
-from job_finder.application_documents import store_documents
-from job_finder.database import transaction
-from job_finder.memory import edit_job, edit_memory, load_memory, save_memory
-from job_finder.migration import migrate
+from job_finder.matching.scoring import LOCAL_PLACES
 from job_finder.models import Job, JobSource
-from job_finder.postgres_backup import create_postgres_backup, restore_backup
-from job_finder.postgres_store import prune_cache, read_dataset, write_dataset
-from job_finder.review_actions import update_review_decision
-from job_finder.review_data import load_review_jobs
-from job_finder.scoring import LOCAL_PLACES
+from job_finder.persistence.application_documents import store_documents
+from job_finder.persistence.database import transaction
+from job_finder.persistence.migration import migrate
+from job_finder.persistence.postgres_backup import (
+    create_postgres_backup,
+    restore_backup,
+)
+from job_finder.persistence.postgres_store import (
+    prune_cache,
+    read_dataset,
+    write_dataset,
+)
+from job_finder.workflow.memory import edit_job, edit_memory, load_memory, save_memory
+from job_finder.workflow.review_actions import update_review_decision
+from job_finder.workflow.review_data import load_review_jobs
 
 
 class PostgresTests(unittest.TestCase):
@@ -219,7 +226,7 @@ class PostgresTests(unittest.TestCase):
 
     def test_worker_publication_preserves_manual_import_not_in_snapshot(self):
         from job_finder.paths import JOBS_FILE, RECOMMENDATIONS_JSON
-        from job_finder.storage import publish_results, write_json_atomic
+        from job_finder.persistence.storage import publish_results, write_json_atomic
 
         manual_job = {
             "id": "manual:1",

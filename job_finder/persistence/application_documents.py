@@ -7,8 +7,8 @@ import re
 import uuid
 from pathlib import Path
 
-from job_finder import document_store
 from job_finder.paths import APPLICATION_DOCUMENTS_DIR
+from job_finder.persistence import document_store
 
 ALLOWED_KINDS = {"cover_letter", "resume"}
 ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".odt"}

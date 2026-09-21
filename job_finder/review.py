@@ -12,9 +12,12 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, urlsplit
 
+import psycopg
+
+from job_finder import document_store
 from job_finder.application_documents import (
-    document_path,
     find_document,
+    resolve_document_key,
 )
 from job_finder.applications import (
     load_application_overview,
@@ -120,6 +123,15 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
     applications_script_path = APPLICATIONS_SCRIPT
 
     def do_GET(self):
+        """Handle database outages without exposing connection details."""
+        try:
+            self._do_GET()
+        except psycopg.Error:
+            self.send_json(
+                {"error": "Datenbank vorübergehend nicht erreichbar."}, status=503
+            )
+
+    def _do_GET(self):
         """Return the page or the current joined recommendation data."""
         if not self.accept_local_request():
             return
@@ -194,6 +206,12 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
             if not isinstance(payload, dict):
                 raise ValueError("JSON-Objekt erforderlich")
             result = action(payload)
+        except psycopg.Error:
+            self.send_json(
+                {"error": "Datenbankänderung fehlgeschlagen; bitte erneut versuchen."},
+                status=503,
+            )
+            return
         except (TypeError, ValueError, KeyError, OSError, RuntimeError) as error:
             self.send_json({"error": str(error)}, status=400)
             return
@@ -286,12 +304,8 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
             memory = load_memory(self.memory_path)
             entry = memory[job_id]
             metadata = find_document(entry, document_id)
-            path = document_path(
-                job_id,
-                metadata,
-                self.application_documents_dir,
-            )
-            content = path.read_bytes()
+            key = resolve_document_key(job_id, metadata)
+            content = document_store.read(key, self.application_documents_dir)
         except (KeyError, ValueError, OSError):
             self.send_error(404)
             return
@@ -376,6 +390,7 @@ def first_query_value(query, name):
 def parse_args():
     """Parse local server options."""
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--no-browser", action="store_true")
     return parser.parse_args()
@@ -389,7 +404,7 @@ def address_is_in_use(error):
 def main():
     """Start the review server on loopback using the configured port."""
     args = parse_args()
-    address = ("127.0.0.1", args.port)
+    address = (args.host, args.port)
     url = f"http://{address[0]}:{address[1]}"
     try:
         server = LocalReviewServer(address, ReviewRequestHandler)

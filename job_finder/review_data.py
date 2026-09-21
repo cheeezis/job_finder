@@ -1,11 +1,12 @@
 """Review data joined with persisted workflow decisions."""
 
-import json
+from contextlib import nullcontext
 from pathlib import Path
 
 from job_finder.applications import (
     is_application,
 )
+from job_finder.database import snapshot
 from job_finder.memory import (
     load_memory,
     memory_source_links,
@@ -17,6 +18,7 @@ from job_finder.paths import (
     RECOMMENDATIONS_JSON,
 )
 from job_finder.reporting import is_international_listing
+from job_finder.storage import dataset_name, read_json
 
 PERSISTED_REVIEW_STATUSES = {
     WorkflowStatus.INTERESTING.value,
@@ -30,9 +32,10 @@ def load_review_jobs(
 ):
     """Combine compact review jobs with their persisted workflow status."""
     path = Path(recommendations_path)
-    document = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    with snapshot() if dataset_name(path) else nullcontext():
+        document = read_json(path, {})
+        memory = load_memory(memory_path)
     recommendations = document.get("recommendations", [])
-    memory = load_memory(memory_path)
     review_jobs = []
     represented_memory_ids = set()
     for recommendation in recommendations:

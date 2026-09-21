@@ -1,5 +1,6 @@
 """Generated data locations shared by the Job Finder modules."""
 
+import os
 from pathlib import Path
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
@@ -8,7 +9,10 @@ INTERNAL_DIR = DATA_DIR / "internal"
 OUTPUT_DIR = DATA_DIR / "output"
 LOG_DIR = DATA_DIR / "logs"
 BACKUP_DIR = DATA_DIR / "backups"
-APPLICATION_DOCUMENTS_DIR = INTERNAL_DIR / "application_documents"
+# Mount a persistent directory here when the review runs in a container.
+APPLICATION_DOCUMENTS_DIR = Path(
+    os.environ.get("JOBFINDER_DOCUMENTS_DIR", INTERNAL_DIR / "application_documents")
+)
 
 JOBS_FILE = INTERNAL_DIR / "jobs.json"
 MEMORY_FILE = INTERNAL_DIR / "job_finder.sqlite3"

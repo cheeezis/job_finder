@@ -1,21 +1,19 @@
 """Tests for lifecycle metadata in the job memory."""
 
 import json
-import sqlite3
 import tempfile
 import threading
 import unittest
-from contextlib import closing
 from pathlib import Path
 
+from job_finder.database import transaction
 from job_finder.memory import (
     edit_memory,
-    load_json_memory,
     load_memory,
-    migrate_legacy_memory,
     save_memory,
     update_memory,
 )
+from job_finder.migration import read_legacy_memory as load_json_memory
 from job_finder.models import Job, JobSource, WorkflowStatus
 
 
@@ -363,11 +361,11 @@ class MemoryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "state.sqlite3"
             save_memory({"test:123": {"workflow_status": "new"}}, path)
-            with closing(sqlite3.connect(path)) as connection:
+            with transaction() as connection:
                 version = connection.execute(
-                    "SELECT value FROM metadata WHERE key='schema_version'"
+                    "SELECT version FROM schema_version"
                 ).fetchone()[0]
-            self.assertEqual(version, "1")
+            self.assertEqual(version, 2)
             self.assertIn("test:123", load_memory(path))
 
     def test_old_memory_format_is_rejected(self):
@@ -378,7 +376,7 @@ class MemoryTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "alte Format"):
                 load_json_memory(path)
 
-    def test_sqlite_state_round_trip_and_transactional_edit(self):
+    def test_postgres_state_round_trip_and_transactional_edit(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "state.sqlite3"
             save_memory({"test:1": {"workflow_status": "new"}}, path)
@@ -389,28 +387,7 @@ class MemoryTests(unittest.TestCase):
 
         self.assertEqual(restored["test:1"]["workflow_status"], "interesting")
 
-    def test_legacy_json_is_migrated_without_deleting_source(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            legacy = root / "seen_jobs.json"
-            database = root / "state.sqlite3"
-            legacy.write_text(
-                json.dumps(
-                    {
-                        "version": 2,
-                        "jobs": {"test:1": {"workflow_status": "new"}},
-                    }
-                ),
-                encoding="utf-8",
-            )
-
-            migrated = migrate_legacy_memory(database, legacy)
-
-            self.assertTrue(migrated)
-            self.assertTrue(legacy.exists())
-            self.assertIn("test:1", load_memory(database))
-
-    def test_failed_sqlite_edit_rolls_back_all_changes(self):
+    def test_failed_postgres_edit_rolls_back_all_changes(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "state.sqlite3"
             original = {"job:1": {"workflow_status": "interesting"}}
@@ -422,7 +399,7 @@ class MemoryTests(unittest.TestCase):
                     raise RuntimeError("abort")
             self.assertEqual(load_memory(path), original)
 
-    def test_concurrent_sqlite_edits_preserve_both_decisions(self):
+    def test_concurrent_postgres_edits_preserve_both_decisions(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "state.sqlite3"
             save_memory({"job:1": {"workflow_status": "new"}}, path)

@@ -12,7 +12,7 @@ from job_finder.applications import (
     update_history_event,
 )
 from job_finder.memory import (
-    edit_memory,
+    edit_job,
 )
 from job_finder.models import WorkflowStatus
 from job_finder.paths import (
@@ -30,12 +30,8 @@ def update_workflow_status(
 ):
     """Validate and persist one manual workflow decision."""
     status = WorkflowStatus(workflow_status)
-    with edit_memory(memory_path) as memory:
-        if job_id not in memory:
-            raise KeyError(f"Unbekannte Job-ID: {job_id}")
-        current_status = record_status_change(
-            memory[job_id], status, occurred_on, scheduled_for
-        )
+    with edit_job(job_id, memory_path) as entry:
+        current_status = record_status_change(entry, status, occurred_on, scheduled_for)
     return current_status
 
 
@@ -52,10 +48,7 @@ def update_review_decision(
         WorkflowStatus.IGNORED,
     }:
         raise ValueError("Ungueltiger Review-Status")
-    with edit_memory(memory_path) as memory:
-        if job_id not in memory:
-            raise KeyError(f"Unbekannte Job-ID: {job_id}")
-        entry = memory[job_id]
+    with edit_job(job_id, memory_path) as entry:
         if is_application(entry):
             return {
                 "workflow_status": entry.get(
@@ -76,10 +69,7 @@ def undo_ignored_decision(
     memory_path=MEMORY_FILE,
 ):
     """Remove the latest ignored transition and restore its prior status."""
-    with edit_memory(memory_path) as memory:
-        if job_id not in memory:
-            raise KeyError(f"Unbekannte Job-ID: {job_id}")
-        entry = memory[job_id]
+    with edit_job(job_id, memory_path) as entry:
         if is_application(entry):
             raise ValueError(
                 "Bewerbungsstatus kann hier nicht rückgängig gemacht werden"
@@ -120,10 +110,7 @@ def start_application(
     """Record the first application without overwriting later progress."""
     stored_documents = []
     try:
-        with edit_memory(memory_path) as memory:
-            if job_id not in memory:
-                raise KeyError(f"Unbekannte Job-ID: {job_id}")
-            entry = memory[job_id]
+        with edit_job(job_id, memory_path) as entry:
             if is_application(entry):
                 return {
                     "workflow_status": entry.get(
@@ -185,8 +172,7 @@ def validated_salary_expectation_eur(value, period="year"):
 def update_application_salary(job_id, value, period="year", memory_path=MEMORY_FILE):
     """Change the salary without changing application status or history."""
     salary = validated_salary_expectation_eur(value, period)
-    with edit_memory(memory_path) as memory:
-        entry = memory[job_id]
+    with edit_job(job_id, memory_path) as entry:
         if not is_application(entry):
             raise ValueError("Für diese Stelle ist noch keine Bewerbung gespeichert")
         if salary is None:
@@ -209,11 +195,9 @@ def update_workflow_history(
     previous_scheduled_for=None,
 ):
     """Edit one manual workflow event."""
-    with edit_memory(memory_path) as memory:
-        if job_id not in memory:
-            raise KeyError(f"Unbekannte Job-ID: {job_id}")
+    with edit_job(job_id, memory_path) as entry:
         result = update_history_event(
-            memory[job_id],
+            entry,
             event_index,
             previous_status,
             previous_occurred_on,
@@ -234,11 +218,9 @@ def delete_workflow_history(
     previous_scheduled_for=None,
 ):
     """Delete one manual workflow event."""
-    with edit_memory(memory_path) as memory:
-        if job_id not in memory:
-            raise KeyError(f"Unbekannte Job-ID: {job_id}")
+    with edit_job(job_id, memory_path) as entry:
         status = delete_history_event(
-            memory[job_id],
+            entry,
             event_index,
             previous_status,
             previous_occurred_on,

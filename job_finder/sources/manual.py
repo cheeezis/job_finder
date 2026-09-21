@@ -91,6 +91,9 @@ def fetch_jobs(cache_path=MANUAL_CACHE_FILE, now=None):
             jobs.append(job)
         except Exception:
             errors += 1
+            # A manual submission is durable input even when its web cache is
+            # too old to use as a current result. Keep it for the next refresh.
+            refreshed[saved_url] = cached_job
             if detail_within_age(cached_job, now):
                 cached_job.cache_stale = True
                 refreshed[saved_url] = cached_job

@@ -14,7 +14,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 .\.venv\Scripts\python.exe -m ruff check job_finder tests run_finder.py
 .\.venv\Scripts\python.exe -m ruff format --check job_finder tests run_finder.py
-.\.venv\Scripts\python.exe -m unittest discover -s tests
+.\.venv\Scripts\python.exe scripts/test_postgres.py
 node --test tests/frontend.test.cjs
 ```
 
@@ -24,10 +24,12 @@ Python-Betrieb reicht `requirements.txt`. `requirements-dev.txt` installiert
 zusätzlich die festgelegte Ruff-Version, damit lokale Prüfung und CI dieselben
 Formatierungsregeln verwenden.
 
-Der [GitHub-Workflow](../.github/workflows/checks.yml) prüft Python auf Windows
-und Linux mit Python 3.11 und 3.13. Ein weiterer Job prüft Stil und Frontend.
-Die Tests verwenden lokale Fixtures, temporäre Datenpfade und ersetzte
-Netzwerkzugriffe. Ein vollständiger Finder-Lauf gehört nicht zur Testsuite.
+Der [GitHub-Workflow](../.github/workflows/checks.yml) prüft Python auf Linux mit PostgreSQL sowie Python 3.11 und 3.13.
+Lokal ist derselbe Teststarter auch unter Windows nutzbar. Ein weiterer Job prüft Stil und Frontend.
+Die Tests verwenden lokale Fixtures, temporäre Datenpfade, eine separate
+PostgreSQL-Testdatenbank und ersetzte Netzwerkzugriffe. Die Datenbank wird gemäß
+[PostgreSQL-Anleitung](postgresql.md) eingerichtet; der Teststarter schützt den
+Produktivbestand vor Testschreibzugriffen. Ein vollständiger Finder-Lauf gehört nicht zur Testsuite.
 GitHub-Checks werden damit ausgeführt; ob sie einen Merge blockieren, wird
 separat in den Repository-Regeln eingestellt.
 

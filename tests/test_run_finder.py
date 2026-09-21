@@ -117,7 +117,7 @@ class RunFinderTests(unittest.TestCase):
                 "run_finder.evaluate_jobs", side_effect=ValueError("invalid details")
             ),
             patch("run_finder.edit_memory") as memory,
-            patch("run_finder.write_json_atomic") as output,
+            patch("run_finder.publish_results") as output,
             self.assertRaises(ValueError),
             redirect_stdout(io.StringIO()),
         ):
@@ -139,7 +139,7 @@ class RunFinderTests(unittest.TestCase):
                 return_value=([make_job("working:1")], reports),
             ),
             patch("run_finder.edit_memory") as edit_memory,
-            patch("run_finder.write_json_atomic") as write_jobs,
+            patch("run_finder.publish_results") as write_jobs,
             patch("run_finder.write_recommendations") as write_recommendations,
             patch("run_finder.process_notifications") as notifications,
             self.assertRaises(IncompleteSourceSnapshotError),

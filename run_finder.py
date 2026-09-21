@@ -7,6 +7,7 @@ from collections import Counter
 
 from job_finder.availability import ignore_closed_listings
 from job_finder.console import configure_utf8_output, print_phase, print_progress
+from job_finder.database import worker_lock
 from job_finder.deduplication import deduplicate_jobs
 from job_finder.main import build_score_results, evaluate_jobs, score_jobs
 from job_finder.memory import edit_memory, update_memory
@@ -46,7 +47,7 @@ from job_finder.sources.common import (
     fetch_diagnostics,
     reset_fetch_diagnostics,
 )
-from job_finder.storage import write_json_atomic
+from job_finder.storage import publish_results
 
 SOURCES = [
     arbeitsagentur,
@@ -120,7 +121,7 @@ def main():
     """Run collection and scoring before persisting state and reporting."""
     configure_utf8_output()
     args = parse_args()
-    with RunLog():
+    with worker_lock(), RunLog():
         run_pipeline(args)
 
 
@@ -182,12 +183,13 @@ def run_pipeline(args):
         f"{memory_stats['reactivated']} reaktiviert"
     )
     with timed_step("Ergebnisdateien schreiben"):
-        write_json_atomic(JOBS_FILE, [job.to_dict() for job in jobs])
+        publish_results(
+            jobs, results, jobs_path=JOBS_FILE, writer=write_recommendations
+        )
         print(
             f"Vorfilter: {len(results['included'])} weiter · "
             f"{len(results['excluded'])} ausgeschlossen"
         )
-        write_recommendations(results)
 
     print_phase(4, 4, "Ausgabe und Benachrichtigungen")
     with timed_step("Benachrichtigungen"):

@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 
 from job_finder.console import format_clock
-from job_finder.paths import BACKUP_DIR, LOG_DIR
+from job_finder.paths import BACKUP_DIR, LOG_DIR, MEMORY_FILE
 
 BACKUP_FILES_TO_KEEP = 7
 
@@ -116,6 +116,14 @@ class RunLog(AbstractContextManager):
 
 def create_backup(files, backup_dir=BACKUP_DIR, keep=BACKUP_FILES_TO_KEEP, now=None):
     """Archive existing persistent state and retain only recent backups."""
+    if any(Path(path).resolve() == MEMORY_FILE.resolve() for path in files):
+        from job_finder.postgres_backup import create_postgres_backup
+
+        archive = create_postgres_backup(backup_dir)
+        backups = sorted(Path(backup_dir).glob("postgres-*.zip"), reverse=True)
+        for old_backup in backups[max(keep, 1) :]:
+            old_backup.unlink()
+        return archive
     existing = [Path(path) for path in files if Path(path).is_file()]
     if not existing:
         return None

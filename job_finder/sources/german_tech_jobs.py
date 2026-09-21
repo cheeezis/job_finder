@@ -1,6 +1,5 @@
 """GermanTechJobs source adapter using its public XML job feed."""
 
-import json
 import re
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
@@ -17,7 +16,7 @@ from job_finder.sources.common import (
     source_job_id,
     utc_now,
 )
-from job_finder.storage import write_json_atomic
+from job_finder.storage import read_json, write_json_atomic
 from job_finder.text import html_to_text
 
 SOURCE_NAME = "german_tech_jobs"
@@ -162,7 +161,7 @@ def save_feed_cache(path, jobs, fetched_at):
 def load_feed_cache(path, now=None):
     """Restore a recent successful feed snapshot as a marked fallback."""
     try:
-        document = json.loads(Path(path).read_text(encoding="utf-8"))
+        document = read_json(path, {})
         if document.get("version") != CACHE_VERSION:
             return []
         fetched_at = datetime.fromisoformat(document["fetched_at"])

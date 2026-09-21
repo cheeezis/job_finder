@@ -1,8 +1,6 @@
 """Score imported jobs without running the source searches again."""
 
-import json
 import sys
-from pathlib import Path
 
 from job_finder.console import configure_utf8_output
 from job_finder.deduplication import deduplicate_jobs
@@ -10,6 +8,7 @@ from job_finder.models import FilterStatus, Job
 from job_finder.paths import JOBS_FILE
 from job_finder.reporting import format_locations, format_remote
 from job_finder.scoring import score_job
+from job_finder.storage import read_json
 
 
 def main():
@@ -122,7 +121,7 @@ def print_results(results):
 
 def load_jobs(path):
     """Load imported jobs from a UTF-8 JSON file."""
-    values = json.loads(Path(path).read_text(encoding="utf-8"))
+    values = read_json(path, [])
     try:
         return [Job.from_dict(job) for job in values]
     except KeyError as error:

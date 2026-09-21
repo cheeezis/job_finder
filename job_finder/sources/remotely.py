@@ -20,7 +20,7 @@ from job_finder.sources.common import (
     source_job_id,
     utc_now,
 )
-from job_finder.storage import write_json_atomic
+from job_finder.storage import read_json, write_json_atomic
 from job_finder.text import html_to_text
 
 SOURCE_NAME = "remotely"
@@ -195,7 +195,7 @@ def linkedin_job_key(url):
 def load_linkedin_status_cache(path):
     """Return cached checks or {} for unreadable or incompatible cache data."""
     try:
-        document = json.loads(Path(path).read_text(encoding="utf-8"))
+        document = read_json(path, {})
     except (FileNotFoundError, OSError, json.JSONDecodeError):
         return {}
     if document.get("version") != 1:

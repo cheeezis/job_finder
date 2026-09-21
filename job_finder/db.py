@@ -1,0 +1,61 @@
+"""Initialize, migrate, check, back up and restore the PostgreSQL data store."""
+
+import argparse
+import json
+
+from job_finder.database import initialize, transaction
+from job_finder.migration import migrate
+from job_finder.paths import APPLICATION_DOCUMENTS_DIR, DATA_DIR
+from job_finder.postgres_backup import create_postgres_backup, restore_backup
+from job_finder.postgres_store import prune_cache
+
+
+def main():
+    """Run an explicit maintenance operation without printing connection secrets."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser("init")
+    migration = commands.add_parser("migrate")
+    migration.add_argument("--source", default=str(DATA_DIR))
+    commands.add_parser("check")
+    cleanup = commands.add_parser("prune-cache")
+    cleanup.add_argument("--days", type=int, default=30)
+    backup = commands.add_parser("backup")
+    backup.add_argument("--documents-dir", default=str(APPLICATION_DOCUMENTS_DIR))
+    restore = commands.add_parser("restore")
+    restore.add_argument("archive")
+    restore.add_argument("--documents-dir", required=True)
+    args = parser.parse_args()
+    if args.command == "init":
+        initialize()
+        result = {"initialized": True}
+    elif args.command == "migrate":
+        result = migrate(args.source)
+    elif args.command == "backup":
+        result = {
+            "backup": str(create_postgres_backup(documents_dir=args.documents_dir))
+        }
+    elif args.command == "restore":
+        result = restore_backup(args.archive, args.documents_dir)
+    elif args.command == "prune-cache":
+        result = {"removed_cache_entries": prune_cache(args.days)}
+    else:
+        with transaction() as connection:
+            result = {
+                table: connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+                for table in (
+                    "job_state",
+                    "workflow_history",
+                    "application_documents",
+                    "jobs",
+                    "recommendations",
+                    "notifications",
+                    "manual_sources",
+                    "source_cache",
+                )
+            }
+    print(json.dumps(result, indent=2, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    main()

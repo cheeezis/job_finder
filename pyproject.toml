@@ -9,8 +9,8 @@ description = "Local-first multi-source IT job finder with review and applicatio
 readme = "README.md"
 requires-python = ">=3.11"
 license = {file = "LICENSE"}
-keywords = ["job-search", "job-tracker", "sqlite", "discord"]
-dependencies = ["PyYAML>=6.0,<7"]
+keywords = ["job-search", "job-tracker", "postgresql", "discord"]
+dependencies = ["PyYAML>=6.0,<7", "psycopg[binary]>=3.2,<4", "python-dotenv>=1.0,<2"]
 
 [tool.setuptools.package-data]
 job_finder = ["*.html", "*.css", "*.js"]

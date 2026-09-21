@@ -432,11 +432,13 @@ class _RemotelyDetailParser(HTMLParser):
         self.description_parts = []
         self.capture_title = False
         self.capture_company = False
+        self.pending_company_mark = False
+        self.awaiting_published_label = False
+        self.capture_published_label = False
         self.capture_heading = False
         self.heading_parts = []
         self.active_section = ""
         self.description_depth = 0
-        self.next_value = ""
 
     @property
     def description_html(self):
@@ -458,21 +460,20 @@ class _RemotelyDetailParser(HTMLParser):
         elif tag == "h3":
             self.capture_heading = True
             self.heading_parts = []
-        elif (
-            tag == "p"
-            and not self.company
-            and "uppercase" in classes.split()
-            and "tracking-wide" in classes.split()
-        ):
+        elif tag == "p" and not self.company and self.pending_company_mark:
             self.capture_company = True
+            self.pending_company_mark = False
+        elif (
+            tag == "span" and self.awaiting_published_label and not self.published_label
+        ):
+            self.capture_published_label = True
+            self.awaiting_published_label = False
         if tag == "a" and values.get("data-apply-cta") == "true":
             href = values.get("href", "")
             if href.startswith(("http://", "https://")):
                 self.application_url = unescape(href)
-        if "lucide-map-pin" in classes:
-            self.next_value = "location"
-        elif "lucide-calendar-days" in classes:
-            self.next_value = "published_label"
+        if "bg-company-mark" in classes.split():
+            self.pending_company_mark = True
 
     def handle_startendtag(self, tag, attrs):
         if self.description_depth:
@@ -489,7 +490,11 @@ class _RemotelyDetailParser(HTMLParser):
         if tag == "h1":
             self.capture_title = False
         elif tag == "p":
+            if self.capture_company:
+                self.awaiting_published_label = True
             self.capture_company = False
+        elif tag == "span" and self.capture_published_label:
+            self.capture_published_label = False
         elif tag == "h3" and self.capture_heading:
             heading = clean_text("".join(self.heading_parts)).casefold()
             self.active_section = heading
@@ -506,14 +511,17 @@ class _RemotelyDetailParser(HTMLParser):
             self.title += data
         if self.capture_company:
             self.company += data
+        if self.capture_published_label:
+            self.published_label += data
         if self.capture_heading:
             self.heading_parts.append(data)
             return
-        if self.next_value:
-            setattr(self, self.next_value, data)
-            self.next_value = ""
-        elif self.active_section == "arbeitsmodell" and not self.work_model:
+        if self.active_section == "arbeitsmodell" and not self.work_model:
             self.work_model = data
+        elif self.active_section == "eckdaten" and not self.location:
+            self.location = data
+        elif self.active_section == "eckdaten" and not self.location:
+            self.location = data
 
 
 class _RemotelyListParser(HTMLParser):

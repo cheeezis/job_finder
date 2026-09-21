@@ -1,10 +1,57 @@
 # Phase 7: Datenbank und Dateien cloudfähig machen
 
 Arbeitsnotizen zur aktualisierten Roadmap `Job_Finder_Cloud_Roadmap_aktualisiert.docx`.
-Stand: 18. September 2026. Die Bestandsaufnahme beschreibt den aktuellen Code,
-keine bereits umgesetzte PostgreSQL-Anbindung.
+Stand: 19. September 2026. Der lokale PostgreSQL-Umbau und die Datenmigration
+sind umgesetzt und geprüft. Die Bestandsaufnahme weiter unten dokumentiert den
+Ausgangszustand vom 18. September, nicht den heutigen Laufzeitspeicher.
 
-## Vereinbarte Richtung
+## Umgesetzter lokaler Stand
+
+Finder und Review nutzen dieselbe PostgreSQL-Datenbank in Docker. Stellenzustand,
+Verlauf, Empfehlungen, Versandstatus, manuelle Quellen und automatische Caches
+liegen in eigenen Tabellen. Dokumentinhalte bleiben separate Dateien; ihre
+Zuordnung liegt in PostgreSQL. SQLite wird nur noch für den ausdrücklichen
+Altimport gelesen. Die alten Dateien bleiben als Sicherung erhalten.
+
+Migriert wurden 43.968 gespeicherte Stellen, 6.098 Verlaufseinträge und 100
+Dokumentreferenzen sowie 21 bisherige JSON-Datasets. Darin enthalten sind 9.890
+aktuelle Stellen, 386 Empfehlungen, 954 Benachrichtigungseinträge, fünf manuelle
+Quellen und 16.547 automatische Cache-Einträge. Quell- und Zieldaten wurden beim
+Import verglichen, Dokumente zusätzlich anhand ihrer Prüfsummen.
+
+Nach dem letzten noch laufenden `main`-Durchlauf wurde am 19. September auch
+dessen Abschlussstand kontrolliert übernommen: insgesamt 45.359 gespeicherte
+Stellen sowie 1.042 versendete und drei ausstehende Benachrichtigungen.
+PostgreSQL hatte seit der ersten Migration keine abweichenden Änderungen.
+Beide Stände wurden vor der Übernahme gesichert. Künftige Läufe verwenden den
+PostgreSQL-Branch; eine laufende Synchronisierung mit SQLite findet nicht statt.
+
+Die Abschlussprüfung umfasst 330 erfolgreiche Python-Tests mit eigener
+PostgreSQL-Testdatenbank, 16 Frontend-Tests, Ruff, Backup-Wiederherstellung und
+Datenerhalt nach Austausch des Datenbankcontainers. Das aktuelle Docker-Image
+erreicht die migrierte Datenbank. Die lokale Review liefert Empfehlungen und
+Bewerbungen aus PostgreSQL; ein Dokumentdownload wurde mit dem Original verglichen.
+Wiederholte Finder-Läufe und konkurrierende Schreibzugriffe sind mit simulierten
+Quellen geprüft; ein vollständiger Live-Suchlauf gehört nicht zu dieser Prüfung.
+
+Automatische Caches lassen sich ausdrücklich nach 30 Tagen ohne Änderung
+aufräumen. Manuelle Quellen und Bewerbungsdaten sind davon ausgeschlossen.
+Bestehende Aktualisierungs- und Fehlerersatzfristen bleiben erhalten.
+
+**Azure-Ergänzung am 19. September:** Punkt 4 ist abgeschlossen. Der Server
+`psql-jobfinder-e64bfdce` (PostgreSQL 18.6, B1ms, 32 GiB, France Central) und
+die leere Datenbank `jobfinder` wurden per Terraform angelegt. Eine gezielte
+Rechner-IP-Freigabe und TLS-Pflicht sind aktiv. Verbindungsprüfung mit TLS 1.3
+und `verify-full` erfolgreich; letzter Terraform-Plan: **No changes**.
+Punkt 5 ist für die Datenbank umgesetzt, aber noch nicht für die Dateiablage.
+
+**Phase 7 ist insgesamt noch offen:** Es folgen eigener Anwendungsbenutzer,
+Cloud-Datenübernahme, dauerhafte Cloud-Dateiablage, Worker-/Review-Anbindung und
+der gemeinsame Test im Cloud-Betrieb. Die lokale Datenbank bleibt bis zur
+kontrollierten Umstellung produktiv. Cloud-Betrieb und Kosten:
+[azure-postgresql.md](azure-postgresql.md). Lokaler Betrieb: [postgresql.md](postgresql.md).
+
+## Ursprünglich vereinbarte Richtung
 
 - PostgreSQL wird der einzige unterstützte Datenbanktyp: lokal in Docker für
   Entwicklung und Tests, in Azure für den tatsächlichen Betrieb. Die Datenbestände
@@ -23,7 +70,7 @@ keine bereits umgesetzte PostgreSQL-Anbindung.
   ist noch offen. Aufbewahrung, Aktualisierung und zulässige Nutzung alter Daten
   bei Abruffehlern werden getrennt festgelegt.
 
-## Schritt 1: Bestandsaufnahme der Datenzugriffe
+## Schritt 1: Bestandsaufnahme vor dem Umbau
 
 Die Pfade sind in `job_finder/paths.py` definiert. Angaben zu Lesern und Schreibern
 beziehen sich auf den Anwendungscode, nicht auf Tests oder manuelle Dateibearbeitung.
@@ -104,7 +151,6 @@ aller Quellenregeln. Aufbewahrung bedeutet nicht automatisch weitere Nutzbarkeit
 als aktuelles Ergebnis. Die genaue Aufräumfrist wird in Schritt 9 festgelegt;
 die gewünschte Größenordnung beträgt mehrere Wochen.
 
-Stand: Schritte 1 und 2 besprochen. Als Nächstes folgt Schritt 3:
-Datenzugriff abstrahieren. Tabellenstruktur und Implementierung werden gemeinsam
-schrittweise erarbeitet; eine SQLite-Alternative ist für das Zielsystem nicht
-vorgesehen.
+Damit waren Schritte 1 und 2 als Planungsgrundlage besprochen. Der anschließend
+beauftragte lokale Umbau ist inzwischen umgesetzt; der aktuelle Stand und die
+noch offenen Cloud-Schritte stehen am Anfang dieses Dokuments.

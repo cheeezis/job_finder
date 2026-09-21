@@ -104,12 +104,30 @@ resource "azurerm_container_app_job" "finder" {
     identity = azurerm_user_assigned_identity.jobfinder.id
   }
 
+  # Verweist nur auf die Key-Vault-Adresse, nie auf den Secret-Wert selbst;
+  # Azure löst das bei jedem Start über die zugewiesene Identität auf.
+  secret {
+    name                = "discord-webhook-url"
+    key_vault_secret_id = "${azurerm_key_vault.jobfinder.vault_uri}secrets/DiscordWebhookUrl"
+    identity            = azurerm_user_assigned_identity.jobfinder.id
+  }
+  secret {
+    name                = "startup-jobs-api-key"
+    key_vault_secret_id = "${azurerm_key_vault.jobfinder.vault_uri}secrets/StartupJobsApiKey"
+    identity            = azurerm_user_assigned_identity.jobfinder.id
+  }
+  secret {
+    name                = "jobfinder-database-url"
+    key_vault_secret_id = "${azurerm_key_vault.jobfinder.vault_uri}secrets/JobfinderDatabaseUrl"
+    identity            = azurerm_user_assigned_identity.jobfinder.id
+  }
+
   # Ohne eigenen command-Block gilt der Startbefehl aus dem Image: python run_finder.py.
   template {
     container {
       name = "jobfinder-worker"
       # Dieses Tag wurde zuvor hochgeladen; Terraform baut oder pusht das Image nicht.
-      image  = "${azurerm_container_registry.jobfinder.login_server}/jobfinder:azure-v2"
+      image  = "${azurerm_container_registry.jobfinder.login_server}/jobfinder:azure-v5"
       cpu    = 0.5
       memory = "1Gi"
 
@@ -133,12 +151,33 @@ resource "azurerm_container_app_job" "finder" {
         name  = "JOBFINDER_STORAGE_CONTAINER"
         value = azurerm_storage_container.application_documents.name
       }
+      env {
+        name  = "JOBFINDER_MANAGED_IDENTITY_CLIENT_ID"
+        value = azurerm_user_assigned_identity.jobfinder.client_id
+      }
+
+      env {
+        name        = "JOBFINDER_DATABASE_URL"
+        secret_name = "jobfinder-database-url"
+      }
+
+      env {
+        name        = "DISCORD_WEBHOOK_URL"
+        secret_name = "discord-webhook-url"
+      }
+      env {
+        name        = "STARTUP_JOBS_API_KEY"
+        secret_name = "startup-jobs-api-key"
+      }
     }
   }
 
   tags = azurerm_resource_group.jobfinder.tags
 
-  # Die Pull-Berechtigung muss vor dem Job angelegt werden.
+  # Die Pull- und Key-Vault-Berechtigungen müssen vor dem Job angelegt werden.
   # Die Referenz auf die Identität allein stellt diese Reihenfolge nicht sicher.
-  depends_on = [azurerm_role_assignment.acr_pull]
+  depends_on = [
+    azurerm_role_assignment.acr_pull,
+    azurerm_role_assignment.keyvault_secrets_user_worker,
+  ]
 }

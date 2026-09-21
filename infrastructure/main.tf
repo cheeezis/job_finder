@@ -118,6 +118,21 @@ resource "azurerm_container_app_job" "finder" {
         name  = "PYTHONUNBUFFERED"
         value = "1"
       }
+
+      # Kontoname/Container sind keine Geheimnisse; der Zugriff läuft über die
+      # oben zugewiesene Managed Identity, kein gespeichertes Passwort nötig.
+      env {
+        name  = "JOBFINDER_DOCUMENTS_BACKEND"
+        value = "blob"
+      }
+      env {
+        name  = "JOBFINDER_STORAGE_ACCOUNT"
+        value = azurerm_storage_account.jobfinder.name
+      }
+      env {
+        name  = "JOBFINDER_STORAGE_CONTAINER"
+        value = azurerm_storage_container.application_documents.name
+      }
     }
   }
 

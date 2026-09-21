@@ -12,3 +12,13 @@ output "postgres_database" {
   description = "Name der Anwendungsdatenbank innerhalb des Servers."
   value       = azurerm_postgresql_flexible_server_database.jobfinder.name
 }
+
+output "storage_account_name" {
+  description = "Storage-Account für Bewerbungsdokumente, für Skripte und App-Konfiguration."
+  value       = azurerm_storage_account.jobfinder.name
+}
+
+output "documents_container_name" {
+  description = "Blob-Container innerhalb des Storage-Accounts, der die Dokumente enthält."
+  value       = azurerm_storage_container.application_documents.name
+}

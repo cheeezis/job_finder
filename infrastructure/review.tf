@@ -48,7 +48,7 @@ resource "azurerm_container_app" "review" {
 
     container {
       name   = "jobfinder-review"
-      image  = "${azurerm_container_registry.jobfinder.login_server}/jobfinder:azure-v3"
+      image  = "${azurerm_container_registry.jobfinder.login_server}/jobfinder:azure-v5"
       cpu    = 0.25
       memory = "0.5Gi"
 
@@ -76,6 +76,14 @@ resource "azurerm_container_app" "review" {
       env {
         name  = "JOBFINDER_STORAGE_CONTAINER"
         value = azurerm_storage_container.application_documents.name
+      }
+      env {
+        name  = "JOBFINDER_REVIEW_HOST"
+        value = var.review_fqdn
+      }
+      env {
+        name  = "JOBFINDER_MANAGED_IDENTITY_CLIENT_ID"
+        value = azurerm_user_assigned_identity.jobfinder.client_id
       }
     }
   }
@@ -113,6 +121,16 @@ resource "azapi_resource" "review_auth" {
             clientId                = var.review_aad_client_id
             clientSecretSettingName = "aad-client-secret"
             openIdIssuer            = "https://sts.windows.net/${data.azurerm_client_config.current.tenant_id}/"
+          }
+          # Beschränkt den Zugriff explizit auf diese eine Person statt auf
+          # "irgendwer aus dem Tenant" - relevant, falls dem Tenant später
+          # weitere Konten (Gäste, Mitglieder) hinzugefügt werden.
+          validation = {
+            defaultAuthorizationPolicy = {
+              allowedPrincipals = {
+                identities = [data.azurerm_client_config.current.object_id]
+              }
+            }
           }
         }
       }

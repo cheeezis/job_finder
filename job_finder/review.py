@@ -4,6 +4,7 @@ import argparse
 import errno
 import json
 import mimetypes
+import os
 import re
 import socket
 import threading
@@ -86,6 +87,10 @@ APPLICATIONS_SCRIPT = Path(__file__).with_name("applications.js")
 ROUTE_ORIGIN = f"{LOCAL_SEARCH_POSTAL_CODE} {LOCAL_SEARCH_LOCATION}".strip()
 MAX_REQUEST_BYTES = 45 * 1024 * 1024
 LOCAL_HOST_PATTERN = re.compile(r"^(?:127\.0\.0\.1|localhost)(?::\d{1,5})?$")
+# Set when deployed behind a real hostname (e.g. Azure Container Apps); the
+# Host/Origin checks below allow exactly this one hostname over HTTPS instead
+# of only 127.0.0.1/localhost over HTTP.
+DEPLOYED_HOST = os.environ.get("JOBFINDER_REVIEW_HOST", "").casefold()
 
 
 class LocalReviewServer(HTTPServer):
@@ -323,11 +328,18 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
         a preflight. This server deliberately emits no CORS permission.
         """
         host = self.headers.get("Host", "").casefold()
-        if not LOCAL_HOST_PATTERN.fullmatch(host):
-            self.send_error(403, "Ungültiger lokaler Host")
-            return False
+        if DEPLOYED_HOST:
+            if host != DEPLOYED_HOST:
+                self.send_error(403, "Ungültiger Host")
+                return False
+            scheme = "https"
+        else:
+            if not LOCAL_HOST_PATTERN.fullmatch(host):
+                self.send_error(403, "Ungültiger lokaler Host")
+                return False
+            scheme = "http"
         origin = self.headers.get("Origin")
-        if origin and origin.casefold() != f"http://{host}":
+        if origin and origin.casefold() != f"{scheme}://{host}":
             self.send_error(403, "Ungültiger Ursprung")
             return False
         if require_json:

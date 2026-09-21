@@ -22,6 +22,12 @@ variable "review_aad_client_id" {
   default     = "323cccd5-c4d1-4380-a5c7-818cc20ffb0b"
 }
 
+variable "review_fqdn" {
+  description = "Vorhersehbarer Hostname der Review-Container-App; nicht aus der Ressource selbst ableitbar, da sie sich sonst auf sich selbst bezöge."
+  type        = string
+  default     = "jobfinder-review.ashyisland-3b6e9522.francecentral.azurecontainerapps.io"
+}
+
 variable "postgres_client_ipv4" {
   description = "Aktuelle öffentliche IPv4 des Rechners für den gezielten Datenbankzugriff."
   type        = string

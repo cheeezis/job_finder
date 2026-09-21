@@ -198,7 +198,11 @@ def run_pipeline(exclude_sources=frozenset()):
     )
     with timed_step("Ergebnisdateien schreiben"):
         publish_results(
-            jobs, results, jobs_path=JOBS_FILE, writer=write_recommendations
+            jobs,
+            results,
+            jobs_path=JOBS_FILE,
+            writer=write_recommendations,
+            exclude_sources=exclude_sources,
         )
         print(
             f"Vorfilter: {len(results['included'])} weiter · "

@@ -189,7 +189,7 @@ liegen in PostgreSQL. Bewerbungsunterlagen bleiben separate Dateien unter
 `data/internal/application_documents`; ihre Zuordnung steht in der Datenbank.
 
 Einrichtung, geprüfte Altdatenmigration, Backups und Wiederherstellung sind in
-[PostgreSQL lokal betreiben](docs/postgresql.md) beschrieben. Die alten SQLite-
+[PostgreSQL betreiben](docs/postgresql.md) beschrieben. Die alten SQLite-
 und JSON-Dateien bleiben nach der Migration als Sicherung erhalten und werden
 vom normalen Betrieb nicht mehr aktualisiert.
 

@@ -118,16 +118,10 @@ Lokale Geheimnisse gehören nicht in YAML-Dateien oder ins Repository.
 
 ## Nutzung
 
-Finder ohne Discord-Versand starten:
+Finder starten (sendet neue Treffer immer per Discord, sofern konfiguriert):
 
 ```powershell
 .\.venv\Scripts\python.exe run_finder.py
-```
-
-Finder mit Discord-Versand starten:
-
-```powershell
-.\.venv\Scripts\python.exe run_finder.py --notify
 ```
 
 Lokale Oberfläche öffnen:

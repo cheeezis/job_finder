@@ -86,12 +86,14 @@ class RunFinderTests(unittest.TestCase):
                     "run_finder.process_notifications",
                     return_value={
                         "ready": 0,
+                        "sent": 0,
+                        "failed": 0,
                         "configuration_error": None,
                     },
                 ),
                 redirect_stdout(io.StringIO()),
             ):
-                run_pipeline(SimpleNamespace(notify=False))
+                run_pipeline()
             persisted = json.loads(jobs_file.read_text(encoding="utf-8"))[0]
         result = recommendations.call_args.args[0]["included"][0]
         self.assertEqual(persisted["description_clean"], "Originalbeschreibung")
@@ -121,7 +123,7 @@ class RunFinderTests(unittest.TestCase):
             self.assertRaises(ValueError),
             redirect_stdout(io.StringIO()),
         ):
-            run_pipeline(SimpleNamespace(notify=False))
+            run_pipeline()
         memory.assert_not_called()
         output.assert_not_called()
 
@@ -144,7 +146,7 @@ class RunFinderTests(unittest.TestCase):
             patch("run_finder.process_notifications") as notifications,
             self.assertRaises(IncompleteSourceSnapshotError),
         ):
-            run_pipeline(SimpleNamespace(notify=False))
+            run_pipeline()
 
         edit_memory.assert_not_called()
         write_jobs.assert_not_called()

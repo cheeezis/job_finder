@@ -62,8 +62,9 @@ Pfaden bleiben als Import-/Exportformat und für Offline-Testfixtures nutzbar.
 ```
 
 Die Befehle laufen in getrennten Terminals. Die Review ist unter
-`http://127.0.0.1:8765` erreichbar. Discord wird weiterhin nur mit `--notify`
-aktiviert. Ein PostgreSQL-Lock verhindert zwei gleichzeitig laufende Finder.
+`http://127.0.0.1:8765` erreichbar. Discord wird bei jedem Finder-Lauf direkt
+versendet, sofern `DISCORD_WEBHOOK_URL` gesetzt ist. Ein PostgreSQL-Lock
+verhindert zwei gleichzeitig laufende Finder.
 
 Dokumente liegen standardmäßig weiterhin unter `data/internal/application_documents`.
 `JOBFINDER_DOCUMENTS_DIR` kann vor dem Start auf eine andere dauerhafte Ablage

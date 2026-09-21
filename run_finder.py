@@ -1,5 +1,6 @@
 """Command-line entry point for collecting, remembering, and scoring jobs."""
 
+import argparse
 import os
 import time
 from collections import Counter
@@ -105,14 +106,34 @@ def require_usable_source_snapshot(source_reports):
     )
 
 
+def parse_args():
+    """Parse command-line options for one Job Finder run."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--exclude-sources",
+        default="",
+        help=(
+            "Comma-separated SOURCE_NAME values to skip this run, e.g. "
+            "'stepstone,remotely' for a split cloud/local schedule"
+        ),
+    )
+    return parser.parse_args()
+
+
+def parse_source_names(value):
+    """Split a comma-separated source-name option into a clean set."""
+    return {name.strip() for name in value.split(",") if name.strip()}
+
+
 def main():
     """Run collection and scoring before persisting state and reporting."""
     configure_utf8_output()
+    args = parse_args()
     with worker_lock(), RunLog():
-        run_pipeline()
+        run_pipeline(exclude_sources=parse_source_names(args.exclude_sources))
 
 
-def run_pipeline():
+def run_pipeline(exclude_sources=frozenset()):
     """Execute one logged run of the complete job-finding pipeline, always notifying."""
     started = time.monotonic()
     with timed_step("Backup"):
@@ -120,7 +141,10 @@ def run_pipeline():
 
     print_phase(1, 4, "Quellen")
     with timed_step("Quellen und Deduplizierung"):
-        jobs, source_reports = collect_jobs()
+        selected_sources = [
+            source for source in SOURCES if source.SOURCE_NAME not in exclude_sources
+        ]
+        jobs, source_reports = collect_jobs(selected_sources)
         print_source_summary(source_reports, len(jobs))
         require_usable_source_snapshot(source_reports)
 

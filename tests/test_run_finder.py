@@ -17,6 +17,7 @@ from run_finder import (
     collect_jobs,
     enrich_candidate_jobs,
     format_duration,
+    parse_source_names,
     print_source_summary,
     run_pipeline,
     source_error_label,
@@ -68,7 +69,9 @@ class RunFinderTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             jobs_file = Path(directory) / "jobs.json"
-            source = SimpleNamespace(enrich_candidate_jobs=enrich)
+            source = SimpleNamespace(
+                SOURCE_NAME="arbeitnow", enrich_candidate_jobs=enrich
+            )
             with (
                 patch("run_finder.JOBS_FILE", jobs_file),
                 patch("run_finder.MEMORY_FILE", Path(directory) / "state.sqlite3"),
@@ -255,6 +258,41 @@ class RunFinderTests(unittest.TestCase):
 
     def test_source_error_label_uses_http_status_without_printing_urls(self):
         self.assertEqual(source_error_label(SimpleNamespace(code=429)), "HTTP 429")
+
+    def test_parse_source_names_splits_and_ignores_blanks(self):
+        self.assertEqual(
+            parse_source_names("stepstone, remotely,, "), {"stepstone", "remotely"}
+        )
+        self.assertEqual(parse_source_names(""), set())
+
+    def test_excluded_sources_are_skipped_before_collection(self):
+        kept = SimpleNamespace(SOURCE_NAME="arbeitnow")
+        excluded = SimpleNamespace(SOURCE_NAME="stepstone")
+        seen_sources = []
+
+        def fake_collect_jobs(sources):
+            seen_sources.extend(sources)
+            return [], [{"name": "arbeitnow", "status": "empty", "jobs": 0}]
+
+        with (
+            patch("run_finder.SOURCES", [kept, excluded]),
+            patch("run_finder.create_backup"),
+            patch("run_finder.collect_jobs", side_effect=fake_collect_jobs),
+            patch("run_finder.write_recommendations"),
+            patch(
+                "run_finder.process_notifications",
+                return_value={
+                    "ready": 0,
+                    "sent": 0,
+                    "failed": 0,
+                    "configuration_error": None,
+                },
+            ),
+            redirect_stdout(io.StringIO()),
+        ):
+            run_pipeline(exclude_sources={"stepstone"})
+
+        self.assertEqual(seen_sources, [kept])
 
 
 if __name__ == "__main__":

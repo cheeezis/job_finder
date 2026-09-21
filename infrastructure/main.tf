@@ -116,13 +116,18 @@ resource "azurerm_container_app_job" "finder" {
     key_vault_secret_id = "${azurerm_key_vault.jobfinder.vault_uri}secrets/StartupJobsApiKey"
     identity            = azurerm_user_assigned_identity.jobfinder.id
   }
+  secret {
+    name                = "jobfinder-database-url"
+    key_vault_secret_id = "${azurerm_key_vault.jobfinder.vault_uri}secrets/JobfinderDatabaseUrl"
+    identity            = azurerm_user_assigned_identity.jobfinder.id
+  }
 
   # Ohne eigenen command-Block gilt der Startbefehl aus dem Image: python run_finder.py.
   template {
     container {
       name = "jobfinder-worker"
       # Dieses Tag wurde zuvor hochgeladen; Terraform baut oder pusht das Image nicht.
-      image  = "${azurerm_container_registry.jobfinder.login_server}/jobfinder:azure-v2"
+      image  = "${azurerm_container_registry.jobfinder.login_server}/jobfinder:azure-v3"
       cpu    = 0.5
       memory = "1Gi"
 
@@ -145,6 +150,11 @@ resource "azurerm_container_app_job" "finder" {
       env {
         name  = "JOBFINDER_STORAGE_CONTAINER"
         value = azurerm_storage_container.application_documents.name
+      }
+
+      env {
+        name        = "JOBFINDER_DATABASE_URL"
+        secret_name = "jobfinder-database-url"
       }
 
       env {

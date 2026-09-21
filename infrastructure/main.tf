@@ -155,6 +155,10 @@ resource "azurerm_container_app_job" "finder" {
         name  = "JOBFINDER_MANAGED_IDENTITY_CLIENT_ID"
         value = azurerm_user_assigned_identity.jobfinder.client_id
       }
+      env {
+        name  = "JOBFINDER_REVIEW_HOST"
+        value = var.review_fqdn
+      }
 
       env {
         name        = "JOBFINDER_DATABASE_URL"

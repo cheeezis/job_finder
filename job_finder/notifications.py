@@ -65,6 +65,7 @@ def process_notifications(
     *,
     send=False,
     webhook_url=None,
+    review_host=None,
     state_path=NOTIFICATION_STATE_FILE,
     client=None,
     now=None,
@@ -95,7 +96,9 @@ def process_notifications(
     for chunk in notification_chunks(candidates):
         keys = [key for key, _job in chunk]
         try:
-            webhook_client.send(discord_payload([job for _key, job in chunk]))
+            webhook_client.send(
+                discord_payload([job for _key, job in chunk], review_host=review_host)
+            )
         except NotificationError as error:
             for key in keys:
                 entry = state["pending"][key]
@@ -274,22 +277,50 @@ def notification_chunks(candidates):
     return chunks
 
 
-def discord_payload(jobs):
+def discord_payload(jobs, *, review_host=None):
     """Build one mention-safe message containing actionable job cards."""
     count = len(jobs)
     label = "Stelle" if count == 1 else "Stellen"
     return {
         "content": f"**{count} {label} zur Sichtung**",
-        "embeds": [discord_embed(job) for job in jobs],
+        "embeds": [discord_embed(job, review_host=review_host) for job in jobs],
         "allowed_mentions": {"parse": []},
     }
 
 
-def discord_embed(job):
+def discord_embed(job, *, review_host=None):
     """Render a quiet, compact card with the facts needed for a first look."""
     locations = ", ".join(job.get("locations", [])) or "unbekannt"
     role = format_role_group(job)
     remote = format_remote(job)
+    fields = [
+        {
+            "name": "Kurzcheck",
+            "value": truncate(
+                f"Neu · {role} · Vorfilter {job.get('match_percent', 0)}/100",
+                1024,
+            ),
+            "inline": False,
+        },
+        {
+            "name": "Einstieg",
+            "value": truncate(job.get("experience_level") or "nicht erkannt", 1024),
+            "inline": True,
+        },
+        {
+            "name": "Standortprüfung",
+            "value": truncate(
+                job.get("location_precheck") or "keine Auffälligkeit erkannt",
+                1024,
+            ),
+            "inline": False,
+        },
+    ]
+    link = review_url(job, review_host)
+    if link:
+        fields.append(
+            {"name": "Review", "value": f"[Stelle öffnen]({link})", "inline": True}
+        )
     return {
         "title": truncate(job["title"], 256),
         "url": primary_url(job),
@@ -299,31 +330,16 @@ def discord_embed(job):
             4096,
         ),
         "color": 0x2E8B57,
-        "fields": [
-            {
-                "name": "Kurzcheck",
-                "value": truncate(
-                    f"Neu · {role} · Vorfilter {job.get('match_percent', 0)}/100",
-                    1024,
-                ),
-                "inline": False,
-            },
-            {
-                "name": "Einstieg",
-                "value": truncate(job.get("experience_level") or "nicht erkannt", 1024),
-                "inline": True,
-            },
-            {
-                "name": "Standortprüfung",
-                "value": truncate(
-                    job.get("location_precheck") or "keine Auffälligkeit erkannt",
-                    1024,
-                ),
-                "inline": False,
-            },
-        ],
+        "fields": fields,
         "footer": {"text": "Titel anklicken, um die Originalanzeige zu öffnen."},
     }
+
+
+def review_url(job, review_host):
+    """Build a deep link into the review page for one job, when configured."""
+    if not review_host:
+        return None
+    return f"https://{review_host}/review?job={job['id']}"
 
 
 def format_count(value):

@@ -194,6 +194,19 @@ class NotificationTests(unittest.TestCase):
 
         self.assertIn("Neu", fields["Kurzcheck"])
 
+    def test_embed_has_no_review_link_without_a_configured_host(self):
+        embed = discord_embed(make_job())
+        fields = {field["name"]: field["value"] for field in embed["fields"]}
+        self.assertNotIn("Review", fields)
+
+    def test_embed_links_to_the_matching_review_job_when_host_is_configured(self):
+        embed = discord_embed(make_job("job:42"), review_host="review.example.test")
+        fields = {field["name"]: field["value"] for field in embed["fields"]}
+        self.assertEqual(
+            fields["Review"],
+            "[Stelle öffnen](https://review.example.test/review?job=job:42)",
+        )
+
     def test_run_summary_contains_no_ai_statistics(self):
         payload = run_summary_payload(
             {

@@ -208,6 +208,7 @@ def run_pipeline(exclude_sources=frozenset()):
             results,
             send=True,
             webhook_url=os.getenv("DISCORD_WEBHOOK_URL"),
+            review_host=os.getenv("JOBFINDER_REVIEW_HOST"),
         )
         if notification_stats["configuration_error"]:
             print(f"Discord: {notification_stats['configuration_error']}")

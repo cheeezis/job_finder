@@ -37,14 +37,26 @@ resource "azurerm_postgresql_flexible_server" "jobfinder" {
   tags = azurerm_resource_group.jobfinder.tags
 }
 
-# Öffentlicher Endpunkt bedeutet nicht Zugriff von überall: Azure erlaubt hier
+# Öffentlicher Endpunkt bedeutet nicht Zugriff von überall: Diese Regel erlaubt
 # nur die einzelne angegebene IP. Bei einem IP-Wechsel muss sie aktualisiert werden.
-# Die pauschale Freigabe für alle Azure-Dienste (0.0.0.0) wird nicht verwendet.
 resource "azurerm_postgresql_flexible_server_firewall_rule" "local_review" {
   name             = "local-review"
   server_id        = azurerm_postgresql_flexible_server.jobfinder.id
   start_ip_address = var.postgres_client_ipv4
   end_ip_address   = var.postgres_client_ipv4
+}
+
+# Der Worker läuft als Container Apps Job ohne feste ausgehende IP; eine echte
+# Netzwerkisolation (VNet-Integration) würde einen verwalteten Load Balancer
+# erzwingen (~20+ EUR/Monat zusätzlich) und ist für diesen Umfang bewusst
+# Phase 11 vorbehalten. Start/End 0.0.0.0 ist Azures Sonderwert für "beliebiger
+# Azure-Dienst", nicht nur diese Subscription. TLS (verify-full) und das
+# eingeschränkte jobfinder_app-Passwort bleiben die eigentliche Zugriffsschranke.
+resource "azurerm_postgresql_flexible_server_firewall_rule" "allow_azure_services" {
+  name             = "allow-azure-services"
+  server_id        = azurerm_postgresql_flexible_server.jobfinder.id
+  start_ip_address = "0.0.0.0"
+  end_ip_address   = "0.0.0.0"
 }
 
 # Erzwingt verschlüsselte Verbindungen. Der Client prüft zusätzlich Zertifikat

@@ -30,9 +30,14 @@ def _blob_container():
 
         account = os.environ["JOBFINDER_STORAGE_ACCOUNT"]
         container = os.environ["JOBFINDER_STORAGE_CONTAINER"]
+        # A user-assigned identity isn't auto-detected like a system-assigned
+        # one; without its client ID, ManagedIdentityCredential can't tell
+        # which identity to use and DefaultAzureCredential falls through to
+        # every other (failing) credential type.
+        client_id = os.environ.get("JOBFINDER_MANAGED_IDENTITY_CLIENT_ID")
         service = BlobServiceClient(
             account_url=f"https://{account}.blob.core.windows.net",
-            credential=DefaultAzureCredential(),
+            credential=DefaultAzureCredential(managed_identity_client_id=client_id),
         )
         _container_client = service.get_container_client(container)
     return _container_client

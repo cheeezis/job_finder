@@ -127,7 +127,7 @@ resource "azurerm_container_app_job" "finder" {
     container {
       name = "jobfinder-worker"
       # Dieses Tag wurde zuvor hochgeladen; Terraform baut oder pusht das Image nicht.
-      image  = "${azurerm_container_registry.jobfinder.login_server}/jobfinder:azure-v3"
+      image  = "${azurerm_container_registry.jobfinder.login_server}/jobfinder:azure-v5"
       cpu    = 0.5
       memory = "1Gi"
 
@@ -150,6 +150,10 @@ resource "azurerm_container_app_job" "finder" {
       env {
         name  = "JOBFINDER_STORAGE_CONTAINER"
         value = azurerm_storage_container.application_documents.name
+      }
+      env {
+        name  = "JOBFINDER_MANAGED_IDENTITY_CLIENT_ID"
+        value = azurerm_user_assigned_identity.jobfinder.client_id
       }
 
       env {

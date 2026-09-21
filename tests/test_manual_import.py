@@ -7,9 +7,9 @@ from datetime import date, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
-from job_finder.manual_import import import_manual_url
-from job_finder.memory import load_memory
 from job_finder.models import Job, JobSource, WorkMode
+from job_finder.workflow.manual_import import import_manual_url
+from job_finder.workflow.memory import load_memory
 
 
 class ManualImportTests(unittest.TestCase):
@@ -33,7 +33,7 @@ class ManualImportTests(unittest.TestCase):
                 "recommendations_path": root / "recommendations.json",
             }
             with patch(
-                "job_finder.manual_import.manual.add_url", return_value=job
+                "job_finder.workflow.manual_import.manual.add_url", return_value=job
             ) as add_url:
                 result = import_manual_url("https://example.com/jobs/python", **paths)
             recommendations = json.loads(
@@ -53,7 +53,7 @@ class ManualImportTests(unittest.TestCase):
         self.assertIn("manual:python", memory)
 
     def test_manual_source_remains_reviewable_in_later_pipeline_runs(self):
-        from job_finder.main import score_jobs
+        from job_finder.workflow.main import score_jobs
 
         job = Job(
             id="manual:remote-conflict",
@@ -72,7 +72,7 @@ class ManualImportTests(unittest.TestCase):
         )
 
     def test_old_manual_job_remains_reviewable_with_warning(self):
-        from job_finder.main import score_jobs
+        from job_finder.workflow.main import score_jobs
 
         job = Job(
             id="manual:old",

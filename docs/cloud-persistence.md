@@ -111,10 +111,10 @@ Weitere Ablagen:
 5. Der manuelle Import schreibt mehrere Ablagen nacheinander. Diese Änderungen
    bilden aktuell keine gemeinsame Transaktion.
 
-Nachweise im Code: `run_finder.py`, `job_finder/memory.py`,
-`job_finder/review.py`, `job_finder/review_data.py`, `job_finder/review_actions.py`,
-`job_finder/manual_import.py`, `job_finder/notifications.py`,
-`job_finder/application_documents.py`, `job_finder/sources/manual.py`,
+Nachweise im Code: `run_finder.py`, `job_finder/workflow/memory.py`,
+`job_finder/review.py`, `job_finder/workflow/review_data.py`, `review_actions.py`,
+`job_finder/workflow/manual_import.py`, `notifications.py`,
+`job_finder/persistence/application_documents.py`, `job_finder/sources/manual.py`,
 `job_finder/sources/common.py` und `job_finder/operations.py`.
 
 ## Schritt 2: Aufbewahrung und gemeinsamer Zugriff

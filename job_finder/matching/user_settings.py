@@ -4,9 +4,9 @@ from pathlib import Path
 
 import yaml
 
-from job_finder.matching_rules import GENERAL_IT_ROLE, ROLE_GROUPS
+from job_finder.matching.matching_rules import GENERAL_IT_ROLE, ROLE_GROUPS
+from job_finder.paths import PROJECT_DIR
 
-PROJECT_DIR = Path(__file__).resolve().parent.parent
 LOCAL_SETTINGS_PATH = PROJECT_DIR / "user_settings.local.yaml"
 EXAMPLE_SETTINGS_PATH = PROJECT_DIR / "user_settings.example.yaml"
 SETTINGS_PATH = (

@@ -6,11 +6,11 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
-from job_finder import document_store
-from job_finder.application_documents import live_document_manifest
-from job_finder.database import initialize, lock, transaction
 from job_finder.paths import APPLICATION_DOCUMENTS_DIR, BACKUP_DIR
-from job_finder.postgres_store import (
+from job_finder.persistence import document_store
+from job_finder.persistence.application_documents import live_document_manifest
+from job_finder.persistence.database import initialize, lock, transaction
+from job_finder.persistence.postgres_store import (
     read_dataset,
     read_memory,
     write_dataset,

@@ -5,20 +5,16 @@ import os
 import time
 from collections import Counter
 
-from job_finder.availability import ignore_closed_listings
 from job_finder.console import configure_utf8_output, print_phase, print_progress
-from job_finder.database import worker_lock
-from job_finder.deduplication import deduplicate_jobs
-from job_finder.main import build_score_results, evaluate_jobs, score_jobs
-from job_finder.memory import edit_memory, update_memory
-from job_finder.notifications import process_notifications, send_run_summary
+from job_finder.matching.deduplication import deduplicate_jobs
 from job_finder.operations import RunLog, create_backup, timed_step
 from job_finder.paths import (
     JOBS_FILE,
     MEMORY_FILE,
     NOTIFICATION_STATE_FILE,
 )
-from job_finder.reporting import is_visible_in_default_review, write_recommendations
+from job_finder.persistence.database import worker_lock
+from job_finder.persistence.storage import publish_results
 from job_finder.sources import (
     arbeitnow,
     arbeitsagentur,
@@ -47,7 +43,14 @@ from job_finder.sources.common import (
     fetch_diagnostics,
     reset_fetch_diagnostics,
 )
-from job_finder.storage import publish_results
+from job_finder.workflow.availability import ignore_closed_listings
+from job_finder.workflow.main import build_score_results, evaluate_jobs, score_jobs
+from job_finder.workflow.memory import edit_memory, update_memory
+from job_finder.workflow.notifications import process_notifications, send_run_summary
+from job_finder.workflow.reporting import (
+    is_visible_in_default_review,
+    write_recommendations,
+)
 
 SOURCES = [
     arbeitsagentur,

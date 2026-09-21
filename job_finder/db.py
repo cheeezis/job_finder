@@ -3,11 +3,14 @@
 import argparse
 import json
 
-from job_finder.database import initialize, transaction
-from job_finder.migration import migrate
 from job_finder.paths import APPLICATION_DOCUMENTS_DIR, DATA_DIR
-from job_finder.postgres_backup import create_postgres_backup, restore_backup
-from job_finder.postgres_store import prune_cache
+from job_finder.persistence.database import initialize, transaction
+from job_finder.persistence.migration import migrate
+from job_finder.persistence.postgres_backup import (
+    create_postgres_backup,
+    restore_backup,
+)
+from job_finder.persistence.postgres_store import prune_cache
 
 
 def main():

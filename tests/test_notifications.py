@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from job_finder.notifications import (
+from job_finder.workflow.notifications import (
     NotificationError,
     discord_embed,
     process_notifications,

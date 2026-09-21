@@ -12,16 +12,17 @@ from pathlib import Path
 from urllib.error import HTTPError
 from urllib.parse import quote, urlencode, urljoin, urlsplit, urlunsplit
 
-from job_finder.config import (
+from job_finder.console import print_progress, progress_checkpoint
+from job_finder.http import fetch_text
+from job_finder.matching.config import (
     STEPSTONE_SEARCH_LOCATIONS,
     STEPSTONE_SEARCH_RADIUS_KM,
     STEPSTONE_SEARCH_TERMS,
 )
-from job_finder.console import print_progress, progress_checkpoint
-from job_finder.http import fetch_text
+from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource
 from job_finder.paths import STEPSTONE_CACHE_FILE
-from job_finder.remote import classify_remote, detect_remote
+from job_finder.persistence.storage import read_json, write_json_atomic
 from job_finder.search_plan import append_unique, iter_search_queries
 from job_finder.sources.common import (
     build_fetch_report,
@@ -35,7 +36,6 @@ from job_finder.sources.common import (
     source_job_id,
     utc_now,
 )
-from job_finder.storage import read_json, write_json_atomic
 from job_finder.structured_data import extract_json_ld_job_posting
 from job_finder.text import html_to_text
 

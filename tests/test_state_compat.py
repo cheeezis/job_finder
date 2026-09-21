@@ -3,7 +3,7 @@
 import copy
 import unittest
 
-from job_finder.state_compat import (
+from job_finder.persistence.state_compat import (
     decode_legacy_memory,
     decode_notification_state,
     restore_initial_discovery_date,

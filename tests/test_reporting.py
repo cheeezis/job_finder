@@ -5,7 +5,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from job_finder.reporting import is_international_listing, write_recommendations
+from job_finder.workflow.reporting import (
+    is_international_listing,
+    write_recommendations,
+)
 
 
 def included_job(job_id="test:1"):

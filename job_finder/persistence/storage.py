@@ -22,7 +22,7 @@ def read_json(path, default=None):
     """Read a runtime dataset or an explicitly selected JSON import file."""
     name = dataset_name(path)
     if name is not None:
-        from job_finder.postgres_store import read_dataset
+        from job_finder.persistence.postgres_store import read_dataset
 
         return read_dataset(name, default)
     target = Path(path)
@@ -35,7 +35,7 @@ def write_json_atomic(path, value, *, indent=2):
     """Commit runtime data to PostgreSQL, or atomically export an explicit file."""
     name = dataset_name(path)
     if name is not None:
-        from job_finder.postgres_store import write_dataset
+        from job_finder.persistence.postgres_store import write_dataset
 
         write_dataset(name, value)
         return
@@ -51,8 +51,8 @@ def write_json_atomic(path, value, *, indent=2):
 
 def publish_results(jobs, results, *, jobs_path, writer):
     """Publish both result views together, retaining concurrent manual imports."""
-    from job_finder.database import lock, transaction
     from job_finder.paths import RECOMMENDATIONS_JSON
+    from job_finder.persistence.database import lock, transaction
 
     values = [job.to_dict() for job in jobs]
     managed = dataset_name(jobs_path) is not None

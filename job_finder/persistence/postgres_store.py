@@ -6,7 +6,7 @@ from datetime import date, datetime
 from psycopg import sql
 from psycopg.types.json import Jsonb
 
-from job_finder.database import lock, snapshot, transaction
+from job_finder.persistence.database import lock, snapshot, transaction
 
 STATE_FIELDS = (
     "title",

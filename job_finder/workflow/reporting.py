@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 
 from job_finder.paths import RECOMMENDATIONS_JSON
-from job_finder.storage import write_json_atomic
+from job_finder.persistence.storage import write_json_atomic
 from job_finder.text import text_is_mainly_english
 
 INTERNATIONAL_LOCATION_TERMS = {

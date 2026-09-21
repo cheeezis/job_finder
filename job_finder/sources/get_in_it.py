@@ -11,16 +11,16 @@ from html import unescape
 from pathlib import Path
 from urllib.parse import urlencode, urljoin
 
-from job_finder.config import (
+from job_finder.http import fetch_json, fetch_text
+from job_finder.matching.config import (
     COMMUTER_SEARCH_LOCATIONS,
     COMMUTER_SEARCH_TERMS,
     GET_IN_IT_SEARCH_LOCATIONS,
     GET_IN_IT_SEARCH_TERMS,
 )
-from job_finder.http import fetch_json, fetch_text
+from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource, WorkMode
 from job_finder.paths import GET_IN_IT_CACHE_FILE
-from job_finder.remote import classify_remote, detect_remote
 from job_finder.search_plan import iter_search_queries, unique_in_order
 from job_finder.sources.common import (
     build_fetch_report,

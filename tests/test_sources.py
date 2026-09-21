@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import ANY, Mock, patch
 from urllib.error import HTTPError
 
-from job_finder.config import (
+from job_finder.matching.config import (
     COMMUTER_SEARCH_RADIUS_KM,
     LOCAL_SEARCH_POSTAL_CODE,
     STEPSTONE_SEARCH_LOCATIONS,

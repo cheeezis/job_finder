@@ -6,7 +6,7 @@ from datetime import date
 from pathlib import Path
 from unittest.mock import patch
 
-from job_finder import scoring
+from job_finder.matching import scoring
 from job_finder.models import Job
 
 

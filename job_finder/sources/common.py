@@ -10,7 +10,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from job_finder.console import print_progress, progress_checkpoint
 from job_finder.models import Job
-from job_finder.storage import read_json, write_json_atomic
+from job_finder.persistence.storage import read_json, write_json_atomic
 
 DETAIL_CACHE_VERSION = 1
 DETAIL_REFRESH_AGE = timedelta(days=7)

@@ -15,8 +15,7 @@ from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-from job_finder.config import LOCAL_SEARCH_LOCATION, LOCAL_SEARCH_POSTAL_CODE
-from job_finder.memory import load_memory, save_memory
+from job_finder.matching.config import LOCAL_SEARCH_LOCATION, LOCAL_SEARCH_POSTAL_CODE
 from job_finder.review import (
     APP_SCRIPT,
     APP_STYLES,
@@ -34,6 +33,7 @@ from job_finder.review import (
     update_review_decision,
     update_workflow_status,
 )
+from job_finder.workflow.memory import load_memory, save_memory
 
 
 def json_request(url, payload):
@@ -872,7 +872,7 @@ class ReviewTests(unittest.TestCase):
         before = load_memory(self.memory_path)
         root = self.directory / "documents"
         with mock.patch(
-            "job_finder.memory.write_memory",
+            "job_finder.workflow.memory.write_memory",
             side_effect=OSError("commit failed"),
         ):
             with self.assertRaises(OSError):

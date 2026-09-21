@@ -11,16 +11,16 @@ from urllib.parse import urljoin, urlsplit
 
 from job_finder.console import print_progress, progress_checkpoint
 from job_finder.http import fetch_text, fetch_text_with_final_url
+from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource
 from job_finder.paths import REMOTELY_CACHE_FILE, REMOTELY_LINKEDIN_STATUS_FILE
-from job_finder.remote import classify_remote, detect_remote
+from job_finder.persistence.storage import read_json, write_json_atomic
 from job_finder.sources.common import (
     ListingUnavailableError,
     fetch_cached_details,
     source_job_id,
     utc_now,
 )
-from job_finder.storage import read_json, write_json_atomic
 from job_finder.text import html_to_text
 
 SOURCE_NAME = "remotely"

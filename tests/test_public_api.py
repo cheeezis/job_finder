@@ -2,8 +2,8 @@
 
 import unittest
 
+from job_finder.matching.scoring import analyze_experience, passes_hard_filters
 from job_finder.review import memory_entry_for_job
-from job_finder.scoring import analyze_experience, passes_hard_filters
 from job_finder.sources.manual import main_fragment
 
 

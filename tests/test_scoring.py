@@ -4,11 +4,11 @@ import unittest
 from datetime import date, timedelta
 from unittest.mock import patch
 
-from job_finder.deduplication import deduplicate_jobs, unique_sources
-from job_finder.main import score_jobs
+from job_finder.matching.deduplication import deduplicate_jobs, unique_sources
+from job_finder.matching.remote import classify_remote, detect_remote
+from job_finder.matching.scoring import LOCAL_PLACES, score_job
 from job_finder.models import Job, JobSource
-from job_finder.remote import classify_remote, detect_remote
-from job_finder.scoring import LOCAL_PLACES, score_job
+from job_finder.workflow.main import score_jobs
 
 
 def make_job(**overrides):
@@ -333,7 +333,7 @@ class ScoringTests(unittest.TestCase):
                 "minimum_remote_percentage": 60,
             }
         ]
-        with patch("job_finder.scoring.COMMUTER_LOCATIONS", locations):
+        with patch("job_finder.matching.scoring.COMMUTER_LOCATIONS", locations):
             accepted = score_job(
                 make_job(
                     title="Python Developer",
@@ -380,7 +380,7 @@ class ScoringTests(unittest.TestCase):
             ),
         )
 
-        with patch("job_finder.scoring.COMMUTER_LOCATIONS", locations):
+        with patch("job_finder.matching.scoring.COMMUTER_LOCATIONS", locations):
             result = score_job(job)
 
         self.assertEqual(result["filter_status"], "included")
@@ -449,7 +449,7 @@ class ScoringTests(unittest.TestCase):
                 "minimum_remote_percentage": 80,
             }
         ]
-        with patch("job_finder.scoring.COMMUTER_LOCATIONS", locations):
+        with patch("job_finder.matching.scoring.COMMUTER_LOCATIONS", locations):
             accepted = score_job(
                 make_job(
                     title="Python Developer",
@@ -774,8 +774,8 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(result["filter_status"], "excluded")
         self.assertIn("Master", result["reasons"][0])
 
-    @patch("job_finder.scoring.SALARY_TARGET", 99_000)
-    @patch("job_finder.scoring.SALARY_MINIMUM", 77_000)
+    @patch("job_finder.matching.scoring.SALARY_TARGET", 99_000)
+    @patch("job_finder.matching.scoring.SALARY_MINIMUM", 77_000)
     def test_structured_part_time_is_scored_as_a_preference_warning(self):
         full_time = score_job(make_job(employment_type="Vollzeit"))
         part_time = score_job(make_job(employment_type="Teilzeit"))
@@ -784,8 +784,8 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(full_time["match_percent"] - part_time["match_percent"], 4)
         self.assertTrue(any("Teilzeit" in reason for reason in part_time["reasons"]))
 
-    @patch("job_finder.scoring.SALARY_TARGET", 99_000)
-    @patch("job_finder.scoring.SALARY_MINIMUM", 77_000)
+    @patch("job_finder.matching.scoring.SALARY_TARGET", 99_000)
+    @patch("job_finder.matching.scoring.SALARY_MINIMUM", 77_000)
     def test_salary_below_minimum_is_a_warning_not_an_exclusion(self):
         result = score_job(make_job(description="Jahresgehalt 70.000 EUR brutto."))
         self.assertEqual(result["filter_status"], "included")
@@ -793,8 +793,8 @@ class ScoringTests(unittest.TestCase):
             any("unter persoenlichem Minimum" in reason for reason in result["reasons"])
         )
 
-    @patch("job_finder.scoring.SALARY_TARGET", 99_000)
-    @patch("job_finder.scoring.SALARY_MINIMUM", 77_000)
+    @patch("job_finder.matching.scoring.SALARY_TARGET", 99_000)
+    @patch("job_finder.matching.scoring.SALARY_MINIMUM", 77_000)
     def test_structured_salary_below_minimum_is_a_warning(self):
         result = score_job(make_job(salary_min_eur=60_000, salary_max_eur=70_000))
 
@@ -803,8 +803,8 @@ class ScoringTests(unittest.TestCase):
             any("unter persoenlichem Minimum" in reason for reason in result["reasons"])
         )
 
-    @patch("job_finder.scoring.SALARY_TARGET", None)
-    @patch("job_finder.scoring.SALARY_MINIMUM", None)
+    @patch("job_finder.matching.scoring.SALARY_TARGET", None)
+    @patch("job_finder.matching.scoring.SALARY_MINIMUM", None)
     def test_missing_salary_preferences_disable_salary_warnings(self):
         result = score_job(make_job(description="Jahresgehalt 30.000 EUR brutto."))
 

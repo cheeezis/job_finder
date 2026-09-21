@@ -2,18 +2,18 @@
 
 from datetime import date, datetime, timedelta
 
-from job_finder.application_documents import public_documents
-from job_finder.memory import (
+from job_finder.models import APPLICATION_STATUSES, WorkflowStatus
+from job_finder.paths import MEMORY_FILE
+from job_finder.persistence.application_documents import public_documents
+from job_finder.persistence.state_compat import legacy_salary_expectation
+from job_finder.workflow.memory import (
     first_seen_date,
     load_memory,
     memory_source_links,
 )
-from job_finder.memory import (
+from job_finder.workflow.memory import (
     has_application_state as is_application,
 )
-from job_finder.models import APPLICATION_STATUSES, WorkflowStatus
-from job_finder.paths import MEMORY_FILE
-from job_finder.state_compat import legacy_salary_expectation
 
 OPEN_APPLICATION_STATUSES = {
     WorkflowStatus.APPLIED.value,

@@ -3,54 +3,54 @@
 import re
 from datetime import date, timedelta
 
-from job_finder import location_rules
-from job_finder.config import LOCAL_SEARCH_RADIUS_KM
-from job_finder.experience import (
+from job_finder.matching import location_rules
+from job_finder.matching.config import LOCAL_SEARCH_RADIUS_KM
+from job_finder.matching.experience import (
     EXPERIENCE_TERM as EXPERIENCE_TERM,
 )
-from job_finder.experience import (
+from job_finder.matching.experience import (
     MORE_THAN_QUALIFIERS as MORE_THAN_QUALIFIERS,
 )
-from job_finder.experience import (
+from job_finder.matching.experience import (
     REQUIRED_EXPERIENCE_PATTERNS as REQUIRED_EXPERIENCE_PATTERNS,
 )
-from job_finder.experience import (
+from job_finder.matching.experience import (
     YEAR_UNIT as YEAR_UNIT,
 )
-from job_finder.experience import (
+from job_finder.matching.experience import (
     analyze_experience as analyze_experience,
 )
-from job_finder.experience import (
+from job_finder.matching.experience import (
     experience_is_optional as experience_is_optional,
 )
-from job_finder.experience import (
+from job_finder.matching.experience import (
     extract_required_years as extract_required_years,
 )
-from job_finder.experience import (
+from job_finder.matching.experience import (
     has_required_experience as has_required_experience,
 )
-from job_finder.experience import (
+from job_finder.matching.experience import (
     match_context as match_context,
 )
-from job_finder.experience import (
+from job_finder.matching.experience import (
     match_is_optional as match_is_optional,
 )
-from job_finder.experience import (
+from job_finder.matching.experience import (
     strong_experience_is_required as strong_experience_is_required,
 )
-from job_finder.location_rules import (
+from job_finder.matching.location_rules import (
     is_full_remote as is_full_remote,
 )
-from job_finder.location_rules import (
+from job_finder.matching.location_rules import (
     is_hybrid as is_hybrid,
 )
-from job_finder.location_rules import (
+from job_finder.matching.location_rules import (
     remote_percent as remote_percent,
 )
-from job_finder.location_rules import (
+from job_finder.matching.location_rules import (
     remote_possible_from_germany as remote_possible_from_germany,
 )
-from job_finder.matching_rules import (
+from job_finder.matching.matching_rules import (
     BLOCKED_TITLE_WORDS,
     ENTRY_LEVEL_TITLE_EXCEPTIONS,
     GENERAL_IT_ROLE,
@@ -59,35 +59,35 @@ from job_finder.matching_rules import (
     MANDATORY_ADVANCED_DEGREE_PATTERNS,
     ROLE_GROUPS,
 )
-from job_finder.matching_text import (
+from job_finder.matching.matching_text import (
     contains_any as contains_any,
 )
-from job_finder.matching_text import (
+from job_finder.matching.matching_text import (
     contains_keyword as contains_keyword,
 )
-from job_finder.matching_text import (
+from job_finder.matching.matching_text import (
     is_entry_level as is_entry_level,
 )
-from job_finder.matching_text import (
+from job_finder.matching.matching_text import (
     keyword_pattern as keyword_pattern,
 )
-from job_finder.matching_text import (
+from job_finder.matching.matching_text import (
     matches_pattern as matches_pattern,
 )
-from job_finder.models import FilterStatus, Job
-from job_finder.ranking_weights import ROLE_POINTS, SCORE_LIMITS, SKILL_GROUPS
-from job_finder.remote import detect_remote
-from job_finder.salary import (
+from job_finder.matching.ranking_weights import ROLE_POINTS, SCORE_LIMITS, SKILL_GROUPS
+from job_finder.matching.remote import detect_remote
+from job_finder.matching.salary import (
     extract_annual_salary as extract_annual_salary,
 )
-from job_finder.salary import (
+from job_finder.matching.salary import (
     salary_number as salary_number,
 )
-from job_finder.salary import (
+from job_finder.matching.salary import (
     valid_salary as valid_salary,
 )
+from job_finder.matching.user_settings import USER_SETTINGS
+from job_finder.models import FilterStatus, Job
 from job_finder.text import normalize_text, text_is_mainly_english
-from job_finder.user_settings import USER_SETTINGS
 
 MAX_JOB_AGE_DAYS = 60
 MATCHING_SETTINGS = USER_SETTINGS["matching"]

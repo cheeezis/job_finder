@@ -3,15 +3,15 @@
 from contextlib import nullcontext
 from pathlib import Path
 
-from job_finder.database import lock, transaction
-from job_finder.deduplication import deduplicate_jobs, merge_jobs
-from job_finder.main import load_jobs, score_for_pipeline
-from job_finder.memory import edit_memory, update_memory
+from job_finder.matching.deduplication import deduplicate_jobs, merge_jobs
 from job_finder.paths import JOBS_FILE, MEMORY_FILE, RECOMMENDATIONS_JSON
-from job_finder.reporting import recommendation_for_job
+from job_finder.persistence.database import lock, transaction
+from job_finder.persistence.storage import dataset_name, read_json, write_json_atomic
 from job_finder.sources import manual
 from job_finder.sources.common import canonical_detail_url
-from job_finder.storage import dataset_name, read_json, write_json_atomic
+from job_finder.workflow.main import load_jobs, score_for_pipeline
+from job_finder.workflow.memory import edit_memory, update_memory
+from job_finder.workflow.reporting import recommendation_for_job
 
 
 def import_manual_url(

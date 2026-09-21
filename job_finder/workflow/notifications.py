@@ -9,15 +9,17 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
 from job_finder.paths import NOTIFICATION_STATE_FILE
-from job_finder.reporting import (
+from job_finder.persistence.state_compat import (
+    NOTIFICATION_STATE_VERSION as STATE_VERSION,
+)
+from job_finder.persistence.state_compat import decode_notification_state
+from job_finder.persistence.storage import read_json, write_json_atomic
+from job_finder.workflow.reporting import (
     format_remote,
     format_role_group,
     is_visible_in_default_review,
     primary_url,
 )
-from job_finder.state_compat import NOTIFICATION_STATE_VERSION as STATE_VERSION
-from job_finder.state_compat import decode_notification_state
-from job_finder.storage import read_json, write_json_atomic
 
 NOTIFIABLE_STATUSES = {"new", "review", "interesting", "inquiry"}
 MAX_EMBEDS = 10

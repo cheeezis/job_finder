@@ -93,7 +93,7 @@ Der Vorfilter verwendet wieder die bewährte Punkteverteilung: bis zu 30 für
 die Rolle, 25 für Technologien, 25 für Einstiegseignung, 15 für den Standort
 und fünf für den Bezug zu Projekten oder Weiterbildungen. Abzüge für
 Arbeitsbedingungen werden danach angewendet. Die Rollen- und Technologiegewichte
-stehen getrennt von den Erkennungsregeln in `job_finder/ranking_weights.py`.
+stehen getrennt von den Erkennungsregeln in `job_finder/matching/ranking_weights.py`.
 `matching.profile_domain_keywords` steuert den einmaligen Stichwortbonus.
 `matching.preferred_role_groups` wird aus Kompatibilitätsgründen weiterhin
 akzeptiert, hat in dieser wiederhergestellten Sortierung aber keinen Einfluss.
@@ -105,8 +105,8 @@ Das Wort „Weiterbildung“ löst im Beschreibungstext keinen Ausbildungsabzug
 mehr aus, damit reguläre Stellen mit Weiterbildungsangeboten nicht schlechter
 abschneiden. Ausbildungsstellen und Weiterbildungstitel werden weiterhin erkannt.
 
-`job_finder/matching_rules.py` enthält die Erkennungs- und Ausschlussregeln,
-`job_finder/scoring.py` setzt daraus die Bewertung zusammen. Ein optionales
+`job_finder/matching/matching_rules.py` enthält die Erkennungs- und Ausschlussregeln,
+`job_finder/matching/scoring.py` setzt daraus die Bewertung zusammen. Ein optionales
 `profile.local.yaml` dient als persönliche Faktenbasis für eine spätere
 agentische Stufe und wird vom aktuellen Finder nicht geladen. Die frühere
 Python-Datei `job_finder/profile.py` wurde durch diese Trennung abgelöst.

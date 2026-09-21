@@ -1,6 +1,6 @@
 """Central search settings for all source adapters."""
 
-from job_finder.user_settings import USER_SETTINGS
+from job_finder.matching.user_settings import USER_SETTINGS
 
 SEARCH_TERMS = [
     "Junior Python Developer",

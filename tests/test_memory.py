@@ -6,15 +6,15 @@ import threading
 import unittest
 from pathlib import Path
 
-from job_finder.database import transaction
-from job_finder.memory import (
+from job_finder.models import Job, JobSource, WorkflowStatus
+from job_finder.persistence.database import transaction
+from job_finder.persistence.migration import read_legacy_memory as load_json_memory
+from job_finder.workflow.memory import (
     edit_memory,
     load_memory,
     save_memory,
     update_memory,
 )
-from job_finder.migration import read_legacy_memory as load_json_memory
-from job_finder.models import Job, JobSource, WorkflowStatus
 
 
 def make_job():

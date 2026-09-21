@@ -2,13 +2,13 @@
 
 import re
 
-from job_finder.matching_rules import (
+from job_finder.matching.matching_rules import (
     BODY_ENTRY_LEVEL_PHRASES,
     FIRST_EXPERIENCE_PHRASES,
     OPTIONAL_EXPERIENCE_PHRASES,
     STRONG_EXPERIENCE_PHRASES,
 )
-from job_finder.matching_text import contains_any, is_entry_level
+from job_finder.matching.matching_text import contains_any, is_entry_level
 
 EXPERIENCE_TERM = (
     r"(?:berufserfahrung|arbeitserfahrung|entwicklungserfahrung|"

@@ -74,7 +74,7 @@ beschreibt Titel und Beschreibung.
    Netzwerkabrufe erfolgen außerhalb der SQLite-Schreibtransaktionen;
    vor einer Statusänderung wird der aktuelle Nutzerentscheid erneut geprüft.
 5. Job-Snapshot und Empfehlungen werden geschrieben. Die Discord-Warteschlange
-   wird aktualisiert; versendet wird nur mit `--notify`.
+   wird aktualisiert und bei jedem Lauf direkt versendet.
 
 `is_new` beschreibt einen Erstfund im Suchlauf. `workflow_status="new"`
 bedeutet dagegen, dass die Stelle noch nicht bearbeitet wurde. Der Review-

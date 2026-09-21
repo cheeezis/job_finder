@@ -11,7 +11,6 @@ import unittest
 from contextlib import redirect_stdout
 from copy import deepcopy
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import patch
 
 from job_finder.application_documents import store_documents
@@ -201,17 +200,17 @@ class PostgresTests(unittest.TestCase):
             patch("run_finder.ignore_closed_listings", return_value=[]),
             patch(
                 "run_finder.collect_jobs",
-                side_effect=lambda: (
+                side_effect=lambda sources=None: (
                     [deepcopy(job)],
                     [{"name": "test", "status": "success", "jobs": 1}],
                 ),
             ),
             redirect_stdout(io.StringIO()),
         ):
-            run_pipeline(SimpleNamespace(notify=False))
+            run_pipeline()
             update_review_decision("test:1", "interesting")
             first_seen = load_memory()["test:1"]["first_seen_at"]
-            run_pipeline(SimpleNamespace(notify=False))
+            run_pipeline()
         restored = load_memory()["test:1"]
         self.assertEqual(restored["workflow_status"], "interesting")
         self.assertEqual(restored["first_seen_at"], first_seen)

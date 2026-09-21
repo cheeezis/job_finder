@@ -116,18 +116,17 @@ Review-Ergebnisse werden durch einen Neustart allein nicht neu bewertet.
 Für Discord kann `DISCORD_WEBHOOK_URL` als Umgebungsvariable gesetzt werden.
 Lokale Geheimnisse gehören nicht in YAML-Dateien oder ins Repository.
 
+Ist zusätzlich `JOBFINDER_REVIEW_HOST` gesetzt (der Hostname der Review-Seite,
+z. B. `jobfinder-review.ashyisland-3b6e9522.francecentral.azurecontainerapps.io`),
+enthält jede Discord-Benachrichtigung einen Direktlink zur passenden Stelle
+in der Review.
+
 ## Nutzung
 
-Finder ohne Discord-Versand starten:
+Finder starten (sendet neue Treffer immer per Discord, sofern konfiguriert):
 
 ```powershell
 .\.venv\Scripts\python.exe run_finder.py
-```
-
-Finder mit Discord-Versand starten:
-
-```powershell
-.\.venv\Scripts\python.exe run_finder.py --notify
 ```
 
 Lokale Oberfläche öffnen:

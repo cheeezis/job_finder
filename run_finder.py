@@ -110,11 +110,19 @@ def parse_args():
     """Parse command-line options for one Job Finder run."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--notify",
-        action="store_true",
-        help="Send queued positive recommendations to Discord",
+        "--exclude-sources",
+        default="",
+        help=(
+            "Comma-separated SOURCE_NAME values to skip this run, e.g. "
+            "'stepstone,remotely' for a split cloud/local schedule"
+        ),
     )
     return parser.parse_args()
+
+
+def parse_source_names(value):
+    """Split a comma-separated source-name option into a clean set."""
+    return {name.strip() for name in value.split(",") if name.strip()}
 
 
 def main():
@@ -122,18 +130,21 @@ def main():
     configure_utf8_output()
     args = parse_args()
     with worker_lock(), RunLog():
-        run_pipeline(args)
+        run_pipeline(exclude_sources=parse_source_names(args.exclude_sources))
 
 
-def run_pipeline(args):
-    """Execute one logged run of the complete job-finding pipeline."""
+def run_pipeline(exclude_sources=frozenset()):
+    """Execute one logged run of the complete job-finding pipeline, always notifying."""
     started = time.monotonic()
     with timed_step("Backup"):
         create_backup([MEMORY_FILE, NOTIFICATION_STATE_FILE])
 
     print_phase(1, 4, "Quellen")
     with timed_step("Quellen und Deduplizierung"):
-        jobs, source_reports = collect_jobs()
+        selected_sources = [
+            source for source in SOURCES if source.SOURCE_NAME not in exclude_sources
+        ]
+        jobs, source_reports = collect_jobs(selected_sources)
         print_source_summary(source_reports, len(jobs))
         require_usable_source_snapshot(source_reports)
 
@@ -195,35 +206,33 @@ def run_pipeline(args):
     with timed_step("Benachrichtigungen"):
         notification_stats = process_notifications(
             results,
-            send=args.notify,
+            send=True,
             webhook_url=os.getenv("DISCORD_WEBHOOK_URL"),
+            review_host=os.getenv("JOBFINDER_REVIEW_HOST"),
         )
         if notification_stats["configuration_error"]:
             print(f"Discord: {notification_stats['configuration_error']}")
-        elif args.notify:
+        else:
             print(
                 f"Discord: {notification_stats['sent']} gesendet, "
                 f"{notification_stats['failed']} fehlgeschlagen"
             )
-        else:
-            print(f"Discord: {notification_stats['ready']} bereit; mit --notify senden")
 
-        if args.notify:
-            summary_error = send_run_summary(
-                build_run_summary(
-                    duration_seconds=time.monotonic() - started,
-                    jobs=jobs,
-                    results=results,
-                    memory_stats=memory_stats,
-                    source_reports=source_reports,
-                    notification_stats=notification_stats,
-                ),
-                webhook_url=os.getenv("DISCORD_WEBHOOK_URL"),
-            )
-            if summary_error:
-                print(f"Discord-Laufstatistik: {summary_error}")
-            else:
-                print("Discord-Laufstatistik gesendet")
+        summary_error = send_run_summary(
+            build_run_summary(
+                duration_seconds=time.monotonic() - started,
+                jobs=jobs,
+                results=results,
+                memory_stats=memory_stats,
+                source_reports=source_reports,
+                notification_stats=notification_stats,
+            ),
+            webhook_url=os.getenv("DISCORD_WEBHOOK_URL"),
+        )
+        if summary_error:
+            print(f"Discord-Laufstatistik: {summary_error}")
+        else:
+            print("Discord-Laufstatistik gesendet")
 
     print("\nErgebnisübersicht")
     print_review_diagnostics(results, memory_stats)

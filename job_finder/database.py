@@ -129,15 +129,27 @@ def database_url():
     return value
 
 
+def admin_database_url():
+    """DDL-capable connection; only initialize() may use this, never runtime reads/writes."""
+    load_dotenv(PROJECT_DIR / ".env.postgres", override=False)
+    value = os.getenv("JOBFINDER_ADMIN_DATABASE_URL")
+    if not value:
+        raise RuntimeError(
+            "JOBFINDER_ADMIN_DATABASE_URL fehlt. PostgreSQL einrichten; siehe docs/postgresql.md."
+        )
+    return value
+
+
 @contextmanager
-def transaction():
+def transaction(*, admin=False):
     """Reuse the current transaction so multi-repository writes commit together."""
     existing = _connection.get()
     if existing is not None:
         with existing.transaction():
             yield existing
         return
-    with psycopg.connect(database_url(), connect_timeout=10) as connection:
+    url = admin_database_url() if admin else database_url()
+    with psycopg.connect(url, connect_timeout=10) as connection:
         connection.execute("SET LOCAL lock_timeout = '30s'")
         token = _connection.set(connection)
         try:
@@ -167,7 +179,7 @@ def snapshot():
 
 def initialize():
     """Explicitly initialize the application schema, without touching user data."""
-    with transaction() as connection:
+    with transaction(admin=True) as connection:
         lock(connection, "jobfinder-schema")
         connection.execute(SCHEMA)
         versions = connection.execute("SELECT version FROM schema_version").fetchall()

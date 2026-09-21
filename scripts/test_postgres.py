@@ -26,6 +26,9 @@ def main():
     ) == conninfo_to_dict(production).get("dbname"):
         raise SystemExit("Tests benötigen eine separate Datenbank mit Suffix _test.")
     os.environ["JOBFINDER_DATABASE_URL"] = target
+    # The disposable test database has no app/admin split; the same superuser
+    # connection is fine for schema setup (initialize()) and TRUNCATE below.
+    os.environ["JOBFINDER_ADMIN_DATABASE_URL"] = target
     os.environ["JOBFINDER_TEST_MODE"] = "1"
     initialize()
     with transaction() as connection:

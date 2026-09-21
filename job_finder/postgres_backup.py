@@ -6,8 +6,9 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
+from job_finder import document_store
+from job_finder.application_documents import live_document_manifest
 from job_finder.database import initialize, lock, transaction
-from job_finder.migration import document_manifest
 from job_finder.paths import APPLICATION_DOCUMENTS_DIR, BACKUP_DIR
 from job_finder.postgres_store import (
     read_dataset,
@@ -36,7 +37,7 @@ def create_postgres_backup(
                 "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"
             )
             memory = read_memory(connection, "default")
-            documents = document_manifest(memory, Path(documents_dir))
+            documents = live_document_manifest(memory, documents_dir)
 
             def add(name, content):
                 archive.writestr(name, content)
@@ -53,7 +54,7 @@ def create_postgres_backup(
                     json.dumps(read_dataset(name), ensure_ascii=False).encode(),
                 )
             for name, expected in documents.items():
-                content = (Path(documents_dir) / name).read_bytes()
+                content = document_store.read(name, documents_dir)
                 if hashlib.sha256(content).hexdigest() != expected:
                     raise RuntimeError("Dokument während der Sicherung geändert.")
                 add("documents/" + name, content)
@@ -68,10 +69,9 @@ def create_postgres_backup(
 
 
 def restore_backup(archive_path, documents_dir):
-    """Restore into an empty database and document directory; verify before commit."""
+    """Restore into an empty database and document store; verify before commit."""
     initialize()
-    root = Path(documents_dir).resolve()
-    if root.exists() and any(root.iterdir()):
+    if not document_store.is_empty(documents_dir):
         raise ValueError(
             "Dokumentziel muss leer sein; bestehende Dateien werden nicht überschrieben."
         )
@@ -114,18 +114,18 @@ def restore_backup(archive_path, documents_dir):
                                 "Datenvergleich nach Wiederherstellung fehlgeschlagen"
                             )
                     elif name.startswith("documents/"):
-                        target = root / name.removeprefix("documents/")
-                        target.parent.mkdir(parents=True, exist_ok=True)
-                        with target.open("xb") as output:
-                            output.write(archive.read(name))
-                        written.append(target)
+                        key = name.removeprefix("documents/")
+                        if document_store.exists(key, documents_dir):
+                            raise ValueError("Dokument existiert bereits am Zielort")
+                        document_store.write(key, archive.read(name), documents_dir)
+                        written.append(key)
                 if read_memory(connection, "default") != memory:
                     raise RuntimeError(
                         "Gedächtnis stimmt nach Wiederherstellung nicht überein"
                     )
-                document_manifest(memory, root)
+                live_document_manifest(memory, documents_dir)
         except BaseException:
-            for path in written:
-                path.unlink(missing_ok=True)
+            for key in written:
+                document_store.delete(key, documents_dir)
             raise
     return {"jobs_remembered": len(memory), "documents": len(written), "verified": True}

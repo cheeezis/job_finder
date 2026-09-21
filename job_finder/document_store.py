@@ -77,3 +77,11 @@ def delete(key, root=APPLICATION_DOCUMENTS_DIR):
             client.delete_blob()
         return
     (Path(root) / key).unlink(missing_ok=True)
+
+
+def is_empty(root=APPLICATION_DOCUMENTS_DIR):
+    """Restore requires an empty target so nothing gets silently overwritten."""
+    if _backend() == "blob":
+        return next(iter(_blob_container().list_blobs()), None) is None
+    path = Path(root)
+    return not path.exists() or not any(path.iterdir())

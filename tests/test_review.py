@@ -872,7 +872,7 @@ class ReviewTests(unittest.TestCase):
         before = load_memory(self.memory_path)
         root = self.directory / "documents"
         with mock.patch(
-            "job_finder.memory.replace_sqlite_memory",
+            "job_finder.memory.write_memory",
             side_effect=OSError("commit failed"),
         ):
             with self.assertRaises(OSError):

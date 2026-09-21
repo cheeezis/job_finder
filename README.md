@@ -71,6 +71,10 @@ Unterstützt wird Python 3.11 oder neuer. Die Projektmetadaten stehen zusätzlic
 in `pyproject.toml`; eine bearbeitbare Installation ist mit
 `.\.venv\Scripts\python.exe -m pip install -e .` möglich.
 
+Vor dem ersten Start PostgreSQL einrichten beziehungsweise vorhandene Daten
+übernehmen: [PostgreSQL-Anleitung](docs/postgresql.md). Die Datenbank ist für
+Finder und Review erforderlich.
+
 Persönliche Sucheinstellungen anlegen:
 
 ```powershell
@@ -181,25 +185,14 @@ Fehlende Suchtreffer, Login-Weiterleitungen und Abruffehler reichen dafür nicht
 Bestehende Bewerbungen bleiben davon ausgenommen. Der automatische Wechsel wird
 mit Datum und Grund gespeichert.
 
-Der veränderliche Stellen- und Bewerbungszustand liegt transaktional in
-`data/internal/job_finder.sqlite3`. Beim ersten Zugriff wird eine vorhandene
-`seen_jobs.json` einmalig importiert und als unveränderte Rückfallkopie
-beibehalten. `jobs.json` und `recommendations.json` bleiben bewusst lesbare,
-neu erzeugbare Ausgaben. Bewerbungsunterlagen liegen als eigenständige Dateien
-in `data/internal/application_documents`; die Zustandsbackups enthalten diese
-Dokumentordner nicht. Für eine vollständige Sicherung den gesamten `data`-Ordner
-bei beendeter Anwendung separat sichern. SQLite ist der einzige schreibbare Speicher für den
-Stellen- und Bewerbungszustand; JSON wird dafür nur noch beim Altimport gelesen.
+Der Stellen- und Bewerbungszustand, Empfehlungen, Versandstatus und Quellencaches
+liegen in PostgreSQL. Bewerbungsunterlagen bleiben separate Dateien unter
+`data/internal/application_documents`; ihre Zuordnung steht in der Datenbank.
 
-```text
-data/internal/job_finder.sqlite3  Status, Entscheidungen und Bewerbungsverlauf
-data/internal/jobs.json          letzter deduplizierter Quellensnapshot
-data/internal/*_cache.json       lokale Quellencaches
-data/internal/notifications.json Discord-Versandstatus
-data/output/recommendations.json aktuelle Ausgabe für die Review-Oberfläche
-data/logs/                        Laufprotokolle
-data/backups/                     rotierende Zustandsbackups
-```
+Einrichtung, geprüfte Altdatenmigration, Backups und Wiederherstellung sind in
+[PostgreSQL lokal betreiben](docs/postgresql.md) beschrieben. Die alten SQLite-
+und JSON-Dateien bleiben nach der Migration als Sicherung erhalten und werden
+vom normalen Betrieb nicht mehr aktualisiert.
 
 Direkte Arbeitnow-Anzeigen mit vollständigem Text bleiben unverändert. Nur bei
 dem bekannten Platzhaltertext wird nach bestandenem Vorfilter die verlinkte
@@ -255,7 +248,7 @@ als geschlossen bestätigt worden sein. Die Anfragen bleiben sequenziell.
 ## Tests
 
 ```powershell
-.\.venv\Scripts\python.exe -m unittest discover -s tests
+.\.venv\Scripts\python.exe scripts/test_postgres.py
 ```
 
 Die gemeinsamen Browser-Helfer lassen sich zusätzlich mit Node.js (ab Version 18)

@@ -104,6 +104,19 @@ resource "azurerm_container_app_job" "finder" {
     identity = azurerm_user_assigned_identity.jobfinder.id
   }
 
+  # Verweist nur auf die Key-Vault-Adresse, nie auf den Secret-Wert selbst;
+  # Azure löst das bei jedem Start über die zugewiesene Identität auf.
+  secret {
+    name                = "discord-webhook-url"
+    key_vault_secret_id = "${azurerm_key_vault.jobfinder.vault_uri}secrets/DiscordWebhookUrl"
+    identity            = azurerm_user_assigned_identity.jobfinder.id
+  }
+  secret {
+    name                = "startup-jobs-api-key"
+    key_vault_secret_id = "${azurerm_key_vault.jobfinder.vault_uri}secrets/StartupJobsApiKey"
+    identity            = azurerm_user_assigned_identity.jobfinder.id
+  }
+
   # Ohne eigenen command-Block gilt der Startbefehl aus dem Image: python run_finder.py.
   template {
     container {
@@ -133,12 +146,24 @@ resource "azurerm_container_app_job" "finder" {
         name  = "JOBFINDER_STORAGE_CONTAINER"
         value = azurerm_storage_container.application_documents.name
       }
+
+      env {
+        name        = "DISCORD_WEBHOOK_URL"
+        secret_name = "discord-webhook-url"
+      }
+      env {
+        name        = "STARTUP_JOBS_API_KEY"
+        secret_name = "startup-jobs-api-key"
+      }
     }
   }
 
   tags = azurerm_resource_group.jobfinder.tags
 
-  # Die Pull-Berechtigung muss vor dem Job angelegt werden.
+  # Die Pull- und Key-Vault-Berechtigungen müssen vor dem Job angelegt werden.
   # Die Referenz auf die Identität allein stellt diese Reihenfolge nicht sicher.
-  depends_on = [azurerm_role_assignment.acr_pull]
+  depends_on = [
+    azurerm_role_assignment.acr_pull,
+    azurerm_role_assignment.keyvault_secrets_user_worker,
+  ]
 }

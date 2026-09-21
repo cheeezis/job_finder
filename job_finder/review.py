@@ -12,6 +12,8 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, urlsplit
 
+import psycopg
+
 from job_finder.application_documents import (
     document_path,
     find_document,
@@ -120,6 +122,15 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
     applications_script_path = APPLICATIONS_SCRIPT
 
     def do_GET(self):
+        """Handle database outages without exposing connection details."""
+        try:
+            self._do_GET()
+        except psycopg.Error:
+            self.send_json(
+                {"error": "Datenbank vorübergehend nicht erreichbar."}, status=503
+            )
+
+    def _do_GET(self):
         """Return the page or the current joined recommendation data."""
         if not self.accept_local_request():
             return
@@ -194,6 +205,12 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
             if not isinstance(payload, dict):
                 raise ValueError("JSON-Objekt erforderlich")
             result = action(payload)
+        except psycopg.Error:
+            self.send_json(
+                {"error": "Datenbankänderung fehlgeschlagen; bitte erneut versuchen."},
+                status=503,
+            )
+            return
         except (TypeError, ValueError, KeyError, OSError, RuntimeError) as error:
             self.send_json({"error": str(error)}, status=400)
             return

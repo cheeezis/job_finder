@@ -1,8 +1,9 @@
 """Targeted processing for one job URL explicitly supplied by the user."""
 
-import json
+from contextlib import nullcontext
 from pathlib import Path
 
+from job_finder.database import lock, transaction
 from job_finder.deduplication import deduplicate_jobs, merge_jobs
 from job_finder.main import load_jobs, score_for_pipeline
 from job_finder.memory import edit_memory, update_memory
@@ -10,7 +11,7 @@ from job_finder.paths import JOBS_FILE, MEMORY_FILE, RECOMMENDATIONS_JSON
 from job_finder.reporting import recommendation_for_job
 from job_finder.sources import manual
 from job_finder.sources.common import canonical_detail_url
-from job_finder.storage import write_json_atomic
+from job_finder.storage import dataset_name, read_json, write_json_atomic
 
 
 def import_manual_url(
@@ -23,10 +24,9 @@ def import_manual_url(
 ):
     """Fetch, remember and score one user-supplied public listing URL.
 
-    Write the manual cache, update SQLite state, and replace the job's
+    Write the manual source, update PostgreSQL state, and replace the job's
     entries in the job snapshot and recommendations. Unrelated review
-    results are retained. These writes do not share one transaction;
-    a later error can leave earlier writes in place.
+    results are retained. Default runtime writes share one transaction.
 
     Return job_id, title, company, match_percent and prefilter_warning.
     Manual submissions remain reviewable even when the filter rejects
@@ -35,7 +35,26 @@ def import_manual_url(
     Invalid URLs or unrecognized pages raise ValueError. Network,
     filesystem and database failures propagate to the caller.
     """
-    imported = manual.add_url(url, cache_path=cache_path)
+    # Download before taking a database lock. Persist the manual source and
+    # both review datasets in the same transaction as the remembered job.
+    if dataset_name(cache_path):
+        requested_url = manual.validate_public_url(url)
+        final_url, html = manual.fetch_text_with_final_url(
+            requested_url, url_validator=manual.validate_public_url
+        )
+        imported = manual.job_from_page(final_url, html)
+    else:
+        imported = manual.add_url(url, cache_path=cache_path)
+    with transaction() if dataset_name(jobs_path) else nullcontext() as connection:
+        if connection is not None:
+            lock(connection, "finder-publication")
+            cache = manual.load_detail_cache(cache_path)
+            cache[canonical_detail_url(imported.primary_url)] = imported
+            manual.save_detail_cache(cache_path, cache)
+        return _persist_import(imported, jobs_path, memory_path, recommendations_path)
+
+
+def _persist_import(imported, jobs_path, memory_path, recommendations_path):
     jobs = load_current_jobs(jobs_path)
     target = replace_or_add_job(jobs, imported)
 
@@ -64,7 +83,7 @@ def import_manual_url(
 def load_current_jobs(path):
     """Load the current JSON snapshot, or return [] before the first run."""
     path = Path(path)
-    return load_jobs(path) if path.exists() else []
+    return load_jobs(path)
 
 
 def replace_or_add_job(jobs, imported):
@@ -99,10 +118,7 @@ def save_jobs(jobs, path):
 def save_recommendation(job, path):
     """Replace only the imported card and preserve all other review results."""
     path = Path(path)
-    if path.exists():
-        document = json.loads(path.read_text(encoding="utf-8"))
-    else:
-        document = {"recommendations": []}
+    document = read_json(path, {"recommendations": []})
     recommendation = recommendation_for_job(job)
     urls = {
         link["url"]

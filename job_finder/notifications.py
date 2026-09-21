@@ -17,7 +17,7 @@ from job_finder.reporting import (
 )
 from job_finder.state_compat import NOTIFICATION_STATE_VERSION as STATE_VERSION
 from job_finder.state_compat import decode_notification_state
-from job_finder.storage import write_json_atomic
+from job_finder.storage import read_json, write_json_atomic
 
 NOTIFIABLE_STATUSES = {"new", "review", "interesting", "inquiry"}
 MAX_EMBEDS = 10
@@ -406,9 +406,9 @@ def webhook_url_with_confirmation(webhook_url):
 def load_notification_state(path=NOTIFICATION_STATE_FILE):
     """Load delivery state and fold legacy content keys into stable job IDs."""
     state_path = Path(path)
-    if not state_path.exists():
-        return {"sent": {}, "pending": {}}
-    document = json.loads(state_path.read_text(encoding="utf-8"))
+    document = read_json(
+        state_path, {"version": STATE_VERSION, "sent": {}, "pending": {}}
+    )
     return decode_notification_state(document)
 
 

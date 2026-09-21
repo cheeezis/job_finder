@@ -10,7 +10,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from job_finder.console import print_progress, progress_checkpoint
 from job_finder.models import Job
-from job_finder.storage import write_json_atomic
+from job_finder.storage import read_json, write_json_atomic
 
 DETAIL_CACHE_VERSION = 1
 DETAIL_REFRESH_AGE = timedelta(days=7)
@@ -107,10 +107,8 @@ def canonical_detail_url(url):
 def load_detail_cache(path):
     """Load one source's current URL-to-job detail cache."""
     cache_path = Path(path)
-    if not cache_path.exists():
-        return {}
     try:
-        document = json.loads(cache_path.read_text(encoding="utf-8"))
+        document = read_json(cache_path, {})
     except (json.JSONDecodeError, OSError):
         return {}
     if document.get("version") != DETAIL_CACHE_VERSION:

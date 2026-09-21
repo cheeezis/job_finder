@@ -35,7 +35,7 @@ from job_finder.sources.common import (
     source_job_id,
     utc_now,
 )
-from job_finder.storage import write_json_atomic
+from job_finder.storage import read_json, write_json_atomic
 from job_finder.structured_data import extract_json_ld_job_posting
 from job_finder.text import html_to_text
 
@@ -304,11 +304,9 @@ def fetch_job(url, client=None):
 def load_cache(path):
     """Load cached jobs and the links from the last successful search."""
     empty_cache = {"version": CACHE_VERSION, "last_links": [], "jobs": {}}
-    if not path.exists():
-        return empty_cache
 
     try:
-        cache = json.loads(path.read_text(encoding="utf-8"))
+        cache = read_json(path, empty_cache)
     except (json.JSONDecodeError, OSError):
         return empty_cache
 

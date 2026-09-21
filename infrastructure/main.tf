@@ -85,8 +85,11 @@ resource "azurerm_container_app_job" "finder" {
   replica_timeout_in_seconds = 3600
   replica_retry_limit        = 0
 
-  # Zunächst manuell starten, um das Deployment kontrolliert zu prüfen.
-  manual_trigger_config {
+  # 08:00 und 18:00 MESZ = 06:00 und 16:00 UTC. Läuft ganzjährig auf fixer
+  # UTC-Zeit; die tatsächliche lokale Uhrzeit verschiebt sich beim Wechsel
+  # zwischen MESZ und MEZ um eine Stunde.
+  schedule_trigger_config {
+    cron_expression = "0 6,16 * * *"
     # Pro Ausführung eine Replik; ihr erfolgreicher Abschluss beendet die Ausführung.
     parallelism              = 1
     replica_completion_count = 1

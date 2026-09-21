@@ -121,7 +121,6 @@ def _update_queue(results, state, timestamp):
     queued = 0
     current_new = 0
     eligible_new = 0
-    default_review_new = 0
 
     # A job may have been queued in an earlier run but be excluded after a
     # stricter general rule or an updated posting. It must not remain queued.
@@ -139,8 +138,6 @@ def _update_queue(results, state, timestamp):
             continue
         if is_new_job:
             eligible_new += 1
-            if is_visible_in_default_review(job):
-                default_review_new += 1
         if is_new_job and key not in state["sent"] and key not in state["pending"]:
             state["pending"][key] = pending_entry(job, timestamp)
             queued += 1
@@ -155,7 +152,6 @@ def _update_queue(results, state, timestamp):
         "ready": len(candidates),
         "current_new": current_new,
         "eligible_new": eligible_new,
-        "default_review_new": default_review_new,
         "already_notified": max(eligible_new - len(candidates), 0),
         "sent": 0,
         "failed": 0,
@@ -184,8 +180,6 @@ def run_summary_payload(summary):
     sent = notifications.get("sent", 0)
     failed = notifications.get("failed", 0)
     eligible = notifications.get("eligible_new", summary["review_new"])
-    default_review = notifications.get("default_review_new", eligible)
-    hidden_by_default = max(eligible - default_review, 0)
     source_warnings = exceptional_source_text(sources)
     color = (
         0xD99A2B
@@ -211,10 +205,6 @@ def run_summary_payload(summary):
             f"{format_count(eligible)} zur Benachrichtigung · "
             f"{format_count(sent)} gesendet · {format_count(failed)} fehlgeschlagen"
         ),
-        (
-            f"{format_count(default_review)} direkt im Standard-Review sichtbar · "
-            f"{format_count(hidden_by_default)} über Zusatzfilter"
-        ),
         "",
         "**Quellen**",
         source_health_text(sources),
@@ -235,8 +225,14 @@ def run_summary_payload(summary):
 
 
 def is_notifiable(job):
-    """Return whether one prefiltered result belongs in Discord notifications."""
-    return job.get("workflow_status", "new") in NOTIFIABLE_STATUSES
+    """Return whether one prefiltered result belongs in Discord notifications.
+
+    Matches what the default review actually shows; a job hidden behind an
+    extra filter (Junior-Hybrid, international remote) is never notified.
+    """
+    return job.get(
+        "workflow_status", "new"
+    ) in NOTIFIABLE_STATUSES and is_visible_in_default_review(job)
 
 
 def notification_key(job):

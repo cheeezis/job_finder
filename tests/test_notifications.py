@@ -77,7 +77,6 @@ class NotificationTests(unittest.TestCase):
         self.assertEqual(stats["ready"], 1)
         self.assertEqual(stats["current_new"], 1)
         self.assertEqual(stats["eligible_new"], 1)
-        self.assertEqual(stats["default_review_new"], 1)
 
     def test_content_changes_never_resend_an_already_notified_job(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -115,7 +114,8 @@ class NotificationTests(unittest.TestCase):
             )
         self.assertEqual(stats["queued"], 0)
 
-    def test_default_review_count_excludes_hidden_special_cases(self):
+    def test_hidden_special_cases_are_never_eligible(self):
+        """A job hidden behind an extra review filter must never be notified."""
         junior_hybrid = make_job("junior-hybrid")
         junior_hybrid["location_precheck"] = (
             "Junior-Hybrid außerhalb des Suchgebiets; Präsenzumfang prüfen"
@@ -131,8 +131,10 @@ class NotificationTests(unittest.TestCase):
                 state_path=Path(directory) / "state.json",
             )
 
-        self.assertEqual(stats["eligible_new"], 3)
-        self.assertEqual(stats["default_review_new"], 1)
+        # All three are "new", but only the review-visible one is notifiable.
+        self.assertEqual(stats["current_new"], 3)
+        self.assertEqual(stats["eligible_new"], 1)
+        self.assertEqual(stats["queued"], 1)
 
     def test_successful_delivery_is_sent_only_once(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -204,7 +206,6 @@ class NotificationTests(unittest.TestCase):
                 "review_new": 2,
                 "notifications": {
                     "eligible_new": 2,
-                    "default_review_new": 1,
                     "sent": 2,
                     "failed": 0,
                 },
@@ -217,8 +218,6 @@ class NotificationTests(unittest.TestCase):
         description = embed["description"]
         self.assertIn("20 im Vorfilter", description)
         self.assertIn("2 zur Benachrichtigung · 2 gesendet", description)
-        self.assertIn("1 direkt im Standard-Review sichtbar", description)
-        self.assertIn("1 über Zusatzfilter", description)
         self.assertNotIn("im Lauf neu/geändert", description)
         self.assertNotIn("fields", embed)
         self.assertNotIn("KI", json.dumps(payload, ensure_ascii=False))

@@ -201,6 +201,33 @@ class RunFinderTests(unittest.TestCase):
         self.assertEqual(reports[0]["error"], "RuntimeError")
         self.assertEqual(reports[1]["status"], "success")
 
+    def test_collect_jobs_logs_one_structured_event_per_source(self):
+        failing = SimpleNamespace(
+            SOURCE_NAME="broken",
+            fetch_jobs=lambda: (_ for _ in ()).throw(RuntimeError("kaputt")),
+        )
+        working = SimpleNamespace(
+            SOURCE_NAME="working", fetch_jobs=lambda: [make_job("working:1")]
+        )
+        output = io.StringIO()
+        with redirect_stdout(output):
+            collect_jobs([failing, working], run_id="test-run-1")
+
+        events = [
+            json.loads(line)
+            for line in output.getvalue().splitlines()
+            if line.strip().startswith("{")
+        ]
+        self.assertEqual([e["event"] for e in events], ["source_completed"] * 2)
+        self.assertEqual(events[0]["run_id"], "test-run-1")
+        self.assertEqual(events[0]["source"], "broken")
+        self.assertEqual(events[0]["status"], "failed")
+        self.assertEqual(events[0]["level"], "error")
+        self.assertEqual(events[1]["source"], "working")
+        self.assertEqual(events[1]["status"], "success")
+        self.assertEqual(events[1]["jobs_found"], 1)
+        self.assertIn("duration_seconds", events[1])
+
     def test_empty_source_is_reported_as_a_complete_empty_snapshot(self):
         jobs, reports = collect_jobs(
             [SimpleNamespace(SOURCE_NAME="empty", fetch_jobs=lambda: [])]
@@ -270,7 +297,7 @@ class RunFinderTests(unittest.TestCase):
         excluded = SimpleNamespace(SOURCE_NAME="stepstone")
         seen_sources = []
 
-        def fake_collect_jobs(sources):
+        def fake_collect_jobs(sources, run_id=None):
             seen_sources.extend(sources)
             return [], [{"name": "arbeitnow", "status": "empty", "jobs": 0}]
 

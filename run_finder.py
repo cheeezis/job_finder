@@ -5,7 +5,12 @@ import os
 import time
 from collections import Counter
 
-from job_finder.console import configure_utf8_output, print_phase, print_progress
+from job_finder.console import (
+    configure_utf8_output,
+    log_event,
+    print_phase,
+    print_progress,
+)
 from job_finder.matching.deduplication import deduplicate_jobs
 from job_finder.operations import RunLog, create_backup, timed_step
 from job_finder.paths import (
@@ -132,11 +137,14 @@ def main():
     """Run collection and scoring before persisting state and reporting."""
     configure_utf8_output()
     args = parse_args()
-    with worker_lock(), RunLog():
-        run_pipeline(exclude_sources=parse_source_names(args.exclude_sources))
+    with worker_lock(), RunLog() as run_log:
+        run_pipeline(
+            exclude_sources=parse_source_names(args.exclude_sources),
+            run_id=run_log.run_id,
+        )
 
 
-def run_pipeline(exclude_sources=frozenset()):
+def run_pipeline(exclude_sources=frozenset(), run_id=None):
     """Execute one logged run of the complete job-finding pipeline, always notifying."""
     started = time.monotonic()
     with timed_step("Backup"):
@@ -147,7 +155,7 @@ def run_pipeline(exclude_sources=frozenset()):
         selected_sources = [
             source for source in SOURCES if source.SOURCE_NAME not in exclude_sources
         ]
-        jobs, source_reports = collect_jobs(selected_sources)
+        jobs, source_reports = collect_jobs(selected_sources, run_id=run_id)
         print_source_summary(source_reports, len(jobs))
         require_usable_source_snapshot(source_reports)
 
@@ -207,6 +215,13 @@ def run_pipeline(exclude_sources=frozenset()):
         print(
             f"Vorfilter: {len(results['included'])} weiter · "
             f"{len(results['excluded'])} ausgeschlossen"
+        )
+        log_event(
+            "prefilter_completed",
+            run_id=run_id,
+            jobs_total=len(jobs),
+            included=len(results["included"]),
+            excluded=len(results["excluded"]),
         )
 
     print_phase(4, 4, "Ausgabe und Benachrichtigungen")
@@ -273,7 +288,7 @@ def print_review_diagnostics(results, memory_stats):
     )
 
 
-def collect_jobs(sources=None):
+def collect_jobs(sources=None, run_id=None):
     """Return deduplicated jobs and coverage reports from selected sources.
 
     Each adapter provides SOURCE_NAME and fetch_jobs(). Prefer the
@@ -296,6 +311,7 @@ def collect_jobs(sources=None):
             "wird geladen",
         )
         reset_fetch_diagnostics()
+        started = time.monotonic()
         try:
             source_jobs, source_status, report_details = fetch_source_jobs(source)
         except Exception as error:
@@ -312,6 +328,16 @@ def collect_jobs(sources=None):
                 1,
                 1,
                 f"fehlgeschlagen ({source_error_label(error)})",
+            )
+            log_event(
+                "source_completed",
+                run_id=run_id,
+                level="error",
+                source=source.SOURCE_NAME,
+                status="failed",
+                jobs_found=0,
+                duration_seconds=round(time.monotonic() - started, 1),
+                error=source_error_label(error),
             )
             continue
         source_reports.append(
@@ -332,6 +358,16 @@ def collect_jobs(sources=None):
                 if source_status == "partial"
                 else ""
             ),
+        )
+        log_event(
+            "source_completed",
+            run_id=run_id,
+            level="warning" if source_status in {"partial", "failed"} else "info",
+            source=source.SOURCE_NAME,
+            status=source_status,
+            jobs_found=len(source_jobs),
+            duration_seconds=round(time.monotonic() - started, 1),
+            **report_details,
         )
         for job in source_jobs:
             url = job.primary_url

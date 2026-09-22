@@ -8,7 +8,7 @@ from contextlib import AbstractContextManager, contextmanager
 from datetime import datetime
 from pathlib import Path
 
-from job_finder.console import format_clock
+from job_finder.console import format_clock, log_event, new_run_id
 from job_finder.paths import BACKUP_DIR, LOG_DIR, MEMORY_FILE
 
 BACKUP_FILES_TO_KEEP = 7
@@ -77,10 +77,11 @@ class TeeStream:
 class RunLog(AbstractContextManager):
     """Capture one complete run while preserving normal console output."""
 
-    def __init__(self, log_dir=LOG_DIR, now=None):
+    def __init__(self, log_dir=LOG_DIR, now=None, run_id=None):
         self.log_dir = Path(log_dir)
         self.started_at = now or datetime.now().astimezone()
         self.path = self.log_dir / f"run-{self.started_at:%Y%m%d-%H%M%S}.log"
+        self.run_id = run_id or new_run_id()
         self.log_file = None
         self.started_monotonic = None
         self.original_stdout = None
@@ -96,18 +97,33 @@ class RunLog(AbstractContextManager):
         sys.stderr = TeeStream(self.original_stderr, self.log_file)
         print(f"Lauf gestartet: {self.started_at.isoformat(timespec='seconds')}")
         print(f"Logdatei: {self.path}")
+        log_event("run_started", run_id=self.run_id, log_path=str(self.path))
         return self
 
     def __exit__(self, error_type, error, traceback):
         finished_at = datetime.now().astimezone()
+        duration_seconds = round(time.monotonic() - self.started_monotonic, 1)
         if error is None:
             print(
                 f"Lauf erfolgreich beendet · Gesamtdauer {format_clock(time.monotonic() - self.started_monotonic)}"
+            )
+            log_event(
+                "run_finished",
+                run_id=self.run_id,
+                duration_seconds=duration_seconds,
             )
         else:
             print(f"Lauf fehlgeschlagen: {type(error).__name__}: {error}")
             traceback_module.print_exception(error_type, error, traceback)
             print(f"Lauf beendet: {finished_at.isoformat(timespec='seconds')}")
+            log_event(
+                "run_failed",
+                run_id=self.run_id,
+                level="error",
+                duration_seconds=duration_seconds,
+                error_type=type(error).__name__,
+                error=str(error),
+            )
         sys.stdout = self.original_stdout
         sys.stderr = self.original_stderr
         self.log_file.close()

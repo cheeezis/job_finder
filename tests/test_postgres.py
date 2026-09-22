@@ -207,7 +207,7 @@ class PostgresTests(unittest.TestCase):
             patch("run_finder.ignore_closed_listings", return_value=[]),
             patch(
                 "run_finder.collect_jobs",
-                side_effect=lambda sources=None: (
+                side_effect=lambda sources=None, run_id=None: (
                     [deepcopy(job)],
                     [{"name": "test", "status": "success", "jobs": 1}],
                 ),

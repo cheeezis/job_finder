@@ -34,6 +34,12 @@ variable "local_docker_sp_object_id" {
   default     = "f270644a-c084-422f-a1db-ae500701dca0"
 }
 
+variable "alert_email" {
+  description = "Empfängeradresse für Azure-Monitor-Alerts (fehlgeschlagene Finder-Läufe)."
+  type        = string
+  default     = "jannis.hauke@t-online.de"
+}
+
 variable "postgres_client_ipv4" {
   description = "Aktuelle öffentliche IPv4 des Rechners für den gezielten Datenbankzugriff."
   type        = string

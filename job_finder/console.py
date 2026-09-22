@@ -1,12 +1,37 @@
 """Console configuration shared by command-line entry points."""
 
+import json
 import sys
 import time
+import uuid
+from datetime import datetime, timezone
 
 PROGRESS_WIDTH = 24
 _PROGRESS_STARTED = {}
 _PROGRESS_REPORTED = {}
 LOG_PROGRESS_INTERVAL = 30
+
+
+def new_run_id():
+    """Create one short identifier shared by every structured log line of a run."""
+    return uuid.uuid4().hex[:12]
+
+
+def log_event(event, *, run_id, level="info", **fields):
+    """Print one structured JSON line for machine-readable log analysis.
+
+    Alongside the human-readable progress output, so Azure Log Analytics
+    receives a parseable JSON string in Log_s instead of only free text;
+    query it with e.g. `Log_s | extend e = parse_json(Log_s)`.
+    """
+    entry = {
+        "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "run_id": run_id,
+        "event": event,
+        "level": level,
+        **fields,
+    }
+    print(json.dumps(entry, ensure_ascii=False))
 
 
 def configure_utf8_output():

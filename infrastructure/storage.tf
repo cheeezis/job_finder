@@ -34,14 +34,16 @@ resource "azurerm_role_assignment" "storage_blob_data_contributor" {
   principal_type       = "ServicePrincipal"
 }
 
-# Der aktuell angemeldete Benutzer (az login), z.B. für lokale Entwicklung und
-# manuelle Prüfungen ohne Kontoschlüssel - dieselbe Identitätsbasis wie die App.
+# Liefert nur noch die Tenant-ID (keyvault.tf, review.tf); object_id wird
+# bewusst NICHT mehr von hier gelesen, siehe var.owner_object_id.
 data "azurerm_client_config" "current" {}
 
+# Eigener Zugriff für lokale Entwicklung und manuelle Prüfungen ohne
+# Kontoschlüssel - dieselbe Identitätsbasis wie die App.
 resource "azurerm_role_assignment" "storage_blob_data_contributor_dev" {
   scope                = azurerm_storage_account.jobfinder.id
   role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = data.azurerm_client_config.current.object_id
+  principal_id         = var.owner_object_id
 }
 
 # Dedicated app registration for the local Docker-based hybrid worker run

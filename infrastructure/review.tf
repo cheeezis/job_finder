@@ -48,7 +48,7 @@ resource "azurerm_container_app" "review" {
 
     container {
       name   = "jobfinder-review"
-      image  = "${azurerm_container_registry.jobfinder.login_server}/jobfinder:azure-v9"
+      image  = "${azurerm_container_registry.jobfinder.login_server}/jobfinder:${var.image_tag}"
       cpu    = 0.25
       memory = "0.5Gi"
 
@@ -128,7 +128,7 @@ resource "azapi_resource" "review_auth" {
           validation = {
             defaultAuthorizationPolicy = {
               allowedPrincipals = {
-                identities = [data.azurerm_client_config.current.object_id]
+                identities = [var.owner_object_id]
               }
             }
           }

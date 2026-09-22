@@ -32,5 +32,5 @@ resource "azurerm_role_assignment" "keyvault_secrets_user_worker" {
 resource "azurerm_role_assignment" "keyvault_secrets_officer_dev" {
   scope                = azurerm_key_vault.jobfinder.id
   role_definition_name = "Key Vault Secrets Officer"
-  principal_id         = data.azurerm_client_config.current.object_id
+  principal_id         = var.owner_object_id
 }

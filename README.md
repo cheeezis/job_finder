@@ -279,7 +279,13 @@ Docstring-Konventionen. Entwicklungswerkzeuge installieren und prüfen:
 
 Der Workflow in `.github/workflows/checks.yml` führt Stilprüfungen, Python-
 und Frontend-Tests bei Pull Requests und Pushes auf `main` aus. Er startet
-keinen Finder-Lauf und verschickt keine Discord-Nachrichten.
+keinen Finder-Lauf und verschickt keine Discord-Nachrichten. Bei Pull Requests
+zeigt er zusätzlich einen `terraform plan`; nach erfolgreichem Test-Durchlauf
+auf `main` baut er das Docker-Image, pusht es nach ACR und aktualisiert Worker
+und Review-App per `terraform apply` – letzterer Schritt wartet auf manuelle
+Freigabe im GitHub-Environment `production` (siehe
+[infrastructure/cicd.tf](infrastructure/cicd.tf) und
+[Netzwerkpfade](docs/networking.md)).
 
 ```text
 job_finder/             Kernlogik, Quellen, Review und Bewerbungsverwaltung

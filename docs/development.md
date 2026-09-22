@@ -1,8 +1,10 @@
 # Entwicklung am Job Finder
 
 Diese Anleitung beschreibt die gemeinsame Anwendung. Einrichtung und Bedienung
-stehen in der [README](../README.md). Docker- und Azure-Arbeit wird separat auf
-`cloud/azure-job-finder` gepflegt.
+stehen in der [README](../README.md). Docker- und Azure-Betrieb sind seit der
+vollständigen Umstellung auf PostgreSQL und Azure Teil von `main`
+(`infrastructure/`, [PostgreSQL-Anleitung](postgresql.md),
+[Netzwerkpfade](networking.md)); ein separater Cloud-Branch existiert nicht mehr.
 
 ## Arbeitsumgebung und Prüfungen
 

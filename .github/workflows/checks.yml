@@ -1,4 +1,4 @@
-name: Checks
+name: CI/CD
 
 on:
   pull_request:
@@ -59,3 +59,97 @@ jobs:
           node-version: "24"
           package-manager-cache: false
       - run: node --test tests/frontend.test.cjs
+
+  # Nur bei Pull Requests: zeigt, was ein Merge an der Infrastruktur ändern
+  # würde. Rein lesend, kein apply - unabhängig vom Testergebnis interessant.
+  terraform-plan:
+    name: Terraform plan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: infrastructure
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.16.2"
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - run: terraform fmt -check
+      - run: terraform init -input=false
+      - run: terraform validate
+      - run: terraform plan -input=false -lock-timeout=2m
+        env:
+          TF_VAR_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          TF_VAR_postgres_admin_password: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+          TF_VAR_postgres_client_ipv4: ${{ secrets.POSTGRES_CLIENT_IPV4 }}
+
+  # Baut und pusht nur, wenn die Tests auf main erfolgreich waren.
+  # Tag = Commit-SHA statt manueller Versionsnummer: eindeutig, kein
+  # Koordinationsaufwand, direkt auf den erzeugenden Commit rückführbar.
+  docker-build-push:
+    name: Build and push image
+    runs-on: ubuntu-latest
+    needs: [python, style-and-frontend]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      image_tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: tag
+        run: echo "tag=sha-${GITHUB_SHA:0:12}" >> "$GITHUB_OUTPUT"
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - run: az acr login --name acrjobfinder
+      - run: |
+          docker build -t acrjobfinder.azurecr.io/jobfinder:${{ steps.tag.outputs.tag }} .
+          docker push acrjobfinder.azurecr.io/jobfinder:${{ steps.tag.outputs.tag }}
+
+  # Aktualisiert Worker und Review-App auf das neue Image. Läuft im
+  # production-Environment: GitHub hält hier an, bis der hinterlegte
+  # Reviewer manuell zustimmt (die "kontrolliert" aus der Roadmap-Vorgabe).
+  # Erst danach führt terraform apply auch echte Infrastrukturänderungen aus.
+  terraform-apply:
+    name: Terraform apply
+    runs-on: ubuntu-latest
+    needs: [docker-build-push]
+    environment: production
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: infrastructure
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.16.2"
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - run: terraform init -input=false
+      - run: terraform apply -input=false -auto-approve -lock-timeout=2m
+        env:
+          TF_VAR_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          TF_VAR_postgres_admin_password: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+          TF_VAR_postgres_client_ipv4: ${{ secrets.POSTGRES_CLIENT_IPV4 }}
+          TF_VAR_image_tag: ${{ needs.docker-build-push.outputs.image_tag }}

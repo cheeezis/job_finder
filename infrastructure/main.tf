@@ -134,8 +134,9 @@ resource "azurerm_container_app_job" "finder" {
     container {
       name    = "jobfinder-worker"
       command = ["python", "run_finder.py", "--exclude-sources", "stepstone,remotely"]
-      # Dieses Tag wurde zuvor hochgeladen; Terraform baut oder pusht das Image nicht.
-      image  = "${azurerm_container_registry.jobfinder.login_server}/jobfinder:azure-v9"
+      # Terraform baut oder pusht das Image nicht selbst; das übernimmt die
+      # CI/CD-Pipeline, die var.image_tag pro Lauf auf den Commit-SHA setzt.
+      image  = "${azurerm_container_registry.jobfinder.login_server}/jobfinder:${var.image_tag}"
       cpu    = 0.5
       memory = "1Gi"
 

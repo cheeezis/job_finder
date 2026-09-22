@@ -23,7 +23,7 @@ import subprocess
 from pathlib import Path
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
-IMAGE = "acrjobfinder.azurecr.io/jobfinder:azure-v7"
+IMAGE = "acrjobfinder.azurecr.io/jobfinder:azure-v8"
 STORAGE_ACCOUNT = "stjobfindere64bfdce"
 STORAGE_CONTAINER = "application-documents"
 REVIEW_HOST = "jobfinder-review.ashyisland-3b6e9522.francecentral.azurecontainerapps.io"

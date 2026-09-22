@@ -43,3 +43,14 @@ resource "azurerm_role_assignment" "storage_blob_data_contributor_dev" {
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = data.azurerm_client_config.current.object_id
 }
+
+# Dedicated app registration for the local Docker-based hybrid worker run
+# (StepStone/Remotely), which has no Managed Identity and no interactive
+# az-CLI session available inside the container. Least privilege: only this
+# one role on this one storage account, nothing else.
+resource "azurerm_role_assignment" "storage_blob_data_contributor_local_docker" {
+  scope                = azurerm_storage_account.jobfinder.id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = var.local_docker_sp_object_id
+  principal_type       = "ServicePrincipal"
+}

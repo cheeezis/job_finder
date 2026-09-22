@@ -40,6 +40,18 @@ variable "alert_email" {
   default     = "jannis.hauke@t-online.de"
 }
 
+variable "image_tag" {
+  description = "Tag des jobfinder-Images für Worker und Review-App. Lokal per Default; die CI/CD-Pipeline überschreibt dies pro Lauf mit dem Commit-SHA."
+  type        = string
+  default     = "azure-v9"
+}
+
+variable "github_actions_sp_object_id" {
+  description = "Objekt-ID des per az ad sp create angelegten Service Principals für die GitHub-Actions-CI/CD-Pipeline (OIDC, kein gespeichertes Secret)."
+  type        = string
+  default     = "746f1edf-e808-4861-a7bb-af7c491ac17a"
+}
+
 variable "postgres_client_ipv4" {
   description = "Aktuelle öffentliche IPv4 des Rechners für den gezielten Datenbankzugriff."
   type        = string

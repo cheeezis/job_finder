@@ -49,8 +49,19 @@ def write_json_atomic(path, value, *, indent=2):
     temporary.replace(destination)
 
 
-def publish_results(jobs, results, *, jobs_path, writer):
-    """Publish both result views together, retaining concurrent manual imports."""
+def _kept_from_previous(value_sources, exclude_sources, *, ignore=frozenset()):
+    """Keep an entry a run didn't recollect: manual, or entirely excluded sources."""
+    names = {source.get("source") for source in value_sources} - ignore
+    return "manual" in names or (bool(names) and names <= set(exclude_sources))
+
+
+def publish_results(jobs, results, *, jobs_path, writer, exclude_sources=frozenset()):
+    """Publish both result views, retaining manual imports and excluded sources.
+
+    A split schedule (--exclude-sources) only recollects some sources per run;
+    entries whose sources were all skipped this run must survive the write
+    instead of being dropped as if they no longer existed.
+    """
     from job_finder.paths import RECOMMENDATIONS_JSON
     from job_finder.persistence.database import lock, transaction
 
@@ -64,10 +75,7 @@ def publish_results(jobs, results, *, jobs_path, writer):
                 value
                 for value in read_json(jobs_path, [])
                 if value["id"] not in ids
-                and any(
-                    source.get("source") == "manual"
-                    for source in value.get("sources", [])
-                )
+                and _kept_from_previous(value.get("sources", []), exclude_sources)
             )
             previous = read_json(RECOMMENDATIONS_JSON, {}).get("recommendations", [])
         write_json_atomic(jobs_path, values)
@@ -79,9 +87,10 @@ def publish_results(jobs, results, *, jobs_path, writer):
                 value
                 for value in previous
                 if value["id"] not in ids
-                and any(
-                    source.get("source") == "manual"
-                    for source in value.get("source_links", [])
+                and _kept_from_previous(
+                    value.get("source_links", []),
+                    exclude_sources,
+                    ignore={"original"},
                 )
             )
             write_json_atomic(RECOMMENDATIONS_JSON, updated)

@@ -2,17 +2,31 @@
 
 Both are blocked from Azure IPs, so they run from here against the shared
 Azure database instead; see docs/postgresql.md for the reliable-sources half
-that runs in Azure. Sets its own environment for this one subprocess call
-only, so a plain `python run_finder.py` still defaults to the local
-development database.
+that runs in Azure.
+
+Runs inside the same Docker image as the Azure worker rather than the local
+.venv: a native Windows psycopg connection to the Azure database was found to
+return stale reads (a data snapshot from hours earlier, never catching up),
+while the identical code running in a Linux container connects correctly.
+The root cause wasn't identified; running in Docker sidesteps it.
+
+Needs a scoped service principal for Blob access, since there's no Managed
+Identity or interactive az-CLI session inside the container - see
+infrastructure/storage.tf (storage_blob_data_contributor_local_docker) and
+.env.docker-local (gitignored, not the same credential as any Azure-hosted
+identity).
 """
 
 import os
+import re
 import subprocess
-import sys
 from pathlib import Path
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
+IMAGE = "acrjobfinder.azurecr.io/jobfinder:azure-v7"
+STORAGE_ACCOUNT = "stjobfindere64bfdce"
+STORAGE_CONTAINER = "application-documents"
+REVIEW_HOST = "jobfinder-review.ashyisland-3b6e9522.francecentral.azurecontainerapps.io"
 LOCAL_ONLY_SOURCES = {"stepstone", "remotely"}
 ALL_SOURCE_NAMES = [
     "arbeitnow",
@@ -37,41 +51,64 @@ ALL_SOURCE_NAMES = [
 ]
 
 
-def azure_environment():
-    """Layer Azure connection details onto the current environment."""
-    env = dict(os.environ)
-    for line in (
-        (PROJECT_DIR / ".env.postgres-azure").read_text(encoding="utf-8").splitlines()
-    ):
+def read_dotenv(path):
+    """Read simple KEY=VALUE lines, ignoring comments and blanks."""
+    values = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, _, value = line.partition("=")
-        env[key] = value
-    env["JOBFINDER_DOCUMENTS_BACKEND"] = "blob"
-    env["JOBFINDER_STORAGE_ACCOUNT"] = "stjobfindere64bfdce"
-    env["JOBFINDER_STORAGE_CONTAINER"] = "application-documents"
-    env["JOBFINDER_REVIEW_HOST"] = (
-        "jobfinder-review.ashyisland-3b6e9522.francecentral.azurecontainerapps.io"
+        values[key] = value
+    return values
+
+
+def container_environment():
+    """Build the -e KEY=VALUE pairs the container needs, none of it inherited."""
+    postgres = read_dotenv(PROJECT_DIR / ".env.postgres-azure")
+    database_url = re.sub(
+        r"sslrootcert=[^&]+",
+        "sslrootcert=/etc/ssl/certs/ca-certificates.crt",
+        postgres["JOBFINDER_DATABASE_URL"],
     )
-    return env
+    service_principal = read_dotenv(PROJECT_DIR / ".env.docker-local")
+    values = {
+        "JOBFINDER_DATABASE_URL": database_url,
+        "JOBFINDER_DOCUMENTS_BACKEND": "blob",
+        "JOBFINDER_STORAGE_ACCOUNT": STORAGE_ACCOUNT,
+        "JOBFINDER_STORAGE_CONTAINER": STORAGE_CONTAINER,
+        "JOBFINDER_REVIEW_HOST": REVIEW_HOST,
+        "AZURE_CLIENT_ID": service_principal["AZURE_CLIENT_ID"],
+        "AZURE_TENANT_ID": service_principal["AZURE_TENANT_ID"],
+        "AZURE_CLIENT_SECRET": service_principal["AZURE_CLIENT_SECRET"],
+    }
+    webhook = os.environ.get("DISCORD_WEBHOOK_URL")
+    if webhook:
+        values["DISCORD_WEBHOOK_URL"] = webhook
+    return values
 
 
 def main():
-    """Run the finder with every source excluded except StepStone and Remotely."""
+    """Run the containerized finder with every source excluded except StepStone and Remotely."""
     exclude = ",".join(
         name for name in ALL_SOURCE_NAMES if name not in LOCAL_ONLY_SOURCES
     )
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(PROJECT_DIR / "run_finder.py"),
-            "--exclude-sources",
-            exclude,
-        ],
-        cwd=PROJECT_DIR,
-        env=azure_environment(),
-    )
+    env_args = []
+    for key, value in container_environment().items():
+        env_args += ["-e", f"{key}={value}"]
+    command = [
+        "docker",
+        "run",
+        "--rm",
+        *env_args,
+        "--entrypoint",
+        "python",
+        IMAGE,
+        "run_finder.py",
+        "--exclude-sources",
+        exclude,
+    ]
+    result = subprocess.run(command)
     raise SystemExit(result.returncode)
 
 

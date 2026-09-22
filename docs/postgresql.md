@@ -203,6 +203,43 @@ späteres Löschen benötigt vorher eine geprüfte Datensicherung;
 `terraform destroy` im Ordner betrifft die gesamte dort verwaltete
 Infrastruktur, nicht nur PostgreSQL.
 
+## Lokaler Hybrid-Lauf (StepStone/Remotely)
+
+StepStone und Remotely liefern aus Azure heraus keine Treffer; sie laufen
+stattdessen einmal täglich über den lokalen Windows-Task gegen dieselbe
+Azure-Datenbank (`scripts/run_local_hybrid.py`, siehe README für den
+Zeitplan). Eine native Windows-Verbindung (`.venv`) lieferte dabei
+nachweislich veraltete Lesezustände gegenüber Azure – ein Snapshot von
+Stunden zuvor, der nie aktualisiert wurde, obwohl derselbe Code in einem
+Linux-Container korrekt liest. Die Ursache blieb ungeklärt; der Task läuft
+deshalb im selben Docker-Image wie der Azure-Worker statt über `.venv`.
+
+Ohne Managed Identity oder interaktive `az`-Anmeldung im Container braucht
+das einen eigenen, eng begrenzten Service Principal für den Blob-Zugriff
+(nur `Storage Blob Data Contributor` auf genau diesem Storage-Konto, siehe
+`infrastructure/storage.tf`,
+`storage_blob_data_contributor_local_docker`). Einmalig einrichten:
+
+```powershell
+az ad app create --display-name "jobfinder-local-docker"
+az ad sp create --id <appId aus dem vorigen Befehl>
+az ad app credential reset --id <appId> --display-name "local-docker-worker" --years 2
+```
+
+Die drei Werte (`appId`, `tenant`, `password`) in `.env.docker-local`
+speichern (von Git ausgeschlossen, nicht dieselben Werte wie
+`.env.postgres-azure`):
+
+```text
+AZURE_CLIENT_ID=<appId>
+AZURE_TENANT_ID=<tenant>
+AZURE_CLIENT_SECRET=<password>
+```
+
+Danach in `infrastructure/variables.tf` die `object_id` des neuen Service
+Principals (`az ad sp show --id <appId> --query id`) als
+`local_docker_sp_object_id` eintragen und die Rollenzuweisung anwenden.
+
 ## Tests
 
 Einmalig die getrennte Testdatenbank anlegen:

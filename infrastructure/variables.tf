@@ -28,6 +28,12 @@ variable "review_fqdn" {
   default     = "jobfinder-review.ashyisland-3b6e9522.francecentral.azurecontainerapps.io"
 }
 
+variable "local_docker_sp_object_id" {
+  description = "Objekt-ID des per az ad sp create angelegten Service Principals für den lokalen Docker-Worker-Lauf (StepStone/Remotely)."
+  type        = string
+  default     = "f270644a-c084-422f-a1db-ae500701dca0"
+}
+
 variable "postgres_client_ipv4" {
   description = "Aktuelle öffentliche IPv4 des Rechners für den gezielten Datenbankzugriff."
   type        = string

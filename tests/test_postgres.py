@@ -251,6 +251,44 @@ class PostgresTests(unittest.TestCase):
             [manual_result],
         )
 
+    def test_worker_publication_preserves_entries_from_excluded_sources(self):
+        """A split schedule must not drop jobs a run deliberately skipped."""
+        from job_finder.paths import JOBS_FILE, RECOMMENDATIONS_JSON
+        from job_finder.persistence.storage import publish_results, write_json_atomic
+
+        skipped_job = {
+            "id": "arbeitsagentur:1",
+            "sources": [{"source": "arbeitsagentur", "url": "https://example.test/1"}],
+        }
+        skipped_result = {
+            "id": "arbeitsagentur:1",
+            "source_links": skipped_job["sources"],
+        }
+        stale_job = {
+            "id": "stepstone:2",
+            "sources": [{"source": "stepstone", "url": "https://example.test/2"}],
+        }
+        stale_result = {"id": "stepstone:2", "source_links": stale_job["sources"]}
+        write_dataset("internal/jobs.json", [skipped_job, stale_job])
+        write_dataset(
+            "output/recommendations.json",
+            {"recommendations": [skipped_result, stale_result]},
+        )
+        publish_results(
+            [],
+            {},
+            jobs_path=JOBS_FILE,
+            writer=lambda _results: write_json_atomic(
+                RECOMMENDATIONS_JSON, {"recommendations": []}
+            ),
+            exclude_sources={"arbeitsagentur"},
+        )
+        self.assertEqual(read_dataset("internal/jobs.json"), [skipped_job])
+        self.assertEqual(
+            read_dataset("output/recommendations.json")["recommendations"],
+            [skipped_result],
+        )
+
     def test_backup_restore_includes_document_bytes_and_refuses_overwrite(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

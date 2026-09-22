@@ -135,7 +135,7 @@ resource "azurerm_container_app_job" "finder" {
       name    = "jobfinder-worker"
       command = ["python", "run_finder.py", "--exclude-sources", "stepstone,remotely"]
       # Dieses Tag wurde zuvor hochgeladen; Terraform baut oder pusht das Image nicht.
-      image  = "${azurerm_container_registry.jobfinder.login_server}/jobfinder:azure-v6"
+      image  = "${azurerm_container_registry.jobfinder.login_server}/jobfinder:azure-v7"
       cpu    = 0.5
       memory = "1Gi"
 

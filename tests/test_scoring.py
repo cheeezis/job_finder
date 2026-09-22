@@ -440,6 +440,14 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(result["filter_status"], "excluded")
         self.assertIn("Deutschland", result["reasons"][0])
 
+    def test_remote_foreign_city_without_country_name_is_excluded(self):
+        """A city-only location must be rejected even without the country name."""
+        for city in ("London", "Paris", "Zuerich", "Warschau"):
+            with self.subTest(city=city):
+                result = score_job(make_job(location=city, remote="100%"))
+                self.assertEqual(result["filter_status"], "excluded")
+                self.assertIn("Deutschland", result["reasons"][0])
+
     def test_commuter_rule_honors_excluded_alias_and_threshold(self):
         locations = [
             {

@@ -128,7 +128,7 @@ resource "azapi_resource" "review_auth" {
           validation = {
             defaultAuthorizationPolicy = {
               allowedPrincipals = {
-                identities = [data.azurerm_client_config.current.object_id]
+                identities = [var.owner_object_id]
               }
             }
           }

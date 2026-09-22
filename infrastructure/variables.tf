@@ -46,6 +46,12 @@ variable "image_tag" {
   default     = "azure-v9"
 }
 
+variable "owner_object_id" {
+  description = "Objekt-ID des persönlichen Entra-ID-Kontos (Jannis). Bewusst fest statt über data.azurerm_client_config.current aufgelöst: sonst würde ein Terraform-Lauf durch die CI/CD-Pipeline die Dev-Berechtigungen und den Review-App-Login von der eigenen Person auf den GitHub-Actions-Principal umziehen."
+  type        = string
+  default     = "e417d473-3d02-48ee-9a4d-b2fab9bf84f1"
+}
+
 variable "github_actions_sp_object_id" {
   description = "Objekt-ID des per az ad sp create angelegten Service Principals für die GitHub-Actions-CI/CD-Pipeline (OIDC, kein gespeichertes Secret)."
   type        = string

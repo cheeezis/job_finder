@@ -15,6 +15,7 @@ from job_finder.sources.common import (
     detail_is_fresh,
     load_detail_cache,
     normalize_employment_type,
+    record_candidate_failure,
     record_partial_failure,
     save_detail_cache,
     source_job_id,
@@ -176,6 +177,7 @@ def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE):
     if enriched:
         save_detail_cache(cache_file, cache)
     if enrichment_errors:
+        record_candidate_failure(enrichment_errors)
         print(
             f"WARNUNG Arbeitnow: {enrichment_errors} Originalanzeige(n) "
             "nicht erreichbar"

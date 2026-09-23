@@ -186,9 +186,11 @@ def run_summary_payload(summary):
     failed = notifications.get("failed", 0)
     eligible = notifications.get("eligible_new", summary["review_new"])
     source_warnings = exceptional_source_text(sources)
+    detail_warnings = detail_failure_text(summary.get("detail_failures", []))
     color = (
         0xD99A2B
         if failed
+        or detail_warnings
         or any(source["status"] in {"failed", "partial"} for source in sources)
         else 0x2E8B57
     )
@@ -216,6 +218,8 @@ def run_summary_payload(summary):
     ]
     if source_warnings:
         lines.append(source_warnings)
+    if detail_warnings:
+        lines.append(detail_warnings)
     lines.extend(["", "**Neue Treffer nach Quelle**", new_source_text(sources)])
     return {
         "embeds": [
@@ -380,6 +384,15 @@ def exceptional_source_text(sources):
         if source["status"] in {"partial", "failed"}
     ]
     return f"⚠️ {', '.join(warnings)}" if warnings else ""
+
+
+def detail_failure_text(detail_failures):
+    """Name sources whose prefiltered candidates lack detail text."""
+    warnings = [
+        f"{failure['label']} {format_count(failure['failed'])} Kandidat(en)"
+        for failure in detail_failures
+    ]
+    return f"⚠️ Details fehlen: {', '.join(warnings)}" if warnings else ""
 
 
 def source_status_label(status):

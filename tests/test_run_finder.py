@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from job_finder.models import Job, JobSource
+from job_finder.sources.common import record_candidate_failure
 from run_finder import (
     IncompleteSourceSnapshotError,
     build_run_summary,
@@ -49,14 +50,55 @@ class RunFinderTests(unittest.TestCase):
         )
         jobs = [make_job("detailed:1")]
 
-        enriched = enrich_candidate_jobs(
-            jobs,
-            {"detailed:1"},
-            [plain_source, detailed_source],
-        )
+        with redirect_stdout(io.StringIO()):
+            reports = enrich_candidate_jobs(
+                jobs,
+                {"detailed:1"},
+                [plain_source, detailed_source],
+            )
 
-        self.assertEqual(enriched, 2)
+        self.assertEqual(reports, [{"name": "detailed", "enriched": 2, "failed": 0}])
         self.assertEqual(calls, [(jobs, {"detailed:1"})])
+
+    def test_failed_candidate_details_are_reported_and_logged_per_source(self):
+        def failing(jobs, candidate_ids):
+            record_candidate_failure(3)
+            return 1
+
+        sources = [
+            SimpleNamespace(SOURCE_NAME="studysmarter", enrich_candidate_jobs=failing),
+            SimpleNamespace(
+                SOURCE_NAME="get_in_it", enrich_candidate_jobs=lambda jobs, ids: 2
+            ),
+        ]
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            reports = enrich_candidate_jobs([], set(), sources, run_id="run-1")
+
+        self.assertEqual(
+            reports,
+            [
+                {"name": "studysmarter", "enriched": 1, "failed": 3},
+                {"name": "get_in_it", "enriched": 2, "failed": 0},
+            ],
+        )
+        events = [
+            json.loads(line)
+            for line in output.getvalue().splitlines()
+            if line.startswith("{")
+        ]
+        self.assertEqual(
+            [
+                (event["event"], event["source"], event["level"], event["failed"])
+                for event in events
+            ],
+            [
+                ("enrichment_completed", "studysmarter", "warning", 3),
+                ("enrichment_completed", "get_in_it", "info", 0),
+            ],
+        )
+        self.assertEqual({event["run_id"] for event in events}, {"run-1"})
 
     def test_pipeline_persists_jobs_after_arbeitnow_enrichment(self):
         job = make_job("arbeitnow:1")
@@ -267,8 +309,15 @@ class RunFinderTests(unittest.TestCase):
                 {"name": "broken", "status": "failed", "jobs": 0},
             ],
             notification_stats={"sent": 1, "failed": 0},
+            enrichment_reports=[
+                {"name": "studysmarter", "enriched": 3, "failed": 12},
+                {"name": "get_in_it", "enriched": 5, "failed": 0},
+            ],
         )
         self.assertEqual(summary["duration"], "2 Min. 05 Sek.")
+        self.assertEqual(
+            summary["detail_failures"], [{"label": "StudySmarter", "failed": 12}]
+        )
         self.assertEqual(summary["review_new"], 1)
         self.assertEqual(summary["notifications"]["sent"], 1)
         self.assertEqual(summary["sources"][0]["new"], 1)

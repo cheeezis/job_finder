@@ -165,7 +165,7 @@ def run_pipeline(exclude_sources=frozenset(), run_id=None):
 
     candidate_ids = {job["id"] for job in results["included"]}
     with timed_step("Detailanreicherung"):
-        enrich_candidate_jobs(jobs, candidate_ids)
+        enrichment_reports = enrich_candidate_jobs(jobs, candidate_ids, run_id=run_id)
 
     # Validate final details before committing any workflow state. The score
     # stays attached to the job as memory resolves its ID and timestamps.
@@ -248,6 +248,7 @@ def run_pipeline(exclude_sources=frozenset(), run_id=None):
                 memory_stats=memory_stats,
                 source_reports=source_reports,
                 notification_stats=notification_stats,
+                enrichment_reports=enrichment_reports,
             ),
             webhook_url=os.getenv("DISCORD_WEBHOOK_URL"),
         )
@@ -402,22 +403,35 @@ def fetch_source_jobs(source):
     return source_jobs, source_status, report_details
 
 
-def enrich_candidate_jobs(jobs, candidate_ids, sources=None):
+def enrich_candidate_jobs(jobs, candidate_ids, sources=None, run_id=None):
     """Let selected adapters update the candidate list in place.
 
     Each optional adapter hook receives jobs and candidate_ids and
     returns a count of affected jobs. Hooks may replace job objects or
-    remove confirmed closed listings. Return the sum of hook counts;
-    unexpected hook errors propagate to stop the pipeline.
+    remove confirmed closed listings, and report candidates whose
+    details failed via record_candidate_failure(). Return one report per
+    hook with both counts; unexpected hook errors propagate to stop the
+    pipeline.
     """
-    enriched = 0
+    reports = []
     for source in sources or SOURCES:
         enricher = getattr(source, "enrich_candidate_jobs", None)
         if enricher is not None:
-            label = source_label(getattr(source, "SOURCE_NAME", "Details"))
-            with timed_step(f"Details {label}"):
-                enriched += enricher(jobs, candidate_ids)
-    return enriched
+            name = getattr(source, "SOURCE_NAME", "Details")
+            reset_fetch_diagnostics()
+            with timed_step(f"Details {source_label(name)}"):
+                enriched = enricher(jobs, candidate_ids)
+            failed = fetch_diagnostics()["failed_candidates"]
+            reports.append({"name": name, "enriched": enriched, "failed": failed})
+            log_event(
+                "enrichment_completed",
+                run_id=run_id,
+                level="warning" if failed else "info",
+                source=name,
+                enriched=enriched,
+                failed=failed,
+            )
+    return reports
 
 
 def print_source_summary(source_reports, total_jobs):
@@ -439,6 +453,7 @@ def build_run_summary(
     memory_stats,
     source_reports,
     notification_stats=None,
+    enrichment_reports=(),
 ):
     """Collect the reliable counts shown in Discord after one complete run."""
     new_by_source = Counter(
@@ -465,6 +480,11 @@ def build_run_summary(
         "review_new": review_new,
         "notifications": dict(notification_stats or {}),
         "sources": summary_sources,
+        "detail_failures": [
+            {"label": source_label(report["name"]), "failed": report["failed"]}
+            for report in enrichment_reports
+            if report["failed"]
+        ],
     }
 
 

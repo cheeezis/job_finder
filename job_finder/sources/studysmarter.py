@@ -1,7 +1,7 @@
 """StudySmarter source adapter using its public read-only jobs API."""
 
 import time
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit, urlunsplit
 
 from job_finder.http import fetch_json, fetch_text
 from job_finder.matching.config import (
@@ -56,7 +56,7 @@ def jobs_from_records(records, cache_path):
     cache = load_detail_cache(cache_path)
     jobs = []
     for record in records:
-        url = canonical_detail_url(record.get("link", ""))
+        url = detail_url(record.get("link", ""))
         if url:
             summary = summary_job_from_record(record)
             jobs.append(
@@ -155,6 +155,23 @@ def record_identifier(record):
     return str(record.get("id") or record.get("link") or "").strip()
 
 
+def detail_url(link):
+    """Return a detail-page URL the StudySmarter site actually serves.
+
+    API links may contain a city segment with German transliterations
+    such as "koeln", while the site only routes its own spelling "koln"
+    and answers 404. The same page is served without the city segment.
+    """
+    url = canonical_detail_url(link)
+    parts = urlsplit(url)
+    segments = parts.path.strip("/").split("/")
+    if len(segments) != 4 or segments[0] != "companies":
+        return url
+    del segments[2]
+    path = "/" + "/".join(segments) + ("/" if parts.path.endswith("/") else "")
+    return urlunsplit(parts._replace(path=path))
+
+
 def job_from_record(record, html):
     """Combine API metadata with a detail page's structured job data."""
     summary = summary_job_from_record(record)
@@ -163,7 +180,7 @@ def job_from_record(record, html):
 
 def summary_job_from_record(record):
     """Create a lightweight Job from one API search record."""
-    url = canonical_detail_url(record.get("link", ""))
+    url = detail_url(record.get("link", ""))
     identifier = record_identifier(record)
     remote = str(record.get("is_remote_positions") or "").casefold()
     if remote == "completely":

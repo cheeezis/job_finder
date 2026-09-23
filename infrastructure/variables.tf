@@ -41,7 +41,7 @@ variable "alert_email" {
 }
 
 variable "image_tag" {
-  description = "Tag des jobfinder-Images für Worker und Review-App. Lokal per Default; die CI/CD-Pipeline überschreibt dies pro Lauf mit dem Commit-SHA."
+  description = "Tag des jobfinder-Images nur für den Erstaufbau von Worker und Review-App. Danach setzt die CI/CD-Pipeline das Image; Terraform ignoriert Änderungen daran (lifecycle.ignore_changes)."
   type        = string
   default     = "azure-v9"
 }

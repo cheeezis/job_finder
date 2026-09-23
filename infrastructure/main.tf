@@ -134,8 +134,8 @@ resource "azurerm_container_app_job" "finder" {
     container {
       name    = "jobfinder-worker"
       command = ["python", "run_finder.py", "--exclude-sources", "stepstone,remotely"]
-      # Terraform baut oder pusht das Image nicht selbst; das übernimmt die
-      # CI/CD-Pipeline, die var.image_tag pro Lauf auf den Commit-SHA setzt.
+      # Nur für den Erstaufbau; danach setzt die CI/CD-Pipeline das Image
+      # (siehe lifecycle unten).
       image  = "${azurerm_container_registry.jobfinder.login_server}/jobfinder:${var.image_tag}"
       cpu    = 0.5
       memory = "1Gi"
@@ -186,6 +186,13 @@ resource "azurerm_container_app_job" "finder" {
   }
 
   tags = azurerm_resource_group.jobfinder.tags
+
+  # Die App-Version gehört der CI/CD-Pipeline (az containerapp job update).
+  # Verwaltete Terraform sie mit, setzte jedes lokale Apply auf den
+  # Default von var.image_tag zurück.
+  lifecycle {
+    ignore_changes = [template[0].container[0].image]
+  }
 
   # Die Pull- und Key-Vault-Berechtigungen müssen vor dem Job angelegt werden.
   # Die Referenz auf die Identität allein stellt diese Reihenfolge nicht sicher.

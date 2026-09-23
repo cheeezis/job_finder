@@ -208,11 +208,16 @@ Infrastruktur, nicht nur PostgreSQL.
 StepStone und Remotely liefern aus Azure heraus keine Treffer; sie laufen
 stattdessen einmal täglich über den lokalen Windows-Task gegen dieselbe
 Azure-Datenbank (`scripts/run_local_hybrid.py`, siehe README für den
-Zeitplan). Eine native Windows-Verbindung (`.venv`) lieferte dabei
-nachweislich veraltete Lesezustände gegenüber Azure – ein Snapshot von
-Stunden zuvor, der nie aktualisiert wurde, obwohl derselbe Code in einem
-Linux-Container korrekt liest. Die Ursache blieb ungeklärt; der Task läuft
-deshalb im selben Docker-Image wie der Azure-Worker statt über `.venv`.
+Zeitplan). Der Task startet genau das Image, das der Azure-Worker gerade
+nutzt: Er fragt es bei jedem Start über die lokale `az`-Anmeldung ab, meldet
+sich an der Registry an und holt es per `docker pull`. Beide Hälften laufen
+so immer mit derselben Code-Version; Voraussetzung sind eine gültige
+`az`-Anmeldung und ein laufendes Docker Desktop.
+
+Eine native Windows-Verbindung (`.venv`) lieferte zeitweise veraltete
+Lesezustände gegenüber Azure, ein Snapshot von Stunden zuvor. Im Container
+trat das einmal ebenfalls auf, danach nicht mehr. Die Ursache ist ungeklärt;
+der Container-Betrieb umgeht das Problem nur, er erklärt es nicht.
 
 Ohne Managed Identity oder interaktive `az`-Anmeldung im Container braucht
 das einen eigenen, eng begrenzten Service Principal für den Blob-Zugriff

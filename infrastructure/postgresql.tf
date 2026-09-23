@@ -74,3 +74,14 @@ resource "azurerm_postgresql_flexible_server_database" "jobfinder" {
   charset   = "UTF8"
   collation = "en_US.utf8"
 }
+
+# Löschsperre für den Server mit den Review-Entscheidungen: Die Serverbackups
+# helfen gegen falsch geänderte Daten, nach dem Löschen des Servers aber nur
+# noch kurz und umständlich. IP-Wechsel an den Firewall-Regeln sind Änderungen
+# und laufen weiter. Anlegen und Entfernen wie in storage.tf nur lokal.
+resource "azurerm_management_lock" "postgres" {
+  name       = "no-delete"
+  scope      = azurerm_postgresql_flexible_server.jobfinder.id
+  lock_level = "CanNotDelete"
+  notes      = "Review-Entscheidungen und Bewerbungsverlauf. Entfernen nur bewusst und lokal."
+}

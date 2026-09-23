@@ -55,6 +55,19 @@ resource "azurerm_storage_management_policy" "jobfinder" {
   }
 }
 
+# Löschsperre für den ganzen Account: Soft Delete rettet nur einzelne Blobs und
+# Container, nicht einen gelöschten Account samt Dokumenten und Terraform-State.
+# Ändern bleibt erlaubt, Löschen nicht - auch nicht für Container und
+# Rollenzuweisungen darunter. Sperren darf nur ein Owner anlegen oder entfernen,
+# die Pipeline nicht: Fehlt die Sperre, scheitert deshalb der nächste CI-Apply,
+# bis sie lokal wieder angelegt ist.
+resource "azurerm_management_lock" "storage" {
+  name       = "no-delete"
+  scope      = azurerm_storage_account.jobfinder.id
+  lock_level = "CanNotDelete"
+  notes      = "Bewerbungsdokumente und Terraform-State. Entfernen nur bewusst und lokal."
+}
+
 # Enthält die Bewerbungsdokumente. "private" heißt: kein anonymer Lesezugriff,
 # nur über eine authentifizierte Identität oder einen Kontoschlüssel.
 resource "azurerm_storage_container" "application_documents" {

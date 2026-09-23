@@ -207,7 +207,10 @@ az postgres flexible-server start --resource-group rg-jobfinder --name $jobfinde
 Ein gestoppter Server startet nach sieben Tagen automatisch wieder. Ein
 späteres Löschen benötigt vorher eine geprüfte Datensicherung;
 `terraform destroy` im Ordner betrifft die gesamte dort verwaltete
-Infrastruktur, nicht nur PostgreSQL.
+Infrastruktur, nicht nur PostgreSQL. Server und Storage-Account tragen
+zusätzlich eine Löschsperre (`no-delete`): Jedes Löschen, auch per
+`terraform destroy`, scheitert, bis die Sperre bewusst lokal mit
+Owner-Rechten entfernt wurde. Stoppen und Starten sind davon nicht betroffen.
 
 ## Lokaler Hybrid-Lauf (StepStone/Remotely)
 

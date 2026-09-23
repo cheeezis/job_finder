@@ -79,7 +79,10 @@ jobs:
         with:
           terraform_version: "1.16.2"
       # Eigene Identität, die nur lesen darf. Ohne Sperre (-lock=false), weil
-      # schon das Sperren ein Schreibvorgang auf dem State wäre.
+      # schon das Sperren ein Schreibvorgang auf dem State wäre. Ohne
+      # Nachladen aus Azure (-refresh=false): azurerm liest die Container Apps
+      # per listSecrets, und das liefert die echten Geheimniswerte. Der Plan
+      # vergleicht Code mit dem State; das Apply lädt weiterhin vollständig nach.
       - uses: azure/login@v2
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID_PLAN }}
@@ -88,7 +91,7 @@ jobs:
       - run: terraform fmt -check
       - run: terraform init -input=false
       - run: terraform validate
-      - run: terraform plan -input=false -lock=false
+      - run: terraform plan -input=false -lock=false -refresh=false
         env:
           TF_VAR_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
           TF_VAR_postgres_admin_password: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}

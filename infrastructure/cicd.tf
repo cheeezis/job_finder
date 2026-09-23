@@ -51,7 +51,9 @@ resource "azurerm_role_assignment" "acr_reader_github_build" {
   principal_type       = "ServicePrincipal"
 }
 
-# Plan-Identität für Pull Requests: sieht alle Ressourcen, ändert nichts.
+# Plan-Identität für Pull Requests: sieht Ressourcen, ändert nichts. Bewusst
+# ohne listSecrets - das gäbe die echten Geheimniswerte der Container Apps
+# heraus. Der PR-Plan lädt deshalb nichts aus Azure nach (-refresh=false).
 resource "azurerm_role_assignment" "reader_github_plan" {
   scope                = azurerm_resource_group.jobfinder.id
   role_definition_name = "Reader"

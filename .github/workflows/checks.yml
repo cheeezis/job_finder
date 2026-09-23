@@ -129,8 +129,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [docker-build-push]
     environment: production
-    # Ein neuerer Deploy bricht einen älteren, noch auf Freigabe wartenden ab.
-    # So kann eine späte Freigabe nie einen veralteten Stand zurückbringen.
+    # Nie zwei Deploys gleichzeitig; ein neu ankommender verdrängt einen noch
+    # auf Freigabe wartenden.
     concurrency:
       group: production-deploy
       cancel-in-progress: false
@@ -143,6 +143,16 @@ jobs:
         working-directory: infrastructure
     steps:
       - uses: actions/checkout@v7
+      # Die Concurrency-Gruppe ordnet nach Ankunft, nicht nach Commit: Ein
+      # älterer Lauf, dessen Image später fertig wird, käme nach dem neueren
+      # an. Geprüft wird nach der Freigabe, direkt vor dem Ausrollen.
+      - name: Nur den aktuellen main-Stand ausrollen
+        run: |
+          latest=$(git ls-remote origin refs/heads/main | cut -f1)
+          if [ "$latest" != "$GITHUB_SHA" ]; then
+            echo "::error::Veralteter Stand ${GITHUB_SHA::12}, main steht auf ${latest::12}. Deploy abgebrochen."
+            exit 1
+          fi
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.16.2"

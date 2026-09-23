@@ -32,9 +32,18 @@ terraform {
 }
 
 provider "azurerm" {
-  features {}
+  features {
+    # Keine Datenebenen-Abfragen für Warteschlangen und statische Webseiten,
+    # die das Projekt nicht nutzt; sie liefen bisher über den Account-Schlüssel.
+    storage {
+      data_plane_available = false
+    }
+  }
 
   subscription_id = var.subscription_id
+  # Speicherzugriffe über Entra ID statt über Account-Schlüssel; der
+  # Storage-Account lässt Schlüssel gar nicht mehr zu (storage.tf).
+  storage_use_azuread = true
 }
 
 provider "azapi" {

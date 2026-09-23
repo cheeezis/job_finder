@@ -12,6 +12,10 @@ resource "azurerm_storage_account" "jobfinder" {
 
   min_tls_version                 = "TLS1_2"
   allow_nested_items_to_be_public = false
+  # Kein Zugriff über die Account-Schlüssel: Wer sie abfragen kann (etwa mit
+  # Contributor), bekommt damit trotzdem keinen Datenzugriff. Alle Zugriffe
+  # laufen über Entra ID und die eng gefassten Rollen unten.
+  shared_access_key_enabled = false
 
   # Der Account hält die einzigen Cloud-Kopien der Bewerbungsdokumente und den
   # Terraform-State. Überschriebene Blobs bleiben als Version erhalten,

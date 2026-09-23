@@ -78,15 +78,17 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.16.2"
+      # Eigene Identität, die nur lesen darf. Ohne Sperre (-lock=false), weil
+      # schon das Sperren ein Schreibvorgang auf dem State wäre.
       - uses: azure/login@v2
         with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          client-id: ${{ vars.AZURE_CLIENT_ID_PLAN }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       - run: terraform fmt -check
       - run: terraform init -input=false
       - run: terraform validate
-      - run: terraform plan -input=false -lock-timeout=2m
+      - run: terraform plan -input=false -lock=false
         env:
           TF_VAR_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
           TF_VAR_postgres_admin_password: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}

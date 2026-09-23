@@ -50,3 +50,20 @@ resource "azurerm_role_assignment" "acr_reader_github_build" {
   principal_id         = var.github_build_sp_object_id
   principal_type       = "ServicePrincipal"
 }
+
+# Plan-Identität für Pull Requests: sieht alle Ressourcen, ändert nichts.
+resource "azurerm_role_assignment" "reader_github_plan" {
+  scope                = azurerm_resource_group.jobfinder.id
+  role_definition_name = "Reader"
+  principal_id         = var.github_plan_sp_object_id
+  principal_type       = "ServicePrincipal"
+}
+
+# Liest den State; der Plan läuft ohne Sperre (-lock=false), weil schon das
+# Sperren ein Schreibvorgang auf dem State-Container wäre.
+resource "azurerm_role_assignment" "state_reader_github_plan" {
+  scope                = "${azurerm_storage_account.jobfinder.id}/blobServices/default/containers/tfstate"
+  role_definition_name = "Storage Blob Data Reader"
+  principal_id         = var.github_plan_sp_object_id
+  principal_type       = "ServicePrincipal"
+}

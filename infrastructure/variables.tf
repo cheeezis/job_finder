@@ -64,6 +64,12 @@ variable "github_build_sp_object_id" {
   default     = "904edb79-936b-42a3-895f-2a271c9e8879"
 }
 
+variable "github_plan_sp_object_id" {
+  description = "Objekt-ID des Service Principals jobfinder-github-plan: darf nur lesen (terraform plan in Pull Requests)."
+  type        = string
+  default     = "6017ba66-8ecd-4508-b182-f1d84b68b4d4"
+}
+
 variable "postgres_client_ipv4" {
   description = "Aktuelle öffentliche IPv4 des Rechners für den gezielten Datenbankzugriff."
   type        = string

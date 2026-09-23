@@ -58,6 +58,12 @@ variable "github_actions_sp_object_id" {
   default     = "746f1edf-e808-4861-a7bb-af7c491ac17a"
 }
 
+variable "github_build_sp_object_id" {
+  description = "Objekt-ID des Service Principals jobfinder-github-build: darf nur Images in die Registry hochladen (Build-Job auf main)."
+  type        = string
+  default     = "904edb79-936b-42a3-895f-2a271c9e8879"
+}
+
 variable "postgres_client_ipv4" {
   description = "Aktuelle öffentliche IPv4 des Rechners für den gezielten Datenbankzugriff."
   type        = string

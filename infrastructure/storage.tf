@@ -27,8 +27,10 @@ resource "azurerm_storage_container" "application_documents" {
 # Dieselbe Identität, die der Worker schon fürs ACR-Image-Pull nutzt, bekommt
 # zusätzlich Lese-/Schreibzugriff auf die Dokumente. Eine Identität kann mehrere
 # Rollen auf unterschiedlichen Ressourcen halten; eine zweite ist nicht nötig.
+# Bewusst nur auf den Dokumente-Container: Im selben Account liegt auch der
+# Terraform-State, den die App weder lesen noch ändern darf.
 resource "azurerm_role_assignment" "storage_blob_data_contributor" {
-  scope                = azurerm_storage_account.jobfinder.id
+  scope                = azurerm_storage_container.application_documents.id
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = azurerm_user_assigned_identity.jobfinder.principal_id
   principal_type       = "ServicePrincipal"
@@ -39,7 +41,8 @@ resource "azurerm_role_assignment" "storage_blob_data_contributor" {
 data "azurerm_client_config" "current" {}
 
 # Eigener Zugriff für lokale Entwicklung und manuelle Prüfungen ohne
-# Kontoschlüssel - dieselbe Identitätsbasis wie die App.
+# Kontoschlüssel. Bleibt bewusst auf dem ganzen Account: Das lokale
+# terraform braucht darüber Zugriff auf den tfstate-Container.
 resource "azurerm_role_assignment" "storage_blob_data_contributor_dev" {
   scope                = azurerm_storage_account.jobfinder.id
   role_definition_name = "Storage Blob Data Contributor"
@@ -49,9 +52,10 @@ resource "azurerm_role_assignment" "storage_blob_data_contributor_dev" {
 # Dedicated app registration for the local Docker-based hybrid worker run
 # (StepStone/Remotely), which has no Managed Identity and no interactive
 # az-CLI session available inside the container. Least privilege: only this
-# one role on this one storage account, nothing else.
+# one role on the documents container - not the tfstate container in the same
+# account, since this principal's secret lives on a local disk.
 resource "azurerm_role_assignment" "storage_blob_data_contributor_local_docker" {
-  scope                = azurerm_storage_account.jobfinder.id
+  scope                = azurerm_storage_container.application_documents.id
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = var.local_docker_sp_object_id
   principal_type       = "ServicePrincipal"

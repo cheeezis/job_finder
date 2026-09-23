@@ -13,7 +13,42 @@ resource "azurerm_storage_account" "jobfinder" {
   min_tls_version                 = "TLS1_2"
   allow_nested_items_to_be_public = false
 
+  # Der Account hält die einzigen Cloud-Kopien der Bewerbungsdokumente und den
+  # Terraform-State. Überschriebene Blobs bleiben als Version erhalten,
+  # gelöschte Blobs und Container lassen sich 14 Tage lang wiederherstellen.
+  blob_properties {
+    versioning_enabled = true
+
+    delete_retention_policy {
+      days = 14
+    }
+
+    container_delete_retention_policy {
+      days = 14
+    }
+  }
+
   tags = azurerm_resource_group.jobfinder.tags
+}
+
+# Ohne Aufräumen sammelt sich bei jedem Terraform-Apply eine State-Version an.
+resource "azurerm_storage_management_policy" "jobfinder" {
+  storage_account_id = azurerm_storage_account.jobfinder.id
+
+  rule {
+    name    = "delete-old-versions"
+    enabled = true
+
+    filters {
+      blob_types = ["blockBlob"]
+    }
+
+    actions {
+      version {
+        delete_after_days_since_creation = 30
+      }
+    }
+  }
 }
 
 # Enthält die Bewerbungsdokumente. "private" heißt: kein anonymer Lesezugriff,

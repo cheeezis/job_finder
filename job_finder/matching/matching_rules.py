@@ -467,17 +467,17 @@ OPTIONAL_EXPERIENCE_PHRASES = [
     "nicht notwendig",
 ]
 
+# German adjectives decline ("mit mehrjaehriger praktischer Erfahrung");
+# phrases are matched as plain substrings, so every ending has to be listed.
 STRONG_EXPERIENCE_PHRASES = [
-    "mehrjaehrige berufserfahrung",
-    "mehrjaehrige erfahrung",
-    "mehrjaehrige praktische erfahrung",
-    "langjaehrige berufserfahrung",
-    "langjaehrige erfahrung",
+    f"{adjective}{ending} {noun.format(ending=ending)}"
+    for adjective in ("mehrjaehrig", "langjaehrig", "fundiert", "einschlaegig")
+    for noun in ("berufserfahrung", "erfahrung", "praktisch{ending} erfahrung")
+    for ending in ("e", "er", "en")
+] + [
+    "mehrere jahre berufserfahrung",
+    "mehrere jahre erfahrung",
     "bereits berufserfahrung",
-    "fundierte berufserfahrung",
-    "fundierte erfahrung",
-    "einschlaegige berufserfahrung",
-    "einschlaegige erfahrung",
     "several years of experience",
     "multiple years of experience",
     "deep previous experience",
@@ -485,6 +485,48 @@ STRONG_EXPERIENCE_PHRASES = [
     "proven professional experience",
     "demonstrated professional experience",
     "worked in a similar",
+]
+
+
+# A junior title only yields to a seniority phrase that addresses the
+# applicant: a subject in the same clause or a profile heading shortly before.
+# Employer self-descriptions ("unser Team mit langjaehriger Erfahrung") never
+# exclude a junior role.
+APPLICANT_SUBJECT_PHRASES = [
+    "du hast",
+    "du bringst",
+    "du verfuegst",
+    "sie haben",
+    "sie bringen",
+    "sie verfuegen",
+    "you have",
+    "you bring",
+]
+
+PROFILE_HEADING_PHRASES = [
+    "dein profil",
+    "ihr profil",
+    "your profile",
+    "das bringst du mit",
+    "was du mitbringst",
+    "was sie mitbringen",
+    "what you bring",
+    "anforderungen",
+    "requirements",
+    "qualifications",
+]
+
+EMPLOYER_CONTEXT_WORDS = [
+    "wir",
+    "uns",
+    "unser",
+    "unsere",
+    "unserem",
+    "unseren",
+    "unserer",
+    "we",
+    "us",
+    "our",
 ]
 
 

@@ -3,9 +3,12 @@
 import re
 
 from job_finder.matching.matching_rules import (
+    APPLICANT_SUBJECT_PHRASES,
     BODY_ENTRY_LEVEL_PHRASES,
+    EMPLOYER_CONTEXT_WORDS,
     FIRST_EXPERIENCE_PHRASES,
     OPTIONAL_EXPERIENCE_PHRASES,
+    PROFILE_HEADING_PHRASES,
     STRONG_EXPERIENCE_PHRASES,
 )
 from job_finder.matching.matching_text import contains_any, is_entry_level
@@ -39,13 +42,14 @@ REQUIRED_EXPERIENCE_PATTERNS = [
 ]
 
 
-def analyze_experience(title, full_text, required_years=None):
+def analyze_experience(title, full_text, required_years=None, description=None):
     """Return experience rank, points and label for normalized job text.
 
     Call after hard_filter_reason: explicit requirements above three
     years must already be excluded. Numeric requirements take priority
     over entry-level signals; optional experience is weighted less
-    strictly than required experience. Lower rank sorts first.
+    strictly than required experience. Lower rank sorts first. Without a
+    usable description only the title can signal an entry-level role.
     """
     if required_years is None:
         required_years = extract_required_years(full_text)
@@ -57,6 +61,13 @@ def analyze_experience(title, full_text, required_years=None):
             "points": points,
             "label": f"{required_years} Jahr(e) gefordert",
         }
+
+    if (
+        description is not None
+        and description_is_missing(description)
+        and not is_entry_level(title)
+    ):
+        return {"rank": 4, "points": 8, "label": "Beschreibung fehlt, Erfahrung unklar"}
 
     if contains_any(full_text, BODY_ENTRY_LEVEL_PHRASES):
         return {"rank": 0, "points": 25, "label": "klare Einstiegsstelle"}
@@ -85,6 +96,12 @@ def analyze_experience(title, full_text, required_years=None):
         return {"rank": 1, "points": 18, "label": "Erfahrung nur wuenschenswert"}
 
     return {"rank": 1, "points": 20, "label": "keine klare Jahresanforderung"}
+
+
+def description_is_missing(description):
+    """Return whether only an empty or cut-off teaser text is available."""
+    text = description.strip()
+    return not text or (len(text) < 400 and text.endswith(("...", "…")))
 
 
 def extract_required_years(text):
@@ -121,6 +138,12 @@ def extract_required_years(text):
                 year += 1
             years.append(year)
 
+    # "5+ years in sales" is a requirement even without the word experience;
+    # company facts such as "seit 20 Jahren am Markt" carry no plus sign.
+    for match in re.finditer(rf"(\d+)\s*\+\s*{YEAR_UNIT}", text):
+        if not match_is_optional(text, match):
+            years.append(int(match.group(1)))
+
     plausible = [year for year in years if 0 < year <= 10]
     return max(plausible, default=0)
 
@@ -142,17 +165,34 @@ def has_required_experience(text):
 
 
 def strong_experience_is_required(title, description):
-    """Reject vague seniority requirements unless the vacancy is entry-level."""
-    if is_entry_level(title, description):
-        return False
+    """Reject vague seniority requirements.
+
+    For entry-level titles only a requirement addressed to the applicant
+    counts, so employer self-descriptions cannot exclude a junior role.
+    """
+    entry_level = is_entry_level(title, description)
     for phrase in STRONG_EXPERIENCE_PHRASES:
-        position = description.find(phrase)
-        if position < 0:
+        match = re.search(re.escape(phrase), description)
+        if match is None:
             continue
-        context = description[max(0, position - 55) : position + len(phrase) + 55]
-        if not contains_any(context, OPTIONAL_EXPERIENCE_PHRASES):
+        context = description[max(0, match.start() - 55) : match.end() + 55]
+        if contains_any(context, OPTIONAL_EXPERIENCE_PHRASES):
+            continue
+        if not entry_level or is_addressed_to_applicant(description, match):
             return True
     return False
+
+
+def is_addressed_to_applicant(text, match):
+    """Tell an applicant requirement from an employer self-description."""
+    start, end = match_context(text, match, 80)
+    clause = text[start:end]
+    if contains_any(clause, EMPLOYER_CONTEXT_WORDS):
+        return False
+    heading_window = text[max(0, match.start() - 150) : match.start()]
+    return contains_any(clause, APPLICANT_SUBJECT_PHRASES) or contains_any(
+        heading_window, PROFILE_HEADING_PHRASES
+    )
 
 
 def match_is_optional(text, match, context_size=55):

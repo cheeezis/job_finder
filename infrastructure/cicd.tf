@@ -1,9 +1,8 @@
-# Berechtigungen für den GitHub-Actions-Service-Principal (OIDC-Anmeldung,
-# siehe .github/workflows/deploy.yml). Der App-Registration/SP selbst wird
-# nicht von Terraform angelegt: Terraform kann sich nicht selbst die
-# Berechtigungen erteilen, die es braucht, um zu laufen (Henne-Ei-Problem),
-# daher wurde er einmalig per az ad app/sp create erstellt und die
-# Objekt-ID als var.github_actions_sp_object_id hinterlegt.
+# Berechtigungen für die GitHub-Actions-Identitäten (OIDC-Anmeldung, siehe
+# .github/workflows/checks.yml). Die App-Registrierungen/SPs selbst legt
+# Terraform nicht an: Es kann sich nicht selbst die Berechtigungen erteilen,
+# die es braucht, um zu laufen (Henne-Ei-Problem). Sie wurden einmalig per
+# az ad app/sp create erstellt, ihre Objekt-IDs stehen in variables.tf.
 
 # Erlaubt terraform plan/apply aus der Pipeline: Ressourcen in dieser
 # Resource Group anlegen, ändern und löschen.
@@ -31,5 +30,23 @@ resource "azurerm_role_assignment" "state_access_github_actions" {
   scope                = "${azurerm_storage_account.jobfinder.id}/blobServices/default/containers/tfstate"
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = var.github_actions_sp_object_id
+  principal_type       = "ServicePrincipal"
+}
+
+# Build-Identität: darf nur Images in die Registry hochladen, sonst nichts.
+resource "azurerm_role_assignment" "acr_push_github_build" {
+  scope                = azurerm_container_registry.jobfinder.id
+  role_definition_name = "AcrPush"
+  principal_id         = var.github_build_sp_object_id
+  principal_type       = "ServicePrincipal"
+}
+
+# az acr login schlägt die Registry vorher über die Verwaltungsebene nach, die
+# AcrPush nicht abdeckt. Reader erlaubt nur dieses Nachschlagen - weder Zugriff
+# auf Images noch Änderungen an der Registry.
+resource "azurerm_role_assignment" "acr_reader_github_build" {
+  scope                = azurerm_container_registry.jobfinder.id
+  role_definition_name = "Reader"
+  principal_id         = var.github_build_sp_object_id
   principal_type       = "ServicePrincipal"
 }

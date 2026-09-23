@@ -147,8 +147,13 @@ def main():
 def run_pipeline(exclude_sources=frozenset(), run_id=None):
     """Execute one logged run of the complete job-finding pipeline, always notifying."""
     started = time.monotonic()
-    with timed_step("Backup"):
-        create_backup([MEMORY_FILE, NOTIFICATION_STATE_FILE])
+    # A container discards its filesystem, and the ZIP with it; there Azure
+    # point-in-time restore and blob versioning protect the data instead.
+    if os.environ.get("JOBFINDER_SKIP_RUN_BACKUP") == "1":
+        print("  Backup: übersprungen (Container ohne dauerhaftes Dateisystem)")
+    else:
+        with timed_step("Backup"):
+            create_backup([MEMORY_FILE, NOTIFICATION_STATE_FILE])
 
     print_phase(1, 4, "Quellen")
     with timed_step("Quellen und Deduplizierung"):

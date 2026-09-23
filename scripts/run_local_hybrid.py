@@ -80,6 +80,8 @@ def container_environment():
         "JOBFINDER_STORAGE_ACCOUNT": STORAGE_ACCOUNT,
         "JOBFINDER_STORAGE_CONTAINER": STORAGE_CONTAINER,
         "JOBFINDER_REVIEW_HOST": REVIEW_HOST,
+        # The container is removed after the run, so a ZIP backup would be lost.
+        "JOBFINDER_SKIP_RUN_BACKUP": "1",
         "AZURE_CLIENT_ID": service_principal["AZURE_CLIENT_ID"],
         "AZURE_TENANT_ID": service_principal["AZURE_TENANT_ID"],
         "AZURE_CLIENT_SECRET": service_principal["AZURE_CLIENT_SECRET"],

@@ -168,6 +168,12 @@ resource "azurerm_container_app_job" "finder" {
         name  = "JOBFINDER_REVIEW_HOST"
         value = var.review_fqdn
       }
+      # Das ZIP-Backup vor jedem Lauf verschwände mit dem Container; die Daten
+      # sichern hier Point-in-Time-Restore (Postgres) und Blob-Versionierung.
+      env {
+        name  = "JOBFINDER_SKIP_RUN_BACKUP"
+        value = "1"
+      }
 
       env {
         name        = "JOBFINDER_DATABASE_URL"

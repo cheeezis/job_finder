@@ -130,6 +130,12 @@ Dokumentdateien und Prüfsummen. Vor jedem echten Finder-Lauf wird ebenfalls ein
 solches Backup erzeugt; die automatische Rotation behält sieben Archive.
 Die Quellsicherungen vor der Migration sind davon ausgenommen.
 
+In Containern (Azure-Worker, lokaler Hybrid-Lauf) entfällt dieses Backup
+(`JOBFINDER_SKIP_RUN_BACKUP=1`): Ihr Dateisystem überdauert den Lauf nicht, das
+ZIP wäre sofort wieder weg. Dort sichern der Point-in-Time-Restore des
+Postgres-Servers (sieben Tage) und die Versionierung samt Soft Delete im
+Blob Storage (14 Tage) die Daten.
+
 Eine Wiederherstellung benötigt eine leere, separat konfigurierte Datenbank und
 ein leeres Dokumentziel. Zuerst `JOBFINDER_DATABASE_URL` auf dieses Ziel setzen:
 

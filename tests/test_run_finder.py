@@ -2,6 +2,7 @@
 
 import io
 import json
+import os
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -171,6 +172,24 @@ class RunFinderTests(unittest.TestCase):
             run_pipeline()
         memory.assert_not_called()
         output.assert_not_called()
+
+    def test_container_runs_skip_the_discarded_zip_backup(self):
+        for env, expected_calls in (({}, 1), ({"JOBFINDER_SKIP_RUN_BACKUP": "1"}, 0)):
+            with (
+                self.subTest(env=env),
+                patch.dict(os.environ),
+                patch("run_finder.create_backup") as backup,
+                patch(
+                    "run_finder.collect_jobs",
+                    side_effect=RuntimeError("stop after backup"),
+                ),
+                redirect_stdout(io.StringIO()),
+            ):
+                os.environ.pop("JOBFINDER_SKIP_RUN_BACKUP", None)
+                os.environ.update(env)
+                with self.assertRaises(RuntimeError):
+                    run_pipeline()
+                self.assertEqual(backup.call_count, expected_calls)
 
     def test_incomplete_snapshot_does_not_replace_persistent_output(self):
         reports = [

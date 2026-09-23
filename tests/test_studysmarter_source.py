@@ -5,6 +5,7 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 from job_finder.models import WorkflowStatus, WorkMode
 from job_finder.sources import studysmarter
@@ -17,6 +18,11 @@ from job_finder.sources.common import (
 class StudySmarterTests(unittest.TestCase):
     JOB_URL = (
         "https://talents.studysmarter.de/companies/example/"
+        "junior-python-developer-12345678/"
+    )
+    # The API spells the city segment "koeln"; the site only routes "koln".
+    CITY_LINK = (
+        "https://talents.studysmarter.de/companies/example/koeln/"
         "junior-python-developer-12345678/"
     )
     JOB_HTML = """
@@ -224,6 +230,42 @@ class StudySmarterTests(unittest.TestCase):
         self.assertEqual(jobs[1].description_clean, "")
         self.assertEqual(list(cache), [self.JOB_URL])
         fetch_text.assert_called_once_with(self.JOB_URL)
+
+    def test_detail_url_drops_city_segment_and_keeps_plain_links(self):
+        self.assertEqual(studysmarter.detail_url(self.CITY_LINK), self.JOB_URL)
+        self.assertEqual(studysmarter.detail_url(self.JOB_URL), self.JOB_URL)
+
+    def test_candidate_with_transliterated_city_link_gets_cached_details(self):
+        record = {
+            "id": 12345678,
+            "title": "Junior Python Developer (m/w/d)",
+            "company_name": "Example GmbH",
+            "link": self.CITY_LINK,
+            "locations": ["Köln"],
+            "is_remote_positions": "completely",
+        }
+
+        def fetch_page(url):
+            if "/koeln/" in url:
+                raise HTTPError(url, 404, "Not Found", {}, None)
+            return self.JOB_HTML
+
+        with tempfile.TemporaryDirectory() as directory:
+            cache_path = Path(directory) / "studysmarter.json"
+            with (
+                patch.object(studysmarter, "collect_records", return_value=[record]),
+                patch.object(studysmarter, "fetch_text", side_effect=fetch_page),
+            ):
+                jobs = studysmarter.fetch_jobs(cache_path)
+                enriched = studysmarter.enrich_candidate_jobs(
+                    jobs, {jobs[0].id}, cache_path
+                )
+                next_run = studysmarter.fetch_jobs(cache_path)
+
+        self.assertEqual(enriched, 1)
+        self.assertEqual(jobs[0].primary_url, self.JOB_URL)
+        self.assertIn("Entwicklung mit Python", jobs[0].description_clean)
+        self.assertIn("Entwicklung mit Python", next_run[0].description_clean)
 
 
 if __name__ == "__main__":

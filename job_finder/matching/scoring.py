@@ -157,7 +157,7 @@ def score_job(job: Job, today=None):
     if not location_score["allowed"]:
         return excluded_result(location_score["label"])
 
-    experience = analyze_experience(title, full_text, required_years)
+    experience = analyze_experience(title, full_text, required_years, description)
     skill_score, skill_labels = score_skills(f"{title} {description}")
     profile_score = score_profile_connection(full_text)
 

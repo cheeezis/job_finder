@@ -540,6 +540,91 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(german["filter_status"], "excluded")
         self.assertEqual(english["filter_status"], "excluded")
 
+    def test_inflected_strong_experience_is_excluded(self):
+        for phrase in (
+            "mit mehrjähriger Berufserfahrung",
+            "mit mehrjähriger praktischer Erfahrung",
+        ):
+            with self.subTest(phrase=phrase):
+                result = score_job(
+                    make_job(
+                        title="Data Scientist (m/w/d)",
+                        description=f"Hochschulstudium {phrase} in der Datenanalyse.",
+                    )
+                )
+                self.assertEqual(result["filter_status"], "excluded")
+                self.assertIn("Mehrjaehrige", result["reasons"][0])
+
+    def test_junior_title_does_not_hide_applicant_directed_seniority(self):
+        for description in (
+            "Your profile: several years of experience as a full stack developer "
+            "in a production environment.",
+            "Du bringst mehrjährige Berufserfahrung in der Webentwicklung mit.",
+        ):
+            with self.subTest(description=description):
+                result = score_job(
+                    make_job(
+                        title="Junior Software Engineer",
+                        description=description,
+                    )
+                )
+                self.assertEqual(result["filter_status"], "excluded")
+
+    def test_employer_self_description_does_not_exclude_junior_roles(self):
+        result = score_job(
+            make_job(
+                title="Junior Software Engineer",
+                description=(
+                    "Wir sind ein Team mit langjähriger Erfahrung in der "
+                    "Cloud-Beratung. Du lernst Python und Azure von Grund auf."
+                ),
+            )
+        )
+        self.assertEqual(result["filter_status"], "included")
+
+    def test_missing_description_is_not_rewarded_as_no_requirement(self):
+        for description in (
+            "",
+            "Soda Core is used by teams at HelloFresh, 2K Games and Nubank. Our u…",
+        ):
+            with self.subTest(description=description):
+                result = score_job(
+                    make_job(title="Data Analyst", description=description)
+                )
+                self.assertEqual(result["filter_status"], "included")
+                self.assertEqual(
+                    result["experience_level"], "Beschreibung fehlt, Erfahrung unklar"
+                )
+                self.assertTrue(
+                    any(
+                        reason.startswith("+8 Erfahrung")
+                        for reason in result["reasons"]
+                    )
+                )
+
+    def test_missing_description_keeps_the_junior_title_signal(self):
+        result = score_job(make_job(title="Junior Data Analyst", description=""))
+        self.assertEqual(result["experience_level"], "klare Einstiegsstelle")
+
+    def test_several_years_in_german_are_strong_experience(self):
+        result = score_job(
+            make_job(
+                title="Software Engineer",
+                description="Du hast mehrere Jahre Erfahrung in der Softwareentwicklung.",
+            )
+        )
+        self.assertEqual(result["filter_status"], "excluded")
+
+    def test_plus_years_without_the_word_experience_are_excluded(self):
+        result = score_job(
+            make_job(
+                title="Data Analyst",
+                description="5+ years in sales or revenue analytics at a B2B SaaS company.",
+            )
+        )
+        self.assertEqual(result["filter_status"], "excluded")
+        self.assertIn("5 Jahre", result["reasons"][0])
+
     def test_company_entry_level_boilerplate_does_not_define_the_vacancy(self):
         result = score_job(
             make_job(

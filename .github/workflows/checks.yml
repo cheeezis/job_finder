@@ -129,6 +129,11 @@ jobs:
     runs-on: ubuntu-latest
     needs: [docker-build-push]
     environment: production
+    # Ein neuerer Deploy bricht einen älteren, noch auf Freigabe wartenden ab.
+    # So kann eine späte Freigabe nie einen veralteten Stand zurückbringen.
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
     timeout-minutes: 15
     permissions:
       contents: read
@@ -152,4 +157,11 @@ jobs:
           TF_VAR_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
           TF_VAR_postgres_admin_password: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
           TF_VAR_postgres_client_ipv4: ${{ secrets.POSTGRES_CLIENT_IPV4 }}
-          TF_VAR_image_tag: ${{ needs.docker-build-push.outputs.image_tag }}
+      # Terraform ignoriert das Image (lifecycle.ignore_changes); die
+      # App-Version wird ausschließlich hier gesetzt.
+      - name: Image ausrollen
+        run: |
+          image="acrjobfinder.azurecr.io/jobfinder:${{ needs.docker-build-push.outputs.image_tag }}"
+          az extension add --name containerapp --upgrade --only-show-errors
+          az containerapp job update --name jobfinder-worker --resource-group rg-jobfinder --image "$image" --output none
+          az containerapp update --name jobfinder-review --resource-group rg-jobfinder --image "$image" --output none

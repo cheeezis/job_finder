@@ -4,26 +4,28 @@ Both are blocked from Azure IPs, so they run from here against the shared
 Azure database instead; see docs/postgresql.md for the reliable-sources half
 that runs in Azure.
 
-Runs inside the same Docker image as the Azure worker rather than the local
-.venv: a native Windows psycopg connection to the Azure database was found to
-return stale reads (a data snapshot from hours earlier, never catching up),
-while the identical code running in a Linux container connects correctly.
-The root cause wasn't identified; running in Docker sidesteps it.
+Runs the image the Azure worker currently uses, looked up through the host's
+az-CLI session on every start, so both halves always share one code version.
+Running in Docker rather than the local .venv also sidestepped stale reads
+seen from a native Windows psycopg connection to the Azure database; that
+root cause is still unexplained.
 
-Needs a scoped service principal for Blob access, since there's no Managed
-Identity or interactive az-CLI session inside the container - see
-infrastructure/storage.tf (storage_blob_data_contributor_local_docker) and
-.env.docker-local (gitignored, not the same credential as any Azure-hosted
-identity).
+Inside the container there is no Managed Identity or az-CLI session, so Blob
+access needs a scoped service principal - see infrastructure/storage.tf
+(storage_blob_data_contributor_local_docker) and .env.docker-local
+(gitignored, not the same credential as any Azure-hosted identity).
 """
 
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
-IMAGE = "acrjobfinder.azurecr.io/jobfinder:azure-v9"
+REGISTRY = "acrjobfinder"
+RESOURCE_GROUP = "rg-jobfinder"
+WORKER_JOB = "jobfinder-worker"
 STORAGE_ACCOUNT = "stjobfindere64bfdce"
 STORAGE_CONTAINER = "application-documents"
 REVIEW_HOST = "jobfinder-review.ashyisland-3b6e9522.francecentral.azurecontainerapps.io"
@@ -88,8 +90,50 @@ def container_environment():
     return values
 
 
+def az(*args):
+    """Run an Azure CLI command through the host session and return its output."""
+    executable = shutil.which("az")
+    if executable is None:
+        raise SystemExit("Azure CLI (az) nicht gefunden.")
+    try:
+        result = subprocess.run(
+            [executable, *args],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=True,
+        )
+    except subprocess.CalledProcessError as error:
+        raise SystemExit(
+            f"az {' '.join(args[:3])} fehlgeschlagen: {error.stderr.strip()}"
+        ) from error
+    return result.stdout.strip()
+
+
+def deployed_image():
+    """Return the image the Azure worker currently runs."""
+    return az(
+        "containerapp",
+        "job",
+        "show",
+        "--name",
+        WORKER_JOB,
+        "--resource-group",
+        RESOURCE_GROUP,
+        "--query",
+        "properties.template.containers[0].image",
+        "--output",
+        "tsv",
+    )
+
+
 def main():
     """Run the containerized finder with every source excluded except StepStone and Remotely."""
+    image = deployed_image()
+    print(f"Image des Azure-Workers: {image}", flush=True)
+    az("acr", "login", "--name", REGISTRY)
+    subprocess.run(["docker", "pull", "--quiet", image], check=True)
     exclude = ",".join(
         name for name in ALL_SOURCE_NAMES if name not in LOCAL_ONLY_SOURCES
     )
@@ -103,7 +147,7 @@ def main():
         *env_args,
         "--entrypoint",
         "python",
-        IMAGE,
+        image,
         "run_finder.py",
         "--exclude-sources",
         exclude,

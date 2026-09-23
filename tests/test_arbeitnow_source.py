@@ -9,7 +9,9 @@ from urllib.error import HTTPError
 
 from job_finder.sources import arbeitnow
 from job_finder.sources.common import (
+    fetch_diagnostics,
     load_detail_cache,
+    reset_fetch_diagnostics,
     save_detail_cache,
 )
 
@@ -315,6 +317,37 @@ class ArbeitnowTests(unittest.TestCase):
             arbeitnow.external_description(html),
             structured_description.strip(),
         )
+
+    def test_unreachable_original_page_is_recorded_as_candidate_failure(self):
+        job = arbeitnow.job_from_record(
+            {
+                "slug": "offline",
+                "company_name": "Example GmbH",
+                "title": "Junior Developer",
+                "description": "Find Jobs in Germany on Arbeitnow",
+                "remote": True,
+                "url": "https://www.arbeitnow.com/jobs/example/offline",
+                "location": "Fulda",
+            }
+        )
+        reset_fetch_diagnostics()
+
+        with tempfile.TemporaryDirectory() as directory:
+            with (
+                patch.object(
+                    arbeitnow,
+                    "fetch_text_with_final_url",
+                    side_effect=OSError("timeout"),
+                ),
+                patch("builtins.print"),
+            ):
+                count = arbeitnow.enrich_candidate_jobs(
+                    [job], {job.id}, cache_path=Path(directory) / "arbeitnow.json"
+                )
+
+        self.assertEqual(count, 0)
+        self.assertEqual(fetch_diagnostics()["failed_candidates"], 1)
+        self.assertEqual(fetch_diagnostics()["failed_segments"], 0)
 
     def test_failed_enrichment_does_not_keep_application_url(self):
         job = arbeitnow.job_from_record(

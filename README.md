@@ -25,7 +25,8 @@ Stellenkarten und Laufstatistiken an Discord übertragen.
   bezieht sich nur auf abgeschlossene Bewerbungen
 - kompakte Discord-Karten für neue Stellen sowie
   eine strukturierte Laufstatistik, die Fundmenge, Vorfilter, tatsächlich
-  versendete Karten und die im Standard-Review sichtbare Anzahl trennt
+  versendete Karten und die im Standard-Review sichtbare Anzahl trennt und
+  Kandidaten ohne ladbare Detailseite ausweist
 - isolierte Quellenfehler, Laufprotokolle und rotierende Backups wichtiger
   lokaler Zustände
 - dynamische Fortschrittsanzeigen je Quelle und Detailabruf; im Terminal wird

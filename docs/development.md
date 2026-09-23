@@ -105,7 +105,7 @@ Der vom Runner erwartete Vertrag:
 | `SOURCE_NAME` | Stabiler Quellenname für IDs, Cache und Laufdiagnose |
 | `fetch_jobs()` | Liefert eine Liste von `Job`; bei einem vollständigen Quellenfehler darf eine Exception propagieren |
 | `fetch_jobs_with_report()` (optional) | Wird anstelle von `fetch_jobs()` verwendet und liefert `jobs`, `status`, optional `details` |
-| `enrich_candidate_jobs(jobs, candidate_ids)` (optional) | Verändert die übergebene Liste beziehungsweise ihre Jobs und liefert die Anzahl betroffener Anzeigen |
+| `enrich_candidate_jobs(jobs, candidate_ids)` (optional) | Verändert die übergebene Liste beziehungsweise ihre Jobs und liefert die Anzahl betroffener Anzeigen; nicht ladbare Kandidatendetails meldet sie über `record_candidate_failure()` |
 
 Ein Abdeckungsbericht sieht beispielsweise so aus:
 
@@ -120,6 +120,11 @@ Bei einem abgefangenen Teilfehler muss die Quelle diesen melden, etwa über
 könnte sonst als vollständig erfolgreiche Suche ohne Treffer interpretiert
 werden. Der Runner verwendet die Zustände `success`, `empty`, `partial` und
 `failed`, um fehlende Treffer richtig zu behandeln.
+
+Scheitert nach dem Vorfilter die Detailseite eines Kandidaten, meldet die
+Quelle das über `record_candidate_failure()`. Der Quellenstatus bleibt dabei
+unverändert, weil die Suche selbst vollständig war. Die Discord-Laufstatistik
+und das Logereignis `enrichment_completed` weisen die fehlenden Details aus.
 
 Für Details übernimmt `fetch_cached_details` den gemeinsamen Cache: sieben
 Tage frisch, bei Abruffehlern höchstens 14 Tage als markierter Fallback.

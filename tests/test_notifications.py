@@ -235,6 +235,36 @@ class NotificationTests(unittest.TestCase):
         self.assertNotIn("fields", embed)
         self.assertNotIn("KI", json.dumps(payload, ensure_ascii=False))
         self.assertEqual(payload["allowed_mentions"], {"parse": []})
+        self.assertNotIn("Details fehlen", description)
+        self.assertEqual(embed["color"], 0x2E8B57)
+
+    def test_run_summary_warns_about_candidates_without_details(self):
+        payload = run_summary_payload(
+            {
+                "duration": "10 Sek.",
+                "jobs_total": 100,
+                "jobs_new": 3,
+                "jobs_known": 97,
+                "included": 20,
+                "excluded": 80,
+                "review_new": 2,
+                "notifications": {"eligible_new": 2, "sent": 2, "failed": 0},
+                "sources": [{"label": "StudySmarter", "status": "success", "jobs": 10}],
+                "detail_failures": [
+                    {"label": "Arbeitnow", "failed": 2},
+                    {"label": "StudySmarter", "failed": 12},
+                ],
+            }
+        )
+        embed = payload["embeds"][0]
+
+        self.assertIn(
+            "\u26a0\ufe0f Details fehlen: Arbeitnow 2 Kandidat(en), "
+            "StudySmarter 12 Kandidat(en)",
+            embed["description"],
+        )
+        self.assertIn("1 erfolgreich", embed["description"])
+        self.assertEqual(embed["color"], 0xD99A2B)
 
 
 if __name__ == "__main__":

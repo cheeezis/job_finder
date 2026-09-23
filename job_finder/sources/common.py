@@ -45,17 +45,27 @@ DETAIL_CACHE_FIELDS = (
     "published_at",
     "fetched_at",
 )
-_FETCH_DIAGNOSTICS = {"failed_segments": 0}
+_FETCH_DIAGNOSTICS = {"failed_segments": 0, "failed_candidates": 0}
 
 
 def reset_fetch_diagnostics():
     """Reset sequential per-source diagnostics before one adapter runs."""
-    _FETCH_DIAGNOSTICS["failed_segments"] = 0
+    for key in _FETCH_DIAGNOSTICS:
+        _FETCH_DIAGNOSTICS[key] = 0
 
 
 def record_partial_failure(count=1):
     """Record internally handled failures that make a source result partial."""
     _FETCH_DIAGNOSTICS["failed_segments"] += max(0, int(count))
+
+
+def record_candidate_failure(count=1):
+    """Record prefiltered candidates whose details could not be loaded.
+
+    Unlike record_partial_failure, this leaves the source status unchanged:
+    the search itself was complete, only the candidates lack detail text.
+    """
+    _FETCH_DIAGNOSTICS["failed_candidates"] += max(0, int(count))
 
 
 def fetch_diagnostics():
@@ -393,6 +403,7 @@ def enrich_cached_candidates(
     if unsaved:
         save_detail_cache(cache_path, cache)
     if errors:
+        record_candidate_failure(errors)
         print(f"WARNUNG {label}: {errors} Kandidat(en) nicht erreichbar")
     return enriched
 

@@ -25,7 +25,8 @@ Stellenkarten und Laufstatistiken an Discord übertragen.
   bezieht sich nur auf abgeschlossene Bewerbungen
 - kompakte Discord-Karten für neue Stellen sowie
   eine strukturierte Laufstatistik, die Fundmenge, Vorfilter, tatsächlich
-  versendete Karten und die im Standard-Review sichtbare Anzahl trennt
+  versendete Karten und die im Standard-Review sichtbare Anzahl trennt und
+  Kandidaten ohne ladbare Detailseite ausweist
 - isolierte Quellenfehler, Laufprotokolle und rotierende Backups wichtiger
   lokaler Zustände
 - dynamische Fortschrittsanzeigen je Quelle und Detailabruf; im Terminal wird
@@ -281,9 +282,12 @@ Der Workflow in `.github/workflows/checks.yml` führt Stilprüfungen, Python-
 und Frontend-Tests bei Pull Requests und Pushes auf `main` aus. Er startet
 keinen Finder-Lauf und verschickt keine Discord-Nachrichten. Bei Pull Requests
 zeigt er zusätzlich einen `terraform plan`; nach erfolgreichem Test-Durchlauf
-auf `main` baut er das Docker-Image, pusht es nach ACR und aktualisiert Worker
-und Review-App per `terraform apply` – letzterer Schritt wartet auf manuelle
-Freigabe im GitHub-Environment `production` (siehe
+auf `main` baut er das Docker-Image, pusht es nach ACR, wendet die
+Infrastruktur per `terraform apply` an und rollt danach das neue Image auf
+Worker und Review-App aus. Dieser letzte Job wartet auf manuelle Freigabe im
+GitHub-Environment `production`; ein neuerer Deploy bricht einen älteren, noch
+wartenden automatisch ab. Terraform selbst verwaltet die Image-Version nicht,
+ein lokales `terraform apply` setzt die App also nie zurück (siehe
 [infrastructure/cicd.tf](infrastructure/cicd.tf) und
 [Netzwerkpfade](docs/networking.md)).
 

@@ -90,6 +90,11 @@ resource "azurerm_container_app" "review" {
 
   tags = azurerm_resource_group.jobfinder.tags
 
+  # Wie beim Worker: Die App-Version setzt die CI/CD-Pipeline, nicht Terraform.
+  lifecycle {
+    ignore_changes = [template[0].container[0].image]
+  }
+
   depends_on = [
     azurerm_role_assignment.acr_pull,
     azurerm_role_assignment.keyvault_secrets_user_worker,

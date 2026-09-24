@@ -70,34 +70,21 @@ class IncompleteSourceSnapshotError(RuntimeError):
     """Stop a run before incomplete source data can replace good output."""
 
 
-def unavailable_source_count(source_reports):
-    """Count failed sources and partial sources that returned no jobs."""
-    return sum(
+def require_usable_source_snapshot(source_reports):
+    """Raise unless at least half the sources were reachable.
+
+    Failed sources and partial sources that returned no jobs count as unreachable.
+    """
+    unavailable = sum(
         report.get("status") == "failed"
         or (report.get("status") == "partial" and not report.get("jobs"))
         for report in source_reports
     )
-
-
-def source_snapshot_is_usable(source_reports):
-    """Accept a snapshot only when at least half its sources were reachable."""
-    if not source_reports:
-        return False
-
-    unavailable = unavailable_source_count(source_reports)
-    return unavailable * 2 <= len(source_reports)
-
-
-def require_usable_source_snapshot(source_reports):
-    """Raise with a concise diagnosis when source coverage is catastrophic."""
-    if source_snapshot_is_usable(source_reports):
-        return
-
-    unavailable = unavailable_source_count(source_reports)
-    raise IncompleteSourceSnapshotError(
-        f"{unavailable} von {len(source_reports)} Quellen waren nicht "
-        "verwendbar; vorhandene Jobs und Review-Ausgabe bleiben unverändert"
-    )
+    if not source_reports or unavailable * 2 > len(source_reports):
+        raise IncompleteSourceSnapshotError(
+            f"{unavailable} von {len(source_reports)} Quellen waren nicht "
+            "verwendbar; vorhandene Jobs und Review-Ausgabe bleiben unverändert"
+        )
 
 
 def parse_args():
@@ -298,71 +285,40 @@ def collect_jobs(sources=None, run_id=None):
     seen_urls = set()
     source_reports = []
 
-    selected_sources = list(sources or SOURCES)
-    for source in selected_sources:
+    for source in sources or SOURCES:
         label = source_label(source.SOURCE_NAME)
         print_progress(label, 0, 1, "wird geladen")
         reset_fetch_diagnostics()
         started = time.monotonic()
         try:
-            source_jobs, source_status, report_details = fetch_source_jobs(source)
+            source_jobs, status, details = fetch_source_jobs(source)
         except Exception as error:
-            source_reports.append(
-                {
-                    "name": source.SOURCE_NAME,
-                    "status": "failed",
-                    "jobs": 0,
-                    "error": source_error_label(error),
-                }
-            )
-            print_progress(label, 1, 1, f"fehlgeschlagen ({source_error_label(error)})")
-            log_event(
-                "source_completed",
-                run_id=run_id,
-                level="error",
-                source=source.SOURCE_NAME,
-                status="failed",
-                jobs_found=0,
-                duration_seconds=round(time.monotonic() - started, 1),
-                error=source_error_label(error),
-            )
-            continue
+            source_jobs, status, details = [], "failed", {"error": source_error_label(error)}
+            level, progress = "error", f"fehlgeschlagen ({details['error']})"
+        else:
+            level = "warning" if status in {"partial", "failed"} else "info"
+            progress = f"{len(source_jobs)} Stellen"
+            if status == "partial":
+                failed = details.get("failed_segments", "?")
+                progress += f" · Teilergebnis ({failed} Segment(e) fehlgeschlagen)"
         source_reports.append(
-            {
-                "name": source.SOURCE_NAME,
-                "status": source_status,
-                "jobs": len(source_jobs),
-                **report_details,
-            }
+            {"name": source.SOURCE_NAME, "status": status, "jobs": len(source_jobs), **details}
         )
-        print_progress(
-            label,
-            1,
-            1,
-            f"{len(source_jobs)} Stellen"
-            + (
-                f" · Teilergebnis ({report_details.get('failed_segments', '?')} Segment(e) fehlgeschlagen)"
-                if source_status == "partial"
-                else ""
-            ),
-        )
+        print_progress(label, 1, 1, progress)
         log_event(
             "source_completed",
             run_id=run_id,
-            level="warning" if source_status in {"partial", "failed"} else "info",
+            level=level,
             source=source.SOURCE_NAME,
-            status=source_status,
+            status=status,
             jobs_found=len(source_jobs),
             duration_seconds=round(time.monotonic() - started, 1),
-            **report_details,
+            **details,
         )
         for job in source_jobs:
-            url = job.primary_url
-            dedupe_key = canonical_url(url)
-            if dedupe_key in seen_urls:
-                continue
-            seen_urls.add(dedupe_key)
-            jobs.append(job)
+            if (dedupe_key := canonical_url(job.primary_url)) not in seen_urls:
+                seen_urls.add(dedupe_key)
+                jobs.append(job)
 
     return deduplicate_jobs(jobs), source_reports
 

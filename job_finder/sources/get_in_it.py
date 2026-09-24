@@ -8,7 +8,6 @@ can contain malformed escaping.
 import json
 import re
 from itertools import product
-from pathlib import Path
 from urllib.parse import urlencode, urljoin
 
 from job_finder.http import fetch_json, fetch_text
@@ -69,7 +68,7 @@ def fetch_jobs_with_report(cache_path=CACHE_FILE, now=None):
 
 def jobs_from_records(records, cache_path=CACHE_FILE, now=None):
     """Reuse fresh details and keep stale or unknown records lightweight."""
-    cache = load_detail_cache(Path(cache_path))
+    cache = load_detail_cache(cache_path)
     jobs = []
     for record in records:
         summary = summary_job_from_record(record)

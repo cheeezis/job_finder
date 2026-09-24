@@ -3,7 +3,6 @@
 import time
 from datetime import UTC, datetime
 from html.parser import HTMLParser
-from pathlib import Path
 from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlencode, urlsplit
 
@@ -52,8 +51,7 @@ class _DescriptionMetaParser(HTMLParser):
 
 def fetch_jobs(cache_path=CACHE_FILE):
     """Load all currently exposed jobs and track meaningful changes."""
-    cache_file = Path(cache_path)
-    cache = load_detail_cache(cache_file)
+    cache = load_detail_cache(cache_path)
     jobs = []
 
     try:
@@ -81,7 +79,7 @@ def fetch_jobs(cache_path=CACHE_FILE):
         jobs.append(job)
 
     if jobs:
-        save_detail_cache(cache_file, current_cache)
+        save_detail_cache(cache_path, current_cache)
     return jobs
 
 
@@ -135,8 +133,7 @@ def reuse_cached_enrichment(job, previous):
 
 def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE):
     """Replace placeholder portal text with the original ad for eligible jobs."""
-    cache_file = Path(cache_path)
-    cache = load_detail_cache(cache_file)
+    cache = load_detail_cache(cache_path)
     enriched = 0
     enrichment_errors = 0
     for job in jobs:
@@ -160,7 +157,7 @@ def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE):
         except Exception:
             enrichment_errors += 1
     if enriched:
-        save_detail_cache(cache_file, cache)
+        save_detail_cache(cache_path, cache)
     if enrichment_errors:
         record_candidate_failure(enrichment_errors)
         print(f"WARNUNG Arbeitnow: {enrichment_errors} Originalanzeige(n) nicht erreichbar")

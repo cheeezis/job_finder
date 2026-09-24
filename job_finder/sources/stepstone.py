@@ -9,9 +9,8 @@ import re
 import time
 from html import unescape
 from itertools import product
-from pathlib import Path
 from urllib.error import HTTPError
-from urllib.parse import quote, urlencode, urljoin, urlsplit, urlunsplit
+from urllib.parse import quote, urlencode, urljoin, urlsplit
 
 from job_finder.console import print_progress, progress_checkpoint
 from job_finder.http import fetch_text
@@ -86,8 +85,7 @@ class StepStoneHttpClient:
 
 def fetch_jobs(cache_path=CACHE_FILE, client=None, now=None, _coverage=None):
     """Search StepStone and return imported job details."""
-    cache_file = Path(cache_path)
-    cache = load_cache(cache_file)
+    cache = load_cache(cache_path)
     client = client or StepStoneHttpClient()
 
     try:
@@ -102,7 +100,7 @@ def fetch_jobs(cache_path=CACHE_FILE, client=None, now=None, _coverage=None):
         return []
 
     cache["last_links"] = links
-    save_cache(cache_file, cache)
+    save_cache(cache_path, cache)
 
     jobs = []
     detail_errors = 0
@@ -119,7 +117,7 @@ def fetch_jobs(cache_path=CACHE_FILE, client=None, now=None, _coverage=None):
                 job.cache_stale = False
                 jobs.append(job)
                 cache["jobs"][cache_key] = job
-                save_cache(cache_file, cache)
+                save_cache(cache_path, cache)
             except StepStoneBlockedError as error:
                 if _coverage is not None:
                     _coverage["failed_segments"] = max(1, _coverage.get("failed_segments", 0))
@@ -229,8 +227,7 @@ def extract_detail_links(html):
 
 def normalize_detail_url(url):
     """Remove query and fragment from a StepStone detail URL."""
-    parts = urlsplit(url)
-    return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+    return urlsplit(url)._replace(query="", fragment="").geturl()
 
 
 def fetch_job(url, client=None):

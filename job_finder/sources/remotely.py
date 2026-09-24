@@ -6,7 +6,6 @@ import time
 from datetime import date, datetime, timedelta
 from html import unescape
 from html.parser import HTMLParser
-from pathlib import Path
 from urllib.parse import urljoin, urlsplit
 
 from job_finder.console import print_progress, progress_checkpoint
@@ -68,12 +67,11 @@ class RemotelyHttpClient:
 def fetch_jobs(cache_path=CACHE_FILE, client=None, now=None):
     """Fetch only listings published within the rolling lookback window."""
     client = client or RemotelyHttpClient()
-    cache_file = Path(cache_path)
     reference_date = (now.date() if hasattr(now, "date") else now) or date.today()
     links = collect_links(client, today=reference_date)
     return fetch_cached_details(
         links,
-        cache_file,
+        cache_path,
         lambda url: fetch_job(url, client),
         "Remotely",
         now=now,
@@ -99,8 +97,7 @@ def enrich_candidate_jobs(
         return 0
 
     checked_at = now or utc_now()
-    status_path = Path(status_cache_path)
-    checks = load_linkedin_status_cache(status_path)
+    checks = load_linkedin_status_cache(status_cache_path)
     cache_changed = False
     closed_indices = set()
     errors = 0
@@ -130,7 +127,7 @@ def enrich_candidate_jobs(
             )
 
     if cache_changed:
-        save_linkedin_status_cache(status_path, checks)
+        save_linkedin_status_cache(status_cache_path, checks)
     if closed_indices:
         jobs[:] = [job for index, job in enumerate(jobs) if index not in closed_indices]
         print(

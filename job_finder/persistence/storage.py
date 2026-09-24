@@ -28,7 +28,7 @@ def read_json(path, default=None):
     return json.loads(target.read_text(encoding="utf-8"))
 
 
-def write_json_atomic(path, value, *, indent=2):
+def write_json_atomic(path, value):
     """Commit runtime data to PostgreSQL, or atomically export an explicit file."""
     name = dataset_name(path)
     if name is not None:
@@ -39,7 +39,7 @@ def write_json_atomic(path, value, *, indent=2):
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_suffix(f"{destination.suffix}.tmp")
-    temporary.write_text(json.dumps(value, indent=indent, ensure_ascii=False), encoding="utf-8")
+    temporary.write_text(json.dumps(value, indent=2, ensure_ascii=False), encoding="utf-8")
     temporary.replace(destination)
 
 

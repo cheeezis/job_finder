@@ -7,16 +7,16 @@ DEFAULT_HEADERS = {"User-Agent": "job-finder/0.1"}
 MAX_RESPONSE_BYTES = 20 * 1024 * 1024
 
 
-def fetch_text(url, headers=None, timeout=20, max_bytes=MAX_RESPONSE_BYTES):
+def fetch_text(url, headers=None, timeout=20):
     """Fetch a URL and decode its response as UTF-8 text."""
     request = Request(url, headers=_build_headers(headers))
     with urlopen(request, timeout=timeout) as response:
-        return _read_bounded(response, max_bytes).decode("utf-8")
+        return _read_bounded(response, MAX_RESPONSE_BYTES).decode("utf-8")
 
 
-def fetch_json(url, headers=None, timeout=20):
+def fetch_json(url, headers=None):
     """Fetch a URL and parse its UTF-8 response as JSON."""
-    return json.loads(fetch_text(url, headers=headers, timeout=timeout))
+    return json.loads(fetch_text(url, headers=headers))
 
 
 def fetch_text_with_final_url(

@@ -103,6 +103,6 @@ def print_phase(current, total, label):
     print(f"\n[{current}/{total}] {label}", flush=True)
 
 
-def progress_checkpoint(current, total, interval=10):
+def progress_checkpoint(current, total):
     """Limit long detail loops to useful, readable progress snapshots."""
-    return current == 1 or current == total or current % interval == 0
+    return current == 1 or current == total or current % 10 == 0

@@ -63,7 +63,6 @@ def process_notifications(
     review_host=None,
     state_path=NOTIFICATION_STATE_FILE,
     client=None,
-    now=None,
 ):
     """Update the persistent queue and optionally send eligible Discord cards.
 
@@ -77,7 +76,7 @@ def process_notifications(
     that field. Delivery failures remain pending for a later run and
     increment failed; filesystem and malformed-state errors propagate.
     """
-    timestamp = (now or datetime.now(timezone.utc)).isoformat()
+    timestamp = datetime.now(timezone.utc).isoformat()
     state = load_notification_state(state_path)
     candidates, stats = _update_queue(results, state, timestamp)
     save_notification_state(state, state_path)
@@ -155,14 +154,13 @@ def _update_queue(results, state, timestamp):
     return candidates, stats
 
 
-def send_run_summary(summary, *, webhook_url, client=None):
+def send_run_summary(summary, *, webhook_url):
     """Send one compact operational summary after a requested Job Finder run."""
     if not webhook_url:
         return "DISCORD_WEBHOOK_URL ist nicht gesetzt"
 
-    webhook_client = client or DiscordWebhookClient(webhook_url)
     try:
-        webhook_client.send(run_summary_payload(summary))
+        DiscordWebhookClient(webhook_url).send(run_summary_payload(summary))
     except NotificationError as error:
         return str(error)
     return None

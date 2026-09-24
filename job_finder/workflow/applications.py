@@ -317,9 +317,9 @@ def validated_scheduled_for(status, value):
     return appointment.strftime("%Y-%m-%dT%H:%M")
 
 
-def first_upcoming_interview(history, now=None):
+def first_upcoming_interview(history):
     """Return the next scheduled interview from a normalized history."""
-    current = (now or datetime.now()).strftime("%Y-%m-%dT%H:%M")
+    current = datetime.now().strftime("%Y-%m-%dT%H:%M")
     appointments = [
         event["scheduled_for"]
         for event in history

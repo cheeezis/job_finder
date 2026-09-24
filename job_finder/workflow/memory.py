@@ -56,7 +56,7 @@ def edit_job(job_id, path=MEMORY_FILE):
         write_memory(connection, scope, original, memory)
 
 
-def update_memory(jobs, memory, successful_sources=None, inactive_after=INACTIVE_AFTER_MISSED_RUNS):
+def update_memory(jobs, memory, successful_sources=None):
     """Update job identity and discovery state in the supplied objects.
 
     Mutate both memory and the Job objects in jobs: resolve canonical
@@ -67,7 +67,7 @@ def update_memory(jobs, memory, successful_sources=None, inactive_after=INACTIVE
     successful_sources=None disables missed-run accounting, as needed
     for a single manual import. Otherwise, count an absent job only if
     every known source completed successfully. Mark it inactive after
-    inactive_after missed runs; do not change its workflow decision.
+    INACTIVE_AFTER_MISSED_RUNS missed runs; do not change its workflow decision.
     """
     now = datetime.now(timezone.utc)
     new_count = 0
@@ -129,7 +129,7 @@ def update_memory(jobs, memory, successful_sources=None, inactive_after=INACTIVE
             if not sources_succeeded(job_id, entry, successful):
                 continue
             entry["missed_runs"] = entry.get("missed_runs", 0) + 1
-            if entry["missed_runs"] >= inactive_after and entry.get("active", True):
+            if entry["missed_runs"] >= INACTIVE_AFTER_MISSED_RUNS and entry.get("active", True):
                 entry["active"] = False
                 inactive_count += 1
 

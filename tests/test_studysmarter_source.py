@@ -73,7 +73,9 @@ class StudySmarterTests(unittest.TestCase):
             "job_types": [{"name": "Vollzeit"}],
             "posted": "2026-08-20",
         }
-        cached = studysmarter.job_from_record(record, self.JOB_HTML)
+        cached = studysmarter.enrich_summary_job(
+            studysmarter.summary_job_from_record(record), self.JOB_HTML
+        )
         cached.title = "Senior Developer"
         cached.locations = ["München"]
         cached.work_mode = WorkMode.ONSITE
@@ -136,7 +138,9 @@ class StudySmarterTests(unittest.TestCase):
             "salary": {"salary_type": "ai_predicted"},
         }
 
-        job = studysmarter.job_from_record(record, self.JOB_HTML)
+        job = studysmarter.enrich_summary_job(
+            studysmarter.summary_job_from_record(record), self.JOB_HTML
+        )
 
         self.assertEqual(job.id, "studysmarter:12345678")
         self.assertEqual(job.title, "Junior Python Developer (m/w/d)")
@@ -156,7 +160,9 @@ class StudySmarterTests(unittest.TestCase):
                 "company_name": "Example GmbH",
                 "is_remote_positions": "completely",
             }
-            cached_job = studysmarter.job_from_record(record, self.JOB_HTML)
+            cached_job = studysmarter.enrich_summary_job(
+                studysmarter.summary_job_from_record(record), self.JOB_HTML
+            )
             cached_job.fetched_at = datetime(2026, 8, 25, tzinfo=timezone.utc)
             save_detail_cache(cache_path, {self.JOB_URL: cached_job})
 

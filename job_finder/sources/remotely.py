@@ -252,11 +252,6 @@ def collect_links(client=None, today=None, max_pages=None):
     return links
 
 
-def extract_detail_links(html):
-    """Extract canonical public job URLs without relying on CSS classes."""
-    return [entry["url"] for entry in extract_list_entries(html)]
-
-
 def extract_list_entries(html):
     """Return each job link together with its visible relative date label."""
     parser = _RemotelyListParser()

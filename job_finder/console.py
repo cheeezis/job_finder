@@ -6,7 +6,6 @@ import time
 import uuid
 from datetime import datetime, timezone
 
-PROGRESS_WIDTH = 24
 _PROGRESS_STARTED = {}
 _PROGRESS_REPORTED = {}
 LOG_PROGRESS_INTERVAL = 30
@@ -39,14 +38,6 @@ def configure_utf8_output():
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")
-
-
-def progress_bar(current, total, width=PROGRESS_WIDTH):
-    """Return one stable text bar suitable for consoles and log files."""
-    total = max(int(total), 1)
-    current = min(max(int(current), 0), total)
-    filled = round(width * current / total)
-    return f"[{'#' * filled}{'-' * (width - filled)}]"
 
 
 def print_progress(label, current, total, detail=""):

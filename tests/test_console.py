@@ -5,7 +5,7 @@ import unittest
 from contextlib import redirect_stdout
 from unittest.mock import patch
 
-from job_finder.console import print_phase, print_progress, progress_bar, progress_line
+from job_finder.console import print_phase, print_progress, progress_line
 from job_finder.operations import TeeStream
 
 
@@ -15,11 +15,6 @@ class FakeTerminal(io.StringIO):
 
 
 class ConsoleProgressTests(unittest.TestCase):
-    def test_progress_bar_is_bounded(self):
-        self.assertEqual(progress_bar(0, 4, width=8), "[--------]")
-        self.assertEqual(progress_bar(2, 4, width=8), "[####----]")
-        self.assertEqual(progress_bar(5, 4, width=8), "[########]")
-
     def test_progress_lines_remain_readable_in_logs(self):
         output = io.StringIO()
         with redirect_stdout(output):

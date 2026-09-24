@@ -64,7 +64,7 @@ class RemotelySourceTests(unittest.TestCase):
         """
 
         self.assertEqual(
-            remotely.extract_detail_links(html),
+            [entry["url"] for entry in remotely.extract_list_entries(html)],
             ["https://www.remotely.de/job/example-one", "https://www.remotely.de/job/example-two"],
         )
 

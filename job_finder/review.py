@@ -38,10 +38,7 @@ from job_finder.workflow.review_actions import (
     update_workflow_history,
     update_workflow_status,
 )
-from job_finder.workflow.review_data import (
-    load_review_jobs,
-    memory_entry_for_job as memory_entry_for_job,
-)
+from job_finder.workflow.review_data import load_review_jobs
 
 LANDING_PAGE = Path(__file__).with_name("landing.html")
 REVIEW_PAGE = Path(__file__).with_name("review.html")

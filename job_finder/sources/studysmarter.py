@@ -165,12 +165,6 @@ def detail_url(link):
     return urlunsplit(parts._replace(path=path))
 
 
-def job_from_record(record, html):
-    """Combine API metadata with a detail page's structured job data."""
-    summary = summary_job_from_record(record)
-    return enrich_summary_job(summary, html)
-
-
 def summary_job_from_record(record):
     """Create a lightweight Job from one API search record."""
     url = detail_url(record.get("link", ""))

@@ -356,25 +356,6 @@ def score_preferences(full_text):
     return penalties
 
 
-def passes_hard_filters(title, description, location, remote, full_text, role, career_levels):
-    """Return (allowed, reason) for normalized job text and role data.
-
-    Inputs use normalize_text; role is a matching profile dictionary
-    or None. Return the first blocking reason, or (True, "") when title,
-    experience, degree, travel and location requirements pass. The age
-    check is performed separately by score_job.
-    """
-    reason = hard_filter_reason(title, description, full_text, role, career_levels)
-    if reason:
-        return False, reason
-
-    location_score = analyze_location_for_role(title, location, remote, description)
-    if not location_score["allowed"]:
-        return False, location_score["label"]
-
-    return True, ""
-
-
 def analyze_location(location, remote, description):
     """Analyze location using the currently configured local and commuter rules."""
     return location_rules.analyze_location(

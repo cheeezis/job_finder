@@ -16,7 +16,6 @@ from job_finder.sources import (
     arbeitsagentur,
     bytewerk,
     compose_it,
-    css,
     edag,
     german_tech_jobs,
     get_in_it,
@@ -25,7 +24,6 @@ from job_finder.sources import (
     jumo,
     manual,
     nethinks,
-    proemion,
     remotely,
     rhoenenergie,
     startup_jobs,
@@ -37,6 +35,7 @@ from job_finder.sources.common import (
     fetch_diagnostics,
     reset_fetch_diagnostics,
 )
+from job_finder.sources.company_careers import CSS, PROEMION
 from job_finder.workflow.availability import ignore_closed_listings
 from job_finder.workflow.main import build_score_results, evaluate_jobs, score_jobs
 from job_finder.workflow.memory import edit_memory, update_memory
@@ -60,8 +59,8 @@ SOURCES = [
     rhoenenergie,
     jumo,
     edag,
-    css,
-    proemion,
+    CSS,
+    PROEMION,
     nethinks,
 ]
 

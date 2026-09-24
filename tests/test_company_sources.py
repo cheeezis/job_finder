@@ -10,16 +10,15 @@ from urllib.parse import parse_qsl
 from job_finder.models import Job, JobSource, WorkMode
 from job_finder.sources import (
     bytewerk,
+    company_careers,
     compose_it,
-    css,
     edag,
     jumo,
     nethinks,
-    proemion,
     rhoenenergie,
 )
 from job_finder.sources.common import canonical_detail_url, load_detail_cache, save_detail_cache
-from job_finder.sources.company_careers import fetch_company_jobs
+from job_finder.sources.company_careers import CSS, PROEMION, CareerPage, fetch_company_jobs
 
 
 class FakeJumoSession:
@@ -99,7 +98,7 @@ EDAG_LIST = "https://www.edag.com/de/karriere/stellenanzeigen"
 EDAG_DETAIL = "https://www.edag.com/de/karriere/stellenanzeigen/detail"
 COMPANY_SOURCES = [
     (
-        css,
+        CSS,
         "CSS AG",
         {
             "https://jobs.css.de/public/jobs/?standort=1": '<a href="https://jobs.css.de/job-dev-1.html">'
@@ -109,7 +108,7 @@ COMPANY_SOURCES = [
         ["https://jobs.css.de/job-dev-1.html", "https://jobs.css.de/job-admin-9.html"],
     ),
     (
-        proemion,
+        PROEMION,
         "Proemion GmbH",
         {
             # A query that survives canonicalisation breaks the anchored pattern.
@@ -175,10 +174,12 @@ COMPANY_SOURCES = [
 class CompanyListingTests(unittest.TestCase):
     def test_each_company_source_hands_its_links_to_the_shared_cache(self):
         for module, company, pages, links in COMPANY_SOURCES:
+            # Registry entries fetch and cache through company_careers itself.
+            target = company_careers if isinstance(module, CareerPage) else module
             with self.subTest(module.SOURCE_NAME):
                 with (
-                    patch.object(module, "fetch_text", side_effect=pages.get) as fetched,
-                    patch.object(module, "fetch_company_jobs", return_value=["job"]) as cache,
+                    patch.object(target, "fetch_text", side_effect=pages.get) as fetched,
+                    patch.object(target, "fetch_company_jobs", return_value=["job"]) as cache,
                 ):
                     self.assertEqual(module.fetch_jobs("cache.json", now="now"), ["job"])
 

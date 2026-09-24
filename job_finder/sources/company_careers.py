@@ -7,6 +7,7 @@ from urllib.parse import urljoin, urlsplit
 from job_finder.http import fetch_text
 from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource
+from job_finder.paths import cache_file
 from job_finder.sources.common import (
     canonical_detail_url,
     extract_annual_salary_eur,
@@ -19,6 +20,31 @@ from job_finder.sources.common import (
 )
 from job_finder.structured_data import extract_json_ld_job_posting
 from job_finder.text import html_to_text
+
+
+class CareerPage:
+    """A company career page whose detail links all match one URL pattern.
+
+    The upper-case attributes mirror an adapter module, so run_finder treats a
+    registry entry like any other source.
+    """
+
+    def __init__(self, source_name, company, list_url, link_pattern):
+        self.SOURCE_NAME = source_name
+        self.CACHE_FILE = cache_file(source_name)
+        self.company = company
+        self.list_url = list_url
+        self.link_pattern = link_pattern
+
+    def fetch_jobs(self, cache_path=None, now=None):
+        """Import the listings through the shared company detail cache."""
+        links = self.collect_links()
+        cache_path = self.CACHE_FILE if cache_path is None else cache_path
+        return fetch_company_jobs(self.SOURCE_NAME, self.company, links, cache_path, now=now)
+
+    def collect_links(self):
+        """Extract the detail links from the public career page."""
+        return extract_links(fetch_text(self.list_url), self.list_url, self.link_pattern)
 
 
 def fetch_company_jobs(source_name, company, links, cache_path, now=None, parser=None):
@@ -125,3 +151,14 @@ def identifier_from_url(url):
     if match:
         return match.group(1)
     return urlsplit(url).path.rstrip("/").rsplit("/", 1)[-1]
+
+
+CSS = CareerPage(
+    "css", "CSS AG", "https://jobs.css.de/public/jobs/?standort=1", r"jobs\.css\.de/job-.+\.html$"
+)
+PROEMION = CareerPage(
+    "proemion",
+    "Proemion GmbH",
+    "https://proemion.jobs.personio.de/?language=de",
+    r"proemion\.jobs\.personio\.de/job/\d+$",
+)

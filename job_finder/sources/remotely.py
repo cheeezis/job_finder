@@ -500,8 +500,6 @@ class _RemotelyDetailParser(HTMLParser):
             self.work_model = data
         elif self.active_section == "eckdaten" and not self.location:
             self.location = data
-        elif self.active_section == "eckdaten" and not self.location:
-            self.location = data
 
 
 class _RemotelyListParser(HTMLParser):

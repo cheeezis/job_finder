@@ -7,6 +7,7 @@ can contain malformed escaping.
 
 import json
 import re
+from itertools import product
 from pathlib import Path
 from urllib.parse import urlencode, urljoin
 
@@ -20,7 +21,6 @@ from job_finder.matching.config import (
 from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource, WorkMode
 from job_finder.paths import cache_file
-from job_finder.search_plan import iter_search_queries, unique_in_order
 from job_finder.sources.common import (
     build_fetch_report,
     canonical_detail_url,
@@ -159,14 +159,14 @@ def build_api_searches():
         (COMMUTER_SEARCH_TERMS, COMMUTER_SEARCH_LOCATIONS),
     ]
     for terms, locations in search_plans:
-        for query in iter_search_queries(terms, locations):
-            for priority_id in priority_ids_for_term(query.term):
-                key = (priority_id, query.location.lower() == "remote")
+        for term, location in product(terms, locations):
+            for priority_id in priority_ids_for_term(term):
+                key = (priority_id, location.lower() == "remote")
                 if key in seen:
                     continue
 
                 seen.add(key)
-                yield {"priority_id": priority_id, "location": query.location}
+                yield {"priority_id": priority_id, "location": location}
 
 
 def priority_ids_for_term(term):
@@ -178,7 +178,7 @@ def priority_ids_for_term(term):
         if any(keyword in normalized for keyword in keywords):
             priority_ids.extend(ids)
 
-    return unique_in_order(priority_ids)
+    return list(dict.fromkeys(priority_ids))
 
 
 def search_api(priority_id, location):

@@ -8,6 +8,7 @@ import json
 import re
 import time
 from html import unescape
+from itertools import product
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.parse import quote, urlencode, urljoin, urlsplit, urlunsplit
@@ -23,7 +24,6 @@ from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource
 from job_finder.paths import cache_file
 from job_finder.persistence.storage import read_json, write_json_atomic
-from job_finder.search_plan import append_unique, iter_search_queries
 from job_finder.sources.common import (
     build_fetch_report,
     detail_cache_job_dict,
@@ -157,21 +157,20 @@ def fetch_jobs_with_report(cache_path=CACHE_FILE, client=None, now=None):
 def search_links(client=None, *, coverage=None):
     """Collect unique detail links from all configured search pages."""
     client = client or StepStoneHttpClient()
-    links = []
-    seen = set()
+    links = {}
     search_errors = 0
     requested_pages = 0
     planned_queries = len(STEPSTONE_SEARCH_TERMS) * len(STEPSTONE_SEARCH_LOCATIONS)
     if coverage is not None:
         coverage["total_segments"] = planned_queries
 
-    queries = iter_search_queries(STEPSTONE_SEARCH_TERMS, STEPSTONE_SEARCH_LOCATIONS)
-    for processed_queries, query in enumerate(queries, start=1):
+    queries = product(STEPSTONE_SEARCH_TERMS, STEPSTONE_SEARCH_LOCATIONS)
+    for processed_queries, (term, location) in enumerate(queries, start=1):
         page = 1
         query_seen = set()
 
         while True:
-            search_url = build_search_url(query.term, query.location, page)
+            search_url = build_search_url(term, location, page)
             try:
                 html = client.get(search_url)
                 requested_pages += 1
@@ -185,8 +184,7 @@ def search_links(client=None, *, coverage=None):
             page_links = [url for url in found_links if url not in query_seen]
             query_seen.update(page_links)
 
-            for url in page_links:
-                append_unique(url, links, seen)
+            links.update(dict.fromkeys(page_links))
 
             if not page_links:
                 break
@@ -203,7 +201,7 @@ def search_links(client=None, *, coverage=None):
         print(f"WARNUNG StepStone: {search_errors} Suchseite(n) nicht erreichbar")
     if coverage is not None:
         coverage["failed_segments"] += search_errors
-    return links
+    return list(links)
 
 
 def build_search_url(term, location, page=1):
@@ -222,14 +220,11 @@ def extract_detail_links(html):
         r'|/stellenangebote--[^"\'<> ]+?\.html[^"\'<> ]*',
         html,
     )
-    links = []
-    seen = set()
-
-    for match in matches:
-        url = normalize_detail_url(urljoin("https://www.stepstone.de", unescape(match)))
-        append_unique(url, links, seen)
-
-    return links
+    urls = (
+        normalize_detail_url(urljoin("https://www.stepstone.de", unescape(match)))
+        for match in matches
+    )
+    return list(dict.fromkeys(urls))
 
 
 def normalize_detail_url(url):

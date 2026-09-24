@@ -7,7 +7,6 @@ can contain malformed escaping.
 
 import json
 import re
-from html import unescape
 from pathlib import Path
 from urllib.parse import urlencode, urljoin
 
@@ -36,7 +35,7 @@ from job_finder.sources.common import (
     utc_now,
     with_current_summary,
 )
-from job_finder.structured_data import extract_json_ld_job_posting
+from job_finder.structured_data import extract_json_ld_job_posting, extract_script_json
 from job_finder.text import html_to_text
 
 SOURCE_NAME = "get_in_it"
@@ -257,16 +256,6 @@ def fetch_job(url):
     )
 
 
-def extract_next_data(html):
-    """Parse embedded Next.js JSON or raise ValueError when it is absent."""
-    match = re.search(
-        r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', html, re.DOTALL
-    )
-    if not match:
-        raise ValueError("__NEXT_DATA__ JSON nicht gefunden")
-    return json.loads(unescape(match.group(1)))
-
-
 def extract_job_posting(html):
     """Prefer JSON-LD, then fall back to get-in-IT's embedded state."""
     posting = extract_json_ld_job_posting(html)
@@ -282,7 +271,7 @@ def extract_job_posting(html):
 
 def extract_job_posting_from_next_data(html):
     """Build a JobPosting-like dict from Next.js state when JSON-LD fails."""
-    next_data = extract_next_data(html)
+    next_data = extract_script_json(html, "__NEXT_DATA__")
     job = next_data.get("props", {}).get("initialState", {}).get("jobJob", {}).get("job")
     if not job:
         return None

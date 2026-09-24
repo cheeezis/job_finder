@@ -5,7 +5,6 @@ from datetime import date, datetime, timedelta
 from job_finder.models import APPLICATION_STATUSES, WorkflowStatus
 from job_finder.paths import MEMORY_FILE
 from job_finder.persistence.application_documents import public_documents
-from job_finder.persistence.state_compat import legacy_salary_expectation
 from job_finder.workflow.memory import (
     first_seen_date,
     has_application_state as is_application,
@@ -248,11 +247,11 @@ def application_row(job_id, entry, as_of=None):
 
 
 def application_salary_expectation_eur(entry):
-    """Return the numeric salary, accepting one legacy formatted text value."""
+    """Return the stored positive salary in whole euros, or None."""
     value = entry.get("salary_expectation_eur")
     if isinstance(value, int) and not isinstance(value, bool) and value > 0:
         return value
-    return legacy_salary_expectation(entry.get("salary_expectation"))
+    return None
 
 
 def valid_history(history):

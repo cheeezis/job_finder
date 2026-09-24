@@ -87,7 +87,6 @@ def start_application(
                 entry["application_documents"] = stored_documents
             if salary_eur is not None:
                 entry["salary_expectation_eur"] = salary_eur
-                entry.pop("salary_expectation", None)
             status = record_status_change(entry, WorkflowStatus.APPLIED)
     except Exception:
         # Files are created before the database commit and must not survive a
@@ -131,7 +130,6 @@ def update_application_salary(job_id, value, period="year", memory_path=MEMORY_F
             entry.pop("salary_expectation_eur", None)
         else:
             entry["salary_expectation_eur"] = salary
-        entry.pop("salary_expectation", None)
     return {"salary_expectation_eur": salary}
 
 

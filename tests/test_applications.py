@@ -39,22 +39,6 @@ class ApplicationTrackingTests(unittest.TestCase):
                 {"status": "interesting", "occurred_on": "2026-08-03"},
             ],
         )
-        self.save_job(
-            {
-                "workflow_status": "applied",
-                "first_seen_at": "2026-08-01T12:00:00+00:00",
-                "workflow_history": [
-                    {"status": "new", "occurred_on": None},
-                    {"status": "interesting", "occurred_on": None},
-                    {"status": "applied", "occurred_on": "2026-08-04"},
-                ],
-            }
-        )
-        history = load_application_overview(self.memory_path, as_of=date(2026, 8, 5))[
-            "applications"
-        ][0]["workflow_history"]
-        dates = {event["status"]: event["occurred_on"] for event in history}
-        self.assertEqual(dates, {"new": "2026-08-01", "interesting": None, "applied": "2026-08-04"})
 
     def test_every_manual_status_change_is_kept_with_its_date(self):
         self.save_job(
@@ -296,20 +280,6 @@ class ApplicationTrackingTests(unittest.TestCase):
     def test_application_overview_exposes_salary_expectation(self):
         self.save_jobs(
             {"job:salary": {"workflow_status": "applied", "salary_expectation_eur": 58_000}}
-        )
-
-        application = load_application_overview(self.memory_path)["applications"][0]
-
-        self.assertEqual(application["salary_expectation_eur"], 58_000)
-
-    def test_application_overview_normalizes_legacy_salary_text(self):
-        self.save_jobs(
-            {
-                "job:salary": {
-                    "workflow_status": "applied",
-                    "salary_expectation": "58.000 € brutto/Jahr",
-                }
-            }
         )
 
         application = load_application_overview(self.memory_path)["applications"][0]

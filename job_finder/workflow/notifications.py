@@ -412,7 +412,7 @@ def webhook_url_with_confirmation(webhook_url):
 
 
 def load_notification_state(path=NOTIFICATION_STATE_FILE):
-    """Load delivery state and fold legacy content keys into stable job IDs."""
+    """Load the delivery state keyed by stable job IDs."""
     state_path = Path(path)
     document = read_json(state_path, {"version": STATE_VERSION, "sent": {}, "pending": {}})
     return decode_notification_state(document)

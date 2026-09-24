@@ -10,10 +10,7 @@ from job_finder.models import APPLICATION_STATUSES, WorkflowStatus
 from job_finder.paths import MEMORY_FILE
 from job_finder.persistence.database import lock, memory_scope, snapshot, transaction
 from job_finder.persistence.postgres_store import read_memory, write_memory
-from job_finder.persistence.state_compat import (
-    first_seen_date as first_seen_date,
-    restore_initial_discovery_date,
-)
+from job_finder.persistence.state_compat import first_seen_date as first_seen_date
 
 INACTIVE_AFTER_MISSED_RUNS = 3
 
@@ -22,10 +19,7 @@ def load_memory(path=MEMORY_FILE):
     """Read a consistent PostgreSQL snapshot of the remembered jobs."""
     scope = memory_scope(path)
     with snapshot() as connection:
-        memory = read_memory(connection, scope)
-        for entry in memory.values():
-            restore_initial_discovery_date(entry)
-        return memory
+        return read_memory(connection, scope)
 
 
 def save_memory(memory, path=MEMORY_FILE):
@@ -43,8 +37,6 @@ def edit_memory(path=MEMORY_FILE):
         lock(connection, "memory:" + scope)
         memory = read_memory(connection, scope)
         original = deepcopy(memory)
-        for entry in memory.values():
-            restore_initial_discovery_date(entry)
         yield memory
         write_memory(connection, scope, original, memory)
 
@@ -61,7 +53,6 @@ def edit_job(job_id, path=MEMORY_FILE):
         if job_id not in memory:
             raise KeyError(f"Unbekannte Job-ID: {job_id}")
         original = deepcopy(memory)
-        restore_initial_discovery_date(memory[job_id])
         yield memory[job_id]
         write_memory(connection, scope, original, memory)
 

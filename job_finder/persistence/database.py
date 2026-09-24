@@ -181,14 +181,6 @@ def initialize():
         lock(connection, "jobfinder-schema")
         connection.execute(SCHEMA)
         versions = connection.execute("SELECT version FROM schema_version").fetchall()
-        if versions == [(1,)]:
-            # Snapshots may contain several source representations of one
-            # canonical job. Preserve all of them and their original order.
-            for table in ("jobs", "recommendations"):
-                connection.execute(f"ALTER TABLE {table} DROP CONSTRAINT {table}_pkey")
-                connection.execute(f"ALTER TABLE {table} ADD PRIMARY KEY (dataset, position)")
-            connection.execute("UPDATE schema_version SET version=2")
-            versions = [(2,)]
         if versions and versions != [(SCHEMA_VERSION,)]:
             raise RuntimeError("Nicht unterstützte PostgreSQL-Schemaversion")
         connection.execute(

@@ -11,8 +11,8 @@ from urllib.error import HTTPError
 from job_finder.matching.config import (
     COMMUTER_SEARCH_RADIUS_KM,
     LOCAL_SEARCH_POSTAL_CODE,
+    LOCAL_SEARCH_RADIUS_KM,
     STEPSTONE_SEARCH_LOCATIONS,
-    STEPSTONE_SEARCH_RADIUS_KM,
     STEPSTONE_SEARCH_TERMS,
 )
 from job_finder.models import Job, JobSource, WorkMode
@@ -32,8 +32,8 @@ class CommuterSearchTests(unittest.TestCase):
 
     def test_get_in_it_uses_reduced_terms_for_commuter_cities(self):
         with (
-            patch.object(get_in_it, "GET_IN_IT_SEARCH_TERMS", []),
-            patch.object(get_in_it, "GET_IN_IT_SEARCH_LOCATIONS", []),
+            patch.object(get_in_it, "SEARCH_TERMS", []),
+            patch.object(get_in_it, "SEARCH_LOCATIONS", []),
             patch.object(get_in_it, "COMMUTER_SEARCH_TERMS", ["Junior Developer"]),
             patch.object(get_in_it, "COMMUTER_SEARCH_LOCATIONS", ["Beispielstadt"]),
         ):
@@ -58,7 +58,7 @@ class StepStoneSearchTests(unittest.TestCase):
             url,
             "https://www.stepstone.de/jobs/Python-Developer/"
             f"in-{LOCAL_SEARCH_POSTAL_CODE}?page=2"
-            f"&radius={STEPSTONE_SEARCH_RADIUS_KM}",
+            f"&radius={LOCAL_SEARCH_RADIUS_KM}",
         )
 
     def test_remote_search_does_not_add_local_radius(self):

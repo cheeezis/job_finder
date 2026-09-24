@@ -15,8 +15,8 @@ from job_finder.http import fetch_json, fetch_text
 from job_finder.matching.config import (
     COMMUTER_SEARCH_LOCATIONS,
     COMMUTER_SEARCH_TERMS,
-    GET_IN_IT_SEARCH_LOCATIONS,
-    GET_IN_IT_SEARCH_TERMS,
+    SEARCH_LOCATIONS,
+    SEARCH_TERMS,
 )
 from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource, WorkMode
@@ -155,7 +155,7 @@ def build_api_searches():
     seen = set()
 
     search_plans = [
-        (GET_IN_IT_SEARCH_TERMS, GET_IN_IT_SEARCH_LOCATIONS),
+        (SEARCH_TERMS, SEARCH_LOCATIONS),
         (COMMUTER_SEARCH_TERMS, COMMUTER_SEARCH_LOCATIONS),
     ]
     for terms, locations in search_plans:

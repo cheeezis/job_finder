@@ -181,8 +181,8 @@ class GetInItSearchTests(unittest.TestCase):
 
     def test_searches_map_terms_to_unique_priorities_per_location_mode(self):
         settings = {
-            "GET_IN_IT_SEARCH_TERMS": ["python dev", "remote java"],
-            "GET_IN_IT_SEARCH_LOCATIONS": ["Fulda", "remote"],
+            "SEARCH_TERMS": ["python dev", "remote java"],
+            "SEARCH_LOCATIONS": ["Fulda", "remote"],
             "COMMUTER_SEARCH_TERMS": ["python"],
             "COMMUTER_SEARCH_LOCATIONS": ["Kassel"],
             "TERM_PRIORITY_RULES": [(("python",), [1, 2]), (("java",), [2, 3])],

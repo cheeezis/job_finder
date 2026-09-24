@@ -16,8 +16,8 @@ from urllib.parse import quote, urlencode, urljoin, urlsplit, urlunsplit
 from job_finder.console import print_progress, progress_checkpoint
 from job_finder.http import fetch_text
 from job_finder.matching.config import (
+    LOCAL_SEARCH_RADIUS_KM,
     STEPSTONE_SEARCH_LOCATIONS,
-    STEPSTONE_SEARCH_RADIUS_KM,
     STEPSTONE_SEARCH_TERMS,
 )
 from job_finder.matching.remote import classify_remote, detect_remote
@@ -209,7 +209,7 @@ def build_search_url(term, location, page=1):
     base_url = f"{SEARCH_BASE_URL}/{quote(term.replace(' ', '-'))}/in-{quote(location)}"
     query = {"page": page}
     if location.lower() != "remote":
-        query["radius"] = STEPSTONE_SEARCH_RADIUS_KM
+        query["radius"] = LOCAL_SEARCH_RADIUS_KM
     return f"{base_url}?{urlencode(query)}"
 
 

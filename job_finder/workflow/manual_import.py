@@ -1,7 +1,6 @@
 """Targeted processing for one job URL explicitly supplied by the user."""
 
 from contextlib import nullcontext
-from pathlib import Path
 
 from job_finder.matching.deduplication import deduplicate_jobs, merge_jobs
 from job_finder.paths import JOBS_FILE, MEMORY_FILE, RECOMMENDATIONS_JSON
@@ -55,7 +54,7 @@ def import_manual_url(
 
 
 def _persist_import(imported, jobs_path, memory_path, recommendations_path):
-    jobs = load_current_jobs(jobs_path)
+    jobs = load_jobs(jobs_path)
     target = replace_or_add_job(jobs, imported)
 
     with edit_memory(memory_path) as memory:
@@ -74,12 +73,6 @@ def _persist_import(imported, jobs_path, memory_path, recommendations_path):
         "match_percent": row.get("match_percent"),
         "prefilter_warning": warning,
     }
-
-
-def load_current_jobs(path):
-    """Load the current JSON snapshot, or return [] before the first run."""
-    path = Path(path)
-    return load_jobs(path)
 
 
 def replace_or_add_job(jobs, imported):
@@ -104,13 +97,11 @@ def replace_or_add_job(jobs, imported):
 
 def save_jobs(jobs, path):
     """Atomically replace the JSON snapshot with serialized Job objects."""
-    path = Path(path)
     write_json_atomic(path, [job.to_dict() for job in jobs])
 
 
 def save_recommendation(job, path):
     """Replace only the imported card and preserve all other review results."""
-    path = Path(path)
     document = read_json(path, {"recommendations": []})
     recommendation = recommendation_for_job(job)
     urls = {link["url"] for link in recommendation.get("source_links", []) if link.get("url")}

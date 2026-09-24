@@ -43,6 +43,17 @@ class FakeClient:
             raise self.error
 
 
+def discord_limited_characters(payload):
+    """Count the embed text Discord limits to 6000 characters per message."""
+    return sum(
+        len(embed.get("title", ""))
+        + len(embed.get("description", ""))
+        + sum(len(field["name"]) + len(field["value"]) for field in embed["fields"])
+        + len(embed.get("footer", {}).get("text", ""))
+        for embed in payload["embeds"]
+    )
+
+
 class NotificationTests(unittest.TestCase):
     def test_legacy_pending_ai_backlog_is_discarded(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -206,6 +217,29 @@ class NotificationTests(unittest.TestCase):
             fields["Review"],
             "[Stelle öffnen](https://review.example.test/review?job=job:42)",
         )
+
+    def test_sent_messages_stay_within_discord_limit_with_review_links(self):
+        """Batching must count the review link and footer that are actually sent."""
+        jobs = []
+        for index in range(10):
+            job = make_job(f"job:{index}")
+            job["location_precheck"] = "Standort und Präsenzumfang prüfen. " * 12
+            jobs.append(job)
+        client = FakeClient()
+        with tempfile.TemporaryDirectory() as directory:
+            stats = process_notifications(
+                {"included": jobs, "excluded": []},
+                send=True,
+                webhook_url="https://discord.test/webhook",
+                review_host="jobfinder-review.example.azurecontainerapps.io",
+                client=client,
+                state_path=Path(directory) / "state.json",
+            )
+
+        self.assertEqual(stats["sent"], 10)
+        self.assertEqual(sum(len(payload["embeds"]) for payload in client.payloads), 10)
+        for payload in client.payloads:
+            self.assertLessEqual(discord_limited_characters(payload), 6000)
 
     def test_run_summary_contains_no_ai_statistics(self):
         payload = run_summary_payload(

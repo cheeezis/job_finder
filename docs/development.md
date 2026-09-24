@@ -250,9 +250,10 @@ Konfiguration steht in [pyproject.toml](../pyproject.toml).
 
 - Vier Leerzeichen einrücken; englische Bezeichner, Kommentare und Docstrings
   verwenden. Nutzertexte und Projektanleitungen bleiben deutsch.
-- Ruff formatiert mit 88 Zeichen als Richtwert. Lange URLs, Regex-Ausdrücke
-  oder Testdaten können länger bleiben, wenn Aufteilen die Lesbarkeit
-  verschlechtert. `E501` wird deshalb nicht pauschal erzwungen; lange
+- Ruff formatiert mit 100 Zeichen als Richtwert und setzt alles auf eine Zeile,
+  was hineinpasst; ein Komma am Ende erzwingt keinen Umbruch. Lange URLs,
+  Regex-Ausdrücke oder Testdaten können länger bleiben, wenn Aufteilen die
+  Lesbarkeit verschlechtert. `E501` wird deshalb nicht pauschal erzwungen; lange
   Kommentar- und Docstring-Absätze von Hand auf etwa 72 Zeichen umbrechen.
 - Imports nach Standardbibliothek, Fremdpaketen und Projektcode gruppieren.
   Änderungen an Importreihenfolgen bei Modulen mit Initialisierungseffekten

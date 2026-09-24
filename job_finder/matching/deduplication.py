@@ -7,18 +7,7 @@ from dataclasses import replace
 from job_finder.models import Job, WorkMode
 from job_finder.text import normalize_text
 
-LEGAL_FORMS = [
-    "gmbh",
-    "mbh",
-    "ag",
-    "se",
-    "kg",
-    "ohg",
-    "ug",
-    "co",
-    "ltd",
-    "inc",
-]
+LEGAL_FORMS = ["gmbh", "mbh", "ag", "se", "kg", "ohg", "ug", "co", "ltd", "inc"]
 
 WORK_MODE_TITLE_SUFFIX = re.compile(
     r"(?:\s*[-–—|]\s*|\s+\()"
@@ -46,10 +35,7 @@ def deduplicate_jobs(jobs: list[Job]) -> list[Job]:
         title_key = normalize_title(job.title)
         company_key = normalize_company(job.company)
         position = find_duplicate_position(
-            job,
-            company_key,
-            positions_by_title.get(title_key, []),
-            unique_jobs,
+            job, company_key, positions_by_title.get(title_key, []), unique_jobs
         )
 
         if position is None:
@@ -76,8 +62,7 @@ def find_duplicate_position(job, company_key, positions, unique_jobs):
             continue
         existing_company = normalize_company(existing.company)
         if companies_match(company_key, existing_company) and (
-            locations_match(job.locations, existing.locations)
-            or both_fully_remote(job, existing)
+            locations_match(job.locations, existing.locations) or both_fully_remote(job, existing)
         ):
             return position
     return None
@@ -92,9 +77,7 @@ def locations_match(first_locations, second_locations):
     if not first or not second:
         return False
     return any(
-        left == right
-        or (len(left) >= 5 and left in right)
-        or (len(right) >= 5 and right in left)
+        left == right or (len(left) >= 5 and left in right) or (len(right) >= 5 and right in left)
         for left in first
         for right in second
     )
@@ -103,8 +86,7 @@ def locations_match(first_locations, second_locations):
 def both_fully_remote(first, second):
     """Ignore conflicting display locations for two fully remote postings."""
     return all(
-        job.remote_percentage == 100 or job.work_mode is WorkMode.REMOTE
-        for job in (first, second)
+        job.remote_percentage == 100 or job.work_mode is WorkMode.REMOTE for job in (first, second)
     )
 
 
@@ -119,9 +101,7 @@ def companies_match(first, second):
     if first == second:
         return True
     shorter, longer = sorted([first, second], key=len)
-    return len(shorter) >= 5 and (
-        longer.startswith(shorter + " ") or shorter in longer.split()
-    )
+    return len(shorter) >= 5 and (longer.startswith(shorter + " ") or shorter in longer.split())
 
 
 def normalize_company(company):
@@ -137,16 +117,8 @@ def normalize_title(title):
     """Remove gender labels and work-mode suffixes for title comparison."""
     text = normalize_text(title)
     text = re.sub(r"\[[^]]*\]", " ", text)
-    text = re.sub(
-        r"\((?:m/w/d|w/m/d|m/f/d|f/m/d|all genders|alle geschlechter|gn)\)",
-        " ",
-        text,
-    )
-    text = re.sub(
-        r"\b(?:m/w/d|w/m/d|m/f/d|f/m/d|all genders|alle geschlechter|gn)\b",
-        " ",
-        text,
-    )
+    text = re.sub(r"\((?:m/w/d|w/m/d|m/f/d|f/m/d|all genders|alle geschlechter|gn)\)", " ", text)
+    text = re.sub(r"\b(?:m/w/d|w/m/d|m/f/d|f/m/d|all genders|alle geschlechter|gn)\b", " ", text)
     # Portals often append the work model to the title although location and
     # remote compatibility are checked independently before a merge.
     text = WORK_MODE_TITLE_SUFFIX.sub(" ", text)
@@ -158,11 +130,7 @@ def merge_jobs(existing, duplicate):
     """Keep the richer posting and attach provenance from both sources."""
     existing_description = existing.description_clean
     duplicate_description = duplicate.description_clean
-    richer = (
-        duplicate
-        if len(duplicate_description) > len(existing_description)
-        else existing
-    )
+    richer = duplicate if len(duplicate_description) > len(existing_description) else existing
     sources = unique_sources(existing.sources + duplicate.sources)
     locations = list(dict.fromkeys(existing.locations + duplicate.locations))
     return replace(
@@ -176,11 +144,7 @@ def merge_jobs(existing, duplicate):
 
 def clone_job(job):
     """Copy mutable model fields before merging jobs."""
-    return replace(
-        job,
-        locations=list(job.locations),
-        sources=list(job.sources),
-    )
+    return replace(job, locations=list(job.locations), sources=list(job.sources))
 
 
 def unique_sources(sources):

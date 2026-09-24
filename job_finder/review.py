@@ -25,54 +25,25 @@ from job_finder.paths import (
     RECOMMENDATIONS_JSON,
 )
 from job_finder.persistence import document_store
-from job_finder.persistence.application_documents import (
-    find_document,
-    resolve_document_key,
-)
-from job_finder.workflow.applications import (
-    load_application_overview,
-)
+from job_finder.persistence.application_documents import find_document, resolve_document_key
+from job_finder.workflow.applications import load_application_overview
 from job_finder.workflow.manual_import import import_manual_url
-from job_finder.workflow.memory import (
-    load_memory,
-)
+from job_finder.workflow.memory import load_memory
 from job_finder.workflow.review_actions import (
     delete_workflow_history as delete_workflow_history,
-)
-from job_finder.workflow.review_actions import (
     start_application as start_application,
-)
-from job_finder.workflow.review_actions import (
     undo_ignored_decision as undo_ignored_decision,
-)
-from job_finder.workflow.review_actions import (
     update_application_salary as update_application_salary,
-)
-from job_finder.workflow.review_actions import (
     update_review_decision as update_review_decision,
-)
-from job_finder.workflow.review_actions import (
     update_workflow_history as update_workflow_history,
-)
-from job_finder.workflow.review_actions import (
     update_workflow_status as update_workflow_status,
-)
-from job_finder.workflow.review_actions import (
     validated_salary_expectation_eur as validated_salary_expectation_eur,
 )
 from job_finder.workflow.review_data import (
     PERSISTED_REVIEW_STATUSES as PERSISTED_REVIEW_STATUSES,
-)
-from job_finder.workflow.review_data import (
     load_review_jobs as load_review_jobs,
-)
-from job_finder.workflow.review_data import (
     memory_entry_for_job as memory_entry_for_job,
-)
-from job_finder.workflow.review_data import (
     memory_ids_for_job as memory_ids_for_job,
-)
-from job_finder.workflow.review_data import (
     remembered_review_job as remembered_review_job,
 )
 
@@ -101,11 +72,7 @@ class LocalReviewServer(HTTPServer):
     def server_bind(self):
         """Bind the server with exclusive address use when the platform supports it."""
         if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
-            self.socket.setsockopt(
-                socket.SOL_SOCKET,
-                socket.SO_EXCLUSIVEADDRUSE,
-                1,
-            )
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
         super().server_bind()
 
 
@@ -132,9 +99,7 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
         try:
             self._do_GET()
         except psycopg.Error:
-            self.send_json(
-                {"error": "Datenbank vorübergehend nicht erreichbar."}, status=503
-            )
+            self.send_json({"error": "Datenbank vorübergehend nicht erreichbar."}, status=503)
 
     def _do_GET(self):
         """Return the page or the current joined recommendation data."""
@@ -148,10 +113,7 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
             self.send_file(self.page_path, "text/html; charset=utf-8")
             return
         if request_path in {"/applications", "/applications.html"}:
-            self.send_file(
-                self.applications_page_path,
-                "text/html; charset=utf-8",
-            )
+            self.send_file(self.applications_page_path, "text/html; charset=utf-8")
             return
         if request_path == "/app.css":
             self.send_file(self.styles_path, "text/css; charset=utf-8")
@@ -169,8 +131,7 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
             self.send_json(
                 {
                     "recommendations": load_review_jobs(
-                        self.recommendations_path,
-                        self.memory_path,
+                        self.recommendations_path, self.memory_path
                     ),
                     "workflow_statuses": [status.value for status in WorkflowStatus],
                     "route_origin": ROUTE_ORIGIN,
@@ -213,8 +174,7 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
             result = action(payload)
         except psycopg.Error:
             self.send_json(
-                {"error": "Datenbankänderung fehlgeschlagen; bitte erneut versuchen."},
-                status=503,
+                {"error": "Datenbankänderung fehlgeschlagen; bitte erneut versuchen."}, status=503
             )
             return
         except (TypeError, ValueError, KeyError, OSError, RuntimeError) as error:
@@ -238,8 +198,7 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
             payload.get("documents"),
             self.application_documents_dir,
             salary_expectation_eur=payload.get(
-                "salary_expectation_eur",
-                payload.get("salary_expectation"),
+                "salary_expectation_eur", payload.get("salary_expectation")
             ),
             salary_period=payload.get("salary_period", "year"),
         )
@@ -254,16 +213,12 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
 
     def _review_status(self, payload):
         return update_review_decision(
-            payload["job_id"],
-            payload["workflow_status"],
-            self.memory_path,
+            payload["job_id"], payload["workflow_status"], self.memory_path
         )
 
     def _undo_review(self, payload):
         return undo_ignored_decision(
-            payload["job_id"],
-            payload["expected_status"],
-            self.memory_path,
+            payload["job_id"], payload["expected_status"], self.memory_path
         )
 
     def _update_status(self, payload):

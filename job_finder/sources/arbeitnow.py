@@ -44,9 +44,7 @@ class _DescriptionMetaParser(HTMLParser):
         if tag.casefold() != "meta":
             return
         values = {str(name).casefold(): value for name, value in attrs}
-        description_type = str(
-            values.get("property") or values.get("name") or ""
-        ).casefold()
+        description_type = str(values.get("property") or values.get("name") or "").casefold()
         content = values.get("content")
         if description_type in {"og:description", "description"} and content:
             self.descriptions.append(content)
@@ -93,8 +91,7 @@ def collect_records():
 
     for page in range(1, MAX_PAGES + 1):
         payload = fetch_json(
-            f"{API_URL}?{urlencode({'page': page})}",
-            headers={"Accept": "application/json"},
+            f"{API_URL}?{urlencode({'page': page})}", headers={"Accept": "application/json"}
         )
         page_records = payload.get("data") or []
         for record in page_records:
@@ -119,14 +116,8 @@ def reuse_cached_enrichment(job, previous):
     if previous is None or is_placeholder_description(previous.description_clean):
         return False
 
-    previous_source = next(
-        (item for item in previous.sources if item.source == SOURCE_NAME),
-        None,
-    )
-    current_source = next(
-        (item for item in job.sources if item.source == SOURCE_NAME),
-        None,
-    )
+    previous_source = next((item for item in previous.sources if item.source == SOURCE_NAME), None)
+    current_source = next((item for item in job.sources if item.source == SOURCE_NAME), None)
     if (
         previous_source is None
         or current_source is None
@@ -149,19 +140,13 @@ def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE):
     enriched = 0
     enrichment_errors = 0
     for job in jobs:
-        if job.id not in candidate_ids or not is_placeholder_description(
-            job.description_clean
-        ):
+        if job.id not in candidate_ids or not is_placeholder_description(job.description_clean):
             continue
-        source = next(
-            (item for item in job.sources if item.source == SOURCE_NAME), None
-        )
+        source = next((item for item in job.sources if item.source == SOURCE_NAME), None)
         if source is None:
             continue
         try:
-            target_url, html = fetch_text_with_final_url(
-                f"{source.url.rstrip('/')}/apply"
-            )
+            target_url, html = fetch_text_with_final_url(f"{source.url.rstrip('/')}/apply")
             if application_page_is_missing(target_url):
                 continue
             description = external_description(html)
@@ -178,10 +163,7 @@ def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE):
         save_detail_cache(cache_file, cache)
     if enrichment_errors:
         record_candidate_failure(enrichment_errors)
-        print(
-            f"WARNUNG Arbeitnow: {enrichment_errors} Originalanzeige(n) "
-            "nicht erreichbar"
-        )
+        print(f"WARNUNG Arbeitnow: {enrichment_errors} Originalanzeige(n) nicht erreichbar")
     return enriched
 
 
@@ -200,20 +182,13 @@ def external_description(html):
 
     parser = _DescriptionMetaParser()
     parser.feed(str(html or ""))
-    return max(
-        (html_to_text(value) for value in parser.descriptions),
-        key=len,
-        default="",
-    )
+    return max((html_to_text(value) for value in parser.descriptions), key=len, default="")
 
 
 def application_page_is_missing(url):
     """Reject redirects that explicitly identify a missing application page."""
     values = parse_qs(urlsplit(url or "").query)
-    return any(
-        value.casefold() in {"1", "true", "yes"}
-        for value in values.get("not_found", [])
-    )
+    return any(value.casefold() in {"1", "true", "yes"} for value in values.get("not_found", []))
 
 
 def job_from_record(record):

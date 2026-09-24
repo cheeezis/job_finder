@@ -4,11 +4,7 @@ import unittest
 from unittest.mock import patch
 
 from job_finder.models import WorkMode
-from job_finder.sources import (
-    himalayas,
-    jobicy,
-    startup_jobs,
-)
+from job_finder.sources import himalayas, jobicy, startup_jobs
 from job_finder.sources.common import remote_region_allows_germany
 
 
@@ -24,24 +20,9 @@ class HimalayasTests(unittest.TestCase):
 
     def test_collect_records_paginates_and_removes_cross_query_duplicates(self):
         pages = [
-            {
-                "offset": 0,
-                "limit": 2,
-                "totalCount": 3,
-                "jobs": [{"guid": "one"}, {"guid": "two"}],
-            },
-            {
-                "offset": 2,
-                "limit": 2,
-                "totalCount": 3,
-                "jobs": [{"guid": "three"}],
-            },
-            {
-                "offset": 0,
-                "limit": 2,
-                "totalCount": 2,
-                "jobs": [{"guid": "two"}, {"guid": "four"}],
-            },
+            {"offset": 0, "limit": 2, "totalCount": 3, "jobs": [{"guid": "one"}, {"guid": "two"}]},
+            {"offset": 2, "limit": 2, "totalCount": 3, "jobs": [{"guid": "three"}]},
+            {"offset": 0, "limit": 2, "totalCount": 2, "jobs": [{"guid": "two"}, {"guid": "four"}]},
         ]
 
         with (
@@ -50,19 +31,14 @@ class HimalayasTests(unittest.TestCase):
         ):
             records = himalayas.collect_records(["software", "data"])
 
-        self.assertEqual(
-            [record["guid"] for record in records],
-            ["one", "two", "three", "four"],
-        )
+        self.assertEqual([record["guid"] for record in records], ["one", "two", "three", "four"])
         self.assertEqual(fetch.call_count, 3)
         self.assertEqual(sleep.call_count, 2)
 
     def test_job_from_record_maps_remote_constraints_and_euro_salary(self):
         record = {
             "guid": "https://himalayas.app/companies/example/jobs/junior-developer",
-            "applicationLink": (
-                "https://himalayas.app/companies/example/jobs/junior-developer"
-            ),
+            "applicationLink": ("https://himalayas.app/companies/example/jobs/junior-developer"),
             "title": "Junior Developer",
             "companyName": "Example GmbH",
             "description": "<p>Python und APIs</p>",
@@ -110,27 +86,13 @@ class StartupJobsTests(unittest.TestCase):
     def test_source_is_only_configured_with_nonempty_api_key(self):
         self.assertFalse(startup_jobs.is_configured({}))
         self.assertFalse(startup_jobs.is_configured({startup_jobs.API_KEY_ENV: "  "}))
-        self.assertTrue(
-            startup_jobs.is_configured({startup_jobs.API_KEY_ENV: "sj_test"})
-        )
+        self.assertTrue(startup_jobs.is_configured({startup_jobs.API_KEY_ENV: "sj_test"}))
 
     def test_collect_records_paginates_and_removes_scope_overlaps(self):
         pages = [
-            {
-                "data": [{"id": "one"}, {"id": "two"}],
-                "has_more": True,
-                "next_cursor": "cursor-2",
-            },
-            {
-                "data": [{"id": "three"}],
-                "has_more": False,
-                "next_cursor": None,
-            },
-            {
-                "data": [{"id": "two"}, {"id": "four"}],
-                "has_more": False,
-                "next_cursor": None,
-            },
+            {"data": [{"id": "one"}, {"id": "two"}], "has_more": True, "next_cursor": "cursor-2"},
+            {"data": [{"id": "three"}], "has_more": False, "next_cursor": None},
+            {"data": [{"id": "two"}, {"id": "four"}], "has_more": False, "next_cursor": None},
         ]
         scopes = (
             {"role": "engineering", "country": "DE"},
@@ -142,10 +104,7 @@ class StartupJobsTests(unittest.TestCase):
                 {"Authorization": "Bearer sj_test"}, scopes=scopes
             )
 
-        self.assertEqual(
-            [record["id"] for record in records],
-            ["one", "two", "three", "four"],
-        )
+        self.assertEqual([record["id"] for record in records], ["one", "two", "three", "four"])
         self.assertEqual(fetch.call_count, 3)
         self.assertIn("country=DE", fetch.call_args_list[0].args[0])
         self.assertIn("starting_after=cursor-2", fetch.call_args_list[1].args[0])
@@ -168,9 +127,7 @@ class StartupJobsTests(unittest.TestCase):
                 "location": {"country": "Canada", "country_code": "CA"},
             },
         ]
-        with patch.object(
-            startup_jobs, "collect_records", return_value=records
-        ) as collect:
+        with patch.object(startup_jobs, "collect_records", return_value=records) as collect:
             jobs = startup_jobs.fetch_jobs(api_key="sj_test")
 
         self.assertEqual([job.id for job in jobs], ["startup_jobs:de"])
@@ -185,17 +142,8 @@ class StartupJobsTests(unittest.TestCase):
                 "published_at": "2026-08-16T09:30:00Z",
                 "employment_type": "full-time",
                 "workplace_type": "remote",
-                "location": {
-                    "city": "Berlin",
-                    "country": "Germany",
-                    "country_code": "DE",
-                },
-                "salary_data": {
-                    "min": 83000,
-                    "max": 101000,
-                    "currency": "EUR",
-                    "interval": "year",
-                },
+                "location": {"city": "Berlin", "country": "Germany", "country_code": "DE"},
+                "salary_data": {"min": 83000, "max": 101000, "currency": "EUR", "interval": "year"},
                 "company": {"name": "Example GmbH"},
                 "description_html": "<p>Python und APIs</p>",
             }
@@ -216,9 +164,7 @@ class JobicyTests(unittest.TestCase):
         url = jobicy.build_search_url({"industry": "technical-support"})
 
         self.assertEqual(
-            url,
-            "https://jobicy.com/api/v2/remote-jobs"
-            "?industry=technical-support&count=100",
+            url, "https://jobicy.com/api/v2/remote-jobs?industry=technical-support&count=100"
         )
 
     def test_collect_records_merges_scopes_and_removes_duplicates(self):
@@ -231,9 +177,7 @@ class JobicyTests(unittest.TestCase):
             patch.object(jobicy, "fetch_json", side_effect=pages) as fetch,
             patch.object(jobicy.time, "sleep") as sleep,
         ):
-            records = jobicy.collect_records(
-                ({"geo": "germany"}, {"industry": "engineering"})
-            )
+            records = jobicy.collect_records(({"geo": "germany"}, {"industry": "engineering"}))
 
         self.assertEqual([record["id"] for record in records], ["one", "two", "three"])
         self.assertEqual(fetch.call_count, 2)

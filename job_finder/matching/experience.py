@@ -24,12 +24,7 @@ EXPERIENCE_TERM = (
 YEAR_UNIT = r"(?:jahre?n?|years?|yrs?)"
 
 
-MORE_THAN_QUALIFIERS = {
-    "mehr als",
-    "ueber",
-    "more than",
-    "over",
-}
+MORE_THAN_QUALIFIERS = {"mehr als", "ueber", "more than", "over"}
 
 
 REQUIRED_EXPERIENCE_PATTERNS = [
@@ -73,11 +68,7 @@ def analyze_experience(title, full_text, required_years=None, description=None):
         return {"rank": 0, "points": 25, "label": "klare Einstiegsstelle"}
 
     if contains_any(full_text, STRONG_EXPERIENCE_PHRASES):
-        return {
-            "rank": 5,
-            "points": 6,
-            "label": "mehrjaehrige/fundierte Erfahrung ohne Jahreszahl",
-        }
+        return {"rank": 5, "points": 6, "label": "mehrjaehrige/fundierte Erfahrung ohne Jahreszahl"}
 
     if is_entry_level(title, full_text):
         return {"rank": 0, "points": 25, "label": "klare Einstiegsstelle"}
@@ -150,9 +141,7 @@ def extract_required_years(text):
 
 def experience_is_optional(text):
     """Detect an experience mention whose surrounding sentence is optional."""
-    return any(
-        match_is_optional(text, match) for match in re.finditer(EXPERIENCE_TERM, text)
-    )
+    return any(match_is_optional(text, match) for match in re.finditer(EXPERIENCE_TERM, text))
 
 
 def has_required_experience(text):

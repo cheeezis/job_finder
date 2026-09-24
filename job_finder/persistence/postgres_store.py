@@ -28,8 +28,7 @@ def prune_cache(days=30):
         raise ValueError("Cache-Aufbewahrung muss mindestens 14 Tage betragen.")
     with transaction() as connection:
         rows = connection.execute(
-            "DELETE FROM source_cache WHERE stored_at < now() - (%s * interval '1 day')",
-            (days,),
+            "DELETE FROM source_cache WHERE stored_at < now() - (%s * interval '1 day')", (days,)
         ).rowcount
         return rows
 
@@ -62,9 +61,7 @@ def upsert_records(connection, table, keys, fields, records):
     if not records:
         return
     columns = (*keys, *fields, "present", "extra")
-    statement = sql.SQL(
-        "INSERT INTO {} ({}) VALUES ({}) ON CONFLICT ({}) DO UPDATE SET {}"
-    ).format(
+    statement = sql.SQL("INSERT INTO {} ({}) VALUES ({}) ON CONFLICT ({}) DO UPDATE SET {}").format(
         sql.Identifier(table),
         sql.SQL(",").join(map(sql.Identifier, columns)),
         sql.SQL(",").join(sql.Placeholder() for _ in columns),
@@ -125,9 +122,7 @@ def write_memory(connection, scope, before, after):
                 for position, value in enumerate(values):
                     if not isinstance(value, dict):
                         raise ValueError(f"Ungültiger Eintrag in {field}")
-                    children[field].append(
-                        (scope, job_id, position, *parts(value, fields))
-                    )
+                    children[field].append((scope, job_id, position, *parts(value, fields)))
         records.append((scope, job_id, *parts(core, STATE_FIELDS)))
     upsert_records(connection, "job_state", ("scope", "job_id"), STATE_FIELDS, records)
     for table, fields in (
@@ -136,20 +131,15 @@ def write_memory(connection, scope, before, after):
     ):
         if changed:
             connection.execute(
-                f"DELETE FROM {table} WHERE scope=%s AND job_id=ANY(%s)",
-                (scope, list(changed)),
+                f"DELETE FROM {table} WHERE scope=%s AND job_id=ANY(%s)", (scope, list(changed))
             )
-        upsert_records(
-            connection, table, ("scope", "job_id", "position"), fields, children[table]
-        )
+        upsert_records(connection, table, ("scope", "job_id", "position"), fields, children[table])
 
 
 def read_dataset(name, default=None):
     """Read metadata and rows from the same nonblocking database snapshot."""
     with snapshot() as connection:
-        row = connection.execute(
-            "SELECT metadata FROM datasets WHERE name=%s", (name,)
-        ).fetchone()
+        row = connection.execute("SELECT metadata FROM datasets WHERE name=%s", (name,)).fetchone()
         if row is None:
             return deepcopy(default)
         info = row[0]
@@ -180,17 +170,12 @@ def read_dataset(name, default=None):
                 result.setdefault(row[1], {})[row[0]] = unpack(row[2:], fields)
         elif kind in {"cache", "manual"}:
             table, key = (
-                ("manual_sources", "url")
-                if kind == "manual"
-                else ("source_cache", "cache_key")
+                ("manual_sources", "url") if kind == "manual" else ("source_cache", "cache_key")
             )
             values = connection.execute(
-                f"SELECT {key},payload FROM {table} WHERE dataset=%s ORDER BY position",
-                (name,),
+                f"SELECT {key},payload FROM {table} WHERE dataset=%s ORDER BY position", (name,)
             ).fetchall()
-            result[info["field"]] = (
-                [row[1] for row in values] if info["list"] else dict(values)
-            )
+            result[info["field"]] = [row[1] for row in values] if info["list"] else dict(values)
         return result
 
 
@@ -204,9 +189,7 @@ def write_dataset(name, value):
             kind, header = "recommendations", {**value, "recommendations": []}
         elif name.endswith("/notifications.json"):
             kind, header = "notifications", {**value, "sent": {}, "pending": {}}
-        elif isinstance(value, dict) and any(
-            key in value for key in ("jobs", "checks")
-        ):
+        elif isinstance(value, dict) and any(key in value for key in ("jobs", "checks")):
             kind = "manual" if name.endswith("/manual_jobs_cache.json") else "cache"
             field = "jobs" if "jobs" in value else "checks"
             header = {k: v for k, v in value.items() if k != field}
@@ -231,9 +214,7 @@ def write_dataset(name, value):
                 data = {k: v for k, v in item.items() if k != "id"}
                 rows.append((name, position, item["id"], *parts(data, fields)))
             # Position is a regular column, not part of record attributes.
-            upsert_records(
-                connection, kind, ("dataset", "position"), ("job_id", *fields), rows
-            )
+            upsert_records(connection, kind, ("dataset", "position"), ("job_id", *fields), rows)
         elif kind == "notifications":
             connection.execute("DELETE FROM notifications WHERE dataset=%s", (name,))
             fields = ("job_id", "sent_at", "attempts")
@@ -251,9 +232,7 @@ def write_dataset(name, value):
             )
         elif kind in {"cache", "manual"}:
             table, key_column = (
-                ("manual_sources", "url")
-                if kind == "manual"
-                else ("source_cache", "cache_key")
+                ("manual_sources", "url") if kind == "manual" else ("source_cache", "cache_key")
             )
             entries = enumerate(value[field]) if info["list"] else value[field].items()
             rows = [

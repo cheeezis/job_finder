@@ -136,9 +136,7 @@ def main():
     print(f"Image des Azure-Workers: {image}", flush=True)
     az("acr", "login", "--name", REGISTRY)
     subprocess.run(["docker", "pull", "--quiet", image], check=True)
-    exclude = ",".join(
-        name for name in ALL_SOURCE_NAMES if name not in LOCAL_ONLY_SOURCES
-    )
+    exclude = ",".join(name for name in ALL_SOURCE_NAMES if name not in LOCAL_ONLY_SOURCES)
     env_args = []
     for key, value in container_environment().items():
         env_args += ["-e", f"{key}={value}"]

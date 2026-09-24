@@ -38,13 +38,7 @@ CACHE_FILE = ARBEITSAGENTUR_CACHE_FILE
 
 def fetch_jobs(cache_path=CACHE_FILE, now=None):
     """Search Arbeitsagentur and return imported job details."""
-    return fetch_cached_details(
-        collect_links(),
-        cache_path,
-        fetch_job,
-        "Arbeitsagentur",
-        now=now,
-    )
+    return fetch_cached_details(collect_links(), cache_path, fetch_job, "Arbeitsagentur", now=now)
 
 
 def collect_links():
@@ -52,9 +46,7 @@ def collect_links():
     seen = set()
     links = []
 
-    searches = [
-        (term, LOCAL_SEARCH_LOCATION, LOCAL_SEARCH_RADIUS_KM) for term in SEARCH_TERMS
-    ]
+    searches = [(term, LOCAL_SEARCH_LOCATION, LOCAL_SEARCH_RADIUS_KM) for term in SEARCH_TERMS]
     searches.extend(
         (term, location, COMMUTER_SEARCH_RADIUS_KM)
         for location in COMMUTER_SEARCH_LOCATIONS
@@ -89,14 +81,10 @@ def search(term, location=LOCAL_SEARCH_LOCATION, radius=LOCAL_SEARCH_RADIUS_KM):
         html = fetch_text(build_search_url(term, page, location, radius))
         search_result = extract_ng_state(html).get("suchergebnis", {})
         page_results = (
-            search_result.get("ergebnisliste")
-            or search_result.get("stellenangebote")
-            or []
+            search_result.get("ergebnisliste") or search_result.get("stellenangebote") or []
         )
         new_results = [
-            result
-            for result in page_results
-            if result.get("referenznummer") not in seen_references
+            result for result in page_results if result.get("referenznummer") not in seen_references
         ]
 
         for result in new_results:
@@ -110,12 +98,7 @@ def search(term, location=LOCAL_SEARCH_LOCATION, radius=LOCAL_SEARCH_RADIUS_KM):
         page += 1
 
 
-def build_search_url(
-    term,
-    page=1,
-    location=LOCAL_SEARCH_LOCATION,
-    radius=LOCAL_SEARCH_RADIUS_KM,
-):
+def build_search_url(term, page=1, location=LOCAL_SEARCH_LOCATION, radius=LOCAL_SEARCH_RADIUS_KM):
     """Encode a term, page and local search radius into a search URL."""
     query = {
         "angebotsart": "1",
@@ -138,10 +121,7 @@ def fetch_job(url):
     description = html_to_text(raw_description)
     structured_remote = format_remote(detail)
     detected_remote = detect_remote(
-        title,
-        description,
-        location_text,
-        structured_remote=structured_remote,
+        title, description, location_text, structured_remote=structured_remote
     )
     work_mode, remote_percentage = classify_remote(detected_remote)
     reference = url.rstrip("/").rsplit("/", 1)[-1]
@@ -177,9 +157,7 @@ def fetch_job(url):
 def extract_ng_state(html):
     """Extract Arbeitsagentur's Angular server-side rendering state."""
     match = re.search(
-        r'<script id="ng-state" type="application/json">(.*?)</script>',
-        html,
-        re.DOTALL,
+        r'<script id="ng-state" type="application/json">(.*?)</script>', html, re.DOTALL
     )
     if not match:
         raise ValueError("ng-state JSON nicht gefunden")

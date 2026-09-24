@@ -40,30 +40,17 @@ class AvailabilityTests(unittest.TestCase):
             {"@type":"JobPosting","title":"An unrelated suggested job"}
             </script></body>"""
         with patch(
-            "job_finder.workflow.availability.fetch_text_with_final_url",
-            return_value=(url, html),
+            "job_finder.workflow.availability.fetch_text_with_final_url", return_value=(url, html)
         ):
             self.assertTrue(listing_is_closed(url))
 
     def test_arbeitnow_missing_detection_does_not_match_scripts_or_external_login(self):
         url = "https://www.arbeitnow.com/jobs/companies/example/developer-123"
         for final_url, html, expected in [
-            (
-                url,
-                '<script>"<h2>Page not found</h2>"</script><h1>Developer</h1>',
-                False,
-            ),
-            (
-                url,
-                "<h1>Developer</h1><p>Handle errors such as Page not found.</p>",
-                False,
-            ),
+            (url, '<script>"<h2>Page not found</h2>"</script><h1>Developer</h1>', False),
+            (url, "<h1>Developer</h1><p>Handle errors such as Page not found.</p>", False),
             ("https://login.example.test/", "<h2>Page not found</h2>", False),
-            (
-                "https://www.arbeitnow.com/?not_found=1",
-                "<h1>Jobs in Germany</h1>",
-                True,
-            ),
+            ("https://www.arbeitnow.com/?not_found=1", "<h1>Jobs in Germany</h1>", True),
         ]:
             with (
                 self.subTest(final_url=final_url, html=html),
@@ -88,14 +75,12 @@ class AvailabilityTests(unittest.TestCase):
             with (
                 self.subTest(code=code, host=host),
                 patch(
-                    "job_finder.workflow.availability.fetch_text_with_final_url",
-                    side_effect=error,
+                    "job_finder.workflow.availability.fetch_text_with_final_url", side_effect=error
                 ),
             ):
                 self.assertEqual(listing_is_closed(url), expected)
         with patch(
-            "job_finder.workflow.availability.fetch_text_with_final_url",
-            side_effect=TimeoutError,
+            "job_finder.workflow.availability.fetch_text_with_final_url", side_effect=TimeoutError
         ):
             self.assertFalse(listing_is_closed(url))
 
@@ -131,34 +116,24 @@ class AvailabilityTests(unittest.TestCase):
                     "job:1": {
                         "title": "Developer",
                         "workflow_status": "interesting",
-                        "source_urls": [
-                            "https://example.test/a",
-                            "https://example.test/b",
-                        ],
+                        "source_urls": ["https://example.test/a", "https://example.test/b"],
                     }
                 },
                 path,
             )
-            with patch(
-                "job_finder.workflow.availability.listing_is_closed", return_value=True
-            ):
+            with patch("job_finder.workflow.availability.listing_is_closed", return_value=True):
                 self.assertEqual(
-                    ignore_closed_listings([], path, successful_sources={"job"}),
-                    {"job:1"},
+                    ignore_closed_listings([], path, successful_sources={"job"}), {"job:1"}
                 )
             entry = load_memory(path)["job:1"]
             self.assertEqual(entry["workflow_status"], "ignored")
             self.assertFalse(entry["active"])
-            self.assertEqual(
-                entry["workflow_history"][-1]["reason"], "listing_unavailable"
-            )
+            self.assertEqual(entry["workflow_history"][-1]["reason"], "listing_unavailable")
             self.assertTrue(entry["workflow_history"][-1]["occurred_on"])
             rows = load_review_jobs(Path(directory) / "missing.json", path)
             self.assertEqual(rows[0]["workflow_status"], "ignored")
             undo_ignored_decision("job:1", "ignored", path)
-            self.assertEqual(
-                load_memory(path)["job:1"]["workflow_status"], "interesting"
-            )
+            self.assertEqual(load_memory(path)["job:1"]["workflow_status"], "interesting")
 
     def test_one_unconfirmed_source_preserves_the_shortlist(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -171,8 +146,7 @@ class AvailabilityTests(unittest.TestCase):
             }
             save_memory(original, path)
             with patch(
-                "job_finder.workflow.availability.listing_is_closed",
-                side_effect=[True, False],
+                "job_finder.workflow.availability.listing_is_closed", side_effect=[True, False]
             ):
                 self.assertEqual(
                     ignore_closed_listings([], path, successful_sources={"job"}), set()
@@ -193,9 +167,7 @@ class AvailabilityTests(unittest.TestCase):
                     "job:2": {
                         "workflow_status": "interesting",
                         "source_urls": ["https://example.test/b"],
-                        "workflow_history": [
-                            {"status": "applied", "occurred_on": "2026-09-01"}
-                        ],
+                        "workflow_history": [{"status": "applied", "occurred_on": "2026-09-01"}],
                     },
                 },
                 path,
@@ -215,9 +187,7 @@ class AvailabilityTests(unittest.TestCase):
                 )
                 check.assert_called_once_with("https://example.test/a")
             self.assertEqual(load_memory(path)["job:1"]["workflow_status"], "inquiry")
-            self.assertEqual(
-                load_memory(path)["job:2"]["workflow_status"], "interesting"
-            )
+            self.assertEqual(load_memory(path)["job:2"]["workflow_status"], "interesting")
 
     def test_only_missing_jobs_from_complete_sources_are_checked(self):
         cases = [
@@ -234,10 +204,7 @@ class AvailabilityTests(unittest.TestCase):
             for presence, sources, complete, expected in cases:
                 with (
                     self.subTest(
-                        status=status,
-                        presence=presence,
-                        sources=sources,
-                        complete=complete,
+                        status=status, presence=presence, sources=sources, complete=complete
                     ),
                     tempfile.TemporaryDirectory() as directory,
                 ):
@@ -263,19 +230,14 @@ class AvailabilityTests(unittest.TestCase):
                         ]
                     )
                     with patch(
-                        "job_finder.workflow.availability.listing_is_closed",
-                        return_value=True,
+                        "job_finder.workflow.availability.listing_is_closed", return_value=True
                     ) as check:
-                        result = ignore_closed_listings(
-                            jobs, path, successful_sources=complete
-                        )
+                        result = ignore_closed_listings(jobs, path, successful_sources=complete)
                     should_check = expected and status == "interesting"
                     self.assertEqual(result, {"job:1"} if should_check else set())
                     if should_check:
                         check.assert_called_once_with("https://example.test/a")
-                        self.assertEqual(
-                            load_memory(path)["job:1"]["workflow_status"], "ignored"
-                        )
+                        self.assertEqual(load_memory(path)["job:1"]["workflow_status"], "ignored")
                     else:
                         check.assert_not_called()
                         self.assertEqual(load_memory(path), original)
@@ -292,12 +254,7 @@ class AvailabilityTests(unittest.TestCase):
             save_memory(original, path)
             with patch("job_finder.workflow.availability.listing_is_closed") as check:
                 self.assertEqual(
-                    ignore_closed_listings(
-                        [],
-                        path,
-                        successful_sources={"feed"},
-                    ),
-                    set(),
+                    ignore_closed_listings([], path, successful_sources={"feed"}), set()
                 )
                 check.assert_not_called()
             self.assertEqual(load_memory(path), original)
@@ -354,13 +311,9 @@ class AvailabilityTests(unittest.TestCase):
                 "job_finder.workflow.availability.listing_is_closed", return_value=False
             ) as check:
                 for _ in range(3):
-                    ignore_closed_listings(
-                        [], path, successful_sources={"feed"}, max_urls=2
-                    )
+                    ignore_closed_listings([], path, successful_sources={"feed"}, max_urls=2)
                 self.assertEqual(check.call_count, 4)
-                self.assertEqual(
-                    len({call.args[0] for call in check.call_args_list}), 4
-                )
+                self.assertEqual(len({call.args[0] for call in check.call_args_list}), 4)
             self.assertTrue(
                 all(
                     entry["workflow_status"] == "interesting"
@@ -385,13 +338,9 @@ class AvailabilityTests(unittest.TestCase):
                 path,
             )
             with (
+                patch("job_finder.workflow.availability.time.monotonic", side_effect=[0, 0, 121]),
                 patch(
-                    "job_finder.workflow.availability.time.monotonic",
-                    side_effect=[0, 0, 121],
-                ),
-                patch(
-                    "job_finder.workflow.availability.listing_is_closed",
-                    return_value=False,
+                    "job_finder.workflow.availability.listing_is_closed", return_value=False
                 ) as check,
             ):
                 ignore_closed_listings([], path, successful_sources={"feed"})
@@ -405,10 +354,7 @@ class AvailabilityTests(unittest.TestCase):
                 {
                     "feed:1": {
                         "workflow_status": "interesting",
-                        "source_urls": [
-                            "https://example.test/a",
-                            "https://example.test/b",
-                        ],
+                        "source_urls": ["https://example.test/a", "https://example.test/b"],
                     }
                 },
                 path,
@@ -417,18 +363,11 @@ class AvailabilityTests(unittest.TestCase):
                 "job_finder.workflow.availability.listing_is_closed", return_value=True
             ) as check:
                 self.assertEqual(
-                    ignore_closed_listings(
-                        [], path, successful_sources={"feed"}, max_urls=1
-                    ),
-                    set(),
+                    ignore_closed_listings([], path, successful_sources={"feed"}, max_urls=1), set()
                 )
+                self.assertEqual(load_memory(path)["feed:1"]["workflow_status"], "interesting")
                 self.assertEqual(
-                    load_memory(path)["feed:1"]["workflow_status"], "interesting"
-                )
-                self.assertEqual(
-                    ignore_closed_listings(
-                        [], path, successful_sources={"feed"}, max_urls=1
-                    ),
+                    ignore_closed_listings([], path, successful_sources={"feed"}, max_urls=1),
                     {"feed:1"},
                 )
                 self.assertEqual(check.call_count, 2)
@@ -447,31 +386,21 @@ class AvailabilityTests(unittest.TestCase):
                 path,
             )
             with patch(
-                "job_finder.workflow.availability.listing_is_closed",
-                side_effect=[False, True],
+                "job_finder.workflow.availability.listing_is_closed", side_effect=[False, True]
             ) as check:
                 self.assertEqual(
-                    ignore_closed_listings(
-                        [], path, successful_sources={"feed"}, now=start
-                    ),
-                    set(),
+                    ignore_closed_listings([], path, successful_sources={"feed"}, now=start), set()
                 )
                 self.assertEqual(
                     ignore_closed_listings(
-                        [],
-                        path,
-                        successful_sources={"feed"},
-                        now=start + timedelta(hours=23),
+                        [], path, successful_sources={"feed"}, now=start + timedelta(hours=23)
                     ),
                     set(),
                 )
                 self.assertEqual(check.call_count, 1)
                 self.assertEqual(
                     ignore_closed_listings(
-                        [],
-                        path,
-                        successful_sources={"feed"},
-                        now=start + timedelta(hours=24),
+                        [], path, successful_sources={"feed"}, now=start + timedelta(hours=24)
                     ),
                     {"feed:1"},
                 )
@@ -489,9 +418,7 @@ class AvailabilityTests(unittest.TestCase):
             save_memory(original, path)
             with patch("job_finder.workflow.availability.listing_is_closed") as check:
                 self.assertEqual(
-                    ignore_closed_listings(
-                        [], path, successful_sources={"feed"}, budget_seconds=0
-                    ),
+                    ignore_closed_listings([], path, successful_sources={"feed"}, budget_seconds=0),
                     set(),
                 )
                 check.assert_not_called()
@@ -521,9 +448,7 @@ class AvailabilityTests(unittest.TestCase):
                 "job_finder.workflow.availability.listing_is_closed", return_value=True
             ) as check:
                 self.assertEqual(
-                    ignore_closed_listings(
-                        [], path, successful_sources={"feed"}, max_urls=1
-                    ),
+                    ignore_closed_listings([], path, successful_sources={"feed"}, max_urls=1),
                     {"feed:saved"},
                 )
                 check.assert_called_once_with("https://example.test/saved")

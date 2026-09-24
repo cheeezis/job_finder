@@ -109,9 +109,7 @@ def collect_records(*, return_report=False):
 
 def summary_job_from_record(record):
     """Build a permissive first-pass job from get-in-IT API metadata."""
-    url = canonical_detail_url(
-        urljoin("https://www.get-in-it.de", str(record.get("url") or ""))
-    )
+    url = canonical_detail_url(urljoin("https://www.get-in-it.de", str(record.get("url") or "")))
     identifier = str(record.get("id") or "").strip()
     company = record.get("company") or {}
     locations = [
@@ -169,10 +167,7 @@ def build_api_searches():
                     continue
 
                 seen.add(key)
-                yield {
-                    "priority_id": priority_id,
-                    "location": query.location,
-                }
+                yield {"priority_id": priority_id, "location": query.location}
 
 
 def priority_ids_for_term(term):
@@ -200,11 +195,7 @@ def search_api(priority_id, location):
     start = 0
 
     while True:
-        params = {
-            "start": start,
-            "limit": API_PAGE_SIZE,
-            "filter[thematic_priority]": priority_id,
-        }
+        params = {"start": start, "limit": API_PAGE_SIZE, "filter[thematic_priority]": priority_id}
 
         if location.lower() == "remote":
             params["filter[homeOffice]"] = 1
@@ -215,11 +206,7 @@ def search_api(priority_id, location):
 
         url = f"{API_SEARCH_URL}?{urlencode(params)}"
         data = fetch_json(
-            url,
-            headers={
-                "Accept": "application/json",
-                "X-Requested-With": "XMLHttpRequest",
-            },
+            url, headers={"Accept": "application/json", "X-Requested-With": "XMLHttpRequest"}
         )
         page_results = data.get("items", {}).get("results", [])
         new_results = [job for job in page_results if job.get("id") not in seen_ids]
@@ -245,10 +232,7 @@ def fetch_job(url):
     location_text = ", ".join(locations)
     title = posting.get("title", "")
     detected_remote = detect_remote(
-        title,
-        description,
-        location_text,
-        structured_remote=format_schema_remote(posting),
+        title, description, location_text, structured_remote=format_schema_remote(posting)
     )
     work_mode, remote_percentage = classify_remote(detected_remote)
     identifier = extract_source_id(url, posting)
@@ -259,13 +243,7 @@ def fetch_job(url):
         title=title,
         company=clean_company(posting.get("hiringOrganization", {}).get("name", "")),
         locations=locations,
-        sources=[
-            JobSource(
-                source=SOURCE_NAME,
-                source_id=identifier,
-                url=url,
-            )
-        ],
+        sources=[JobSource(source=SOURCE_NAME, source_id=identifier, url=url)],
         description_raw=raw_description,
         description_clean=description,
         work_mode=work_mode,
@@ -282,9 +260,7 @@ def fetch_job(url):
 def extract_next_data(html):
     """Parse embedded Next.js JSON or raise ValueError when it is absent."""
     match = re.search(
-        r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>',
-        html,
-        re.DOTALL,
+        r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', html, re.DOTALL
     )
     if not match:
         raise ValueError("__NEXT_DATA__ JSON nicht gefunden")
@@ -307,9 +283,7 @@ def extract_job_posting(html):
 def extract_job_posting_from_next_data(html):
     """Build a JobPosting-like dict from Next.js state when JSON-LD fails."""
     next_data = extract_next_data(html)
-    job = (
-        next_data.get("props", {}).get("initialState", {}).get("jobJob", {}).get("job")
-    )
+    job = next_data.get("props", {}).get("initialState", {}).get("jobJob", {}).get("job")
     if not job:
         return None
 
@@ -325,9 +299,7 @@ def extract_job_posting_from_next_data(html):
     return {
         "@type": "JobPosting",
         "title": job.get("header", {}).get("title", ""),
-        "hiringOrganization": {
-            "name": job.get("header", {}).get("companyName", ""),
-        },
+        "hiringOrganization": {"name": job.get("header", {}).get("companyName", "")},
         "jobLocation": build_locations(job.get("header", {}).get("locations", [])),
         "description": job.get("content", ""),
         "url": f"https://www.get-in-it.de/jobsuche/p{job.get('id')}",

@@ -4,13 +4,7 @@ Restored from 201417f after comparison with saved review decisions. Search
 locations and salary preferences continue to come from local user settings.
 """
 
-SCORE_LIMITS = {
-    "role": 30,
-    "skills": 25,
-    "experience": 25,
-    "location": 15,
-    "profile": 5,
-}
+SCORE_LIMITS = {"role": 30, "skills": 25, "experience": 25, "location": 15, "profile": 5}
 
 ROLE_POINTS = {
     "python_ai_data": 30,
@@ -30,12 +24,7 @@ ROLE_POINTS = {
 }
 
 SKILL_GROUPS = [
-    {
-        "id": "python",
-        "label": "Python",
-        "points": 10,
-        "keywords": ["python"],
-    },
+    {"id": "python", "label": "Python", "points": 10, "keywords": ["python"]},
     {
         "id": "ai_ml",
         "label": "AI/ML/RAG/Agenten",
@@ -96,12 +85,7 @@ SKILL_GROUPS = [
         "points": 5,
         "keywords": ["javascript", "typescript", "node.js", "nodejs"],
     },
-    {
-        "id": "java",
-        "label": "Java",
-        "points": 4,
-        "keywords": ["java"],
-    },
+    {"id": "java", "label": "Java", "points": 4, "keywords": ["java"]},
     {
         "id": "devops",
         "label": "DevOps/Cloud-Automatisierung",
@@ -136,12 +120,6 @@ SKILL_GROUPS = [
         "id": "web_api",
         "label": "Web/API",
         "points": 3,
-        "keywords": [
-            "rest api",
-            "rest-api",
-            "backend",
-            "webanwendung",
-            "web application",
-        ],
+        "keywords": ["rest api", "rest-api", "backend", "webanwendung", "web application"],
     },
 ]

@@ -19,8 +19,4 @@ def fetch_jobs(cache_path=CACHE_FILE, now=None):
 def collect_links():
     """Collect bytewerk Personio detail links from its public board."""
     html = fetch_text(LIST_URL)
-    return extract_links(
-        html,
-        LIST_URL,
-        r"bytewerk-gmbh\.jobs\.personio\.de/job/\d+$",
-    )
+    return extract_links(html, LIST_URL, r"bytewerk-gmbh\.jobs\.personio\.de/job/\d+$")

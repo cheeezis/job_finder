@@ -5,14 +5,7 @@ import re
 from job_finder.models import WorkMode
 from job_finder.text import normalize_text
 
-REMOTE_WORDS = [
-    "remote",
-    "homeoffice",
-    "home office",
-    "mobiles arbeiten",
-    "hybrid",
-    "telearbeit",
-]
+REMOTE_WORDS = ["remote", "homeoffice", "home office", "mobiles arbeiten", "hybrid", "telearbeit"]
 
 FULL_REMOTE_PHRASES = [
     "100% remote",

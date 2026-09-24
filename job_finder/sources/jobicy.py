@@ -80,13 +80,7 @@ def job_from_record(record):
         title=title,
         company=company,
         locations=location_names(record.get("jobGeo")),
-        sources=[
-            JobSource(
-                source=SOURCE_NAME,
-                source_id=record_identifier(record),
-                url=url,
-            )
-        ],
+        sources=[JobSource(source=SOURCE_NAME, source_id=record_identifier(record), url=url)],
         description_raw=raw_description,
         description_clean=html_to_text(raw_description),
         work_mode=WorkMode.REMOTE,
@@ -124,6 +118,4 @@ def annual_salary_eur(record):
     period = str(record.get("salaryPeriod") or "").casefold()
     if period not in {"annual", "year", "yearly"}:
         return None, None
-    return numeric_salary(record.get("salaryMin")), numeric_salary(
-        record.get("salaryMax")
-    )
+    return numeric_salary(record.get("salaryMin")), numeric_salary(record.get("salaryMax"))

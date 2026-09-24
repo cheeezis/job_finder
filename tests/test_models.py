@@ -4,12 +4,7 @@ import json
 import unittest
 from datetime import date, datetime, timezone
 
-from job_finder.models import (
-    Job,
-    JobSource,
-    WorkflowStatus,
-    WorkMode,
-)
+from job_finder.models import Job, JobSource, WorkflowStatus, WorkMode
 
 
 def make_job(**overrides):
@@ -19,11 +14,7 @@ def make_job(**overrides):
         "company": "Example GmbH",
         "locations": ["Fulda"],
         "sources": [
-            JobSource(
-                source="stepstone",
-                source_id="123",
-                url="https://example.test/job/123",
-            )
+            JobSource(source="stepstone", source_id="123", url="https://example.test/job/123")
         ],
         "description_raw": "<p>Python</p>",
         "description_clean": "Python",

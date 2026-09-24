@@ -24,18 +24,12 @@ class StateCompatibilityTests(unittest.TestCase):
                 }
                 before = copy.deepcopy(document)
                 state = decode_notification_state(document)
-                self.assertEqual(
-                    state["sent"], {"sent:1": document["sent"]["old-hash"]}
-                )
+                self.assertEqual(state["sent"], {"sent:1": document["sent"]["old-hash"]})
                 self.assertEqual(
                     state["pending"],
-                    {}
-                    if version == 1
-                    else {"queued:1": {"job_id": "queued:1", "attempts": 2}},
+                    {} if version == 1 else {"queued:1": {"job_id": "queued:1", "attempts": 2}},
                 )
-                self.assertEqual(
-                    decode_notification_state({"version": 3, **state}), state
-                )
+                self.assertEqual(decode_notification_state({"version": 3, **state}), state)
                 self.assertEqual(document, before)
 
     def test_unknown_versions_remain_rejected(self):

@@ -19,8 +19,4 @@ def fetch_jobs(cache_path=CACHE_FILE, now=None):
 def collect_links():
     """Collect RhönEnergie offer links from its public career portal."""
     html = fetch_text(LIST_URL)
-    return extract_links(
-        html,
-        LIST_URL,
-        r"re-gruppe\.de/karriere/.+-de-j\d+\.html$",
-    )
+    return extract_links(html, LIST_URL, r"re-gruppe\.de/karriere/.+-de-j\d+\.html$")

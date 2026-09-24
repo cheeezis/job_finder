@@ -171,9 +171,7 @@ def snapshot():
     nested = _connection.get() is not None
     with transaction() as connection:
         if not nested:
-            connection.execute(
-                "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"
-            )
+            connection.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
         yield connection
 
 
@@ -188,16 +186,13 @@ def initialize():
             # canonical job. Preserve all of them and their original order.
             for table in ("jobs", "recommendations"):
                 connection.execute(f"ALTER TABLE {table} DROP CONSTRAINT {table}_pkey")
-                connection.execute(
-                    f"ALTER TABLE {table} ADD PRIMARY KEY (dataset, position)"
-                )
+                connection.execute(f"ALTER TABLE {table} ADD PRIMARY KEY (dataset, position)")
             connection.execute("UPDATE schema_version SET version=2")
             versions = [(2,)]
         if versions and versions != [(SCHEMA_VERSION,)]:
             raise RuntimeError("Nicht unterstützte PostgreSQL-Schemaversion")
         connection.execute(
-            "INSERT INTO schema_version VALUES (%s) ON CONFLICT DO NOTHING",
-            (SCHEMA_VERSION,),
+            "INSERT INTO schema_version VALUES (%s) ON CONFLICT DO NOTHING", (SCHEMA_VERSION,)
         )
 
 
@@ -208,24 +203,16 @@ def memory_scope(path):
     if path is None or Path(path).resolve() == MEMORY_FILE.resolve():
         return "default"
     if os.environ.get("JOBFINDER_TEST_MODE") != "1":
-        raise RuntimeError(
-            "Dateipfade als Datenbankziel sind nur in isolierten Tests erlaubt."
-        )
+        raise RuntimeError("Dateipfade als Datenbankziel sind nur in isolierten Tests erlaubt.")
     return "explicit:" + hashlib.sha256(str(Path(path).resolve()).encode()).hexdigest()
 
 
 @contextmanager
 def worker_lock():
     """Allow one worker run at a time; a crashed connection releases its lock."""
-    key = int.from_bytes(
-        hashlib.sha256(b"jobfinder-worker").digest()[:8], "big", signed=True
-    )
-    with psycopg.connect(
-        database_url(), autocommit=True, connect_timeout=10
-    ) as connection:
-        acquired = connection.execute(
-            "SELECT pg_try_advisory_lock(%s)", (key,)
-        ).fetchone()[0]
+    key = int.from_bytes(hashlib.sha256(b"jobfinder-worker").digest()[:8], "big", signed=True)
+    with psycopg.connect(database_url(), autocommit=True, connect_timeout=10) as connection:
+        acquired = connection.execute("SELECT pg_try_advisory_lock(%s)", (key,)).fetchone()[0]
         if not acquired:
             raise RuntimeError("Ein anderer Finder-Lauf ist bereits aktiv.")
         try:

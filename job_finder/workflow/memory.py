@@ -10,9 +10,11 @@ from job_finder.models import APPLICATION_STATUSES, WorkflowStatus
 from job_finder.paths import MEMORY_FILE
 from job_finder.persistence.database import lock, memory_scope, snapshot, transaction
 from job_finder.persistence.postgres_store import read_memory, write_memory
-from job_finder.persistence.state_compat import MEMORY_VERSION as MEMORY_VERSION
-from job_finder.persistence.state_compat import first_seen_date as first_seen_date
-from job_finder.persistence.state_compat import restore_initial_discovery_date
+from job_finder.persistence.state_compat import (
+    MEMORY_VERSION as MEMORY_VERSION,
+    first_seen_date as first_seen_date,
+    restore_initial_discovery_date,
+)
 
 INACTIVE_AFTER_MISSED_RUNS = 3
 
@@ -65,12 +67,7 @@ def edit_job(job_id, path=MEMORY_FILE):
         write_memory(connection, scope, original, memory)
 
 
-def update_memory(
-    jobs,
-    memory,
-    successful_sources=None,
-    inactive_after=INACTIVE_AFTER_MISSED_RUNS,
-):
+def update_memory(jobs, memory, successful_sources=None, inactive_after=INACTIVE_AFTER_MISSED_RUNS):
     """Update job identity and discovery state in the supplied objects.
 
     Mutate both memory and the Job objects in jobs: resolve canonical
@@ -108,13 +105,9 @@ def update_memory(
             entry["company"] = job.company
             entry["locations"] = list(job.locations)
             entry["source_urls"] = unique_values(
-                entry.get("source_urls", []),
-                [source.url for source in job.sources],
+                entry.get("source_urls", []), [source.url for source in job.sources]
             )
-            entry["source_names"] = unique_values(
-                entry.get("source_names", []),
-                job.source_names,
-            )
+            entry["source_names"] = unique_values(entry.get("source_names", []), job.source_names)
             entry["missed_runs"] = 0
             entry["active"] = True
             add_memory_index_entry(memory_index, job.id, entry)
@@ -164,16 +157,12 @@ def resolve_memory_id(job, memory, memory_index=None):
     index = memory_index or build_memory_index(memory)
     current_urls = {source.url for source in job.sources if source.url}
     candidates = [job.id] if job.id in memory else []
-    candidates = unique_values(
-        candidates,
-        *[index["urls"].get(url, []) for url in current_urls],
-    )
+    candidates = unique_values(candidates, *[index["urls"].get(url, []) for url in current_urls])
     candidates = [job_id for job_id in candidates if job_id in memory]
     if not any(has_manual_state(memory[job_id]) for job_id in candidates):
         fingerprint = repost_fingerprint(job.title, job.company, job.locations)
         candidates = unique_values(
-            candidates,
-            index["reposts"].get(fingerprint, []) if fingerprint else [],
+            candidates, index["reposts"].get(fingerprint, []) if fingerprint else []
         )
         candidates = [job_id for job_id in candidates if job_id in memory]
     if not candidates:
@@ -188,12 +177,10 @@ def resolve_memory_id(job, memory, memory_index=None):
         if has_manual_state(candidate):
             continue
         canonical["source_urls"] = unique_values(
-            canonical.get("source_urls", []),
-            candidate.get("source_urls", []),
+            canonical.get("source_urls", []), candidate.get("source_urls", [])
         )
         canonical["source_names"] = unique_values(
-            canonical.get("source_names", []),
-            candidate.get("source_names", []),
+            canonical.get("source_names", []), candidate.get("source_names", [])
         )
         del memory[candidate_id]
     return canonical_id
@@ -226,11 +213,7 @@ def repost_fingerprint(title_value, company_value, locations=None):
     title = normalize_title(title_value)
     company = normalize_company(company_value)
     normalized_locations = sorted(
-        {
-            " ".join(normalize_title(value).split())
-            for value in (locations or [])
-            if value
-        }
+        {" ".join(normalize_title(value).split()) for value in (locations or []) if value}
     )
     if not title or not company or not normalized_locations:
         return None
@@ -239,9 +222,9 @@ def repost_fingerprint(title_value, company_value, locations=None):
 
 def repost_decision_is_reusable(entry):
     """Limit fuzzy repost matching to explicit rejection or application state."""
-    return entry.get(
-        "workflow_status"
-    ) == WorkflowStatus.IGNORED.value or has_application_state(entry)
+    return entry.get("workflow_status") == WorkflowStatus.IGNORED.value or has_application_state(
+        entry
+    )
 
 
 def preferred_memory_id(candidates, memory, current_job_id):
@@ -249,17 +232,10 @@ def preferred_memory_id(candidates, memory, current_job_id):
     application_candidates = [
         job_id for job_id in candidates if has_application_state(memory[job_id])
     ]
-    manual_candidates = [
-        job_id for job_id in candidates if has_manual_state(memory[job_id])
-    ]
+    manual_candidates = [job_id for job_id in candidates if has_manual_state(memory[job_id])]
     preferred = application_candidates or manual_candidates or candidates
     return min(
-        preferred,
-        key=lambda job_id: memory_candidate_key(
-            job_id,
-            memory[job_id],
-            current_job_id,
-        ),
+        preferred, key=lambda job_id: memory_candidate_key(job_id, memory[job_id], current_job_id)
     )
 
 
@@ -290,8 +266,7 @@ def has_application_state(entry):
     if not isinstance(history, list):
         history = []
     return entry.get("workflow_status") in APPLICATION_STATUSES or any(
-        isinstance(event, dict) and event.get("status") in APPLICATION_STATUSES
-        for event in history
+        isinstance(event, dict) and event.get("status") in APPLICATION_STATUSES for event in history
     )
 
 
@@ -323,8 +298,7 @@ def memory_source_links(entry, *, validate_names=False):
     return [
         {
             "source": names[index]
-            if index < len(names)
-            and (not validate_names or isinstance(names[index], str))
+            if index < len(names) and (not validate_names or isinstance(names[index], str))
             else "listing",
             "url": url,
         }

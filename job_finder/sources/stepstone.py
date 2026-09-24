@@ -84,12 +84,7 @@ class StepStoneHttpClient:
             raise
 
 
-def fetch_jobs(
-    cache_path=CACHE_FILE,
-    client=None,
-    now=None,
-    _coverage=None,
-):
+def fetch_jobs(cache_path=CACHE_FILE, client=None, now=None, _coverage=None):
     """Search StepStone and return imported job details."""
     cache_file = Path(cache_path)
     cache = load_cache(cache_file)
@@ -127,13 +122,8 @@ def fetch_jobs(
                 save_cache(cache_file, cache)
             except StepStoneBlockedError as error:
                 if _coverage is not None:
-                    _coverage["failed_segments"] = max(
-                        1, _coverage.get("failed_segments", 0)
-                    )
-                print(
-                    f"WARNUNG StepStone: HTTP {error.status_code}; "
-                    "keine weiteren Detailanfragen"
-                )
+                    _coverage["failed_segments"] = max(1, _coverage.get("failed_segments", 0))
+                print(f"WARNUNG StepStone: HTTP {error.status_code}; keine weiteren Detailanfragen")
                 if cached_job and detail_within_age(cached_job, now):
                     cached_job.cache_stale = True
                     jobs.append(cached_job)
@@ -142,20 +132,13 @@ def fetch_jobs(
             except Exception:
                 detail_errors += 1
                 if _coverage is not None:
-                    _coverage["failed_segments"] = (
-                        _coverage.get("failed_segments", 0) + 1
-                    )
+                    _coverage["failed_segments"] = _coverage.get("failed_segments", 0) + 1
                 if cached_job and detail_within_age(cached_job, now):
                     cached_job.cache_stale = True
                     jobs.append(cached_job)
                     stale_fallbacks += 1
         if progress_checkpoint(index + 1, len(links)):
-            print_progress(
-                "StepStone Details",
-                index + 1,
-                len(links),
-                f"{len(jobs)} übernommen",
-            )
+            print_progress("StepStone Details", index + 1, len(links), f"{len(jobs)} übernommen")
     if detail_errors:
         print(
             f"WARNUNG StepStone: {detail_errors} Detailseite(n) "
@@ -183,10 +166,7 @@ def search_links(client=None, *, coverage=None):
     if coverage is not None:
         coverage["total_segments"] = planned_queries
 
-    for query in iter_search_queries(
-        STEPSTONE_SEARCH_TERMS,
-        STEPSTONE_SEARCH_LOCATIONS,
-    ):
+    for query in iter_search_queries(STEPSTONE_SEARCH_TERMS, STEPSTONE_SEARCH_LOCATIONS):
         processed_queries += 1
         page = 1
         query_seen = set()
@@ -281,13 +261,7 @@ def fetch_job(url, client=None):
         title=title,
         company=clean_company(posting.get("hiringOrganization", {}).get("name", "")),
         locations=locations,
-        sources=[
-            JobSource(
-                source=SOURCE_NAME,
-                source_id=identifier,
-                url=url,
-            )
-        ],
+        sources=[JobSource(source=SOURCE_NAME, source_id=identifier, url=url)],
         description_raw=raw_description,
         description_clean=description,
         work_mode=work_mode,
@@ -314,9 +288,7 @@ def load_cache(path):
         return empty_cache
     cache.setdefault("last_links", [])
     cache.setdefault("jobs", {})
-    cache["jobs"] = {
-        url: Job.from_dict(job_values) for url, job_values in cache["jobs"].items()
-    }
+    cache["jobs"] = {url: Job.from_dict(job_values) for url, job_values in cache["jobs"].items()}
     return cache
 
 
@@ -327,10 +299,7 @@ def save_cache(path, cache):
         {
             "version": CACHE_VERSION,
             "last_links": cache.get("last_links", []),
-            "jobs": {
-                url: detail_cache_job_dict(job)
-                for url, job in cache.get("jobs", {}).items()
-            },
+            "jobs": {url: detail_cache_job_dict(job) for url, job in cache.get("jobs", {}).items()},
         },
     )
 

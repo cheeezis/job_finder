@@ -33,9 +33,7 @@ def make_job(job_id):
         title="Junior Developer",
         company="Example GmbH",
         locations=["Fulda"],
-        sources=[
-            JobSource(source=job_id.split(":")[0], url=f"https://example.test/{job_id}")
-        ],
+        sources=[JobSource(source=job_id.split(":")[0], url=f"https://example.test/{job_id}")],
         description_raw="Python",
         description_clean="Python",
     )
@@ -52,11 +50,7 @@ class RunFinderTests(unittest.TestCase):
         jobs = [make_job("detailed:1")]
 
         with redirect_stdout(io.StringIO()):
-            reports = enrich_candidate_jobs(
-                jobs,
-                {"detailed:1"},
-                [plain_source, detailed_source],
-            )
+            reports = enrich_candidate_jobs(jobs, {"detailed:1"}, [plain_source, detailed_source])
 
         self.assertEqual(reports, [{"name": "detailed", "enriched": 2, "failed": 0}])
         self.assertEqual(calls, [(jobs, {"detailed:1"})])
@@ -68,9 +62,7 @@ class RunFinderTests(unittest.TestCase):
 
         sources = [
             SimpleNamespace(SOURCE_NAME="studysmarter", enrich_candidate_jobs=failing),
-            SimpleNamespace(
-                SOURCE_NAME="get_in_it", enrich_candidate_jobs=lambda jobs, ids: 2
-            ),
+            SimpleNamespace(SOURCE_NAME="get_in_it", enrich_candidate_jobs=lambda jobs, ids: 2),
         ]
         output = io.StringIO()
 
@@ -85,9 +77,7 @@ class RunFinderTests(unittest.TestCase):
             ],
         )
         events = [
-            json.loads(line)
-            for line in output.getvalue().splitlines()
-            if line.startswith("{")
+            json.loads(line) for line in output.getvalue().splitlines() if line.startswith("{")
         ]
         self.assertEqual(
             [
@@ -112,9 +102,7 @@ class RunFinderTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             jobs_file = Path(directory) / "jobs.json"
-            source = SimpleNamespace(
-                SOURCE_NAME="arbeitnow", enrich_candidate_jobs=enrich
-            )
+            source = SimpleNamespace(SOURCE_NAME="arbeitnow", enrich_candidate_jobs=enrich)
             with (
                 patch("run_finder.JOBS_FILE", jobs_file),
                 patch("run_finder.MEMORY_FILE", Path(directory) / "state.sqlite3"),
@@ -122,20 +110,12 @@ class RunFinderTests(unittest.TestCase):
                 patch("run_finder.SOURCES", [source]),
                 patch(
                     "run_finder.collect_jobs",
-                    return_value=(
-                        [job],
-                        [{"name": "arbeitnow", "status": "success", "jobs": 1}],
-                    ),
+                    return_value=([job], [{"name": "arbeitnow", "status": "success", "jobs": 1}]),
                 ),
                 patch("run_finder.write_recommendations") as recommendations,
                 patch(
                     "run_finder.process_notifications",
-                    return_value={
-                        "ready": 0,
-                        "sent": 0,
-                        "failed": 0,
-                        "configuration_error": None,
-                    },
+                    return_value={"ready": 0, "sent": 0, "failed": 0, "configuration_error": None},
                 ),
                 redirect_stdout(io.StringIO()),
             ):
@@ -155,15 +135,10 @@ class RunFinderTests(unittest.TestCase):
             patch("run_finder.create_backup"),
             patch(
                 "run_finder.collect_jobs",
-                return_value=(
-                    [job],
-                    [{"name": "source", "status": "success", "jobs": 1}],
-                ),
+                return_value=([job], [{"name": "source", "status": "success", "jobs": 1}]),
             ),
             patch("run_finder.enrich_candidate_jobs"),
-            patch(
-                "run_finder.evaluate_jobs", side_effect=ValueError("invalid details")
-            ),
+            patch("run_finder.evaluate_jobs", side_effect=ValueError("invalid details")),
             patch("run_finder.edit_memory") as memory,
             patch("run_finder.publish_results") as output,
             self.assertRaises(ValueError),
@@ -179,10 +154,7 @@ class RunFinderTests(unittest.TestCase):
                 self.subTest(env=env),
                 patch.dict(os.environ),
                 patch("run_finder.create_backup") as backup,
-                patch(
-                    "run_finder.collect_jobs",
-                    side_effect=RuntimeError("stop after backup"),
-                ),
+                patch("run_finder.collect_jobs", side_effect=RuntimeError("stop after backup")),
                 redirect_stdout(io.StringIO()),
             ):
                 os.environ.pop("JOBFINDER_SKIP_RUN_BACKUP", None)
@@ -200,10 +172,7 @@ class RunFinderTests(unittest.TestCase):
         ]
         with (
             patch("run_finder.create_backup"),
-            patch(
-                "run_finder.collect_jobs",
-                return_value=([make_job("working:1")], reports),
-            ),
+            patch("run_finder.collect_jobs", return_value=([make_job("working:1")], reports)),
             patch("run_finder.edit_memory") as edit_memory,
             patch("run_finder.publish_results") as write_jobs,
             patch("run_finder.write_recommendations") as write_recommendations,
@@ -230,12 +199,7 @@ class RunFinderTests(unittest.TestCase):
     def test_source_summary_distinguishes_all_coverage_states(self):
         reports = [
             {"name": "complete", "status": "success", "jobs": 2},
-            {
-                "name": "partial",
-                "status": "partial",
-                "jobs": 1,
-                "failed_segments": 3,
-            },
+            {"name": "partial", "status": "partial", "jobs": 1, "failed_segments": 3},
             {"name": "empty", "status": "empty", "jobs": 0},
             {"name": "failed", "status": "failed", "jobs": 0},
         ]
@@ -245,18 +209,14 @@ class RunFinderTests(unittest.TestCase):
             print_source_summary(reports, 3)
 
         self.assertIn(
-            "1 vollständig · 1 teilweise · 1 ohne Treffer · 1 fehlgeschlagen",
-            output.getvalue(),
+            "1 vollständig · 1 teilweise · 1 ohne Treffer · 1 fehlgeschlagen", output.getvalue()
         )
 
     def test_failed_source_does_not_stop_following_sources(self):
         failing = SimpleNamespace(
-            SOURCE_NAME="broken",
-            fetch_jobs=lambda: (_ for _ in ()).throw(RuntimeError("kaputt")),
+            SOURCE_NAME="broken", fetch_jobs=lambda: (_ for _ in ()).throw(RuntimeError("kaputt"))
         )
-        working = SimpleNamespace(
-            SOURCE_NAME="working", fetch_jobs=lambda: [make_job("working:1")]
-        )
+        working = SimpleNamespace(SOURCE_NAME="working", fetch_jobs=lambda: [make_job("working:1")])
         jobs, reports = collect_jobs([failing, working])
         self.assertEqual([job.id for job in jobs], ["working:1"])
         self.assertEqual(reports[0]["error"], "RuntimeError")
@@ -264,12 +224,9 @@ class RunFinderTests(unittest.TestCase):
 
     def test_collect_jobs_logs_one_structured_event_per_source(self):
         failing = SimpleNamespace(
-            SOURCE_NAME="broken",
-            fetch_jobs=lambda: (_ for _ in ()).throw(RuntimeError("kaputt")),
+            SOURCE_NAME="broken", fetch_jobs=lambda: (_ for _ in ()).throw(RuntimeError("kaputt"))
         )
-        working = SimpleNamespace(
-            SOURCE_NAME="working", fetch_jobs=lambda: [make_job("working:1")]
-        )
+        working = SimpleNamespace(SOURCE_NAME="working", fetch_jobs=lambda: [make_job("working:1")])
         output = io.StringIO()
         with redirect_stdout(output):
             collect_jobs([failing, working], run_id="test-run-1")
@@ -290,9 +247,7 @@ class RunFinderTests(unittest.TestCase):
         self.assertIn("duration_seconds", events[1])
 
     def test_empty_source_is_reported_as_a_complete_empty_snapshot(self):
-        jobs, reports = collect_jobs(
-            [SimpleNamespace(SOURCE_NAME="empty", fetch_jobs=lambda: [])]
-        )
+        jobs, reports = collect_jobs([SimpleNamespace(SOURCE_NAME="empty", fetch_jobs=lambda: [])])
         self.assertEqual(jobs, [])
         self.assertEqual(reports, [{"name": "empty", "status": "empty", "jobs": 0}])
 
@@ -318,10 +273,7 @@ class RunFinderTests(unittest.TestCase):
         summary = build_run_summary(
             duration_seconds=125.4,
             jobs=[job],
-            results={
-                "included": [{"is_new": True}, {"is_new": False}],
-                "excluded": [{}],
-            },
+            results={"included": [{"is_new": True}, {"is_new": False}], "excluded": [{}]},
             memory_stats={"new": 1, "known": 0},
             source_reports=[
                 {"name": "working", "status": "success", "jobs": 1},
@@ -334,9 +286,7 @@ class RunFinderTests(unittest.TestCase):
             ],
         )
         self.assertEqual(summary["duration"], "2 Min. 05 Sek.")
-        self.assertEqual(
-            summary["detail_failures"], [{"label": "StudySmarter", "failed": 12}]
-        )
+        self.assertEqual(summary["detail_failures"], [{"label": "StudySmarter", "failed": 12}])
         self.assertEqual(summary["review_new"], 1)
         self.assertEqual(summary["notifications"]["sent"], 1)
         self.assertEqual(summary["sources"][0]["new"], 1)
@@ -355,9 +305,7 @@ class RunFinderTests(unittest.TestCase):
         self.assertEqual(source_error_label(SimpleNamespace(code=429)), "HTTP 429")
 
     def test_parse_source_names_splits_and_ignores_blanks(self):
-        self.assertEqual(
-            parse_source_names("stepstone, remotely,, "), {"stepstone", "remotely"}
-        )
+        self.assertEqual(parse_source_names("stepstone, remotely,, "), {"stepstone", "remotely"})
         self.assertEqual(parse_source_names(""), set())
 
     def test_excluded_sources_are_skipped_before_collection(self):
@@ -376,12 +324,7 @@ class RunFinderTests(unittest.TestCase):
             patch("run_finder.write_recommendations"),
             patch(
                 "run_finder.process_notifications",
-                return_value={
-                    "ready": 0,
-                    "sent": 0,
-                    "failed": 0,
-                    "configuration_error": None,
-                },
+                return_value={"ready": 0, "sent": 0, "failed": 0, "configuration_error": None},
             ),
             redirect_stdout(io.StringIO()),
         ):

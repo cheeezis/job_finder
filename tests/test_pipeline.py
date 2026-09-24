@@ -20,11 +20,7 @@ class PipelineTests(unittest.TestCase):
             company="Example GmbH",
             locations=[LOCAL_PLACES[0]],
             sources=[
-                JobSource(
-                    source="test",
-                    source_id="123",
-                    url="https://example.test/jobs/123",
-                )
+                JobSource(source="test", source_id="123", url="https://example.test/jobs/123")
             ],
             description_raw="<p>Python, keine Berufserfahrung erforderlich.</p>",
             description_clean="Python, keine Berufserfahrung erforderlich.",
@@ -35,30 +31,18 @@ class PipelineTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             directory_path = Path(directory)
             jobs_path = directory_path / "jobs.json"
-            jobs_path.write_text(
-                json.dumps([job.to_dict()]),
-                encoding="utf-8",
-            )
+            jobs_path.write_text(json.dumps([job.to_dict()]), encoding="utf-8")
 
             restored_jobs = load_jobs(jobs_path)
             results = score_jobs(restored_jobs)
-            write_recommendations(
-                results,
-                json_path=directory_path / "recommendations.json",
-            )
+            write_recommendations(results, json_path=directory_path / "recommendations.json")
             review = json.loads(
                 (directory_path / "recommendations.json").read_text(encoding="utf-8")
             )
 
         self.assertEqual(len(results["included"]), 1)
-        self.assertEqual(
-            review["recommendations"][0]["title"],
-            "Junior Python Developer",
-        )
-        self.assertEqual(
-            review["recommendations"][0]["url"],
-            "https://example.test/jobs/123",
-        )
+        self.assertEqual(review["recommendations"][0]["title"], "Junior Python Developer")
+        self.assertEqual(review["recommendations"][0]["url"], "https://example.test/jobs/123")
         self.assertIn("match_percent", review["recommendations"][0])
 
 

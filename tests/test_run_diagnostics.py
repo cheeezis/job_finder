@@ -16,10 +16,7 @@ class RunDiagnosticsTests(unittest.TestCase):
             with (
                 self.subTest(fails=fails),
                 redirect_stdout(output),
-                patch(
-                    "job_finder.operations.time.monotonic",
-                    side_effect=[10, 75],
-                ),
+                patch("job_finder.operations.time.monotonic", side_effect=[10, 75]),
             ):
                 if fails:
                     with self.assertRaisesRegex(ValueError, "synthetic"):
@@ -58,16 +55,10 @@ class RunDiagnosticsTests(unittest.TestCase):
         output = io.StringIO()
         rows = [
             {"is_new": True, "workflow_status": "new"},
-            {
-                "is_new": True,
-                "workflow_status": "new",
-                "location_precheck": "Junior-Hybrid: Test",
-            },
+            {"is_new": True, "workflow_status": "new", "location_precheck": "Junior-Hybrid: Test"},
             {"is_new": True, "workflow_status": "new", "locations": ["Worldwide"]},
             {"is_new": False, "workflow_status": "new"},
         ]
         with redirect_stdout(output):
-            print_review_diagnostics(
-                {"included": rows, "excluded": []}, {"new": 3, "known": 1}
-            )
+            print_review_diagnostics({"included": rows, "excluded": []}, {"new": 3, "known": 1})
         self.assertIn("Review Neu: 2 im Standardfilter", output.getvalue())

@@ -43,30 +43,11 @@ def compact_text(value):
 def text_is_mainly_english(value):
     """Recognize clearly English job text without treating isolated words as proof."""
     text = normalize_text(value)
-    german_words = [
-        "und",
-        "wir",
-        "du",
-        "sie",
-        "deine",
-        "ihre",
-        "aufgaben",
-        "kenntnisse",
-    ]
-    english_words = [
-        "and",
-        "we",
-        "you",
-        "your",
-        "responsibilities",
-        "requirements",
-        "experience",
-    ]
+    german_words = ["und", "wir", "du", "sie", "deine", "ihre", "aufgaben", "kenntnisse"]
+    english_words = ["and", "we", "you", "your", "responsibilities", "requirements", "experience"]
 
     def count(words):
-        return sum(
-            len(re.findall(rf"(?<!\w){re.escape(word)}(?!\w)", text)) for word in words
-        )
+        return sum(len(re.findall(rf"(?<!\w){re.escape(word)}(?!\w)", text)) for word in words)
 
     german_count = count(german_words)
     english_count = count(english_words)

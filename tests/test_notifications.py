@@ -59,12 +59,10 @@ class NotificationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "state.json"
             path.write_text(
-                json.dumps({"version": 1, "sent": {}, "pending": {"legacy": {}}}),
-                encoding="utf-8",
+                json.dumps({"version": 1, "sent": {}, "pending": {"legacy": {}}}), encoding="utf-8"
             )
             stats = process_notifications(
-                {"included": [make_job(is_new=False)], "excluded": []},
-                state_path=path,
+                {"included": [make_job(is_new=False)], "excluded": []}, state_path=path
             )
             state = json.loads(path.read_text(encoding="utf-8"))
         self.assertEqual(stats["ready"], 0)
@@ -96,12 +94,7 @@ class NotificationTests(unittest.TestCase):
                 json.dumps(
                     {
                         "version": 2,
-                        "sent": {
-                            "old-content-hash": {
-                                "job_id": "job:1",
-                                "sent_at": "2026-09-01",
-                            }
-                        },
+                        "sent": {"old-content-hash": {"job_id": "job:1", "sent_at": "2026-09-01"}},
                         "pending": {"changed-content-hash": {"job_id": "job:1"}},
                     }
                 ),
@@ -109,9 +102,7 @@ class NotificationTests(unittest.TestCase):
             )
             job = make_job()
             job["description_clean"] = "A completely rewritten job description"
-            stats = process_notifications(
-                {"included": [job], "excluded": []}, state_path=path
-            )
+            stats = process_notifications({"included": [job], "excluded": []}, state_path=path)
             self.assertEqual(stats["queued"], 0)
             self.assertEqual(stats["ready"], 0)
             state = json.loads(path.read_text(encoding="utf-8"))
@@ -135,10 +126,7 @@ class NotificationTests(unittest.TestCase):
         international["locations"] = ["Europe"]
         with tempfile.TemporaryDirectory() as directory:
             stats = process_notifications(
-                {
-                    "included": [junior_hybrid, international, make_job("visible")],
-                    "excluded": [],
-                },
+                {"included": [junior_hybrid, international, make_job("visible")], "excluded": []},
                 state_path=Path(directory) / "state.json",
             )
 
@@ -173,10 +161,7 @@ class NotificationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "state.json"
             stats = process_notifications(
-                {
-                    "included": [make_job()],
-                    "excluded": [],
-                },
+                {"included": [make_job()], "excluded": []},
                 send=True,
                 webhook_url="https://discord.test/webhook",
                 client=FakeClient(NotificationError("nicht erreichbar")),
@@ -191,10 +176,7 @@ class NotificationTests(unittest.TestCase):
         fields = {field["name"]: field["value"] for field in embed["fields"]}
         self.assertEqual(embed["title"], "Junior Python Developer")
         self.assertIn("Example GmbH", embed["description"])
-        self.assertEqual(
-            fields["Kurzcheck"],
-            "Neu · Softwareentwicklung · Vorfilter 82/100",
-        )
+        self.assertEqual(fields["Kurzcheck"], "Neu · Softwareentwicklung · Vorfilter 82/100")
         self.assertEqual(fields["Einstieg"], "klare Einstiegsstelle")
         self.assertEqual(fields["Standortprüfung"], "100% remote Deutschland")
         self.assertNotIn("Pro", fields)
@@ -214,8 +196,7 @@ class NotificationTests(unittest.TestCase):
         embed = discord_embed(make_job("job:42"), review_host="review.example.test")
         fields = {field["name"]: field["value"] for field in embed["fields"]}
         self.assertEqual(
-            fields["Review"],
-            "[Stelle öffnen](https://review.example.test/review?job=job:42)",
+            fields["Review"], "[Stelle öffnen](https://review.example.test/review?job=job:42)"
         )
 
     def test_sent_messages_stay_within_discord_limit_with_review_links(self):
@@ -251,14 +232,8 @@ class NotificationTests(unittest.TestCase):
                 "included": 20,
                 "excluded": 80,
                 "review_new": 2,
-                "notifications": {
-                    "eligible_new": 2,
-                    "sent": 2,
-                    "failed": 0,
-                },
-                "sources": [
-                    {"label": "StepStone", "status": "success", "jobs": 10, "new": 1}
-                ],
+                "notifications": {"eligible_new": 2, "sent": 2, "failed": 0},
+                "sources": [{"label": "StepStone", "status": "success", "jobs": 10, "new": 1}],
             }
         )
         embed = payload["embeds"][0]
@@ -293,8 +268,7 @@ class NotificationTests(unittest.TestCase):
         embed = payload["embeds"][0]
 
         self.assertIn(
-            "\u26a0\ufe0f Details fehlen: Arbeitnow 2 Kandidat(en), "
-            "StudySmarter 12 Kandidat(en)",
+            "\u26a0\ufe0f Details fehlen: Arbeitnow 2 Kandidat(en), StudySmarter 12 Kandidat(en)",
             embed["description"],
         )
         self.assertIn("1 erfolgreich", embed["description"])

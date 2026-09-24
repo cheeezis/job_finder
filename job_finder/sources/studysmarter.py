@@ -4,10 +4,7 @@ import time
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
 from job_finder.http import fetch_json, fetch_text
-from job_finder.matching.config import (
-    LOCAL_SEARCH_RADIUS_KM,
-    STUDYSMARTER_LOCAL_SEARCH_LOCATION,
-)
+from job_finder.matching.config import LOCAL_SEARCH_RADIUS_KM, STUDYSMARTER_LOCAL_SEARCH_LOCATION
 from job_finder.models import Job, JobSource, WorkMode
 from job_finder.paths import STUDYSMARTER_CACHE_FILE
 from job_finder.sources.common import (
@@ -19,8 +16,8 @@ from job_finder.sources.common import (
     normalize_employment_type,
     parse_published_date,
     source_job_id,
+    with_current_summary as refresh_summary,
 )
-from job_finder.sources.common import with_current_summary as refresh_summary
 from job_finder.sources.company_careers import job_from_json_ld
 
 SOURCE_NAME = "studysmarter"
@@ -59,9 +56,7 @@ def jobs_from_records(records, cache_path):
         url = detail_url(record.get("link", ""))
         if url:
             summary = summary_job_from_record(record)
-            jobs.append(
-                with_current_summary(cache[url], summary) if url in cache else summary
-            )
+            jobs.append(with_current_summary(cache[url], summary) if url in cache else summary)
     return jobs
 
 
@@ -71,9 +66,7 @@ def with_current_summary(cached_job, summary):
         cached_job,
         summary,
         work_mode=(
-            summary.work_mode
-            if summary.work_mode is not WorkMode.UNKNOWN
-            else cached_job.work_mode
+            summary.work_mode if summary.work_mode is not WorkMode.UNKNOWN else cached_job.work_mode
         ),
         remote_percentage=(
             summary.remote_percentage
@@ -219,12 +212,7 @@ def summary_job_from_record(record):
 
 def enrich_summary_job(summary, html):
     """Replace one lightweight job with structured detail-page content."""
-    job = job_from_json_ld(
-        SOURCE_NAME,
-        summary.company,
-        summary.primary_url,
-        html,
-    )
+    job = job_from_json_ld(SOURCE_NAME, summary.company, summary.primary_url, html)
     job.id = summary.id
     job.sources[0].source_id = summary.primary_source.source_id
     if summary.work_mode is WorkMode.REMOTE:

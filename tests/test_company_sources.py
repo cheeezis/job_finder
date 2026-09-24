@@ -7,18 +7,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from job_finder.models import Job, JobSource, WorkMode
-from job_finder.sources import (
-    bytewerk,
-    compose_it,
-    edag,
-    jumo,
-    rhoenenergie,
-)
-from job_finder.sources.common import (
-    canonical_detail_url,
-    load_detail_cache,
-    save_detail_cache,
-)
+from job_finder.sources import bytewerk, compose_it, edag, jumo, rhoenenergie
+from job_finder.sources.common import canonical_detail_url, load_detail_cache, save_detail_cache
 from job_finder.sources.company_careers import fetch_company_jobs
 
 
@@ -81,10 +71,7 @@ class BytewerkSourceTests(unittest.TestCase):
         with patch.object(bytewerk, "fetch_text", return_value=html):
             links = bytewerk.collect_links()
 
-        self.assertEqual(
-            links,
-            ["https://bytewerk-gmbh.jobs.personio.de/job/1249333"],
-        )
+        self.assertEqual(links, ["https://bytewerk-gmbh.jobs.personio.de/job/1249333"])
 
 
 class RhoenenergieSourceTests(unittest.TestCase):
@@ -127,12 +114,9 @@ class CompanyCareerTests(unittest.TestCase):
                 )
                 save_detail_cache(path, {url: job})
                 with patch(
-                    "job_finder.sources.company_careers.fetch_text",
-                    side_effect=OSError("offline"),
+                    "job_finder.sources.company_careers.fetch_text", side_effect=OSError("offline")
                 ) as fetch:
-                    jobs = fetch_company_jobs(
-                        "example", "Example", [url], path, now=now
-                    )
+                    jobs = fetch_company_jobs("example", "Example", [url], path, now=now)
                 self.assertEqual(len(jobs), expected_count)
                 self.assertEqual(fetch.called, age >= 7)
                 if jobs:

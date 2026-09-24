@@ -4,32 +4,17 @@ from contextlib import nullcontext
 from pathlib import Path
 
 from job_finder.models import WorkflowStatus
-from job_finder.paths import (
-    MEMORY_FILE,
-    RECOMMENDATIONS_JSON,
-)
+from job_finder.paths import MEMORY_FILE, RECOMMENDATIONS_JSON
 from job_finder.persistence.database import snapshot
 from job_finder.persistence.storage import dataset_name, read_json
-from job_finder.workflow.applications import (
-    is_application,
-)
-from job_finder.workflow.memory import (
-    load_memory,
-    memory_source_links,
-    preferred_memory_id,
-)
+from job_finder.workflow.applications import is_application
+from job_finder.workflow.memory import load_memory, memory_source_links, preferred_memory_id
 from job_finder.workflow.reporting import is_international_listing
 
-PERSISTED_REVIEW_STATUSES = {
-    WorkflowStatus.INTERESTING.value,
-    WorkflowStatus.INQUIRY.value,
-}
+PERSISTED_REVIEW_STATUSES = {WorkflowStatus.INTERESTING.value, WorkflowStatus.INQUIRY.value}
 
 
-def load_review_jobs(
-    recommendations_path=RECOMMENDATIONS_JSON,
-    memory_path=MEMORY_FILE,
-):
+def load_review_jobs(recommendations_path=RECOMMENDATIONS_JSON, memory_path=MEMORY_FILE):
     """Combine compact review jobs with their persisted workflow status."""
     path = Path(recommendations_path)
     with snapshot() if dataset_name(path) else nullcontext():
@@ -40,22 +25,13 @@ def load_review_jobs(
     represented_memory_ids = set()
     for recommendation in recommendations:
         job = dict(recommendation)
-        job["international"] = bool(
-            job.get("international")
-        ) or is_international_listing(job)
+        job["international"] = bool(job.get("international")) or is_international_listing(job)
         candidates = memory_ids_for_job(job, memory)
         represented_memory_ids.update(candidates)
-        memory_id = (
-            preferred_memory_id(candidates, memory, job["id"])
-            if candidates
-            else job["id"]
-        )
+        memory_id = preferred_memory_id(candidates, memory, job["id"]) if candidates else job["id"]
         entry = memory.get(memory_id, {})
         job["id"] = memory_id
-        job["workflow_status"] = entry.get(
-            "workflow_status",
-            WorkflowStatus.NEW.value,
-        )
+        job["workflow_status"] = entry.get("workflow_status", WorkflowStatus.NEW.value)
         # ``is_new`` describes the collection run, while a persisted workflow
         # status records that the user has already decided on the job. Never
         # resurrect that transient run marker after the review page reloads.
@@ -70,10 +46,7 @@ def load_review_jobs(
     for job_id, entry in memory.items():
         if job_id in represented_memory_ids or not (
             entry.get("workflow_status") in PERSISTED_REVIEW_STATUSES
-            or (
-                entry.get("workflow_status") == "ignored"
-                and entry.get("availability_checked_at")
-            )
+            or (entry.get("workflow_status") == "ignored" and entry.get("availability_checked_at"))
         ):
             continue
         review_jobs.append(remembered_review_job(job_id, entry))
@@ -83,17 +56,13 @@ def load_review_jobs(
 def remembered_review_job(job_id, entry):
     """Keep a manual shortlist entry until the user changes its status."""
     source_links = memory_source_links(entry)
-    if (
-        entry.get("availability_checked_at")
-        and entry.get("workflow_status") == "ignored"
-    ):
+    if entry.get("availability_checked_at") and entry.get("workflow_status") == "ignored":
         availability_warning = (
             "Anzeige nicht mehr verfügbar; automatisch auf Nicht interessant gesetzt."
         )
     elif entry.get("active", True):
         availability_warning = (
-            "Im aktuellen Lauf nicht gefunden; Verfügbarkeit bitte über die "
-            "Anzeige prüfen."
+            "Im aktuellen Lauf nicht gefunden; Verfügbarkeit bitte über die Anzeige prüfen."
         )
     else:
         availability_warning = (

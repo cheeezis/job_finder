@@ -63,9 +63,7 @@ def _azure_target():
     )
     outputs = json.loads(result.stdout)
     settings = json.loads(
-        (PROJECT / "infrastructure/postgres.auto.tfvars.json").read_text(
-            encoding="utf-8"
-        )
+        (PROJECT / "infrastructure/postgres.auto.tfvars.json").read_text(encoding="utf-8")
     )
     host = outputs["postgres_host"]["value"]
     database = outputs["postgres_database"]["value"]
@@ -78,8 +76,7 @@ def _azure_target():
     bundle = PROJECT / "tmp/azure-postgres-trusted-roots.pem"
     bundle.parent.mkdir(parents=True, exist_ok=True)
     bundle.write_text(
-        "".join(ssl.DER_cert_to_PEM_cert(cert) for cert in certificates),
-        encoding="ascii",
+        "".join(ssl.DER_cert_to_PEM_cert(cert) for cert in certificates), encoding="ascii"
     )
     tls_suffix = f"?sslmode=verify-full&sslrootcert={quote(str(bundle))}"
     return {
@@ -115,9 +112,7 @@ def _read_env_value(env_file, key):
 
 
 def _write_env_value(env_file, key, value):
-    lines = (
-        env_file.read_text(encoding="utf-8").splitlines() if env_file.exists() else []
-    )
+    lines = env_file.read_text(encoding="utf-8").splitlines() if env_file.exists() else []
     for index, line in enumerate(lines):
         if line.startswith(f"{key}="):
             lines[index] = f"{key}={value}"
@@ -129,9 +124,7 @@ def _write_env_value(env_file, key, value):
 
 def _ensure_role(connection):
     """Create jobfinder_app if missing; reset its password if we're about to lose track of it."""
-    exists = connection.execute(
-        "SELECT 1 FROM pg_roles WHERE rolname=%s", (APP_ROLE,)
-    ).fetchone()
+    exists = connection.execute("SELECT 1 FROM pg_roles WHERE rolname=%s", (APP_ROLE,)).fetchone()
     # CREATE/ALTER ROLE take PASSWORD as a literal, not a bind parameter;
     # sql.Literal still escapes it safely, just at SQL-composition time.
     password = secrets.token_hex(24)
@@ -144,8 +137,7 @@ def _ensure_role(connection):
     else:
         connection.execute(
             sql.SQL(
-                "CREATE ROLE {} LOGIN PASSWORD {} "
-                "NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION"
+                "CREATE ROLE {} LOGIN PASSWORD {} NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION"
             ).format(sql.Identifier(APP_ROLE), sql.Literal(password))
         )
     return password
@@ -162,9 +154,9 @@ def _apply_grants(connection, database, admin_role):
         sql.SQL("GRANT USAGE ON SCHEMA public TO {}").format(sql.Identifier(APP_ROLE))
     )
     connection.execute(
-        sql.SQL(
-            "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO {}"
-        ).format(sql.Identifier(APP_ROLE))
+        sql.SQL("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO {}").format(
+            sql.Identifier(APP_ROLE)
+        )
     )
     # Schema may not be initialized yet (job_finder.db init runs independently
     # of this script); skip the revoke rather than fail on a missing table.
@@ -173,9 +165,7 @@ def _apply_grants(connection, database, admin_role):
     ).fetchone()[0]
     if schema_version_exists:
         connection.execute(
-            sql.SQL("REVOKE ALL ON schema_version FROM {}").format(
-                sql.Identifier(APP_ROLE)
-            )
+            sql.SQL("REVOKE ALL ON schema_version FROM {}").format(sql.Identifier(APP_ROLE))
         )
     connection.execute(
         sql.SQL(
@@ -189,9 +179,7 @@ def main():
     """Create/refresh jobfinder_app and its env entries for the chosen target."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--azure",
-        action="store_true",
-        help="Gegen Azure statt die lokale Docker-DB ausführen.",
+        "--azure", action="store_true", help="Gegen Azure statt die lokale Docker-DB ausführen."
     )
     args = parser.parse_args()
     target = _azure_target() if args.azure else _local_target()
@@ -209,14 +197,10 @@ def main():
 
     _write_env_value(env_file, "JOBFINDER_ADMIN_DATABASE_URL", target["admin_url"])
     if not already_configured:
-        _write_env_value(
-            env_file, "JOBFINDER_DATABASE_URL", target["app_url"](password)
-        )
+        _write_env_value(env_file, "JOBFINDER_DATABASE_URL", target["app_url"](password))
         print(f"{env_file.name}: {APP_ROLE} angelegt und Grants gesetzt.")
     else:
-        print(
-            f"{env_file.name}: {APP_ROLE} bereits konfiguriert; Grants erneut angewendet."
-        )
+        print(f"{env_file.name}: {APP_ROLE} bereits konfiguriert; Grants erneut angewendet.")
     print("Zugangsdaten werden nicht ausgegeben.")
 
 

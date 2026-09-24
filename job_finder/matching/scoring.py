@@ -7,47 +7,21 @@ from job_finder.matching import location_rules
 from job_finder.matching.config import LOCAL_SEARCH_RADIUS_KM
 from job_finder.matching.experience import (
     EXPERIENCE_TERM as EXPERIENCE_TERM,
-)
-from job_finder.matching.experience import (
     MORE_THAN_QUALIFIERS as MORE_THAN_QUALIFIERS,
-)
-from job_finder.matching.experience import (
     REQUIRED_EXPERIENCE_PATTERNS as REQUIRED_EXPERIENCE_PATTERNS,
-)
-from job_finder.matching.experience import (
     YEAR_UNIT as YEAR_UNIT,
-)
-from job_finder.matching.experience import (
     analyze_experience as analyze_experience,
-)
-from job_finder.matching.experience import (
     experience_is_optional as experience_is_optional,
-)
-from job_finder.matching.experience import (
     extract_required_years as extract_required_years,
-)
-from job_finder.matching.experience import (
     has_required_experience as has_required_experience,
-)
-from job_finder.matching.experience import (
     match_context as match_context,
-)
-from job_finder.matching.experience import (
     match_is_optional as match_is_optional,
-)
-from job_finder.matching.experience import (
     strong_experience_is_required as strong_experience_is_required,
 )
 from job_finder.matching.location_rules import (
     is_full_remote as is_full_remote,
-)
-from job_finder.matching.location_rules import (
     is_hybrid as is_hybrid,
-)
-from job_finder.matching.location_rules import (
     remote_percent as remote_percent,
-)
-from job_finder.matching.location_rules import (
     remote_possible_from_germany as remote_possible_from_germany,
 )
 from job_finder.matching.matching_rules import (
@@ -61,28 +35,16 @@ from job_finder.matching.matching_rules import (
 )
 from job_finder.matching.matching_text import (
     contains_any as contains_any,
-)
-from job_finder.matching.matching_text import (
     contains_keyword as contains_keyword,
-)
-from job_finder.matching.matching_text import (
     is_entry_level as is_entry_level,
-)
-from job_finder.matching.matching_text import (
     keyword_pattern as keyword_pattern,
-)
-from job_finder.matching.matching_text import (
     matches_pattern as matches_pattern,
 )
 from job_finder.matching.ranking_weights import ROLE_POINTS, SCORE_LIMITS, SKILL_GROUPS
 from job_finder.matching.remote import detect_remote
 from job_finder.matching.salary import (
     extract_annual_salary as extract_annual_salary,
-)
-from job_finder.matching.salary import (
     salary_number as salary_number,
-)
-from job_finder.matching.salary import (
     valid_salary as valid_salary,
 )
 from job_finder.matching.user_settings import USER_SETTINGS
@@ -131,9 +93,7 @@ def score_job(job: Job, today=None):
     employment = normalize_text(job.employment_type or "")
     # Structured employment data must influence preferences even when portals
     # omit words such as "Teilzeit" from title and description.
-    full_text = " ".join(
-        [title, location, remote, employment, description, salary_text]
-    )
+    full_text = " ".join([title, location, remote, employment, description, salary_text])
 
     role = find_role(title, description)
     required_years = extract_required_years(full_text)
@@ -148,12 +108,7 @@ def score_job(job: Job, today=None):
     if filter_reason:
         return excluded_result(filter_reason)
 
-    location_score = analyze_location_for_role(
-        title,
-        location,
-        remote,
-        description,
-    )
+    location_score = analyze_location_for_role(title, location, remote, description)
     if not location_score["allowed"]:
         return excluded_result(location_score["label"])
 
@@ -219,22 +174,13 @@ def strip_platform_boilerplate(description):
         "bei dieser jobboerse erstellen wir fuer stellen",
         "mithilfe von kuenstlicher intelligenz (ki) automatisch generierte zusammenfassungen",
     ]
-    positions = [
-        description.find(marker) for marker in markers if marker in description
-    ]
+    positions = [description.find(marker) for marker in markers if marker in description]
     if positions:
         return description[: min(positions)].strip()
     return description
 
 
-def hard_filter_reason(
-    title,
-    description,
-    full_text,
-    role,
-    career_levels,
-    required_years=None,
-):
+def hard_filter_reason(title, description, full_text, role, career_levels, required_years=None):
     """Return the first blocking job requirement, or an empty string.
 
     Inputs use normalize_text; role is a matching profile dictionary
@@ -260,9 +206,7 @@ def hard_filter_reason(
     if strong_experience_is_required(title, description):
         return "Mehrjaehrige oder fundierte Erfahrung gefordert"
 
-    if any(
-        re.search(pattern, full_text) for pattern in MANDATORY_ADVANCED_DEGREE_PATTERNS
-    ):
+    if any(re.search(pattern, full_text) for pattern in MANDATORY_ADVANCED_DEGREE_PATTERNS):
         return "Verpflichtender Master- oder Promotionsabschluss"
 
     if contains_any(full_text, HIGH_TRAVEL_PHRASES):
@@ -415,15 +359,11 @@ def score_preferences(full_text):
     ):
         penalties.append({"points": 12, "label": "Ausbildungs-/Studienformat"})
 
-    if contains_any(
-        full_text, ["arbeitnehmerueberlassung", "zeitarbeit", "personaldienstleister"]
-    ):
+    if contains_any(full_text, ["arbeitnehmerueberlassung", "zeitarbeit", "personaldienstleister"]):
         penalties.append({"points": 3, "label": "Arbeitnehmerueberlassung/Zeitarbeit"})
 
     if text_is_mainly_english(full_text):
-        penalties.append(
-            {"points": 2, "label": "ueberwiegend englischsprachige Stelle"}
-        )
+        penalties.append({"points": 2, "label": "ueberwiegend englischsprachige Stelle"})
 
     salary = extract_annual_salary(full_text)
     if salary and SALARY_MINIMUM is not None and salary[1] < SALARY_MINIMUM:
@@ -434,15 +374,7 @@ def score_preferences(full_text):
     return penalties
 
 
-def passes_hard_filters(
-    title,
-    description,
-    location,
-    remote,
-    full_text,
-    role,
-    career_levels,
-):
+def passes_hard_filters(title, description, location, remote, full_text, role, career_levels):
     """Return (allowed, reason) for normalized job text and role data.
 
     Inputs use normalize_text; role is a matching profile dictionary
@@ -454,12 +386,7 @@ def passes_hard_filters(
     if reason:
         return False, reason
 
-    location_score = analyze_location_for_role(
-        title,
-        location,
-        remote,
-        description,
-    )
+    location_score = analyze_location_for_role(title, location, remote, description)
     if not location_score["allowed"]:
         return False, location_score["label"]
 

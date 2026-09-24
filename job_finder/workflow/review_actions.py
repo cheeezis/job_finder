@@ -1,14 +1,8 @@
 """Transactional actions for review decisions and application history."""
 
 from job_finder.models import WorkflowStatus
-from job_finder.paths import (
-    APPLICATION_DOCUMENTS_DIR,
-    MEMORY_FILE,
-)
-from job_finder.persistence.application_documents import (
-    remove_documents,
-    store_documents,
-)
+from job_finder.paths import APPLICATION_DOCUMENTS_DIR, MEMORY_FILE
+from job_finder.persistence.application_documents import remove_documents, store_documents
 from job_finder.workflow.applications import (
     delete_history_event,
     is_application,
@@ -16,17 +10,11 @@ from job_finder.workflow.applications import (
     synchronize_current_status,
     update_history_event,
 )
-from job_finder.workflow.memory import (
-    edit_job,
-)
+from job_finder.workflow.memory import edit_job
 
 
 def update_workflow_status(
-    job_id,
-    workflow_status,
-    memory_path=MEMORY_FILE,
-    occurred_on=None,
-    scheduled_for=None,
+    job_id, workflow_status, memory_path=MEMORY_FILE, occurred_on=None, scheduled_for=None
 ):
     """Validate and persist one manual workflow decision."""
     status = WorkflowStatus(workflow_status)
@@ -35,68 +23,39 @@ def update_workflow_status(
     return current_status
 
 
-def update_review_decision(
-    job_id,
-    workflow_status,
-    memory_path=MEMORY_FILE,
-):
+def update_review_decision(job_id, workflow_status, memory_path=MEMORY_FILE):
     """Persist a review decision without changing an existing application."""
     status = WorkflowStatus(workflow_status)
-    if status not in {
-        WorkflowStatus.INTERESTING,
-        WorkflowStatus.INQUIRY,
-        WorkflowStatus.IGNORED,
-    }:
+    if status not in {WorkflowStatus.INTERESTING, WorkflowStatus.INQUIRY, WorkflowStatus.IGNORED}:
         raise ValueError("Ungueltiger Review-Status")
     with edit_job(job_id, memory_path) as entry:
         if is_application(entry):
             return {
-                "workflow_status": entry.get(
-                    "workflow_status", WorkflowStatus.APPLIED.value
-                ),
+                "workflow_status": entry.get("workflow_status", WorkflowStatus.APPLIED.value),
                 "application_tracked": True,
             }
         current_status = record_status_change(entry, status)
-    return {
-        "workflow_status": current_status,
-        "application_tracked": False,
-    }
+    return {"workflow_status": current_status, "application_tracked": False}
 
 
-def undo_ignored_decision(
-    job_id,
-    expected_status,
-    memory_path=MEMORY_FILE,
-):
+def undo_ignored_decision(job_id, expected_status, memory_path=MEMORY_FILE):
     """Remove the latest ignored transition and restore its prior status."""
     with edit_job(job_id, memory_path) as entry:
         if is_application(entry):
-            raise ValueError(
-                "Bewerbungsstatus kann hier nicht rückgängig gemacht werden"
-            )
+            raise ValueError("Bewerbungsstatus kann hier nicht rückgängig gemacht werden")
         if entry.get("workflow_status") != WorkflowStatus(expected_status).value:
             raise ValueError("Die Stelle wurde zwischenzeitlich geändert")
         if expected_status != WorkflowStatus.IGNORED.value:
-            raise ValueError(
-                "Nur die letzte Nicht-interessant-Entscheidung ist rückgängig"
-            )
+            raise ValueError("Nur die letzte Nicht-interessant-Entscheidung ist rückgängig")
         history = entry.get("workflow_history")
         if not isinstance(history, list) or not history:
             raise ValueError("Keine Entscheidung zum Rückgängigmachen gefunden")
         last_event = history[-1]
-        if (
-            not isinstance(last_event, dict)
-            or last_event.get("status") != expected_status
-        ):
-            raise ValueError(
-                "Die letzte Entscheidung hat sich zwischenzeitlich geändert"
-            )
+        if not isinstance(last_event, dict) or last_event.get("status") != expected_status:
+            raise ValueError("Die letzte Entscheidung hat sich zwischenzeitlich geändert")
         history.pop()
         status = synchronize_current_status(entry)
-    return {
-        "workflow_status": status,
-        "application_tracked": False,
-    }
+    return {"workflow_status": status, "application_tracked": False}
 
 
 def start_application(
@@ -113,14 +72,10 @@ def start_application(
         with edit_job(job_id, memory_path) as entry:
             if is_application(entry):
                 return {
-                    "workflow_status": entry.get(
-                        "workflow_status", WorkflowStatus.APPLIED.value
-                    ),
+                    "workflow_status": entry.get("workflow_status", WorkflowStatus.APPLIED.value),
                     "application_tracked": True,
                 }
-            salary_eur = validated_salary_expectation_eur(
-                salary_expectation_eur, salary_period
-            )
+            salary_eur = validated_salary_expectation_eur(salary_expectation_eur, salary_period)
             stored_documents = store_documents(
                 job_id,
                 documents,
@@ -139,10 +94,7 @@ def start_application(
         # failed transaction as unreferenced application documents.
         remove_documents(job_id, stored_documents, documents_dir)
         raise
-    return {
-        "workflow_status": status,
-        "application_tracked": True,
-    }
+    return {"workflow_status": status, "application_tracked": True}
 
 
 def validated_salary_expectation_eur(value, period="year"):
@@ -220,10 +172,6 @@ def delete_workflow_history(
     """Delete one manual workflow event."""
     with edit_job(job_id, memory_path) as entry:
         status = delete_history_event(
-            entry,
-            event_index,
-            previous_status,
-            previous_occurred_on,
-            previous_scheduled_for,
+            entry, event_index, previous_status, previous_occurred_on, previous_scheduled_for
         )
     return {"workflow_status": status}

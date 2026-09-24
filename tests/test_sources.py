@@ -16,23 +16,15 @@ from job_finder.matching.config import (
     STEPSTONE_SEARCH_TERMS,
 )
 from job_finder.models import Job, JobSource, WorkMode
-from job_finder.sources import (
-    arbeitsagentur,
-    get_in_it,
-    stepstone,
-)
-from job_finder.sources.common import (
-    save_detail_cache,
-)
+from job_finder.sources import arbeitsagentur, get_in_it, stepstone
+from job_finder.sources.common import save_detail_cache
 from job_finder.sources.stepstone import build_search_url
 
 
 class CommuterSearchTests(unittest.TestCase):
     def test_arbeitsagentur_search_can_target_one_commuter_city(self):
         url = arbeitsagentur.build_search_url(
-            "Junior IT",
-            location="Beispielstadt",
-            radius=COMMUTER_SEARCH_RADIUS_KM,
+            "Junior IT", location="Beispielstadt", radius=COMMUTER_SEARCH_RADIUS_KM
         )
 
         self.assertIn("wo=Beispielstadt", url)
@@ -43,11 +35,7 @@ class CommuterSearchTests(unittest.TestCase):
             patch.object(get_in_it, "GET_IN_IT_SEARCH_TERMS", []),
             patch.object(get_in_it, "GET_IN_IT_SEARCH_LOCATIONS", []),
             patch.object(get_in_it, "COMMUTER_SEARCH_TERMS", ["Junior Developer"]),
-            patch.object(
-                get_in_it,
-                "COMMUTER_SEARCH_LOCATIONS",
-                ["Beispielstadt"],
-            ),
+            patch.object(get_in_it, "COMMUTER_SEARCH_LOCATIONS", ["Beispielstadt"]),
         ):
             searches = list(get_in_it.build_api_searches())
 
@@ -76,10 +64,7 @@ class StepStoneSearchTests(unittest.TestCase):
     def test_remote_search_does_not_add_local_radius(self):
         url = build_search_url("Python Developer", "Remote")
 
-        self.assertEqual(
-            url,
-            "https://www.stepstone.de/jobs/Python-Developer/in-Remote?page=1",
-        )
+        self.assertEqual(url, "https://www.stepstone.de/jobs/Python-Developer/in-Remote?page=1")
 
 
 class StepStonePaginationTests(unittest.TestCase):
@@ -106,10 +91,7 @@ class StepStonePaginationTests(unittest.TestCase):
     def test_search_progress_replaces_stop_reason_summary(self):
         url = "https://www.stepstone.de/stellenangebote--same.html"
         client = Mock()
-        client.get.side_effect = [
-            f'<a href="{url}">Stelle</a>',
-            f'<a href="{url}">Stelle</a>',
-        ]
+        client.get.side_effect = [f'<a href="{url}">Stelle</a>', f'<a href="{url}">Stelle</a>']
 
         with (
             patch.object(stepstone, "STEPSTONE_SEARCH_TERMS", ["Python"]),
@@ -136,11 +118,7 @@ class StepStoneCacheTests(unittest.TestCase):
             cache_path = Path(directory) / "stepstone.json"
             stepstone.save_cache(
                 cache_path,
-                {
-                    "version": stepstone.CACHE_VERSION,
-                    "last_links": [url],
-                    "jobs": {url: job},
-                },
+                {"version": stepstone.CACHE_VERSION, "last_links": [url], "jobs": {url: job}},
             )
             saved_job = json.loads(cache_path.read_text(encoding="utf-8"))["jobs"][url]
 
@@ -168,17 +146,10 @@ class StepStoneCacheTests(unittest.TestCase):
             )
 
             with (
-                patch.object(
-                    stepstone,
-                    "search_links",
-                    return_value=[cached_url, new_url],
-                ),
+                patch.object(stepstone, "search_links", return_value=[cached_url, new_url]),
                 patch.object(stepstone, "fetch_job", return_value=new_job) as fetch_job,
             ):
-                jobs = stepstone.fetch_jobs(
-                    cache_path=cache_path,
-                    client=Mock(),
-                )
+                jobs = stepstone.fetch_jobs(cache_path=cache_path, client=Mock())
 
             self.assertEqual(jobs, [cached_job, new_job])
             fetch_job.assert_called_once_with(new_url, ANY)
@@ -205,10 +176,7 @@ class StepStoneCacheTests(unittest.TestCase):
                 "search_links",
                 side_effect=stepstone.StepStoneBlockedError(403, "search-url"),
             ):
-                jobs = stepstone.fetch_jobs(
-                    cache_path=cache_path,
-                    client=Mock(),
-                )
+                jobs = stepstone.fetch_jobs(cache_path=cache_path, client=Mock())
 
         self.assertEqual(jobs, [job])
 
@@ -240,10 +208,7 @@ class StepStoneCacheTests(unittest.TestCase):
                     side_effect=stepstone.StepStoneBlockedError(429, blocked_url),
                 ) as fetch_job,
             ):
-                jobs = stepstone.fetch_jobs(
-                    cache_path=cache_path,
-                    client=Mock(),
-                )
+                jobs = stepstone.fetch_jobs(cache_path=cache_path, client=Mock())
 
         self.assertEqual(jobs, [cached_job])
         fetch_job.assert_called_once_with(blocked_url, ANY)
@@ -268,16 +233,9 @@ class StepStoneCacheTests(unittest.TestCase):
             )
             with (
                 patch.object(stepstone, "search_links", return_value=[url]),
-                patch.object(
-                    stepstone,
-                    "fetch_job",
-                    return_value=refreshed_job,
-                ) as fetch_job,
+                patch.object(stepstone, "fetch_job", return_value=refreshed_job) as fetch_job,
             ):
-                jobs = stepstone.fetch_jobs(
-                    cache_path=cache_path,
-                    client=Mock(),
-                )
+                jobs = stepstone.fetch_jobs(cache_path=cache_path, client=Mock())
 
         self.assertEqual(jobs, [refreshed_job])
         fetch_job.assert_called_once_with(url, ANY)
@@ -315,9 +273,7 @@ class SharedDetailCacheTests(unittest.TestCase):
 
     def test_fresh_details_are_reused_by_arbeitsagentur(self):
         now = datetime(2026, 7, 17, 12, tzinfo=timezone.utc)
-        sources = [
-            (arbeitsagentur, "https://example.test/arbeitsagentur/1"),
-        ]
+        sources = [(arbeitsagentur, "https://example.test/arbeitsagentur/1")]
 
         for source, url in sources:
             with self.subTest(source=source.SOURCE_NAME):
@@ -337,11 +293,7 @@ class SharedDetailCacheTests(unittest.TestCase):
     def test_stale_detail_is_downloaded(self):
         now = datetime(2026, 7, 17, 12, tzinfo=timezone.utc)
         url = "https://www.get-in-it.de/jobsuche/p1"
-        cached_job = self.make_job(
-            get_in_it.SOURCE_NAME,
-            url,
-            now - timedelta(days=8),
-        )
+        cached_job = self.make_job(get_in_it.SOURCE_NAME, url, now - timedelta(days=8))
         refreshed_job = self.make_job(get_in_it.SOURCE_NAME, url, now)
         refreshed_job.description_clean = "Python und neue Cloud-Aufgaben"
 
@@ -363,18 +315,11 @@ class SharedDetailCacheTests(unittest.TestCase):
                         }
                     ],
                 ),
-                patch.object(
-                    get_in_it,
-                    "fetch_job",
-                    return_value=refreshed_job,
-                ) as fetch_job,
+                patch.object(get_in_it, "fetch_job", return_value=refreshed_job) as fetch_job,
             ):
                 jobs = get_in_it.fetch_jobs(cache_path=cache_path, now=now)
                 enriched = get_in_it.enrich_candidate_jobs(
-                    jobs,
-                    {jobs[0].id},
-                    cache_path=cache_path,
-                    now=now,
+                    jobs, {jobs[0].id}, cache_path=cache_path, now=now
                 )
 
         self.assertEqual(jobs, [refreshed_job])
@@ -384,11 +329,7 @@ class SharedDetailCacheTests(unittest.TestCase):
     def test_failed_refresh_falls_back_to_stale_detail(self):
         now = datetime(2026, 7, 17, 12, tzinfo=timezone.utc)
         url = "https://example.test/arbeitsagentur/1"
-        cached_job = self.make_job(
-            arbeitsagentur.SOURCE_NAME,
-            url,
-            now - timedelta(days=8),
-        )
+        cached_job = self.make_job(arbeitsagentur.SOURCE_NAME, url, now - timedelta(days=8))
 
         with tempfile.TemporaryDirectory() as directory:
             cache_path = Path(directory) / "details.json"
@@ -396,9 +337,7 @@ class SharedDetailCacheTests(unittest.TestCase):
             with (
                 patch.object(arbeitsagentur, "collect_links", return_value=[url]),
                 patch.object(
-                    arbeitsagentur,
-                    "fetch_job",
-                    side_effect=RuntimeError("nicht erreichbar"),
+                    arbeitsagentur, "fetch_job", side_effect=RuntimeError("nicht erreichbar")
                 ),
             ):
                 jobs = arbeitsagentur.fetch_jobs(cache_path=cache_path, now=now)

@@ -15,8 +15,7 @@ def decode_legacy_memory(values):
     """Decode the supported JSON memory document, preserving all job fields."""
     if values.get("version") != MEMORY_VERSION:
         raise ValueError(
-            "seen_jobs.json verwendet das alte Format; Datei vor dem "
-            "ersten neuen Lauf loeschen"
+            "seen_jobs.json verwendet das alte Format; Datei vor dem ersten neuen Lauf loeschen"
         )
     return values.get("jobs", {})
 
@@ -58,10 +57,7 @@ def decode_notification_state(document):
     version = document.get("version")
     if version not in {1, 2, NOTIFICATION_STATE_VERSION}:
         raise ValueError("Benachrichtigungsstatus verwendet eine unbekannte Version")
-    sent = {
-        entry.get("job_id", key): entry
-        for key, entry in document.get("sent", {}).items()
-    }
+    sent = {entry.get("job_id", key): entry for key, entry in document.get("sent", {}).items()}
     pending = (
         {}
         if version == 1

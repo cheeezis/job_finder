@@ -6,16 +6,12 @@ import re
 def extract_annual_salary(text):
     """Extract explicit annual salary ranges without guessing from unrelated numbers."""
     number = r"(?:\d{2,3}(?:[.\s]\d{3})|\d{5,6}|\d{2,3}\s*k)"
-    range_pattern = (
-        rf"({number})\s*(?:-|\u2013|bis|to)\s*({number})\s*(?:eur|euro|\u20ac)"
-    )
+    range_pattern = rf"({number})\s*(?:-|\u2013|bis|to)\s*({number})\s*(?:eur|euro|\u20ac)"
     ranges = re.findall(range_pattern, text)
     if ranges:
         values = [(salary_number(low), salary_number(high)) for low, high in ranges]
         plausible = [
-            (low, high)
-            for low, high in values
-            if valid_salary(low) and valid_salary(high)
+            (low, high) for low, high in values if valid_salary(low) and valid_salary(high)
         ]
         if plausible:
             return max(plausible, key=lambda item: item[1])

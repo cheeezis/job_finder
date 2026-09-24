@@ -88,9 +88,7 @@ def job_from_element(element, fetched_at=None):
                 source=SOURCE_NAME,
                 source_id=identifier,
                 url=listing_url,
-                application_url=(
-                    application_url if application_url != listing_url else None
-                ),
+                application_url=(application_url if application_url != listing_url else None),
             )
         ],
         description_raw=raw_description,
@@ -127,9 +125,7 @@ def location_names(city, location, country):
 def annual_salary_eur(value):
     """Parse the feed's annual euro salary range into whole euro values."""
     text = str(value or "").strip()
-    if not re.search(r"(?i)(?:€|eur)", text) or not re.search(
-        r"(?i)(?:year|jahr|annual)", text
-    ):
+    if not re.search(r"(?i)(?:€|eur)", text) or not re.search(r"(?i)(?:year|jahr|annual)", text):
         return None, None
     amounts = [
         int(re.sub(r"\D", "", match))

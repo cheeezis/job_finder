@@ -65,11 +65,7 @@ def _persist_import(imported, jobs_path, memory_path, recommendations_path):
     score = score_for_pipeline(target)
     warning = score.get("prefilter_warning")
 
-    row = {
-        **target.to_dict(),
-        "is_new": target.is_new,
-        **score,
-    }
+    row = {**target.to_dict(), "is_new": target.is_new, **score}
     save_recommendation(row, recommendations_path)
     return {
         "job_id": row["id"],
@@ -90,9 +86,7 @@ def replace_or_add_job(jobs, imported):
     """Update an existing exact URL or cross-source duplicate in-place."""
     imported_url = canonical_detail_url(imported.primary_url)
     for index, existing in enumerate(jobs):
-        existing_urls = {
-            canonical_detail_url(source.url) for source in existing.sources
-        }
+        existing_urls = {canonical_detail_url(source.url) for source in existing.sources}
         if imported_url in existing_urls:
             jobs[index] = merge_jobs(existing, imported)
             return jobs[index]
@@ -101,8 +95,7 @@ def replace_or_add_job(jobs, imported):
     jobs[:] = merged
     for job in jobs:
         if any(
-            source.source == manual.SOURCE_NAME
-            and canonical_detail_url(source.url) == imported_url
+            source.source == manual.SOURCE_NAME and canonical_detail_url(source.url) == imported_url
             for source in job.sources
         ):
             return job
@@ -120,11 +113,7 @@ def save_recommendation(job, path):
     path = Path(path)
     document = read_json(path, {"recommendations": []})
     recommendation = recommendation_for_job(job)
-    urls = {
-        link["url"]
-        for link in recommendation.get("source_links", [])
-        if link.get("url")
-    }
+    urls = {link["url"] for link in recommendation.get("source_links", []) if link.get("url")}
     retained = [
         item
         for item in document.get("recommendations", [])
@@ -136,11 +125,7 @@ def save_recommendation(job, path):
     retained.append(recommendation)
     retained.sort(
         key=lambda item: (
-            -(
-                item.get("match_percent")
-                if item.get("match_percent") is not None
-                else -1
-            ),
+            -(item.get("match_percent") if item.get("match_percent") is not None else -1),
             item.get("title", "").casefold(),
         )
     )

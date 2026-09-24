@@ -21,17 +21,12 @@ class PublicApiTests(unittest.TestCase):
         )
 
     def test_main_fragment_retains_original_html(self):
-        self.assertEqual(
-            main_fragment("<main><p>A &amp; B</p></main>"), "<p>A &amp; B</p>"
-        )
+        self.assertEqual(main_fragment("<main><p>A &amp; B</p></main>"), "<p>A &amp; B</p>")
         with self.assertRaisesRegex(ValueError, "Kein Hauptinhalt"):
             main_fragment("<p>Outside</p>")
 
     def test_memory_lookup_retains_id_and_returns_original_entry(self):
-        entry = {
-            "source_urls": ["https://example.test/job"],
-            "workflow_status": "interesting",
-        }
+        entry = {"source_urls": ["https://example.test/job"], "workflow_status": "interesting"}
         self.assertEqual(memory_entry_for_job({"id": "missing"}, {}), ("missing", {}))
         job_id, result = memory_entry_for_job(
             {"id": "old", "url": "https://example.test/job"}, {"saved": entry}

@@ -2,17 +2,12 @@
 
 import re
 
-from job_finder.matching.matching_rules import (
-    FOREIGN_ONLY_LOCATION_WORDS,
-    GERMANY_LOCATION_WORDS,
-)
+from job_finder.matching.matching_rules import FOREIGN_ONLY_LOCATION_WORDS, GERMANY_LOCATION_WORDS
 from job_finder.matching.matching_text import contains_any, contains_keyword
 from job_finder.text import normalize_text
 
 
-def analyze_location(
-    location, remote, description, *, local_places, commuter_locations, radius
-):
+def analyze_location(location, remote, description, *, local_places, commuter_locations, radius):
     """Return allowed, points and label for normalized location evidence.
 
     Accept configured local places, full remote work compatible with
@@ -34,11 +29,7 @@ def analyze_location(
         if full_remote:
             return {"allowed": True, "points": 15, "label": "lokal und 100% Remote"}
         if is_hybrid(remote):
-            return {
-                "allowed": True,
-                "points": 13,
-                "label": f"{radius_label} und Hybrid",
-            }
+            return {"allowed": True, "points": 13, "label": f"{radius_label} und Hybrid"}
         return {"allowed": True, "points": 10, "label": f"im {radius_label}"}
 
     if full_remote:
@@ -53,8 +44,7 @@ def analyze_location(
                 "allowed": True,
                 "points": 8,
                 "label": (
-                    f"Pendelort {commuter_location['search_location']} mit "
-                    f"{percentage}% Remote"
+                    f"Pendelort {commuter_location['search_location']} mit {percentage}% Remote"
                 ),
             }
 
@@ -69,9 +59,7 @@ def is_local_area(location, local_places):
 def find_commuter_location(location, commuter_locations):
     """Return the first matching commuter configuration, or None."""
     for item in commuter_locations:
-        excluded_aliases = [
-            normalize_text(alias) for alias in item.get("excluded_aliases", [])
-        ]
+        excluded_aliases = [normalize_text(alias) for alias in item.get("excluded_aliases", [])]
         if contains_any(location, excluded_aliases):
             continue
         aliases = [normalize_text(alias) for alias in item["aliases"]]

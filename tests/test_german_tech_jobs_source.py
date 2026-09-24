@@ -59,12 +59,10 @@ class GermanTechJobsTests(unittest.TestCase):
 
     def test_non_annual_or_non_euro_salary_is_not_imported(self):
         self.assertEqual(
-            german_tech_jobs.annual_salary_eur("4.000 - 5.000 € per month"),
-            (None, None),
+            german_tech_jobs.annual_salary_eur("4.000 - 5.000 € per month"), (None, None)
         )
         self.assertEqual(
-            german_tech_jobs.annual_salary_eur("60,000 - 80,000 USD per year"),
-            (None, None),
+            german_tech_jobs.annual_salary_eur("60,000 - 80,000 USD per year"), (None, None)
         )
 
     def test_recent_cache_is_used_and_marked_after_feed_failure(self):
@@ -73,9 +71,7 @@ class GermanTechJobsTests(unittest.TestCase):
             cache = Path(directory) / "feed.json"
             jobs, _invalid = german_tech_jobs.parse_feed(FEED, now)
             german_tech_jobs.save_feed_cache(cache, jobs, now)
-            with patch.object(
-                german_tech_jobs, "fetch_text", side_effect=OSError("offline")
-            ):
+            with patch.object(german_tech_jobs, "fetch_text", side_effect=OSError("offline")):
                 result = german_tech_jobs.fetch_jobs_with_report(cache, now=now)
 
         self.assertEqual(result["status"], "partial")
@@ -89,9 +85,7 @@ class GermanTechJobsTests(unittest.TestCase):
             cache = Path(directory) / "feed.json"
             jobs, _invalid = german_tech_jobs.parse_feed(FEED, now)
             german_tech_jobs.save_feed_cache(cache, jobs, now - timedelta(days=4))
-            with patch.object(
-                german_tech_jobs, "fetch_text", side_effect=OSError("offline")
-            ):
+            with patch.object(german_tech_jobs, "fetch_text", side_effect=OSError("offline")):
                 with self.assertRaises(OSError):
                     german_tech_jobs.fetch_jobs_with_report(cache, now=now)
 

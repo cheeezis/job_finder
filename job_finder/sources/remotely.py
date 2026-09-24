@@ -38,8 +38,7 @@ LINKEDIN_REQUEST_DELAY_SECONDS = 0.4
 LINKEDIN_STATUS_MAX_AGE = timedelta(days=1)
 LINKEDIN_HEADERS = {
     "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 Chrome/128 Safari/537.36"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/128 Safari/537.36"
     ),
     "Accept-Language": "de-DE,de;q=0.9,en;q=0.7",
 }
@@ -70,10 +69,7 @@ def fetch_jobs(cache_path=CACHE_FILE, client=None, now=None):
     client = client or RemotelyHttpClient()
     cache_file = Path(cache_path)
     reference_date = (now.date() if hasattr(now, "date") else now) or date.today()
-    links = collect_links(
-        client,
-        today=reference_date,
-    )
+    links = collect_links(client, today=reference_date)
     return fetch_cached_details(
         links,
         cache_file,
@@ -120,10 +116,7 @@ def enrich_candidate_jobs(
             try:
                 final_url, html = fetcher(url, headers=LINKEDIN_HEADERS)
                 closed = linkedin_listing_is_closed(url, final_url, html)
-                checks[key] = {
-                    "closed": closed,
-                    "checked_at": checked_at.isoformat(),
-                }
+                checks[key] = {"closed": closed, "checked_at": checked_at.isoformat()}
                 cache_changed = True
             except Exception:
                 errors += 1
@@ -132,10 +125,7 @@ def enrich_candidate_jobs(
             closed_indices.add(job_index)
         if progress_checkpoint(position, len(targets)):
             print_progress(
-                "Remotely LinkedIn",
-                position,
-                len(targets),
-                f"{len(closed_indices)} geschlossen",
+                "Remotely LinkedIn", position, len(targets), f"{len(closed_indices)} geschlossen"
             )
 
     if cache_changed:
@@ -230,11 +220,7 @@ def fresh_linkedin_status(entry, now):
     return entry["closed"]
 
 
-def collect_links(
-    client=None,
-    today=None,
-    max_pages=None,
-):
+def collect_links(client=None, today=None, max_pages=None):
     """Collect recent listings and stop at the old frontier."""
     client = client or RemotelyHttpClient()
     page_limit = max_pages or MAX_LIST_PAGES
@@ -307,8 +293,7 @@ def page_is_before_cutoff(entries, cutoff, today):
     """Use old regular cards as a conservative pagination stop signal."""
     regular_entries = [entry for entry in entries if not entry.get("promoted")]
     dates = [
-        parse_relative_date(entry.get("published_label"), today=today)
-        for entry in regular_entries
+        parse_relative_date(entry.get("published_label"), today=today) for entry in regular_entries
     ]
     if not dates or any(value is None for value in dates):
         return False
@@ -394,10 +379,7 @@ def parse_relative_date(value, today=None):
         return current
     if label == "gestern":
         return current - timedelta(days=1)
-    match = re.fullmatch(
-        r"vor (\d+) (tag(?:en)?|woche(?:n)?|monat(?:en)?|jahr(?:en)?)",
-        label,
-    )
+    match = re.fullmatch(r"vor (\d+) (tag(?:en)?|woche(?:n)?|monat(?:en)?|jahr(?:en)?)", label)
     if not match:
         return None
     amount = int(match.group(1))
@@ -463,9 +445,7 @@ class _RemotelyDetailParser(HTMLParser):
         elif tag == "p" and not self.company and self.pending_company_mark:
             self.capture_company = True
             self.pending_company_mark = False
-        elif (
-            tag == "span" and self.awaiting_published_label and not self.published_label
-        ):
+        elif tag == "span" and self.awaiting_published_label and not self.published_label:
             self.capture_published_label = True
             self.awaiting_published_label = False
         if tag == "a" and values.get("data-apply-cta") == "true":

@@ -20,34 +20,21 @@ COMPANY = "EDAG Engineering GmbH"
 LIST_URL = "https://www.edag.com/de/karriere/stellenanzeigen"
 CACHE_FILE = EDAG_CACHE_FILE
 
-CAREER_LEVELS = {
-    "professionals",
-    "studierende",
-    "absolventen",
-    "schueler",
-    "fuehrungskraefte",
-}
+CAREER_LEVELS = {"professionals", "studierende", "absolventen", "schueler", "fuehrungskraefte"}
 
 
 def fetch_jobs(cache_path=CACHE_FILE, now=None):
     """Fetch locally relevant EDAG listings using cached visible-page details."""
     links = collect_links()
     return fetch_company_jobs(
-        SOURCE_NAME,
-        COMPANY,
-        links,
-        cache_path,
-        now=now,
-        parser=job_from_html,
+        SOURCE_NAME, COMPANY, links, cache_path, now=now, parser=job_from_html
     )
 
 
 def collect_links():
     """Collect unique local job links across EDAG's advertised result pages."""
     first_html = fetch_text(LIST_URL)
-    pages = [
-        int(value) for value in re.findall(r"currentPage(?:%5D|\])=(\d+)", first_html)
-    ]
+    pages = [int(value) for value in re.findall(r"currentPage(?:%5D|\])=(\d+)", first_html)]
     last_page = max(pages, default=1)
     links = []
     seen = set()
@@ -56,9 +43,7 @@ def collect_links():
         html = (
             first_html
             if page == 1
-            else fetch_text(
-                f"{LIST_URL}?tx_successfactors_view%5BcurrentPage%5D={page}"
-            )
+            else fetch_text(f"{LIST_URL}?tx_successfactors_view%5BcurrentPage%5D={page}")
         )
         for url in extract_local_links(html):
             if url not in seen:
@@ -116,17 +101,12 @@ def job_from_html(source_name, fallback_company, url, html):
         ),
         None,
     )
-    locations = [fact for fact in facts[1:] if is_location_fact(fact, employment)] or [
-        "unbekannt"
-    ]
+    locations = [fact for fact in facts[1:] if is_location_fact(fact, employment)] or ["unbekannt"]
     structured_remote = (
         "homeoffice" if any("hybrid" in normalize_text(fact) for fact in facts) else ""
     )
     remote = detect_remote(
-        title,
-        clean_description,
-        ", ".join(locations),
-        structured_remote=structured_remote,
+        title, clean_description, ", ".join(locations), structured_remote=structured_remote
     )
     work_mode, remote_percentage = classify_remote(remote)
     identifier = identifier_from_url(url)
@@ -157,12 +137,8 @@ def extract_facts(html):
     )
     if not match:
         return []
-    facts = re.findall(
-        r"<span[^>]*>(.*?)</span>", match.group(1), re.IGNORECASE | re.DOTALL
-    )
-    return [
-        text for fact in facts if (text := compact_text(html_to_text(unescape(fact))))
-    ]
+    facts = re.findall(r"<span[^>]*>(.*?)</span>", match.group(1), re.IGNORECASE | re.DOTALL)
+    return [text for fact in facts if (text := compact_text(html_to_text(unescape(fact))))]
 
 
 def is_location_fact(fact, employment):

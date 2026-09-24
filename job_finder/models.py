@@ -191,9 +191,7 @@ class Job:
             first_seen_at=parse_datetime(values.get("first_seen_at")),
             last_seen_at=parse_datetime(values.get("last_seen_at")),
             fetched_at=parse_datetime(values.get("fetched_at")),
-            workflow_status=WorkflowStatus(
-                values.get("workflow_status", WorkflowStatus.NEW.value)
-            ),
+            workflow_status=WorkflowStatus(values.get("workflow_status", WorkflowStatus.NEW.value)),
             cache_stale=bool(values.get("cache_stale", False)),
         )
 

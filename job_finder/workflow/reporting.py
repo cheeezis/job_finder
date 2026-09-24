@@ -53,10 +53,7 @@ ROLE_LABELS = {
 }
 
 
-def write_recommendations(
-    results,
-    json_path=RECOMMENDATIONS_JSON,
-):
+def write_recommendations(results, json_path=RECOMMENDATIONS_JSON):
     """Write every job that passed the rule-based prefilter."""
     recommendations = [recommendation_for_job(job) for job in results["included"]]
     json_file = Path(json_path)
@@ -95,9 +92,7 @@ def recommendation_for_job(job):
 
 def is_international_listing(job):
     """Recognize broad scopes and clearly international feed listings."""
-    locations = [
-        str(value).strip() for value in job.get("locations", []) if str(value).strip()
-    ]
+    locations = [str(value).strip() for value in job.get("locations", []) if str(value).strip()]
     location = " ".join(locations)
     normalized = location.casefold()
     source_names = {
@@ -124,12 +119,7 @@ def primary_url(job):
     """Return the preferred listing URL from serialized source data."""
     sources = job.get("sources", [])
     application_url = next(
-        (
-            source.get("application_url")
-            for source in sources
-            if source.get("application_url")
-        ),
-        None,
+        (source.get("application_url") for source in sources if source.get("application_url")), None
     )
     return application_url or (sources[0].get("url", "") if sources else "")
 

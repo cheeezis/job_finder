@@ -91,7 +91,6 @@ def fetch_jobs(cache_path=MANUAL_CACHE_FILE, now=None):
             refreshed[saved_url] = cached_job
             if detail_within_age(cached_job, now):
                 cached_job.cache_stale = True
-                refreshed[saved_url] = cached_job
                 jobs.append(cached_job)
 
     if refreshed != cache:

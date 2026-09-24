@@ -385,13 +385,3 @@ def analyze_location(location, remote, description):
         commuter_locations=COMMUTER_LOCATIONS,
         radius=LOCAL_SEARCH_RADIUS_KM,
     )
-
-
-def is_local_area(location):
-    """Match a location against the configured local aliases."""
-    return location_rules.is_local_area(location, LOCAL_PLACES)
-
-
-def find_commuter_location(location):
-    """Return the first matching configured commuter location, or None."""
-    return location_rules.find_commuter_location(location, COMMUTER_LOCATIONS)

@@ -7,17 +7,7 @@ for old documents separate from normal workflow updates.
 import re
 from datetime import datetime
 
-MEMORY_VERSION = 2
 NOTIFICATION_STATE_VERSION = 3
-
-
-def decode_legacy_memory(values):
-    """Decode the supported JSON memory document, preserving all job fields."""
-    if values.get("version") != MEMORY_VERSION:
-        raise ValueError(
-            "seen_jobs.json verwendet das alte Format; Datei vor dem ersten neuen Lauf loeschen"
-        )
-    return values.get("jobs", {})
 
 
 def restore_initial_discovery_date(entry):

@@ -189,7 +189,7 @@ Der Stellen- und Bewerbungszustand, Empfehlungen, Versandstatus und Quellencache
 liegen in PostgreSQL. Bewerbungsunterlagen bleiben separate Dateien unter
 `data/internal/application_documents`; ihre Zuordnung steht in der Datenbank.
 
-Einrichtung, geprüfte Altdatenmigration, Backups und Wiederherstellung sind in
+Einrichtung, Backups und Wiederherstellung sind in
 [PostgreSQL betreiben](docs/postgresql.md) beschrieben. Die alten SQLite-
 und JSON-Dateien bleiben nach der Migration als Sicherung erhalten und werden
 vom normalen Betrieb nicht mehr aktualisiert.

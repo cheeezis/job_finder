@@ -2,9 +2,7 @@
 
 import base64
 import io
-import json
 import os
-import sqlite3
 import tempfile
 import threading
 import unittest
@@ -17,7 +15,6 @@ from job_finder.matching.scoring import LOCAL_PLACES
 from job_finder.models import Job, JobSource
 from job_finder.persistence.application_documents import store_documents
 from job_finder.persistence.database import transaction
-from job_finder.persistence.migration import migrate
 from job_finder.persistence.postgres_backup import create_postgres_backup, restore_backup
 from job_finder.persistence.postgres_store import prune_cache, read_dataset, write_dataset
 from job_finder.workflow.memory import edit_job, edit_memory, load_memory, save_memory
@@ -290,28 +287,3 @@ class PostgresTests(unittest.TestCase):
             self.assertEqual(load_memory(), memory)
             self.assertEqual(next((root / "restored").rglob("*.pdf")).read_bytes(), content)
             self.assertIn("job:1", read_dataset("internal/notifications.json")["sent"])
-
-    def test_legacy_migration_is_verified_repeatable_and_keeps_source(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            (root / "internal").mkdir()
-            database = root / "internal" / "job_finder.sqlite3"
-            expected = {"job:1": {"workflow_status": "applied", "review_note": "keep"}}
-            connection = sqlite3.connect(database)
-            connection.executescript(
-                "CREATE TABLE metadata(key TEXT,value TEXT); INSERT INTO metadata VALUES ('schema_version','1'); CREATE TABLE job_state(job_id TEXT,payload_json TEXT);"
-            )
-            connection.execute(
-                "INSERT INTO job_state VALUES (?,?)", ("job:1", json.dumps(expected["job:1"]))
-            )
-            connection.commit()
-            connection.close()
-            (root / "internal" / "jobs.json").write_text(
-                '[{"id":"job:1"},{"id":"job:1"}]', encoding="utf-8"
-            )
-            before = database.read_bytes()
-            result = migrate(root)
-            self.assertTrue(result["verified"])
-            self.assertEqual(load_memory(), expected)
-            self.assertTrue(migrate(root)["already_migrated"])
-            self.assertEqual(database.read_bytes(), before)

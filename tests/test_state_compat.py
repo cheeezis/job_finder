@@ -4,7 +4,6 @@ import copy
 import unittest
 
 from job_finder.persistence.state_compat import (
-    decode_legacy_memory,
     decode_notification_state,
     restore_initial_discovery_date,
 )
@@ -34,8 +33,6 @@ class StateCompatibilityTests(unittest.TestCase):
 
     def test_unknown_versions_remain_rejected(self):
         with self.assertRaises(ValueError):
-            decode_legacy_memory({"version": 1})
-        with self.assertRaises(ValueError):
             decode_notification_state({"version": 4})
 
     def test_legacy_entry_keeps_decisions_and_normalizes_only_once(self):
@@ -48,8 +45,6 @@ class StateCompatibilityTests(unittest.TestCase):
             "first_seen_at": "2026-09-01T12:00:00+00:00",
             "review_note": "keep",
         }
-        document = {"version": 2, "jobs": {"job:1": entry}}
-        self.assertIs(decode_legacy_memory(document)["job:1"], entry)
         restore_initial_discovery_date(entry)
         first = copy.deepcopy(entry)
         restore_initial_discovery_date(entry)

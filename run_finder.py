@@ -103,12 +103,21 @@ def require_usable_source_snapshot(source_reports):
 def parse_args():
     """Parse command-line options for one Job Finder run."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument(
         "--exclude-sources",
         default="",
         help=(
             "Comma-separated SOURCE_NAME values to skip this run, e.g. "
             "'stepstone,remotely' for a split cloud/local schedule"
+        ),
+    )
+    selection.add_argument(
+        "--only-sources",
+        default="",
+        help=(
+            "Comma-separated SOURCE_NAME values to run exclusively; every other "
+            "source keeps its previous jobs like an excluded one"
         ),
     )
     return parser.parse_args()
@@ -119,14 +128,23 @@ def parse_source_names(value):
     return {name.strip() for name in value.split(",") if name.strip()}
 
 
+def excluded_source_names(args):
+    """Return the sources to skip; --only-sources skips every source it does not name."""
+    if not args.only_sources:
+        return parse_source_names(args.exclude_sources)
+    only = parse_source_names(args.only_sources)
+    known = {source.SOURCE_NAME for source in SOURCES}
+    if unknown := only - known:
+        raise SystemExit(f"Unbekannte Quellen: {', '.join(sorted(unknown))}")
+    return known - only
+
+
 def main():
     """Run collection and scoring before persisting state and reporting."""
     configure_utf8_output()
     args = parse_args()
     with worker_lock(), RunLog() as run_log:
-        run_pipeline(
-            exclude_sources=parse_source_names(args.exclude_sources), run_id=run_log.run_id
-        )
+        run_pipeline(exclude_sources=excluded_source_names(args), run_id=run_log.run_id)
 
 
 def run_pipeline(exclude_sources=frozenset(), run_id=None):

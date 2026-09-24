@@ -5,11 +5,83 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
+from urllib.parse import parse_qsl
 
 from job_finder.models import Job, JobSource, WorkMode
 from job_finder.sources import bytewerk, compose_it, edag, jumo, rhoenenergie
 from job_finder.sources.common import canonical_detail_url, load_detail_cache, save_detail_cache
 from job_finder.sources.company_careers import fetch_company_jobs
+
+
+class FakeJumoSession:
+    """Answer JUMO's session requests in order and record what was sent."""
+
+    def __init__(self, answers):
+        self.answers = list(answers)
+        self.requests = []
+
+    def open(self, request, timeout):
+        form = dict(parse_qsl(request.data.decode())) if request.data else None
+        self.requests.append((request.full_url, form, dict(request.header_items()), timeout))
+        return FakeResponse(self.answers.pop(0))
+
+
+class FakeResponse:
+    def __init__(self, text):
+        self.text = text
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def read(self):
+        return self.text.encode()
+
+
+class JumoSessionTests(unittest.TestCase):
+    def test_collect_links_follows_csrf_session_batches_until_no_more_offers(self):
+        session = FakeJumoSession(
+            [
+                '<input name="_csrf" type="hidden" value="a&amp;b">',
+                "search started",
+                '<a href="x?jobOfferId=AA11">1</a><a href="x?jobOfferId=bb22">2</a>',
+                "true",
+                '<a href="x?jobOfferId=bb22">2</a><a href="x?jobOfferId=cc33">3</a>',
+                "False",
+            ]
+        )
+        with patch.object(jumo, "build_opener", return_value=session):
+            links = jumo.collect_links()
+
+        self.assertEqual(
+            [link.split("jobOfferId=")[1].split("&")[0] for link in links], ["AA11", "bb22", "cc33"]
+        )
+        self.assertTrue(
+            links[0].startswith(f"{jumo.BASE_URL}showJobOfferDetail.do?jobOfferId=AA11")
+        )
+        urls = [url for url, _form, _headers, _timeout in session.requests]
+        forms = [form for _url, form, _headers, _timeout in session.requests]
+        self.assertEqual(
+            urls, [jumo.SEARCH_URL, f"{jumo.LIST_URL}?search=true", *[jumo.LIST_URL] * 4]
+        )
+        self.assertIsNone(forms[0])
+        self.assertEqual(forms[1], {"j": "jobexchange", "_csrf": "a&b"})
+        self.assertEqual(
+            forms[2], {"showNextJobOffers": "true", "j": "jobexchange", "_csrf": "a&b"}
+        )
+        self.assertEqual(forms[3], {"hasNextJobOffers": "true", "_csrf": "a&b"})
+        for _url, form, headers, timeout in session.requests:
+            self.assertEqual(headers["User-agent"], "job-finder/0.1")
+            self.assertEqual(timeout, 20)
+            if form is not None:
+                self.assertEqual(headers["Content-type"], "application/x-www-form-urlencoded")
+
+    def test_collect_links_needs_the_csrf_token(self):
+        with patch.object(jumo, "build_opener", return_value=FakeJumoSession(["<form></form>"])):
+            with self.assertRaisesRegex(ValueError, "CSRF"):
+                jumo.collect_links()
 
 
 class ComposeItSourceTests(unittest.TestCase):

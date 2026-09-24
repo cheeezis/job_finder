@@ -80,13 +80,7 @@ def _prepare_documents(documents):
 
 def document_path(job_id, metadata, root=APPLICATION_DOCUMENTS_DIR):
     """Resolve one stored document without accepting a path from the browser."""
-    if not isinstance(metadata, dict):
-        raise ValueError("Bewerbungsunterlage wurde nicht gefunden")
-    stored_name = str(metadata.get("stored_name") or "")
-    if Path(stored_name).name != stored_name or not stored_name:
-        raise ValueError("Ungültiger Dokumentpfad")
-    folder_name = metadata.get("folder_name")
-    path = document_directory(job_id, root, folder_name) / stored_name
+    path = Path(root) / resolve_document_key(job_id, metadata)
     if not path.is_file():
         raise FileNotFoundError("Bewerbungsunterlage wurde nicht gefunden")
     return path
@@ -95,8 +89,7 @@ def document_path(job_id, metadata, root=APPLICATION_DOCUMENTS_DIR):
 def resolve_document_key(job_id, metadata):
     """Compute one document's storage key without touching either backend.
 
-    Shares document_directory()'s folder validation so the key matches
-    exactly what document_path() would resolve on the local backend.
+    document_path() resolves the same key below the local root.
     """
     if not isinstance(metadata, dict):
         raise ValueError("Bewerbungsunterlage wurde nicht gefunden")

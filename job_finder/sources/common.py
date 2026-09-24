@@ -218,15 +218,16 @@ def detail_cache_job_dict(job):
     return {field: values[field] for field in DETAIL_CACHE_FIELDS}
 
 
+def as_utc(moment):
+    """Treat a naive timestamp as UTC and leave aware timestamps unchanged."""
+    return moment.replace(tzinfo=UTC) if moment.tzinfo is None else moment
+
+
 def detail_is_fresh(job, now=None, max_age=DETAIL_REFRESH_AGE):
     """Return whether a cached detail page is younger than the allowed age."""
     if job is None or job.fetched_at is None:
         return False
-    current_time = now or utc_now()
-    fetched_at = job.fetched_at
-    if fetched_at.tzinfo is None:
-        fetched_at = fetched_at.replace(tzinfo=UTC)
-    return current_time - fetched_at < max_age
+    return (now or utc_now()) - as_utc(job.fetched_at) < max_age
 
 
 def detail_within_age(job, now=None, max_age=MAX_STALE_DETAIL_AGE):

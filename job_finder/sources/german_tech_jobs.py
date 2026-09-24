@@ -2,7 +2,7 @@
 
 import re
 import xml.etree.ElementTree as ET
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from job_finder.http import fetch_text
@@ -11,6 +11,7 @@ from job_finder.models import Job, JobSource
 from job_finder.paths import cache_file
 from job_finder.persistence.storage import read_json, write_json_atomic
 from job_finder.sources.common import (
+    as_utc,
     build_fetch_report,
     normalize_employment_type,
     parse_published_date,
@@ -160,9 +161,7 @@ def load_feed_cache(path, now=None):
         document = read_json(path, {})
         if document.get("version") != CACHE_VERSION:
             return []
-        fetched_at = datetime.fromisoformat(document["fetched_at"])
-        if fetched_at.tzinfo is None:
-            fetched_at = fetched_at.replace(tzinfo=UTC)
+        fetched_at = as_utc(datetime.fromisoformat(document["fetched_at"]))
         current = now or utc_now()
         if current - fetched_at > MAX_STALE_FEED_AGE:
             return []

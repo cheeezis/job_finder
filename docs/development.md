@@ -197,11 +197,8 @@ Rollengruppe gewinnt; ihre Reihenfolge ist fachliche Erkennungspriorität und
 wird nicht durch persönliche Vorlieben umsortiert.
 
 `user_settings.local.yaml` steuert Standort, Gehalt
-und den Bezug zu Projekten oder Weiterbildungen. Unbekannte IDs in
-`matching.preferred_role_groups` werden beim Laden abgelehnt. Ein fehlender
-Eintrag ist für ältere Konfigurationen zulässig und entspricht einer leeren
-Liste. Das Feld bleibt kompatibel, beeinflusst die wiederhergestellte
-Sortierung aber nicht. `profile.local.yaml` ist davon unabhängig und wird nicht automatisch
+und den Bezug zu Projekten oder Weiterbildungen. Ein früheres Feld
+`matching.preferred_role_groups` wird beim Laden ignoriert. `profile.local.yaml` ist davon unabhängig und wird nicht automatisch
 eingelesen. Die alte Python-Datei `profile.py` wurde durch `matching_rules.py`
 abgelöst; interne Imports verwenden die neuen Zuständigkeiten.
 

@@ -8,6 +8,7 @@ from job_finder.models import Job, WorkMode
 from job_finder.text import normalize_text
 
 LEGAL_FORMS = ["gmbh", "mbh", "ag", "se", "kg", "ohg", "ug", "co", "ltd", "inc"]
+GENDER_LABEL = r"(?:m/w/d|w/m/d|m/f/d|f/m/d|all genders|alle geschlechter|gn)"
 
 WORK_MODE_TITLE_SUFFIX = re.compile(
     r"(?:\s*[-–—|]\s*|\s+\()"
@@ -44,9 +45,7 @@ def deduplicate_jobs(jobs: list[Job]) -> list[Job]:
             unique_jobs.append(job)
             continue
 
-        existing = unique_jobs[position]
-        merged = merge_jobs(existing, job)
-        unique_jobs[position] = merged
+        unique_jobs[position] = merge_jobs(unique_jobs[position], job)
 
     return unique_jobs
 
@@ -60,8 +59,7 @@ def find_duplicate_position(job, company_key, positions, unique_jobs):
         existing = unique_jobs[position]
         if set(job.source_names) & set(existing.source_names):
             continue
-        existing_company = normalize_company(existing.company)
-        if companies_match(company_key, existing_company) and (
+        if companies_match(company_key, normalize_company(existing.company)) and (
             locations_match(job.locations, existing.locations) or both_fully_remote(job, existing)
         ):
             return position
@@ -70,10 +68,8 @@ def find_duplicate_position(job, company_key, positions, unique_jobs):
 
 def locations_match(first_locations, second_locations):
     """Require a shared normalized place before merging ambiguous portal ads."""
-    first = {normalize_location(value) for value in first_locations}
-    second = {normalize_location(value) for value in second_locations}
-    first.discard("")
-    second.discard("")
+    first = {normalize_location(value) for value in first_locations} - {""}
+    second = {normalize_location(value) for value in second_locations} - {""}
     if not first or not second:
         return False
     return any(
@@ -109,16 +105,15 @@ def normalize_company(company):
     text = normalize_text(company)
     text = re.sub(r"[^a-z0-9]+", " ", text)
     text = re.sub(r"^bei\s+", "", text)
-    words = [word for word in text.split() if word not in LEGAL_FORMS]
-    return " ".join(words)
+    return " ".join(word for word in text.split() if word not in LEGAL_FORMS)
 
 
 def normalize_title(title):
     """Remove gender labels and work-mode suffixes for title comparison."""
     text = normalize_text(title)
     text = re.sub(r"\[[^]]*\]", " ", text)
-    text = re.sub(r"\((?:m/w/d|w/m/d|m/f/d|f/m/d|all genders|alle geschlechter|gn)\)", " ", text)
-    text = re.sub(r"\b(?:m/w/d|w/m/d|m/f/d|f/m/d|all genders|alle geschlechter|gn)\b", " ", text)
+    # A bare label never contains "(", so it cannot overlap a parenthesized one.
+    text = re.sub(rf"\({GENDER_LABEL}\)|\b{GENDER_LABEL}\b", " ", text)
     # Portals often append the work model to the title although location and
     # remote compatibility are checked independently before a merge.
     text = WORK_MODE_TITLE_SUFFIX.sub(" ", text)
@@ -128,16 +123,13 @@ def normalize_title(title):
 
 def merge_jobs(existing, duplicate):
     """Keep the richer posting and attach provenance from both sources."""
-    existing_description = existing.description_clean
-    duplicate_description = duplicate.description_clean
-    richer = duplicate if len(duplicate_description) > len(existing_description) else existing
-    sources = unique_sources(existing.sources + duplicate.sources)
-    locations = list(dict.fromkeys(existing.locations + duplicate.locations))
+    # max() keeps the first of equally long descriptions, i.e. the existing one.
+    richer = max(existing, duplicate, key=lambda job: len(job.description_clean))
     return replace(
         richer,
         id=existing.id,
-        locations=locations,
-        sources=sources,
+        locations=list(dict.fromkeys(existing.locations + duplicate.locations)),
+        sources=unique_sources(existing.sources + duplicate.sources),
         is_new=existing.is_new or duplicate.is_new,
     )
 

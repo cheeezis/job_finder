@@ -149,9 +149,9 @@ class AzureScriptTests(unittest.TestCase):
             run,
             ssl_context,
             patch.object(module.psycopg, "connect", return_value=FakeConnection((False, None))),
+            self.assertRaisesRegex(RuntimeError, "kein TLS"),
         ):
-            with self.assertRaisesRegex(RuntimeError, "kein TLS"):
-                module.main()
+            module.main()
 
     def test_preparation_errors_propagate_unchanged(self):
         def terraform_fails(args, **kwargs):

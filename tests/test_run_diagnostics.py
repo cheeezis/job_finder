@@ -19,9 +19,8 @@ class RunDiagnosticsTests(unittest.TestCase):
                 patch("job_finder.operations.time.monotonic", side_effect=[10, 75]),
             ):
                 if fails:
-                    with self.assertRaisesRegex(ValueError, "synthetic"):
-                        with timed_step("Quelle Test"):
-                            raise ValueError("synthetic")
+                    with self.assertRaisesRegex(ValueError, "synthetic"), timed_step("Quelle Test"):
+                        raise ValueError("synthetic")
                 else:
                     with timed_step("Quelle Test"):
                         pass

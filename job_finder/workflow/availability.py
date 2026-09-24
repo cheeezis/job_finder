@@ -2,7 +2,7 @@
 
 import re
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from html.parser import HTMLParser
 from urllib.error import HTTPError
 from urllib.parse import urlsplit
@@ -152,7 +152,7 @@ def ignore_closed_listings(
     recently confirmed closed. Return the IDs changed by this call.
     progress, if supplied, receives completed and planned URL counts.
     """
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     snapshot = load_memory(memory_path)
     candidates, due = _plan_checks(jobs, snapshot, successful_sources, now)
     selected = sorted(due, key=due.get)[: max(0, max_urls)]

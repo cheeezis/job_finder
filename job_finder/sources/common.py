@@ -4,7 +4,7 @@ import hashlib
 import json
 import re
 from dataclasses import replace
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -88,7 +88,7 @@ class ListingUnavailableError(ValueError):
 
 def utc_now():
     """Return a timezone-aware timestamp for source fetches."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def canonical_detail_url(url):
@@ -225,7 +225,7 @@ def detail_is_fresh(job, now=None, max_age=DETAIL_REFRESH_AGE):
     current_time = now or utc_now()
     fetched_at = job.fetched_at
     if fetched_at.tzinfo is None:
-        fetched_at = fetched_at.replace(tzinfo=timezone.utc)
+        fetched_at = fetched_at.replace(tzinfo=UTC)
     return current_time - fetched_at < max_age
 
 

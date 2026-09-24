@@ -2,7 +2,7 @@
 
 import tempfile
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -52,7 +52,7 @@ class GetInItSourceTests(unittest.TestCase):
         self.assertEqual(job.remote_percentage, 100)
 
     def test_fresh_cached_detail_is_reused_without_page_request(self):
-        now = datetime(2026, 9, 8, 12, tzinfo=timezone.utc)
+        now = datetime(2026, 9, 8, 12, tzinfo=UTC)
         cached = self.detailed_job(now - timedelta(days=2))
         with tempfile.TemporaryDirectory() as directory:
             cache_path = Path(directory) / "get_in_it.json"
@@ -72,7 +72,7 @@ class GetInItSourceTests(unittest.TestCase):
         fetch_job.assert_not_called()
 
     def test_only_stale_prefiltered_candidate_gets_full_details(self):
-        now = datetime(2026, 9, 8, 12, tzinfo=timezone.utc)
+        now = datetime(2026, 9, 8, 12, tzinfo=UTC)
         stale = self.detailed_job(now - timedelta(days=8))
         detailed = self.detailed_job(now)
         detailed.description_clean = "Python, Azure und Kubernetes"

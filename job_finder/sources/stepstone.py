@@ -160,14 +160,13 @@ def search_links(client=None, *, coverage=None):
     links = []
     seen = set()
     search_errors = 0
-    processed_queries = 0
     requested_pages = 0
     planned_queries = len(STEPSTONE_SEARCH_TERMS) * len(STEPSTONE_SEARCH_LOCATIONS)
     if coverage is not None:
         coverage["total_segments"] = planned_queries
 
-    for query in iter_search_queries(STEPSTONE_SEARCH_TERMS, STEPSTONE_SEARCH_LOCATIONS):
-        processed_queries += 1
+    queries = iter_search_queries(STEPSTONE_SEARCH_TERMS, STEPSTONE_SEARCH_LOCATIONS)
+    for processed_queries, query in enumerate(queries, start=1):
         page = 1
         query_seen = set()
 

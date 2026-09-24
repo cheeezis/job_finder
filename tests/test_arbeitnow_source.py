@@ -284,16 +284,14 @@ class ArbeitnowTests(unittest.TestCase):
         )
         reset_fetch_diagnostics()
 
-        with tempfile.TemporaryDirectory() as directory:
-            with (
-                patch.object(
-                    arbeitnow, "fetch_text_with_final_url", side_effect=OSError("timeout")
-                ),
-                patch("builtins.print"),
-            ):
-                count = arbeitnow.enrich_candidate_jobs(
-                    [job], {job.id}, cache_path=Path(directory) / "arbeitnow.json"
-                )
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(arbeitnow, "fetch_text_with_final_url", side_effect=OSError("timeout")),
+            patch("builtins.print"),
+        ):
+            count = arbeitnow.enrich_candidate_jobs(
+                [job], {job.id}, cache_path=Path(directory) / "arbeitnow.json"
+            )
 
         self.assertEqual(count, 0)
         self.assertEqual(fetch_diagnostics()["failed_candidates"], 1)

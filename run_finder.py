@@ -185,9 +185,8 @@ def run_pipeline(exclude_sources=frozenset(), run_id=None):
     complete_sources = {
         report["name"] for report in source_reports if report["status"] in {"success", "empty"}
     }
-    with timed_step("Gedächtnis speichern"):
-        with edit_memory(MEMORY_FILE) as memory:
-            memory_stats = update_memory(jobs, memory, successful_sources=complete_sources)
+    with timed_step("Gedächtnis speichern"), edit_memory(MEMORY_FILE) as memory:
+        memory_stats = update_memory(jobs, memory, successful_sources=complete_sources)
 
     with timed_step("Offline-Prüfung"):
         closed_ids = ignore_closed_listings(

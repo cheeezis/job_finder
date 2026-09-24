@@ -156,11 +156,10 @@ class PostgresTests(unittest.TestCase):
             self.assertEqual(read_dataset(name), value)
 
     def test_related_writes_roll_back_together(self):
-        with self.assertRaisesRegex(RuntimeError, "abort"):
-            with transaction():
-                save_memory({"job:1": {"workflow_status": "new"}})
-                write_dataset("internal/jobs.json", [{"id": "job:1"}])
-                raise RuntimeError("abort")
+        with self.assertRaisesRegex(RuntimeError, "abort"), transaction():
+            save_memory({"job:1": {"workflow_status": "new"}})
+            write_dataset("internal/jobs.json", [{"id": "job:1"}])
+            raise RuntimeError("abort")
         self.assertEqual(load_memory(), {})
         self.assertIsNone(read_dataset("internal/jobs.json"))
 

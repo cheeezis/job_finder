@@ -4,7 +4,7 @@ import json
 import sys
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 _PROGRESS_STARTED = {}
 _PROGRESS_REPORTED = {}
@@ -24,7 +24,7 @@ def log_event(event, *, run_id, level="info", **fields):
     query it with e.g. `Log_s | extend e = parse_json(Log_s)`.
     """
     entry = {
-        "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "timestamp": datetime.now(UTC).isoformat(timespec="seconds"),
         "run_id": run_id,
         "event": event,
         "level": level,

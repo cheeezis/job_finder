@@ -3,7 +3,7 @@
 from collections import defaultdict
 from contextlib import contextmanager
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from job_finder.matching.deduplication import normalize_company, normalize_title
 from job_finder.models import APPLICATION_STATUSES, WorkflowStatus
@@ -69,7 +69,7 @@ def update_memory(jobs, memory, successful_sources=None):
     every known source completed successfully. Mark it inactive after
     INACTIVE_AFTER_MISSED_RUNS missed runs; do not change its workflow decision.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     new_count = 0
     known_count = 0
     inactive_count = 0

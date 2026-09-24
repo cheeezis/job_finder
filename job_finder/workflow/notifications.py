@@ -2,7 +2,7 @@
 
 import json
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -76,7 +76,7 @@ def process_notifications(
     that field. Delivery failures remain pending for a later run and
     increment failed; filesystem and malformed-state errors propagate.
     """
-    timestamp = datetime.now(timezone.utc).isoformat()
+    timestamp = datetime.now(UTC).isoformat()
     state = load_notification_state(state_path)
     candidates, stats = _update_queue(results, state, timestamp)
     save_notification_state(state, state_path)

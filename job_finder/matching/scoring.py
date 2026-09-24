@@ -227,9 +227,12 @@ def find_role(title, description):
             if not contains_any(full_text, testing_context):
                 continue
 
-        if role["id"] == "testing" and contains_keyword(title, "verification"):
-            if not contains_any(full_text, ["software", "test", "automation"]):
-                continue
+        if (
+            role["id"] == "testing"
+            and contains_keyword(title, "verification")
+            and not contains_any(full_text, ["software", "test", "automation"])
+        ):
+            continue
 
         return role
 

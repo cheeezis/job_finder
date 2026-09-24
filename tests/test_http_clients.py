@@ -95,9 +95,11 @@ class HttpHelperTests(unittest.TestCase):
 
     def test_announced_size_above_the_default_limit_is_rejected(self):
         routes = {"/huge": (200, {"Content-Length": str(30 * 1024 * 1024)}, b"x")}
-        with local_server(routes) as (base, _requests):
-            with self.assertRaisesRegex(ValueError, "Größenlimit"):
-                fetch_text(f"{base}/huge")
+        with (
+            local_server(routes) as (base, _requests),
+            self.assertRaisesRegex(ValueError, "Größenlimit"),
+        ):
+            fetch_text(f"{base}/huge")
 
     def test_size_limit_checks_header_and_actual_body(self):
         routes = {
@@ -134,9 +136,11 @@ class HttpHelperTests(unittest.TestCase):
         self.assertNotIn("/blocked", [request["path"] for request in requests])
 
     def test_http_errors_propagate_with_their_status(self):
-        with local_server({"/missing": (404, {}, b"")}) as (base, _requests):
-            with self.assertRaises(HTTPError) as caught:
-                fetch_text(f"{base}/missing")
+        with (
+            local_server({"/missing": (404, {}, b"")}) as (base, _requests),
+            self.assertRaises(HTTPError) as caught,
+        ):
+            fetch_text(f"{base}/missing")
         self.assertEqual(caught.exception.code, 404)
 
 
@@ -157,10 +161,12 @@ class DiscordWebhookClientTests(unittest.TestCase):
 
     def test_unexpected_status_and_http_errors_become_notification_errors(self):
         for status in (202, 500):
-            with self.subTest(status=status):
-                with local_server({"/webhook": (status, {}, b"")}) as (base, _requests):
-                    with self.assertRaisesRegex(NotificationError, f"HTTP {status}"):
-                        DiscordWebhookClient(f"{base}/webhook").send({"content": "x"})
+            with (
+                self.subTest(status=status),
+                local_server({"/webhook": (status, {}, b"")}) as (base, _requests),
+                self.assertRaisesRegex(NotificationError, f"HTTP {status}"),
+            ):
+                DiscordWebhookClient(f"{base}/webhook").send({"content": "x"})
 
     def test_timeout_and_unreachable_server_become_notification_errors(self):
         with local_server({"/slow": (200, {}, b"", 1.0)}) as (base, _requests):

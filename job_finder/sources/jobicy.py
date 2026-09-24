@@ -104,10 +104,7 @@ def location_names(value):
 
 def text_values(value):
     """Split Jobicy's comma-separated seniority labels."""
-    if isinstance(value, list):
-        values = value
-    else:
-        values = str(value or "").split(",")
+    values = value if isinstance(value, list) else str(value or "").split(",")
     return [str(item).strip() for item in values if str(item or "").strip()]
 
 

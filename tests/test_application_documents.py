@@ -1,6 +1,7 @@
 """Tests for locally archived application documents."""
 
 import base64
+import contextlib
 import hashlib
 import os
 import tempfile
@@ -111,10 +112,8 @@ class ApplicationDocumentTests(unittest.TestCase):
         named = {"stored_name": "cv.pdf", "folder_name": "Example GmbH - Dev [abc]"}
         legacy = {"stored_name": "cv.pdf", "folder_name": ""}
         roots = [self.directory, str(self.directory)]
-        try:
+        with contextlib.suppress(ValueError):  # temporary directory on another drive
             roots.append(Path(os.path.relpath(self.directory)))
-        except ValueError:  # temporary directory on another Windows drive
-            pass
         for metadata, folder in ((named, "Example GmbH - Dev [abc]"), (legacy, LEGACY_FOLDER)):
             (self.directory / folder).mkdir()
             (self.directory / folder / "cv.pdf").write_bytes(b"%PDF")
@@ -148,9 +147,11 @@ class ApplicationDocumentTests(unittest.TestCase):
                 ("path", lambda value: document_path("job:1", value, self.directory)),
                 ("key", lambda value: resolve_document_key("job:1", value)),
             ):
-                with self.subTest(metadata=metadata, via=name):
-                    with self.assertRaisesRegex(ValueError, message):
-                        resolve(metadata)
+                with (
+                    self.subTest(metadata=metadata, via=name),
+                    self.assertRaisesRegex(ValueError, message),
+                ):
+                    resolve(metadata)
 
     def test_backslash_in_stored_name_follows_the_platform_path_rules(self):
         metadata = {"stored_name": "a\cv.pdf"}

@@ -27,10 +27,9 @@ def prune_cache(days=30):
     if days < 14:
         raise ValueError("Cache-Aufbewahrung muss mindestens 14 Tage betragen.")
     with transaction() as connection:
-        rows = connection.execute(
+        return connection.execute(
             "DELETE FROM source_cache WHERE stored_at < now() - (%s * interval '1 day')", (days,)
         ).rowcount
-        return rows
 
 
 def parts(record, fields):

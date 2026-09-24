@@ -19,8 +19,7 @@ def update_workflow_status(
     """Validate and persist one manual workflow decision."""
     status = WorkflowStatus(workflow_status)
     with edit_job(job_id, memory_path) as entry:
-        current_status = record_status_change(entry, status, occurred_on, scheduled_for)
-    return current_status
+        return record_status_change(entry, status, occurred_on, scheduled_for)
 
 
 def update_review_decision(job_id, workflow_status, memory_path=MEMORY_FILE):
@@ -146,7 +145,7 @@ def update_workflow_history(
 ):
     """Edit one manual workflow event."""
     with edit_job(job_id, memory_path) as entry:
-        result = update_history_event(
+        return update_history_event(
             entry,
             event_index,
             previous_status,
@@ -156,7 +155,6 @@ def update_workflow_history(
             scheduled_for,
             previous_scheduled_for,
         )
-    return result
 
 
 def delete_workflow_history(

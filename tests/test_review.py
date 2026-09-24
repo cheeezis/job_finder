@@ -585,10 +585,12 @@ class ReviewTests(unittest.TestCase):
         )
         document = load_memory(self.memory_path)["job:1"]["application_documents"][0]
         query = urlencode({"job_id": "job:1", "document_id": document["id"]})
-        with self.server_context(application_documents_dir=documents_directory) as base_url:
-            with urlopen(f"{base_url}/api/application-document?{query}") as response:
-                content = response.read()
-                disposition = response.headers["Content-Disposition"]
+        with (
+            self.server_context(application_documents_dir=documents_directory) as base_url,
+            urlopen(f"{base_url}/api/application-document?{query}") as response,
+        ):
+            content = response.read()
+            disposition = response.headers["Content-Disposition"]
 
         self.assertEqual(content, b"%PDF resume")
         self.assertIn("Lebenslauf.pdf", disposition)
@@ -765,21 +767,23 @@ class ReviewTests(unittest.TestCase):
     def test_database_failure_removes_new_application_documents(self):
         before = load_memory(self.memory_path)
         root = self.directory / "documents"
-        with mock.patch(
-            "job_finder.workflow.memory.write_memory", side_effect=OSError("commit failed")
+        with (
+            mock.patch(
+                "job_finder.workflow.memory.write_memory", side_effect=OSError("commit failed")
+            ),
+            self.assertRaises(OSError),
         ):
-            with self.assertRaises(OSError):
-                start_application(
-                    "job:1",
-                    self.memory_path,
-                    [
-                        {
-                            "kind": "resume",
-                            "name": "CV.pdf",
-                            "content": base64.b64encode(b"test document").decode("ascii"),
-                        }
-                    ],
-                    root,
-                )
+            start_application(
+                "job:1",
+                self.memory_path,
+                [
+                    {
+                        "kind": "resume",
+                        "name": "CV.pdf",
+                        "content": base64.b64encode(b"test document").decode("ascii"),
+                    }
+                ],
+                root,
+            )
         self.assertEqual(load_memory(self.memory_path), before)
         self.assertEqual([p for p in root.rglob("*") if p.is_file()], [])

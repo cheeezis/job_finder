@@ -34,14 +34,14 @@ def _local_target():
         )
     port = env.get("POSTGRES_PORT", "55432")
     return {
-        "connect_kwargs": dict(
-            host="127.0.0.1",
-            port=port,
-            dbname="jobfinder",
-            user="jobfinder",
-            password=password,
-            connect_timeout=10,
-        ),
+        "connect_kwargs": {
+            "host": "127.0.0.1",
+            "port": port,
+            "dbname": "jobfinder",
+            "user": "jobfinder",
+            "password": password,
+            "connect_timeout": 10,
+        },
         "database": "jobfinder",
         "admin_role": "jobfinder",
         "admin_url": f"postgresql://jobfinder:{quote(password)}@127.0.0.1:{port}/jobfinder",
@@ -80,15 +80,15 @@ def _azure_target():
     )
     tls_suffix = f"?sslmode=verify-full&sslrootcert={quote(str(bundle))}"
     return {
-        "connect_kwargs": dict(
-            host=host,
-            dbname=database,
-            user="jobfinder_admin",
-            password=admin_password,
-            sslmode="verify-full",
-            sslrootcert=str(bundle),
-            connect_timeout=20,
-        ),
+        "connect_kwargs": {
+            "host": host,
+            "dbname": database,
+            "user": "jobfinder_admin",
+            "password": admin_password,
+            "sslmode": "verify-full",
+            "sslrootcert": str(bundle),
+            "connect_timeout": 20,
+        },
         "database": database,
         "admin_role": "jobfinder_admin",
         "admin_url": (

@@ -249,7 +249,7 @@ class RunFinderTests(unittest.TestCase):
         self.assertIn("duration_seconds", events[1])
 
     def test_empty_source_is_reported_as_a_complete_empty_snapshot(self):
-        jobs, reports = collect_jobs([SimpleNamespace(SOURCE_NAME="empty", fetch_jobs=lambda: [])])
+        jobs, reports = collect_jobs([SimpleNamespace(SOURCE_NAME="empty", fetch_jobs=list)])
         self.assertEqual(jobs, [])
         self.assertEqual(reports, [{"name": "empty", "status": "empty", "jobs": 0}])
 

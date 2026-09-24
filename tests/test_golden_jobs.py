@@ -7,7 +7,7 @@ behaviour change, regenerate it with JOBFINDER_UPDATE_GOLDEN=1 and review the di
 import json
 import os
 import unittest
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -29,7 +29,7 @@ from job_finder.sources import (
 from job_finder.sources.company_careers import job_from_json_ld
 
 GOLDEN = Path(__file__).parent / "fixtures" / "golden_jobs.json"
-FEED_TIME = datetime(2026, 8, 17, tzinfo=timezone.utc)
+FEED_TIME = datetime(2026, 8, 17, tzinfo=UTC)
 POSTING = {
     "@type": "JobPosting",
     "title": "Junior Python Developer",

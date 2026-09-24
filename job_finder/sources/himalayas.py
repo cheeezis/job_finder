@@ -1,7 +1,7 @@
 """Himalayas source adapter using its free public remote-jobs API."""
 
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from urllib.parse import urlencode
 
 from job_finder.http import fetch_json
@@ -154,7 +154,7 @@ def parse_api_date(value):
     if timestamp > 10_000_000_000:
         timestamp /= 1000
     try:
-        return datetime.fromtimestamp(timestamp, tz=timezone.utc).date()
+        return datetime.fromtimestamp(timestamp, tz=UTC).date()
     except (OSError, OverflowError, ValueError):
         return None
 

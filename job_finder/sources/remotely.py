@@ -3,7 +3,7 @@
 import json
 import re
 import time
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
@@ -211,10 +211,10 @@ def fresh_linkedin_status(entry, now):
     except (KeyError, TypeError, ValueError):
         return None
     if checked_at.tzinfo is None:
-        checked_at = checked_at.replace(tzinfo=timezone.utc)
+        checked_at = checked_at.replace(tzinfo=UTC)
     current = now
     if current.tzinfo is None:
-        current = current.replace(tzinfo=timezone.utc)
+        current = current.replace(tzinfo=UTC)
     if current - checked_at >= LINKEDIN_STATUS_MAX_AGE:
         return None
     return entry["closed"]

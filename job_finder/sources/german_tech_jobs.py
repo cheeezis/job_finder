@@ -2,7 +2,7 @@
 
 import re
 import xml.etree.ElementTree as ET
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from job_finder.http import fetch_text
@@ -162,7 +162,7 @@ def load_feed_cache(path, now=None):
             return []
         fetched_at = datetime.fromisoformat(document["fetched_at"])
         if fetched_at.tzinfo is None:
-            fetched_at = fetched_at.replace(tzinfo=timezone.utc)
+            fetched_at = fetched_at.replace(tzinfo=UTC)
         current = now or utc_now()
         if current - fetched_at > MAX_STALE_FEED_AGE:
             return []

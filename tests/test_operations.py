@@ -55,9 +55,8 @@ class OperationsTests(unittest.TestCase):
 
     def test_run_log_captures_unhandled_error_details(self):
         with tempfile.TemporaryDirectory() as directory:
-            with self.assertRaisesRegex(RuntimeError, "kaputt"):
-                with RunLog(directory) as run_log:
-                    raise RuntimeError("kaputt")
+            with self.assertRaisesRegex(RuntimeError, "kaputt"), RunLog(directory) as run_log:
+                raise RuntimeError("kaputt")
             content = run_log.path.read_text(encoding="utf-8")
 
         self.assertIn("Lauf fehlgeschlagen: RuntimeError: kaputt", content)

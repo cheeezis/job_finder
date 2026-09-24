@@ -603,7 +603,3 @@ class ApplicationTrackingTests(unittest.TestCase):
         self.assertEqual(result["workflow_status"], "interview")
         self.assertEqual(application["applied_on"], "2026-08-02")
         self.assertEqual(application["days_to_response"], 2)
-
-
-if __name__ == "__main__":
-    unittest.main()

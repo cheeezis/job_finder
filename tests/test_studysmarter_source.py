@@ -277,7 +277,3 @@ class StudySmarterTests(unittest.TestCase):
         self.assertEqual(jobs[0].primary_url, self.JOB_URL)
         self.assertIn("Entwicklung mit Python", jobs[0].description_clean)
         self.assertIn("Entwicklung mit Python", next_run[0].description_clean)
-
-
-if __name__ == "__main__":
-    unittest.main()

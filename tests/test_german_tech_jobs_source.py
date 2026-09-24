@@ -88,7 +88,3 @@ class GermanTechJobsTests(unittest.TestCase):
             with patch.object(german_tech_jobs, "fetch_text", side_effect=OSError("offline")):
                 with self.assertRaises(OSError):
                     german_tech_jobs.fetch_jobs_with_report(cache, now=now)
-
-
-if __name__ == "__main__":
-    unittest.main()

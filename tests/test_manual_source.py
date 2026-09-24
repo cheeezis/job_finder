@@ -205,7 +205,3 @@ class ManualSourceTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(ValueError, "Private Netzwerk"):
                 manual.validate_public_url("https://public-name.example/job")
-
-
-if __name__ == "__main__":
-    unittest.main()

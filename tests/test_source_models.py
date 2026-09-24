@@ -203,7 +203,3 @@ class SourceJobModelTests(unittest.TestCase):
                 "value": {"minValue": 73_000, "maxValue": 91_000, "unitText": "YEAR"},
             },
         }
-
-
-if __name__ == "__main__":
-    unittest.main()

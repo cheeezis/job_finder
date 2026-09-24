@@ -381,7 +381,3 @@ class StepStoneHttpClientTests(unittest.TestCase):
             self.assertRaises(stepstone.StepStoneBlockedError),
         ):
             client.get("https://example.test")
-
-
-if __name__ == "__main__":
-    unittest.main()

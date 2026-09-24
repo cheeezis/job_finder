@@ -783,7 +783,3 @@ class ReviewTests(unittest.TestCase):
                 )
         self.assertEqual(load_memory(self.memory_path), before)
         self.assertEqual([p for p in root.rglob("*") if p.is_file()], [])
-
-
-if __name__ == "__main__":
-    unittest.main()

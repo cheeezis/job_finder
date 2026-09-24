@@ -66,7 +66,3 @@ class JobModelTests(unittest.TestCase):
         restored = Job.from_dict(serialized)
 
         self.assertEqual(restored, job)
-
-
-if __name__ == "__main__":
-    unittest.main()

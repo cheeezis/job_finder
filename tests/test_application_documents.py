@@ -159,7 +159,3 @@ class ApplicationDocumentTests(unittest.TestCase):
                 resolve_document_key("job:1", metadata)
         else:
             self.assertEqual(resolve_document_key("job:1", metadata), f"{LEGACY_FOLDER}/a\cv.pdf")
-
-
-if __name__ == "__main__":
-    unittest.main()

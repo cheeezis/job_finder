@@ -384,7 +384,3 @@ class MemoryTests(unittest.TestCase):
             restored = load_memory(path)
             self.assertEqual(restored["job:1"]["workflow_status"], "applied")
             self.assertEqual(restored["job:2"]["workflow_status"], "ignored")
-
-
-if __name__ == "__main__":
-    unittest.main()

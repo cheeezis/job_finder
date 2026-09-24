@@ -28,7 +28,3 @@ class UserSettingsTests(unittest.TestCase):
             loaded = load_user_settings(path)
 
         self.assertEqual(loaded["search"], settings["search"])
-
-
-if __name__ == "__main__":
-    unittest.main()

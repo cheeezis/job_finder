@@ -271,7 +271,3 @@ class JobicyTests(unittest.TestCase):
         self.assertEqual(job.locations, ["weltweit"])
         self.assertIsNone(job.salary_min_eur)
         self.assertIsNone(job.salary_max_eur)
-
-
-if __name__ == "__main__":
-    unittest.main()

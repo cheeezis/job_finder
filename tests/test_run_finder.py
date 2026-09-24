@@ -16,7 +16,6 @@ from run_finder import (
     SOURCES,
     IncompleteSourceSnapshotError,
     build_run_summary,
-    canonical_url,
     collect_jobs,
     enrich_candidate_jobs,
     excluded_source_names,
@@ -295,15 +294,6 @@ class RunFinderTests(unittest.TestCase):
         self.assertEqual(summary["sources"][0]["new"], 1)
         self.assertEqual(format_duration(5), "5 Sek.")
 
-    def test_canonical_url_keeps_jumo_job_offer_id(self):
-        first = canonical_url(
-            "https://jobs.jumo.de/engage/jobexchange/showJobOfferDetail.do?jobOfferId=first&j=jobexchange"
-        )
-        second = canonical_url(
-            "https://jobs.jumo.de/engage/jobexchange/showJobOfferDetail.do?jobOfferId=second&j=jobexchange"
-        )
-        self.assertNotEqual(first, second)
-
     def test_source_error_label_uses_http_status_without_printing_urls(self):
         self.assertEqual(source_error_label(SimpleNamespace(code=429)), "HTTP 429")
 
@@ -360,7 +350,3 @@ class RunFinderTests(unittest.TestCase):
             run_pipeline(exclude_sources={"stepstone"})
 
         self.assertEqual(seen_sources, [kept])
-
-
-if __name__ == "__main__":
-    unittest.main()

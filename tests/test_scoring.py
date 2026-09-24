@@ -1007,7 +1007,3 @@ class DeduplicationTests(unittest.TestCase):
         )
 
         self.assertEqual(len(deduplicate_jobs([remote, onsite])), 2)
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -337,7 +337,3 @@ class ArbeitnowTests(unittest.TestCase):
         self.assertEqual(short_count, 0)
         self.assertIsNone(job.sources[0].application_url)
         self.assertTrue(arbeitnow.is_placeholder_description(job.description_clean))
-
-
-if __name__ == "__main__":
-    unittest.main()

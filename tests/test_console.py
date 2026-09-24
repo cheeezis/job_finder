@@ -80,7 +80,3 @@ class ConsoleProgressTests(unittest.TestCase):
         lines = output.getvalue().splitlines()
         self.assertRegex(lines[0], r"^\d{4}-\d{2}-\d{2}T.* Message continued$")
         self.assertRegex(lines[1], r"^\d{4}-\d{2}-\d{2}T.* next$")
-
-
-if __name__ == "__main__":
-    unittest.main()

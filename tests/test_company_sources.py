@@ -358,7 +358,3 @@ class CompanyCareerTests(unittest.TestCase):
 
         self.assertNotEqual(first, second)
         self.assertEqual(first, first.split("&")[0])
-
-
-if __name__ == "__main__":
-    unittest.main()

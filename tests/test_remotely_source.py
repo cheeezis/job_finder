@@ -295,7 +295,3 @@ class RemotelySourceTests(unittest.TestCase):
 
         self.assertEqual(removed, 1)
         fetcher.assert_not_called()
-
-
-if __name__ == "__main__":
-    unittest.main()

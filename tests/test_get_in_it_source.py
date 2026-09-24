@@ -103,7 +103,3 @@ class GetInItSourceTests(unittest.TestCase):
         self.assertEqual(jobs[1].description_clean, "System Engineering / Admin")
         self.assertIn(detailed.primary_url, cache)
         fetch_job.assert_called_once_with(detailed.primary_url)
-
-
-if __name__ == "__main__":
-    unittest.main()

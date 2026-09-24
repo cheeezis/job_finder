@@ -62,7 +62,3 @@ class OperationsTests(unittest.TestCase):
 
         self.assertIn("Lauf fehlgeschlagen: RuntimeError: kaputt", content)
         self.assertIn("Traceback", content)
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -29,28 +29,7 @@ WORKER_JOB = "jobfinder-worker"
 STORAGE_ACCOUNT = "stjobfindere64bfdce"
 STORAGE_CONTAINER = "application-documents"
 REVIEW_HOST = "jobfinder-review.ashyisland-3b6e9522.francecentral.azurecontainerapps.io"
-LOCAL_ONLY_SOURCES = {"stepstone", "remotely"}
-ALL_SOURCE_NAMES = [
-    "arbeitnow",
-    "arbeitsagentur",
-    "bytewerk",
-    "compose_it",
-    "css",
-    "edag",
-    "german_tech_jobs",
-    "get_in_it",
-    "himalayas",
-    "jobicy",
-    "jumo",
-    "manual",
-    "nethinks",
-    "proemion",
-    "remotely",
-    "rhoenenergie",
-    "startup_jobs",
-    "stepstone",
-    "studysmarter",
-]
+LOCAL_ONLY_SOURCES = "stepstone,remotely"
 
 
 def read_dotenv(path):
@@ -131,12 +110,11 @@ def deployed_image():
 
 
 def main():
-    """Run the containerized finder with every source excluded except StepStone and Remotely."""
+    """Run the containerized finder with only StepStone and Remotely."""
     image = deployed_image()
     print(f"Image des Azure-Workers: {image}", flush=True)
     az("acr", "login", "--name", REGISTRY)
     subprocess.run(["docker", "pull", "--quiet", image], check=True)
-    exclude = ",".join(name for name in ALL_SOURCE_NAMES if name not in LOCAL_ONLY_SOURCES)
     env_args = []
     for key, value in container_environment().items():
         env_args += ["-e", f"{key}={value}"]
@@ -149,8 +127,8 @@ def main():
         "python",
         image,
         "run_finder.py",
-        "--exclude-sources",
-        exclude,
+        "--only-sources",
+        LOCAL_ONLY_SOURCES,
     ]
     result = subprocess.run(command)
     raise SystemExit(result.returncode)

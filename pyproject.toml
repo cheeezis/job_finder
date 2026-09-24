@@ -25,6 +25,8 @@ job_finder = ["*.html", "*.css", "*.js"]
 required-version = "==0.16.7"
 target-version = "py311"
 line-length = 100
+# Scripts import their shared helpers from scripts/ as first-party modules.
+src = [".", "scripts"]
 extend-exclude = ["data", "tmp", "llm_evaluation"]
 
 [tool.ruff.format]

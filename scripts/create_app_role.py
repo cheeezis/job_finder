@@ -8,18 +8,16 @@ printed.
 """
 
 import argparse
-import json
 import secrets
-import ssl
-import subprocess
-from pathlib import Path
 from urllib.parse import quote
 
 import psycopg
 from dotenv import dotenv_values
 from psycopg import sql
 
-PROJECT = Path(__file__).resolve().parents[1]
+import azure_postgres
+
+PROJECT = azure_postgres.PROJECT
 APP_ROLE = "jobfinder_app"
 
 
@@ -54,45 +52,15 @@ def _local_target():
 
 def _azure_target():
     """Admin connection details for the Terraform-provisioned Azure server."""
-    result = subprocess.run(
-        ["terraform", "-chdir=infrastructure", "output", "-json"],
-        cwd=PROJECT,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    outputs = json.loads(result.stdout)
-    settings = json.loads(
-        (PROJECT / "infrastructure/postgres.auto.tfvars.json").read_text(encoding="utf-8")
-    )
-    host = outputs["postgres_host"]["value"]
-    database = outputs["postgres_database"]["value"]
-    admin_password = settings["postgres_admin_password"]
-
-    # libpq needs a PEM bundle; export the OS trust store, same as check_azure_postgres.py.
-    certificates = ssl.create_default_context().get_ca_certs(binary_form=True)
-    if not certificates:
-        raise RuntimeError("Keine vertrauenswürdigen CA-Zertifikate verfügbar.")
-    bundle = PROJECT / "tmp/azure-postgres-trusted-roots.pem"
-    bundle.parent.mkdir(parents=True, exist_ok=True)
-    bundle.write_text(
-        "".join(ssl.DER_cert_to_PEM_cert(cert) for cert in certificates), encoding="ascii"
-    )
-    tls_suffix = f"?sslmode=verify-full&sslrootcert={quote(str(bundle))}"
+    connect_kwargs = azure_postgres.admin_connection()
+    host, database = connect_kwargs["host"], connect_kwargs["dbname"]
+    tls_suffix = f"?sslmode=verify-full&sslrootcert={quote(connect_kwargs['sslrootcert'])}"
     return {
-        "connect_kwargs": {
-            "host": host,
-            "dbname": database,
-            "user": "jobfinder_admin",
-            "password": admin_password,
-            "sslmode": "verify-full",
-            "sslrootcert": str(bundle),
-            "connect_timeout": 20,
-        },
+        "connect_kwargs": connect_kwargs,
         "database": database,
         "admin_role": "jobfinder_admin",
         "admin_url": (
-            f"postgresql://jobfinder_admin:{quote(admin_password)}@{host}:5432/"
+            f"postgresql://jobfinder_admin:{quote(connect_kwargs['password'])}@{host}:5432/"
             f"{database}{tls_suffix}"
         ),
         "app_url": lambda app_password: (

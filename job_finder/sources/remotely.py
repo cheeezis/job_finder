@@ -13,7 +13,7 @@ from job_finder.console import print_progress, progress_checkpoint
 from job_finder.http import fetch_text, fetch_text_with_final_url
 from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource
-from job_finder.paths import REMOTELY_CACHE_FILE, REMOTELY_LINKEDIN_STATUS_FILE
+from job_finder.paths import REMOTELY_LINKEDIN_STATUS_FILE, cache_file
 from job_finder.persistence.storage import read_json, write_json_atomic
 from job_finder.sources.common import (
     ListingUnavailableError,
@@ -26,7 +26,7 @@ from job_finder.text import html_to_text
 SOURCE_NAME = "remotely"
 BASE_URL = "https://www.remotely.de"
 LIST_URL = f"{BASE_URL}/alle-jobs"
-CACHE_FILE = REMOTELY_CACHE_FILE
+CACHE_FILE = cache_file("remotely")
 LINKEDIN_STATUS_FILE = REMOTELY_LINKEDIN_STATUS_FILE
 MAX_LIST_PAGES = 100
 OLD_PAGE_STOP_COUNT = 2

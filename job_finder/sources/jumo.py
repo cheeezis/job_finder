@@ -7,7 +7,7 @@ from html import unescape
 from urllib.parse import urlencode
 from urllib.request import HTTPCookieProcessor, Request, build_opener
 
-from job_finder.paths import JUMO_CACHE_FILE
+from job_finder.paths import cache_file
 from job_finder.sources.company_careers import fetch_company_jobs
 
 SOURCE_NAME = "jumo"
@@ -15,7 +15,7 @@ COMPANY = "JUMO GmbH & Co. KG"
 BASE_URL = "https://jobs.jumo.de/engage/jobexchange/"
 SEARCH_URL = f"{BASE_URL}showJobOffers.do?j=jobexchange"
 LIST_URL = f"{BASE_URL}showJobOfferList.do"
-CACHE_FILE = JUMO_CACHE_FILE
+CACHE_FILE = cache_file("jumo")
 MAX_RESULT_BATCHES = 20
 
 

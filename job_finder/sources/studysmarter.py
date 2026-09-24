@@ -6,7 +6,7 @@ from urllib.parse import urlencode, urlsplit, urlunsplit
 from job_finder.http import fetch_json, fetch_text
 from job_finder.matching.config import LOCAL_SEARCH_RADIUS_KM, STUDYSMARTER_LOCAL_SEARCH_LOCATION
 from job_finder.models import Job, JobSource, WorkMode
-from job_finder.paths import STUDYSMARTER_CACHE_FILE
+from job_finder.paths import cache_file
 from job_finder.sources.common import (
     build_fetch_report,
     canonical_detail_url,
@@ -22,7 +22,7 @@ from job_finder.sources.company_careers import job_from_json_ld
 
 SOURCE_NAME = "studysmarter"
 API_URL = "https://talents.studysmarter.de/wp-json/studysmarter/v1/jobs/"
-CACHE_FILE = STUDYSMARTER_CACHE_FILE
+CACHE_FILE = cache_file("studysmarter")
 IT_CATEGORIES = (
     "software-entwicklung",
     "it-beratung",

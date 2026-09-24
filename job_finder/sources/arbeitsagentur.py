@@ -17,7 +17,7 @@ from job_finder.matching.config import (
 )
 from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource
-from job_finder.paths import ARBEITSAGENTUR_CACHE_FILE
+from job_finder.paths import cache_file
 from job_finder.sources.common import (
     fetch_cached_details,
     normalize_employment_type,
@@ -31,7 +31,7 @@ from job_finder.text import html_to_text
 SOURCE_NAME = "arbeitsagentur"
 SEARCH_BASE_URL = "https://www.arbeitsagentur.de/jobsuche/suche"
 DETAIL_BASE_URL = "https://www.arbeitsagentur.de/jobsuche/jobdetail"
-CACHE_FILE = ARBEITSAGENTUR_CACHE_FILE
+CACHE_FILE = cache_file("arbeitsagentur")
 
 
 def fetch_jobs(cache_path=CACHE_FILE, now=None):

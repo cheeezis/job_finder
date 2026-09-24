@@ -21,7 +21,7 @@ from job_finder.matching.config import (
 )
 from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource
-from job_finder.paths import STEPSTONE_CACHE_FILE
+from job_finder.paths import cache_file
 from job_finder.persistence.storage import read_json, write_json_atomic
 from job_finder.search_plan import append_unique, iter_search_queries
 from job_finder.sources.common import (
@@ -41,7 +41,7 @@ from job_finder.text import html_to_text
 
 SOURCE_NAME = "stepstone"
 SEARCH_BASE_URL = "https://www.stepstone.de/jobs"
-CACHE_FILE = STEPSTONE_CACHE_FILE
+CACHE_FILE = cache_file("stepstone")
 CACHE_VERSION = 2
 REQUEST_DELAY_SECONDS = 1.5
 BLOCKING_STATUS_CODES = {403, 429}

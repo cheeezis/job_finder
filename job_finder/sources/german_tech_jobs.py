@@ -8,7 +8,7 @@ from pathlib import Path
 from job_finder.http import fetch_text
 from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource
-from job_finder.paths import GERMAN_TECH_JOBS_CACHE_FILE
+from job_finder.paths import cache_file
 from job_finder.persistence.storage import read_json, write_json_atomic
 from job_finder.sources.common import (
     build_fetch_report,
@@ -21,7 +21,7 @@ from job_finder.text import html_to_text
 
 SOURCE_NAME = "german_tech_jobs"
 FEED_URL = "https://germantechjobs.de/job_feed.xml"
-CACHE_FILE = GERMAN_TECH_JOBS_CACHE_FILE
+CACHE_FILE = cache_file("german_tech_jobs")
 CACHE_VERSION = 1
 MAX_STALE_FEED_AGE = timedelta(days=3)
 

@@ -6,7 +6,7 @@ from html import unescape
 from job_finder.http import fetch_text
 from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource
-from job_finder.paths import COMPOSE_IT_CACHE_FILE
+from job_finder.paths import cache_file
 from job_finder.sources.common import normalize_employment_type, source_job_id, utc_now
 from job_finder.sources.company_careers import (
     extract_links,
@@ -18,7 +18,7 @@ from job_finder.text import compact_text, html_to_text, normalize_text
 SOURCE_NAME = "compose_it"
 COMPANY = "COMPOSE IT"
 LIST_URL = "https://compose-it.de/unternehmen/karriere/"
-CACHE_FILE = COMPOSE_IT_CACHE_FILE
+CACHE_FILE = cache_file("compose_it")
 
 
 def fetch_jobs(cache_path=CACHE_FILE, now=None):

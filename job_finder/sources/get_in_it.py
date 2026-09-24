@@ -19,7 +19,7 @@ from job_finder.matching.config import (
 )
 from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource, WorkMode
-from job_finder.paths import GET_IN_IT_CACHE_FILE
+from job_finder.paths import cache_file
 from job_finder.search_plan import iter_search_queries, unique_in_order
 from job_finder.sources.common import (
     build_fetch_report,
@@ -42,7 +42,7 @@ SOURCE_NAME = "get_in_it"
 API_SEARCH_URL = "https://www.get-in-it.de/api/v2/open/job/search"
 API_PAGE_SIZE = 39
 HESSEN_STATE_ID = 5
-CACHE_FILE = GET_IN_IT_CACHE_FILE
+CACHE_FILE = cache_file("get_in_it")
 
 TERM_PRIORITY_RULES = [
     (["data", "analytics", "analyst", "bi"], [38, 39]),

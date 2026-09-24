@@ -47,6 +47,22 @@ class CareerPage:
         return extract_links(fetch_text(self.list_url), self.list_url, self.link_pattern)
 
 
+class PaginatedCareerPage(CareerPage):
+    """A career page that spreads its openings over numbered .../page/N/ pages."""
+
+    def collect_links(self):
+        """Collect unique detail links across all advertised pages."""
+        first_html = fetch_text(self.list_url)
+        page_pattern = re.escape(urlsplit(self.list_url).path) + r"page/(\d+)/"
+        last_page = max((int(value) for value in re.findall(page_pattern, first_html)), default=1)
+        links = extract_links(first_html, self.list_url, self.link_pattern)
+        for page in range(2, last_page + 1):
+            html = fetch_text(f"{self.list_url}page/{page}/")
+            new = extract_links(html, self.list_url, self.link_pattern)
+            links += [url for url in new if url not in links]
+        return links
+
+
 def fetch_company_jobs(source_name, company, links, cache_path, now=None, parser=None):
     """Import company details with the shared weekly cache and stale fallback."""
     parser = parser or job_from_json_ld
@@ -161,4 +177,22 @@ PROEMION = CareerPage(
     "Proemion GmbH",
     "https://proemion.jobs.personio.de/?language=de",
     r"proemion\.jobs\.personio\.de/job/\d+$",
+)
+BYTEWERK = CareerPage(
+    "bytewerk",
+    "bytewerk GmbH",
+    "https://bytewerk-gmbh.jobs.personio.de/?language=de",
+    r"bytewerk-gmbh\.jobs\.personio\.de/job/\d+$",
+)
+RHOENENERGIE = CareerPage(
+    "rhoenenergie",
+    "RhönEnergie Fulda GmbH",
+    "https://re-gruppe.de/karriere/",
+    r"re-gruppe\.de/karriere/.+-de-j\d+\.html$",
+)
+NETHINKS = PaginatedCareerPage(
+    "nethinks",
+    "NETHINKS GmbH",
+    "https://nethinks.com/nethinks_jobs/",
+    r"nethinks\.com/nethinks_jobs/(?!page/|feed/?$)[^/]+/$",
 )

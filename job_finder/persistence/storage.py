@@ -4,7 +4,9 @@ import json
 from contextlib import nullcontext
 from pathlib import Path
 
-from job_finder.paths import DATA_DIR, INTERNAL_DIR, OUTPUT_DIR
+from job_finder.paths import DATA_DIR, INTERNAL_DIR, OUTPUT_DIR, RECOMMENDATIONS_JSON
+from job_finder.persistence.database import lock, transaction
+from job_finder.persistence.postgres_store import read_dataset, write_dataset
 
 
 def dataset_name(path):
@@ -19,8 +21,6 @@ def read_json(path, default=None):
     """Read a runtime dataset or an explicitly selected JSON import file."""
     name = dataset_name(path)
     if name is not None:
-        from job_finder.persistence.postgres_store import read_dataset
-
         return read_dataset(name, default)
     target = Path(path)
     if not target.exists():
@@ -32,8 +32,6 @@ def write_json_atomic(path, value):
     """Commit runtime data to PostgreSQL, or atomically export an explicit file."""
     name = dataset_name(path)
     if name is not None:
-        from job_finder.persistence.postgres_store import write_dataset
-
         write_dataset(name, value)
         return
     destination = Path(path)
@@ -56,9 +54,6 @@ def publish_results(jobs, results, *, jobs_path, writer, exclude_sources=frozens
     entries whose sources were all skipped this run must survive the write
     instead of being dropped as if they no longer existed.
     """
-    from job_finder.paths import RECOMMENDATIONS_JSON
-    from job_finder.persistence.database import lock, transaction
-
     values = [job.to_dict() for job in jobs]
     managed = dataset_name(jobs_path) is not None
     with transaction() if managed else nullcontext() as connection:

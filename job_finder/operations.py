@@ -9,6 +9,7 @@ from pathlib import Path
 
 from job_finder.console import format_clock, log_event, new_run_id
 from job_finder.paths import BACKUP_DIR, LOG_DIR
+from job_finder.persistence.postgres_backup import create_postgres_backup
 
 BACKUP_FILES_TO_KEEP = 7
 
@@ -127,8 +128,6 @@ class RunLog(AbstractContextManager):
 
 def create_backup(backup_dir=BACKUP_DIR, keep=BACKUP_FILES_TO_KEEP):
     """Back up the PostgreSQL state and retain only the newest archives."""
-    from job_finder.persistence.postgres_backup import create_postgres_backup
-
     archive = create_postgres_backup(backup_dir)
     backups = sorted(Path(backup_dir).glob("postgres-*.zip"), reverse=True)
     for old_backup in backups[max(keep, 1) :]:

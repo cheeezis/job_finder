@@ -17,7 +17,6 @@ profile.yaml
 # Lokale Laufzeitdaten und temporäre Auswertungen gehören nicht ins Image.
 data/
 tmp/
-llm_evaluation/
 
 # Terraform-Konfiguration und lokale Zustandsdateien gehören nicht ins Image.
 infrastructure/

@@ -14,8 +14,8 @@ Unter Windows muss die virtuelle Umgebung nicht aktiviert werden:
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-.\.venv\Scripts\python.exe -m ruff check job_finder tests run_finder.py
-.\.venv\Scripts\python.exe -m ruff format --check job_finder tests run_finder.py
+.\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe -m ruff format --check .
 .\.venv\Scripts\python.exe scripts/test_postgres.py
 node --test tests/frontend.test.cjs
 ```
@@ -276,9 +276,9 @@ Konfiguration steht in [pyproject.toml](../pyproject.toml).
 Automatisch formatieren und anschließend prüfen:
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check --select I --fix job_finder tests run_finder.py
-.\.venv\Scripts\python.exe -m ruff format job_finder tests run_finder.py
-.\.venv\Scripts\python.exe -m ruff check job_finder tests run_finder.py
+.\.venv\Scripts\python.exe -m ruff check --select I --fix .
+.\.venv\Scripts\python.exe -m ruff format .
+.\.venv\Scripts\python.exe -m ruff check .
 ```
 
 Der Linter prüft Form und häufige Fehler. Ob ein Docstring das tatsächliche

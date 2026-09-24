@@ -10,13 +10,10 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = {file = "LICENSE"}
 keywords = ["job-search", "job-tracker", "postgresql", "discord"]
-dependencies = [
-    "PyYAML>=6.0,<7",
-    "psycopg[binary]>=3.2,<4",
-    "python-dotenv>=1.0,<2",
-    "azure-storage-blob>=12.24,<13",
-    "azure-identity>=1.19,<2",
-]
+dynamic = ["dependencies"]
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
 
 [tool.setuptools.package-data]
 job_finder = ["*.html", "*.css", "*.js"]
@@ -27,7 +24,7 @@ target-version = "py311"
 line-length = 100
 # Scripts import their shared helpers from scripts/ as first-party modules.
 src = [".", "scripts"]
-extend-exclude = ["data", "tmp", "llm_evaluation"]
+extend-exclude = ["data", "tmp"]
 
 [tool.ruff.format]
 # Use one line whenever it fits; a trailing comma alone does not force one

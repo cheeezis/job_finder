@@ -8,7 +8,16 @@ from unittest.mock import patch
 from urllib.parse import parse_qsl
 
 from job_finder.models import Job, JobSource, WorkMode
-from job_finder.sources import bytewerk, compose_it, edag, jumo, rhoenenergie
+from job_finder.sources import (
+    bytewerk,
+    compose_it,
+    css,
+    edag,
+    jumo,
+    nethinks,
+    proemion,
+    rhoenenergie,
+)
 from job_finder.sources.common import canonical_detail_url, load_detail_cache, save_detail_cache
 from job_finder.sources.company_careers import fetch_company_jobs
 
@@ -82,6 +91,118 @@ class JumoSessionTests(unittest.TestCase):
         with patch.object(jumo, "build_opener", return_value=FakeJumoSession(["<form></form>"])):
             with self.assertRaisesRegex(ValueError, "CSRF"):
                 jumo.collect_links()
+
+
+EDAG_LIST = "https://www.edag.com/de/karriere/stellenanzeigen"
+EDAG_DETAIL = "https://www.edag.com/de/karriere/stellenanzeigen/detail"
+COMPANY_SOURCES = [
+    (
+        css,
+        "CSS AG",
+        {
+            "https://jobs.css.de/public/jobs/?standort=1": '<a href="https://jobs.css.de/job-dev-1.html">'
+            '<a href="/job-admin-9.html"><a href="https://jobs.css.de/public/jobs/">'
+            '<a href="https://jobs.css.de/job-dev-1.html#top">'
+        },
+        ["https://jobs.css.de/job-dev-1.html", "https://jobs.css.de/job-admin-9.html"],
+    ),
+    (
+        proemion,
+        "Proemion GmbH",
+        {
+            # A query that survives canonicalisation breaks the anchored pattern.
+            "https://proemion.jobs.personio.de/?language=de": '<a href="/job/77?language=de">'
+            '<a href="/job/88?language=de&amp;display=de"><a href="/?language=de">'
+        },
+        ["https://proemion.jobs.personio.de/job/77"],
+    ),
+    (
+        bytewerk,
+        "bytewerk GmbH",
+        {"https://bytewerk-gmbh.jobs.personio.de/?language=de": '<a href="/job/55"><a href="/">'},
+        ["https://bytewerk-gmbh.jobs.personio.de/job/55"],
+    ),
+    (
+        rhoenenergie,
+        "RhönEnergie Fulda GmbH",
+        {
+            "https://re-gruppe.de/karriere/": '<a href="/karriere/it-admin-de-j123.html">'
+            '<a href="https://re-gruppe.de/karriere/">'
+        },
+        ["https://re-gruppe.de/karriere/it-admin-de-j123.html"],
+    ),
+    (
+        nethinks,
+        "NETHINKS GmbH",
+        {
+            "https://nethinks.com/nethinks_jobs/": '<a href="/nethinks_jobs/page/2/">'
+            '<a href="/nethinks_jobs/page/3/"><a href="/nethinks_jobs/dev/">'
+            '<a href="/nethinks_jobs/feed/">',
+            "https://nethinks.com/nethinks_jobs/page/2/": '<a href="/nethinks_jobs/dev/">'
+            '<a href="/nethinks_jobs/ops/">',
+            "https://nethinks.com/nethinks_jobs/page/3/": '<a href="/nethinks_jobs/qa/">',
+        },
+        [
+            "https://nethinks.com/nethinks_jobs/dev/",
+            "https://nethinks.com/nethinks_jobs/ops/",
+            "https://nethinks.com/nethinks_jobs/qa/",
+        ],
+    ),
+    (
+        edag,
+        "EDAG Engineering GmbH",
+        {
+            EDAG_LIST: '<a class="sfjob" href="/de/karriere/stellenanzeigen/detail/dev-fulda-11">'
+            'Dev Fulda</a><a class="sfjob" href="/de/karriere/stellenanzeigen/detail/dev-muc-12">'
+            'Dev München</a><a href="?tx_successfactors_view%5BcurrentPage%5D=2">2</a>',
+            f"{EDAG_LIST}?tx_successfactors_view%5BcurrentPage%5D=2": '<a class="x sfjob" '
+            f'href="{EDAG_DETAIL}/ops-13">Ops Mehrere Standorte</a><a class="sfjob" '
+            'href="/de/karriere/stellenanzeigen/detail/dev-fulda-11">Dev Fulda</a>',
+        },
+        [f"{EDAG_DETAIL}/dev-fulda-11", f"{EDAG_DETAIL}/ops-13"],
+    ),
+    (
+        compose_it,
+        "COMPOSE IT",
+        {"https://compose-it.de/unternehmen/karriere/": '<a href="/job/it-supporter/">'},
+        ["https://compose-it.de/job/it-supporter/"],
+    ),
+]
+
+
+class CompanyListingTests(unittest.TestCase):
+    def test_each_company_source_hands_its_links_to_the_shared_cache(self):
+        for module, company, pages, links in COMPANY_SOURCES:
+            with self.subTest(module.SOURCE_NAME):
+                with (
+                    patch.object(module, "fetch_text", side_effect=pages.get) as fetched,
+                    patch.object(module, "fetch_company_jobs", return_value=["job"]) as cache,
+                ):
+                    self.assertEqual(module.fetch_jobs("cache.json", now="now"), ["job"])
+
+                self.assertEqual([call.args[0] for call in fetched.call_args_list], list(pages))
+                args, kwargs = cache.call_args
+                self.assertEqual(args, (module.SOURCE_NAME, company, links, "cache.json"))
+                self.assertEqual(kwargs.pop("now"), "now")
+                self.assertEqual(
+                    kwargs, {"parser": module.job_from_html} if module in (edag, compose_it) else {}
+                )
+
+    def test_jumo_hands_its_session_links_to_the_shared_cache(self):
+        with (
+            patch.object(jumo, "collect_links", return_value=["https://jobs.jumo.de/a"]),
+            patch.object(jumo, "fetch_company_jobs", return_value=["job"]) as cache,
+        ):
+            self.assertEqual(jumo.fetch_jobs("cache.json", now="now"), ["job"])
+        cache.assert_called_once_with(
+            "jumo", "JUMO GmbH & Co. KG", ["https://jobs.jumo.de/a"], "cache.json", now="now"
+        )
+
+    def test_source_names_stay_stable(self):
+        self.assertEqual(
+            [module.SOURCE_NAME for module, *_rest in COMPANY_SOURCES],
+            ["css", "proemion", "bytewerk", "rhoenenergie", "nethinks", "edag", "compose_it"],
+        )
 
 
 class ComposeItSourceTests(unittest.TestCase):

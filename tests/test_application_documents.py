@@ -1,6 +1,8 @@
 """Tests for locally archived application documents."""
 
 import base64
+import hashlib
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,8 +10,11 @@ from pathlib import Path
 from job_finder.persistence.application_documents import (
     document_path,
     public_documents,
+    resolve_document_key,
     store_documents,
 )
+
+LEGACY_FOLDER = hashlib.sha256(b"job:1").hexdigest()[:20]
 
 
 class ApplicationDocumentTests(unittest.TestCase):
@@ -101,6 +106,59 @@ class ApplicationDocumentTests(unittest.TestCase):
             )
 
         self.assertEqual(list(self.directory.rglob("*")), [])
+
+    def test_named_and_legacy_folders_resolve_to_the_same_key_and_path(self):
+        named = {"stored_name": "cv.pdf", "folder_name": "Example GmbH - Dev [abc]"}
+        legacy = {"stored_name": "cv.pdf", "folder_name": ""}
+        roots = [self.directory, str(self.directory)]
+        try:
+            roots.append(Path(os.path.relpath(self.directory)))
+        except ValueError:  # temporary directory on another Windows drive
+            pass
+        for metadata, folder in ((named, "Example GmbH - Dev [abc]"), (legacy, LEGACY_FOLDER)):
+            (self.directory / folder).mkdir()
+            (self.directory / folder / "cv.pdf").write_bytes(b"%PDF")
+            with self.subTest(folder=folder):
+                self.assertEqual(resolve_document_key("job:1", metadata), f"{folder}/cv.pdf")
+                for root in roots:
+                    self.assertEqual(
+                        document_path("job:1", metadata, root), Path(root) / folder / "cv.pdf"
+                    )
+
+        missing = {"stored_name": "missing.pdf"}
+        self.assertEqual(resolve_document_key("job:1", missing), f"{LEGACY_FOLDER}/missing.pdf")
+        with self.assertRaisesRegex(FileNotFoundError, "nicht gefunden"):
+            document_path("job:1", missing, self.directory)
+
+    def test_unsafe_document_metadata_is_rejected_by_path_and_key(self):
+        cases = [
+            (None, "nicht gefunden"),
+            ("cv.pdf", "nicht gefunden"),
+            ({}, "Ungültiger Dokumentpfad"),
+            ({"stored_name": ""}, "Ungültiger Dokumentpfad"),
+            ({"stored_name": "../cv.pdf"}, "Ungültiger Dokumentpfad"),
+            ({"stored_name": "a/cv.pdf"}, "Ungültiger Dokumentpfad"),
+        ]
+        for folder in ("..", ".", "a/b", "a\b", "bad:name", " padded"):
+            cases.append(
+                ({"stored_name": "cv.pdf", "folder_name": folder}, "Ungültiger Dokumentordner")
+            )
+        for metadata, message in cases:
+            for name, resolve in (
+                ("path", lambda value: document_path("job:1", value, self.directory)),
+                ("key", lambda value: resolve_document_key("job:1", value)),
+            ):
+                with self.subTest(metadata=metadata, via=name):
+                    with self.assertRaisesRegex(ValueError, message):
+                        resolve(metadata)
+
+    def test_backslash_in_stored_name_follows_the_platform_path_rules(self):
+        metadata = {"stored_name": "a\cv.pdf"}
+        if os.sep == "\\":
+            with self.assertRaisesRegex(ValueError, "Ungültiger Dokumentpfad"):
+                resolve_document_key("job:1", metadata)
+        else:
+            self.assertEqual(resolve_document_key("job:1", metadata), f"{LEGACY_FOLDER}/a\cv.pdf")
 
 
 if __name__ == "__main__":

@@ -1,23 +1,8 @@
-"""Score imported jobs without running the source searches again."""
+"""Score jobs and assemble the sorted result views."""
 
-import sys
-
-from job_finder.console import configure_utf8_output
-from job_finder.matching.deduplication import deduplicate_jobs
 from job_finder.matching.scoring import score_job
 from job_finder.models import FilterStatus, Job
-from job_finder.paths import JOBS_FILE
 from job_finder.persistence.storage import read_json
-from job_finder.workflow.reporting import format_locations, format_remote
-
-
-def main():
-    """Score an existing import file and print its results."""
-    configure_utf8_output()
-    jobs_file = sys.argv[1] if len(sys.argv) > 1 else JOBS_FILE
-    jobs = deduplicate_jobs(load_jobs(jobs_file))
-    results = score_jobs(jobs)
-    print_results(results)
 
 
 def score_jobs(jobs):
@@ -67,36 +52,6 @@ def score_for_pipeline(job):
     }
 
 
-def print_results(results):
-    """Print included jobs and a short excluded-job preview."""
-    included = results["included"]
-    excluded = results["excluded"]
-
-    print("PASSENDE JOBS")
-    print("=" * 60)
-    for job in included:
-        new_marker = "NEU | " if job.get("is_new") else ""
-        summary = (
-            f"Vorfilter {job['match_percent']:>3}/100 | "
-            f"{job['title']} | {job['company']} | "
-            f"{format_locations(job)} | Remote: {format_remote(job)}"
-        )
-        print(new_marker + summary)
-        for reason in job["reasons"]:
-            print(f"      - {reason}")
-        print()
-
-    print(f"AUSGESCHLOSSENE JOBS: {len(excluded)}")
-    print("=" * 60)
-    for job in excluded[:30]:
-        print(f"{job['title']} | {job['company']} | {format_locations(job)}")
-        print(f"      - {job['reasons'][0]}")
-        print()
-
-    if len(excluded) > 30:
-        print(f"... {len(excluded) - 30} weitere ausgeschlossen")
-
-
 def load_jobs(path):
     """Load imported jobs from a UTF-8 JSON file."""
     values = read_json(path, [])
@@ -107,7 +62,3 @@ def load_jobs(path):
             "Importdatei verwendet das alte Jobformat; zuerst einen neuen "
             "vollstaendigen Lauf starten"
         ) from error
-
-
-if __name__ == "__main__":
-    main()

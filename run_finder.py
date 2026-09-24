@@ -8,7 +8,7 @@ from collections import Counter
 from job_finder.console import configure_utf8_output, log_event, print_phase, print_progress
 from job_finder.matching.deduplication import deduplicate_jobs
 from job_finder.operations import RunLog, create_backup, timed_step
-from job_finder.paths import JOBS_FILE, MEMORY_FILE, NOTIFICATION_STATE_FILE
+from job_finder.paths import JOBS_FILE, MEMORY_FILE
 from job_finder.persistence.database import worker_lock
 from job_finder.persistence.storage import publish_results
 from job_finder.sources import (
@@ -156,7 +156,7 @@ def run_pipeline(exclude_sources=frozenset(), run_id=None):
         print("  Backup: übersprungen (Container ohne dauerhaftes Dateisystem)")
     else:
         with timed_step("Backup"):
-            create_backup([MEMORY_FILE, NOTIFICATION_STATE_FILE])
+            create_backup()
 
     print_phase(1, 4, "Quellen")
     with timed_step("Quellen und Deduplizierung"):

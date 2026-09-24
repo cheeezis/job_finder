@@ -95,7 +95,7 @@ def process_notifications(
         return stats
 
     webhook_client = client or DiscordWebhookClient(webhook_url)
-    for chunk in notification_chunks(candidates):
+    for chunk in notification_chunks(candidates, review_host=review_host):
         keys = [key for key, _job in chunk]
         try:
             webhook_client.send(
@@ -261,13 +261,16 @@ def pending_entry(job, timestamp):
     }
 
 
-def notification_chunks(candidates):
-    """Group jobs within Discord's embed count and character limits."""
+def notification_chunks(candidates, *, review_host=None):
+    """Group jobs within Discord's embed count and character limits.
+
+    Size each card exactly as it is sent, including the optional review link.
+    """
     chunks = []
     current = []
     current_characters = 0
     for candidate in candidates:
-        embed = discord_embed(candidate[1])
+        embed = discord_embed(candidate[1], review_host=review_host)
         characters = embed_character_count(embed)
         if current and (
             len(current) >= MAX_EMBEDS
@@ -409,6 +412,7 @@ def embed_character_count(embed):
             len(field.get("name", "")) + len(field.get("value", ""))
             for field in embed.get("fields", [])
         )
+        + len(embed.get("footer", {}).get("text", ""))
     )
 
 

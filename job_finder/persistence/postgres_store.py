@@ -20,6 +20,14 @@ STATE_FIELDS = (
 )
 HISTORY_FIELDS = ("status", "occurred_on", "scheduled_for")
 DOCUMENT_FIELDS = ("id", "name", "kind", "stored_name", "folder_name")
+# Child tables share their name with the list field of the memory entry.
+CHILD_TABLES = (("workflow_history", HISTORY_FIELDS), ("application_documents", DOCUMENT_FIELDS))
+SNAPSHOT_FIELDS = {
+    "jobs": ("title", "company"),
+    "recommendations": ("title", "company", "match_percent"),
+}
+NOTIFICATION_FIELDS = ("job_id", "sent_at", "attempts")
+CACHE_TABLES = {"manual": ("manual_sources", "url"), "cache": ("source_cache", "cache_key")}
 
 
 def prune_cache(days=30):
@@ -84,17 +92,14 @@ def read_memory(connection, scope, job_id=None, *, for_update=False):
         params,
     )
     memory = {row[0]: unpack(row[1:], STATE_FIELDS) for row in rows}
-    for table, field, fields in (
-        ("workflow_history", "workflow_history", HISTORY_FIELDS),
-        ("application_documents", "application_documents", DOCUMENT_FIELDS),
-    ):
+    for table, fields in CHILD_TABLES:
         rows = connection.execute(
             f"SELECT job_id,{','.join(fields)},present,extra FROM {table} "
             f"WHERE {where} ORDER BY job_id,position",
             params,
         )
         for row in rows:
-            memory[row[0]].setdefault(field, []).append(unpack(row[1:], fields))
+            memory[row[0]].setdefault(table, []).append(unpack(row[1:], fields))
     return memory
 
 
@@ -107,13 +112,10 @@ def write_memory(connection, scope, before, after):
         )
     changed = {key: value for key, value in after.items() if before.get(key) != value}
     records = []
-    children = {"workflow_history": [], "application_documents": []}
+    children = {table: [] for table, _fields in CHILD_TABLES}
     for job_id, entry in changed.items():
         core = deepcopy(entry)
-        for field, fields in (
-            ("workflow_history", HISTORY_FIELDS),
-            ("application_documents", DOCUMENT_FIELDS),
-        ):
+        for field, fields in CHILD_TABLES:
             values = core.get(field)
             if isinstance(values, list):
                 # An empty marker preserves the presence of an empty list.
@@ -124,10 +126,7 @@ def write_memory(connection, scope, before, after):
                     children[field].append((scope, job_id, position, *parts(value, fields)))
         records.append((scope, job_id, *parts(core, STATE_FIELDS)))
     upsert_records(connection, "job_state", ("scope", "job_id"), STATE_FIELDS, records)
-    for table, fields in (
-        ("workflow_history", HISTORY_FIELDS),
-        ("application_documents", DOCUMENT_FIELDS),
-    ):
+    for table, fields in CHILD_TABLES:
         if changed:
             connection.execute(
                 f"DELETE FROM {table} WHERE scope=%s AND job_id=ANY(%s)", (scope, list(changed))
@@ -145,9 +144,7 @@ def read_dataset(name, default=None):
         kind = info["kind"]
         result = deepcopy(info["header"])
         if kind in {"jobs", "recommendations"}:
-            fields = ("title", "company") + (
-                ("match_percent",) if kind == "recommendations" else ()
-            )
+            fields = SNAPSHOT_FIELDS[kind]
             values = [
                 {"id": row[0], **unpack(row[1:], fields)}
                 for row in connection.execute(
@@ -160,17 +157,14 @@ def read_dataset(name, default=None):
                 return values
             result["recommendations"] = values
         elif kind == "notifications":
-            fields = ("job_id", "sent_at", "attempts")
             for row in connection.execute(
                 "SELECT notification_key,delivery_state,job_id,sent_at,attempts,present,extra "
                 "FROM notifications WHERE dataset=%s",
                 (name,),
             ):
-                result.setdefault(row[1], {})[row[0]] = unpack(row[2:], fields)
+                result.setdefault(row[1], {})[row[0]] = unpack(row[2:], NOTIFICATION_FIELDS)
         elif kind in {"cache", "manual"}:
-            table, key = (
-                ("manual_sources", "url") if kind == "manual" else ("source_cache", "cache_key")
-            )
+            table, key = CACHE_TABLES[kind]
             values = connection.execute(
                 f"SELECT {key},payload FROM {table} WHERE dataset=%s ORDER BY position", (name,)
             ).fetchall()
@@ -204,9 +198,7 @@ def write_dataset(name, value):
         )
         if kind in {"jobs", "recommendations"}:
             values = value if kind == "jobs" else value["recommendations"]
-            fields = ("title", "company") + (
-                ("match_percent",) if kind == "recommendations" else ()
-            )
+            fields = SNAPSHOT_FIELDS[kind]
             connection.execute(f"DELETE FROM {kind} WHERE dataset=%s", (name,))
             rows = []
             for position, item in enumerate(values):
@@ -216,9 +208,8 @@ def write_dataset(name, value):
             upsert_records(connection, kind, ("dataset", "position"), ("job_id", *fields), rows)
         elif kind == "notifications":
             connection.execute("DELETE FROM notifications WHERE dataset=%s", (name,))
-            fields = ("job_id", "sent_at", "attempts")
             rows = [
-                (name, key, state, *parts(item, fields))
+                (name, key, state, *parts(item, NOTIFICATION_FIELDS))
                 for state in ("sent", "pending")
                 for key, item in value.get(state, {}).items()
             ]
@@ -226,13 +217,11 @@ def write_dataset(name, value):
                 connection,
                 "notifications",
                 ("dataset", "notification_key", "delivery_state"),
-                fields,
+                NOTIFICATION_FIELDS,
                 rows,
             )
         elif kind in {"cache", "manual"}:
-            table, key_column = (
-                ("manual_sources", "url") if kind == "manual" else ("source_cache", "cache_key")
-            )
+            table, key_column = CACHE_TABLES[kind]
             entries = enumerate(value[field]) if info["list"] else value[field].items()
             rows = [
                 (name, str(key), position, Jsonb(item))

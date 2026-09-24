@@ -16,6 +16,20 @@ from job_finder.sources.common import (
 )
 
 
+def api_record(slug, description, **fields):
+    """Return one raw Arbeitnow API record; tests override only the fields they check."""
+    return {
+        "slug": slug,
+        "company_name": "Example GmbH",
+        "title": "Junior Developer",
+        "description": description,
+        "remote": True,
+        "url": f"https://www.arbeitnow.com/jobs/example/{slug}",
+        "location": "Fulda",
+        **fields,
+    }
+
+
 class ArbeitnowTests(unittest.TestCase):
     def test_collect_records_paginates_and_removes_repeated_slugs(self):
         pages = [
@@ -35,30 +49,12 @@ class ArbeitnowTests(unittest.TestCase):
 
     def test_fetch_jobs_refreshes_api_records(self):
         url = "https://www.arbeitnow.com/jobs/example/one"
-        old = arbeitnow.job_from_record(
-            {
-                "slug": "one",
-                "company_name": "Example GmbH",
-                "title": "Junior Developer",
-                "description": "<p>Python</p>",
-                "remote": True,
-                "url": url,
-                "location": "Fulda",
-            }
-        )
+        old = arbeitnow.job_from_record(api_record("one", "<p>Python</p>"))
 
         with tempfile.TemporaryDirectory() as directory:
             cache_path = Path(directory) / "arbeitnow.json"
             save_detail_cache(cache_path, {url: old})
-            changed = {
-                "slug": "one",
-                "company_name": "Example GmbH",
-                "title": "Junior Developer",
-                "description": "<p>Python und APIs</p>",
-                "remote": True,
-                "url": url,
-                "location": "Fulda",
-            }
+            changed = api_record("one", "<p>Python und APIs</p>")
             with patch.object(arbeitnow, "collect_records", return_value=[changed]):
                 jobs = arbeitnow.fetch_jobs(cache_path=cache_path)
 
@@ -71,30 +67,12 @@ class ArbeitnowTests(unittest.TestCase):
         placeholder = "Find Jobs in Germany on Arbeitnow"
         original_text = "Original Python job " * 20
         application_url = "https://company.test/jobs/mediated"
-        enriched = arbeitnow.job_from_record(
-            {
-                "slug": "mediated",
-                "company_name": "Example GmbH",
-                "title": "Junior Developer",
-                "description": placeholder,
-                "remote": True,
-                "url": url,
-                "location": "Fulda",
-            }
-        )
+        enriched = arbeitnow.job_from_record(api_record("mediated", placeholder))
         enriched.description_raw = f"<main>{original_text}</main>"
         enriched.description_clean = original_text
         enriched.sources[0].application_url = application_url
         portal_text = "Current Arbeitnow portal text with Python. " * 10
-        full_text_record = {
-            "slug": "mediated",
-            "company_name": "Example GmbH",
-            "title": "Junior Developer",
-            "description": f"<p>{portal_text}</p>",
-            "remote": True,
-            "url": url,
-            "location": "Fulda",
-        }
+        full_text_record = api_record("mediated", f"<p>{portal_text}</p>")
         placeholder_record = dict(full_text_record, description=placeholder)
 
         with tempfile.TemporaryDirectory() as directory:
@@ -118,17 +96,7 @@ class ArbeitnowTests(unittest.TestCase):
 
     def test_rate_limited_api_uses_recent_cache(self):
         url = "https://www.arbeitnow.com/jobs/example/cached"
-        cached = arbeitnow.job_from_record(
-            {
-                "slug": "cached",
-                "company_name": "Example GmbH",
-                "title": "Junior Developer",
-                "description": "<p>Python</p>",
-                "remote": True,
-                "url": url,
-                "location": "Fulda",
-            }
-        )
+        cached = arbeitnow.job_from_record(api_record("cached", "<p>Python</p>"))
         limited = HTTPError(arbeitnow.API_URL, 429, "Too Many Requests", None, None)
 
         with tempfile.TemporaryDirectory() as directory:
@@ -143,40 +111,20 @@ class ArbeitnowTests(unittest.TestCase):
         current_url = "https://www.arbeitnow.com/jobs/example/current"
         removed_url = "https://www.arbeitnow.com/jobs/example/removed"
         placeholder = "Find Jobs in Germany on Arbeitnow"
-        enriched = arbeitnow.job_from_record(
-            {
-                "slug": "current",
-                "company_name": "Example GmbH",
-                "title": "Junior Developer",
-                "description": placeholder,
-                "remote": True,
-                "url": current_url,
-                "location": "Fulda",
-            }
-        )
+        enriched = arbeitnow.job_from_record(api_record("current", placeholder))
         enriched.description_raw = "<main>Original Python job</main>"
         enriched.description_clean = "Original Python job " * 20
         enriched.sources[0].application_url = "https://company.test/jobs/current"
         removed = arbeitnow.job_from_record(
-            {
-                "slug": "removed",
-                "company_name": "Old GmbH",
-                "title": "Old Developer",
-                "description": "Old job",
-                "remote": True,
-                "url": removed_url,
-                "location": "Berlin",
-            }
+            api_record(
+                "removed",
+                "Old job",
+                company_name="Old GmbH",
+                title="Old Developer",
+                location="Berlin",
+            )
         )
-        current_record = {
-            "slug": "current",
-            "company_name": "Example GmbH",
-            "title": "Junior Developer",
-            "description": placeholder,
-            "remote": True,
-            "url": current_url,
-            "location": "Fulda",
-        }
+        current_record = api_record("current", placeholder)
 
         with tempfile.TemporaryDirectory() as directory:
             cache_path = Path(directory) / "arbeitnow.json"
@@ -192,15 +140,7 @@ class ArbeitnowTests(unittest.TestCase):
 
     def test_direct_description_never_requests_original_page(self):
         job = arbeitnow.job_from_record(
-            {
-                "slug": "direct",
-                "company_name": "Example GmbH",
-                "title": "Junior Developer",
-                "description": "A complete direct job description with Python and APIs.",
-                "remote": True,
-                "url": "https://www.arbeitnow.com/jobs/example/direct",
-                "location": "Fulda",
-            }
+            api_record("direct", "A complete direct job description with Python and APIs.")
         )
 
         with tempfile.TemporaryDirectory() as directory:
@@ -212,15 +152,7 @@ class ArbeitnowTests(unittest.TestCase):
         fetch.assert_not_called()
 
     def test_missing_cached_application_is_not_reused(self):
-        record = {
-            "slug": "missing",
-            "company_name": "Example GmbH",
-            "title": "Junior Developer",
-            "description": "Find Jobs in Germany on Arbeitnow",
-            "remote": True,
-            "url": "https://www.arbeitnow.com/jobs/example/missing",
-            "location": "Fulda",
-        }
+        record = api_record("missing", "Find Jobs in Germany on Arbeitnow")
         previous = arbeitnow.job_from_record(record)
         previous.description_clean = "Cached but invalid description " * 20
         previous.sources[0].application_url = "https://company.test/jobs/missing?not_found=true"
@@ -233,17 +165,7 @@ class ArbeitnowTests(unittest.TestCase):
         self.assertTrue(arbeitnow.is_placeholder_description(current.description_clean))
 
     def test_candidate_enrichment_keeps_original_application_url_and_text(self):
-        job = arbeitnow.job_from_record(
-            {
-                "slug": "one",
-                "company_name": "Example GmbH",
-                "title": "Junior Developer",
-                "description": "Find Jobs in Germany on Arbeitnow",
-                "remote": True,
-                "url": "https://www.arbeitnow.com/jobs/example/one",
-                "location": "Fulda",
-            }
-        )
+        job = arbeitnow.job_from_record(api_record("one", "Find Jobs in Germany on Arbeitnow"))
         html = '<meta property="og:description" content="' + ("Python APIs " * 30) + '">'
 
         with tempfile.TemporaryDirectory() as directory:
@@ -271,17 +193,7 @@ class ArbeitnowTests(unittest.TestCase):
         self.assertEqual(arbeitnow.external_description(html), structured_description.strip())
 
     def test_unreachable_original_page_is_recorded_as_candidate_failure(self):
-        job = arbeitnow.job_from_record(
-            {
-                "slug": "offline",
-                "company_name": "Example GmbH",
-                "title": "Junior Developer",
-                "description": "Find Jobs in Germany on Arbeitnow",
-                "remote": True,
-                "url": "https://www.arbeitnow.com/jobs/example/offline",
-                "location": "Fulda",
-            }
-        )
+        job = arbeitnow.job_from_record(api_record("offline", "Find Jobs in Germany on Arbeitnow"))
         reset_fetch_diagnostics()
 
         with (
@@ -298,17 +210,7 @@ class ArbeitnowTests(unittest.TestCase):
         self.assertEqual(fetch_diagnostics()["failed_segments"], 0)
 
     def test_failed_enrichment_does_not_keep_application_url(self):
-        job = arbeitnow.job_from_record(
-            {
-                "slug": "missing",
-                "company_name": "Example GmbH",
-                "title": "Junior Developer",
-                "description": "Find Jobs in Germany on Arbeitnow",
-                "remote": True,
-                "url": "https://www.arbeitnow.com/jobs/example/missing",
-                "location": "Fulda",
-            }
-        )
+        job = arbeitnow.job_from_record(api_record("missing", "Find Jobs in Germany on Arbeitnow"))
         html = '<meta property="og:description" content="' + ("Python " * 40) + '">'
 
         with tempfile.TemporaryDirectory() as directory:

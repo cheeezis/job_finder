@@ -4,7 +4,6 @@ Search pages provide detail links in HTML. Detail pages expose structured
 schema.org JobPosting JSON-LD, which is more stable than scraping visible text.
 """
 
-import json
 import re
 import time
 from html import unescape
@@ -22,7 +21,7 @@ from job_finder.matching.config import (
 from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource
 from job_finder.paths import cache_file
-from job_finder.persistence.storage import read_json, write_json_atomic
+from job_finder.persistence.storage import read_versioned, write_versioned
 from job_finder.sources.common import (
     build_fetch_report,
     detail_cache_job_dict,
@@ -268,31 +267,16 @@ def fetch_job(url, client=None):
 
 def load_cache(path):
     """Load cached jobs and the links from the last successful search."""
-    empty_cache = {"version": CACHE_VERSION, "last_links": [], "jobs": {}}
-
-    try:
-        cache = read_json(path, empty_cache)
-    except (json.JSONDecodeError, OSError):
-        return empty_cache
-
-    if cache.get("version") != CACHE_VERSION:
-        return empty_cache
+    cache = read_versioned(path, CACHE_VERSION) or {"version": CACHE_VERSION}
     cache.setdefault("last_links", [])
-    cache.setdefault("jobs", {})
-    cache["jobs"] = {url: Job.from_dict(job_values) for url, job_values in cache["jobs"].items()}
+    cache["jobs"] = {url: Job.from_dict(values) for url, values in cache.get("jobs", {}).items()}
     return cache
 
 
 def save_cache(path, cache):
     """Persist cache updates atomically so interrupted runs keep valid JSON."""
-    write_json_atomic(
-        path,
-        {
-            "version": CACHE_VERSION,
-            "last_links": cache.get("last_links", []),
-            "jobs": {url: detail_cache_job_dict(job) for url, job in cache.get("jobs", {}).items()},
-        },
-    )
+    jobs = {url: detail_cache_job_dict(job) for url, job in cache.get("jobs", {}).items()}
+    write_versioned(path, CACHE_VERSION, last_links=cache.get("last_links", []), jobs=jobs)
 
 
 def cached_jobs(links, cache, now=None):

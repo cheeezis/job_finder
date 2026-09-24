@@ -41,6 +41,20 @@ def write_json_atomic(path, value):
     temporary.replace(destination)
 
 
+def read_versioned(path, version):
+    """Return a stored cache document of this format version, else {}."""
+    try:
+        document = read_json(path, {})
+    except (json.JSONDecodeError, OSError):
+        return {}
+    return document if document.get("version") == version else {}
+
+
+def write_versioned(path, version, **fields):
+    """Atomically store one cache document with its format version."""
+    write_json_atomic(path, {"version": version, **fields})
+
+
 def _kept_from_previous(value_sources, exclude_sources, *, ignore=frozenset()):
     """Keep an entry a run didn't recollect: manual, or entirely excluded sources."""
     names = {source.get("source") for source in value_sources} - ignore

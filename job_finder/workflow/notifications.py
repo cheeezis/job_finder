@@ -8,6 +8,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
+from job_finder.models import format_remote
 from job_finder.paths import NOTIFICATION_STATE_FILE
 from job_finder.persistence.state_compat import (
     NOTIFICATION_STATE_VERSION as STATE_VERSION,
@@ -15,7 +16,6 @@ from job_finder.persistence.state_compat import (
 )
 from job_finder.persistence.storage import read_json, write_json_atomic
 from job_finder.workflow.reporting import (
-    format_remote,
     format_role_group,
     is_visible_in_default_review,
     primary_url,
@@ -288,7 +288,7 @@ def discord_embed(job, *, review_host=None):
     """Render a quiet, compact card with the facts needed for a first look."""
     locations = ", ".join(job.get("locations", [])) or "unbekannt"
     role = format_role_group(job)
-    remote = format_remote(job)
+    remote = format_remote(job.get("remote_percentage"), job.get("work_mode"))
     fields = [
         {
             "name": "Kurzcheck",

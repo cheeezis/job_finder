@@ -17,19 +17,14 @@ def evaluate_jobs(jobs):
 
 def build_score_results(evaluated_jobs):
     """Serialize current job metadata with its already validated score."""
-    results = []
+    # Excluded jobs keep their reasons for console diagnostics and notifications.
+    results = {FilterStatus.INCLUDED.value: [], FilterStatus.EXCLUDED.value: []}
     for job, result in evaluated_jobs:
-        results.append({**job.to_dict(), "is_new": job.is_new, **result})
-
-    # Preserve exclusion reasons for console diagnostics and notifications.
-    included = [job for job in results if job["filter_status"] == FilterStatus.INCLUDED.value]
-    excluded = [job for job in results if job["filter_status"] == FilterStatus.EXCLUDED.value]
-
-    included.sort(
+        results[result["filter_status"]].append({**job.to_dict(), "is_new": job.is_new, **result})
+    results["included"].sort(
         key=lambda job: (-job["match_percent"], job["experience_rank"], job["title"].lower())
     )
-
-    return {"included": included, "excluded": excluded}
+    return results
 
 
 def score_for_pipeline(job):

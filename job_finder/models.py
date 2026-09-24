@@ -140,11 +140,7 @@ class Job:
     @property
     def remote_text(self):
         """Return remote information in the format used by scoring."""
-        if self.remote_percentage is not None:
-            return f"{self.remote_percentage}%"
-        if self.work_mode is WorkMode.HYBRID:
-            return "homeoffice"
-        return "0%"
+        return format_remote(self.remote_percentage, self.work_mode)
 
     def to_dict(self):
         """Return the complete job as JSON-compatible values."""
@@ -200,6 +196,13 @@ def validate_percentage(name, value):
     """Validate an optional integer percentage on the fixed 0-100 scale."""
     if value is not None and not 0 <= value <= 100:
         raise ValueError(f"{name} must be between 0 and 100")
+
+
+def format_remote(remote_percentage, work_mode):
+    """Return remote information as display text for scoring and notifications."""
+    if remote_percentage is not None:
+        return f"{remote_percentage}%"
+    return "homeoffice" if work_mode == WorkMode.HYBRID else "0%"
 
 
 def format_temporal(value):

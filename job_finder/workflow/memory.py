@@ -70,10 +70,7 @@ def update_memory(jobs, memory, successful_sources=None):
     INACTIVE_AFTER_MISSED_RUNS missed runs; do not change its workflow decision.
     """
     now = datetime.now(UTC)
-    new_count = 0
-    known_count = 0
-    inactive_count = 0
-    reactivated_count = 0
+    counts = dict.fromkeys(("new", "known", "inactive", "reactivated"), 0)
     current_ids = set()
     memory_index = build_memory_index(memory)
 
@@ -81,10 +78,10 @@ def update_memory(jobs, memory, successful_sources=None):
         job.id = resolve_memory_id(job, memory, memory_index)
         current_ids.add(job.id)
         if job.id in memory:
-            known_count += 1
+            counts["known"] += 1
             entry = memory[job.id]
             if not entry.get("active", True):
-                reactivated_count += 1
+                counts["reactivated"] += 1
             job.is_new = False
             job.first_seen_at = datetime.fromisoformat(entry["first_seen_at"])
             job.last_seen_at = now
@@ -102,7 +99,7 @@ def update_memory(jobs, memory, successful_sources=None):
             add_memory_index_entry(memory_index, job.id, entry)
             continue
 
-        new_count += 1
+        counts["new"] += 1
         job.is_new = True
         job.first_seen_at = now
         job.last_seen_at = now
@@ -131,28 +128,20 @@ def update_memory(jobs, memory, successful_sources=None):
             entry["missed_runs"] = entry.get("missed_runs", 0) + 1
             if entry["missed_runs"] >= INACTIVE_AFTER_MISSED_RUNS and entry.get("active", True):
                 entry["active"] = False
-                inactive_count += 1
+                counts["inactive"] += 1
 
-    return {
-        "new": new_count,
-        "known": known_count,
-        "inactive": inactive_count,
-        "reactivated": reactivated_count,
-    }
+    return counts
 
 
 def resolve_memory_id(job, memory, memory_index=None):
     """Reuse a known canonical ID for the same URL or a decided repost."""
     index = memory_index or build_memory_index(memory)
     current_urls = {source.url for source in job.sources if source.url}
-    candidates = [job.id] if job.id in memory else []
-    candidates = unique_values(candidates, *[index["urls"].get(url, []) for url in current_urls])
+    candidates = unique_values([job.id], *[index["urls"].get(url, []) for url in current_urls])
     candidates = [job_id for job_id in candidates if job_id in memory]
     if not any(has_manual_state(memory[job_id]) for job_id in candidates):
         fingerprint = repost_fingerprint(job.title, job.company, job.locations)
-        candidates = unique_values(
-            candidates, index["reposts"].get(fingerprint, []) if fingerprint else []
-        )
+        candidates = unique_values(candidates, index["reposts"].get(fingerprint, []))
         candidates = [job_id for job_id in candidates if job_id in memory]
     if not candidates:
         return job.id

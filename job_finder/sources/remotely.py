@@ -370,17 +370,9 @@ def parse_relative_date(value, today=None):
     match = re.fullmatch(r"vor (\d+) (tag(?:en)?|woche(?:n)?|monat(?:en)?|jahr(?:en)?)", label)
     if not match:
         return None
-    amount = int(match.group(1))
-    unit = match.group(2)
-    if unit.startswith("tag"):
-        days = amount
-    elif unit.startswith("woche"):
-        days = amount * 7
-    elif unit.startswith("monat"):
-        days = amount * 30
-    else:
-        days = amount * 365
-    return current - timedelta(days=days)
+    days_per_unit = {"tag": 1, "woche": 7, "monat": 30, "jahr": 365}
+    unit = next(stem for stem in days_per_unit if match.group(2).startswith(stem))
+    return current - timedelta(days=int(match.group(1)) * days_per_unit[unit])
 
 
 def clean_text(value):

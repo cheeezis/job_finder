@@ -59,7 +59,7 @@ def fetch_jobs(cache_path=CACHE_FILE):
     except HTTPError as error:
         if error.code != 429:
             raise
-        jobs = fresh_cached_jobs(cache)
+        jobs = [job for job in cache.values() if detail_is_fresh(job)]
         if not jobs:
             raise
         print(
@@ -102,11 +102,6 @@ def collect_records():
         time.sleep(REQUEST_PAUSE_SECONDS)
 
     return list(records.values())
-
-
-def fresh_cached_jobs(cache):
-    """Reuse only recently fetched listings after an API rate limit response."""
-    return [job for job in cache.values() if detail_is_fresh(job)]
 
 
 def reuse_cached_enrichment(job, previous):

@@ -135,7 +135,8 @@ def job_from_visible_page(url, html):
     company = parser.metadata.get("og:site_name", "") or urlsplit(url).hostname
     description_html = parser.main_fragment(html)
     description = " ".join(parser.lines)
-    locations = extract_labeled_values(parser.lines, {"standort", "arbeitsort", "location"})
+    location = first_labeled_value(parser.lines, {"standort", "arbeitsort", "location"})
+    locations = [location] if location else []
     employment = first_labeled_value(
         parser.lines, {"beschaeftigungsart", "anstellungsart", "employment type"}
     )
@@ -162,12 +163,6 @@ def job_from_visible_page(url, html):
         published_at=parse_published_date(parser.metadata.get("article:published_time")),
         fetched_at=utc_now(),
     )
-
-
-def extract_labeled_values(lines, labels):
-    """Return the first labelled value as a list, or [] when absent."""
-    value = first_labeled_value(lines, labels)
-    return [value] if value else []
 
 
 def first_labeled_value(lines, labels):

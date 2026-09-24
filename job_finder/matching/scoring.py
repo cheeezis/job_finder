@@ -6,24 +6,11 @@ from datetime import date, timedelta
 from job_finder.matching import location_rules
 from job_finder.matching.config import LOCAL_SEARCH_RADIUS_KM
 from job_finder.matching.experience import (
-    EXPERIENCE_TERM as EXPERIENCE_TERM,
-    MORE_THAN_QUALIFIERS as MORE_THAN_QUALIFIERS,
-    REQUIRED_EXPERIENCE_PATTERNS as REQUIRED_EXPERIENCE_PATTERNS,
-    YEAR_UNIT as YEAR_UNIT,
-    analyze_experience as analyze_experience,
-    experience_is_optional as experience_is_optional,
-    extract_required_years as extract_required_years,
-    has_required_experience as has_required_experience,
-    match_context as match_context,
-    match_is_optional as match_is_optional,
-    strong_experience_is_required as strong_experience_is_required,
+    analyze_experience,
+    extract_required_years,
+    strong_experience_is_required,
 )
-from job_finder.matching.location_rules import (
-    is_full_remote as is_full_remote,
-    is_hybrid as is_hybrid,
-    remote_percent as remote_percent,
-    remote_possible_from_germany as remote_possible_from_germany,
-)
+from job_finder.matching.location_rules import is_hybrid, remote_possible_from_germany
 from job_finder.matching.matching_rules import (
     BLOCKED_TITLE_WORDS,
     ENTRY_LEVEL_TITLE_EXCEPTIONS,
@@ -34,19 +21,14 @@ from job_finder.matching.matching_rules import (
     ROLE_GROUPS,
 )
 from job_finder.matching.matching_text import (
-    contains_any as contains_any,
-    contains_keyword as contains_keyword,
-    is_entry_level as is_entry_level,
-    keyword_pattern as keyword_pattern,
-    matches_pattern as matches_pattern,
+    contains_any,
+    contains_keyword,
+    is_entry_level,
+    matches_pattern,
 )
 from job_finder.matching.ranking_weights import ROLE_POINTS, SCORE_LIMITS, SKILL_GROUPS
 from job_finder.matching.remote import detect_remote
-from job_finder.matching.salary import (
-    extract_annual_salary as extract_annual_salary,
-    salary_number as salary_number,
-    valid_salary as valid_salary,
-)
+from job_finder.matching.salary import extract_annual_salary
 from job_finder.matching.user_settings import USER_SETTINGS
 from job_finder.models import FilterStatus, Job
 from job_finder.text import normalize_text, text_is_mainly_english

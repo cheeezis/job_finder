@@ -5,8 +5,8 @@ from datetime import date, datetime, timedelta
 from job_finder.models import APPLICATION_STATUSES, WorkflowStatus
 from job_finder.paths import MEMORY_FILE
 from job_finder.persistence.application_documents import public_documents
+from job_finder.persistence.state_compat import first_seen_date
 from job_finder.workflow.memory import (
-    first_seen_date,
     has_application_state as is_application,
     load_memory,
     memory_source_links,

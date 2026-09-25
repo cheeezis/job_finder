@@ -240,7 +240,7 @@ def load_cache(path):
 
 
 def save_cache(path, cache):
-    """Persist cache updates atomically so interrupted runs keep valid JSON."""
+    """Persist cache updates atomically so an interrupted run keeps the last complete cache."""
     jobs = {url: detail_cache_job_dict(job) for url, job in cache.get("jobs", {}).items()}
     write_versioned(path, CACHE_VERSION, last_links=cache.get("last_links", []), jobs=jobs)
 

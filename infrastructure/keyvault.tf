@@ -1,4 +1,4 @@
-# Phase 8: Zentrale Ablage für Discord-Webhook und API-Keys, statt sie als
+# Zentrale Ablage für Discord-Webhook und API-Keys, statt sie als
 # Klartext-Umgebungsvariablen in der Container-App-Definition zu speichern.
 resource "azurerm_key_vault" "jobfinder" {
   name                = "kv-jobfinder-${substr(sha256(var.subscription_id), 0, 8)}"

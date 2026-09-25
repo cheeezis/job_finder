@@ -96,7 +96,7 @@ def replace_or_add_job(jobs, imported):
 
 
 def save_jobs(jobs, path):
-    """Atomically replace the JSON snapshot with serialized Job objects."""
+    """Atomically replace the stored jobs dataset with serialized Job objects."""
     write_json_atomic(path, [job.to_dict() for job in jobs])
 
 

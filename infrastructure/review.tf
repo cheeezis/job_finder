@@ -1,4 +1,4 @@
-# Phase 8: Die Review läuft als eigene, dauerhaft erreichbare Container App
+# Die Review läuft als eigene, dauerhaft erreichbare Container App
 # (anders als der Worker-Job, der nur bei Bedarf startet und wieder endet).
 resource "azurerm_container_app" "review" {
   name                         = "jobfinder-review"
@@ -103,8 +103,9 @@ resource "azurerm_container_app" "review" {
 
 # Easy Auth (Microsoft-Entra-ID-Anmeldung). azurerm bildet diese Ressource
 # noch nicht ab; azapi spricht dafür direkt die Azure-Resource-Manager-API an.
-# Liegt im selben Apply wie die Container App selbst, damit sie zu keinem
-# Zeitpunkt öffentlich ohne Anmeldung erreichbar ist.
+# Liegt im selben Apply wie die Container App. Das hält die Zeit ohne Anmeldung
+# kurz, schließt sie aber nicht aus: Terraform legt die Konfiguration erst nach
+# der App an.
 resource "azapi_resource" "review_auth" {
   type      = "Microsoft.App/containerApps/authConfigs@2024-03-01"
   name      = "current"

@@ -11,7 +11,7 @@ resource "azurerm_resource_group" "jobfinder" {
   }
 }
 
-# Speichert die Docker-Images, die lokal gebaut und per Docker-Push hochgeladen werden.
+# Speichert die Docker-Images, die die CI-Pipeline baut und hochlädt.
 resource "azurerm_container_registry" "jobfinder" {
   name                = "acrjobfinder"
   resource_group_name = azurerm_resource_group.jobfinder.name
@@ -23,7 +23,7 @@ resource "azurerm_container_registry" "jobfinder" {
   tags = azurerm_resource_group.jobfinder.tags
 }
 
-# Speichert Betriebslogs der Container; die Jobfinder-Datenablage folgt separat.
+# Speichert Betriebslogs der Container; Jobdaten liegen in PostgreSQL und Blob Storage.
 resource "azurerm_log_analytics_workspace" "jobfinder" {
   name                = "law-jobfinder"
   resource_group_name = azurerm_resource_group.jobfinder.name
@@ -73,7 +73,7 @@ resource "azurerm_role_assignment" "acr_pull" {
   principal_type       = "ServicePrincipal"
 }
 
-# Definiert einen manuell startbaren Finder-Lauf. Das Anlegen startet ihn noch nicht.
+# Definiert den Finder-Job; er startet per Zeitplan (siehe schedule_trigger_config).
 resource "azurerm_container_app_job" "finder" {
   name                         = "jobfinder-worker"
   resource_group_name          = azurerm_resource_group.jobfinder.name

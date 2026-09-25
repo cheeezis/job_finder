@@ -9,9 +9,7 @@ from job_finder.paths import PROJECT_DIR
 
 LOCAL_SETTINGS_PATH = PROJECT_DIR / "user_settings.local.yaml"
 EXAMPLE_SETTINGS_PATH = PROJECT_DIR / "user_settings.example.yaml"
-SETTINGS_PATH = (
-    LOCAL_SETTINGS_PATH if LOCAL_SETTINGS_PATH.exists() else EXAMPLE_SETTINGS_PATH
-)
+SETTINGS_PATH = LOCAL_SETTINGS_PATH if LOCAL_SETTINGS_PATH.exists() else EXAMPLE_SETTINGS_PATH
 
 
 def load_user_settings(path=SETTINGS_PATH):
@@ -32,13 +30,9 @@ def load_user_settings(path=SETTINGS_PATH):
     try:
         values = yaml.safe_load(settings_path.read_text(encoding="utf-8"))
     except OSError as error:
-        raise ValueError(
-            f"Einstellungen konnten nicht gelesen werden: {settings_path}"
-        ) from error
+        raise ValueError(f"Einstellungen konnten nicht gelesen werden: {settings_path}") from error
     except yaml.YAMLError as error:
-        raise ValueError(
-            f"Einstellungen enthalten ungueltiges YAML: {settings_path}"
-        ) from error
+        raise ValueError(f"Einstellungen enthalten ungueltiges YAML: {settings_path}") from error
 
     if not isinstance(values, dict):
         raise ValueError("Einstellungen muessen ein Objekt sein")
@@ -47,10 +41,7 @@ def load_user_settings(path=SETTINGS_PATH):
     require_text(search.get("local_location"), "search.local_location")
     require_text(search.get("local_postal_code"), "search.local_postal_code")
     require_positive_int(search.get("local_radius_km"), "search.local_radius_km")
-    require_text(
-        matching.get("preferred_location_label"),
-        "matching.preferred_location_label",
-    )
+    require_text(matching.get("preferred_location_label"), "matching.preferred_location_label")
     require_text_list(matching.get("local_places"), "matching.local_places")
     preferred_roles = require_text_list(
         matching.get("preferred_role_groups", []),
@@ -61,26 +52,18 @@ def load_user_settings(path=SETTINGS_PATH):
     unknown_roles = set(preferred_roles) - known_roles
     if unknown_roles:
         raise ValueError(
-            "Unbekannte matching.preferred_role_groups: "
-            + ", ".join(sorted(unknown_roles))
+            "Unbekannte matching.preferred_role_groups: " + ", ".join(sorted(unknown_roles))
         )
     require_commuter_locations(
-        matching.get("commuter_locations", []),
-        "matching.commuter_locations",
+        matching.get("commuter_locations", []), "matching.commuter_locations"
     )
     require_text_list(
         matching.get("profile_domain_keywords"),
         "matching.profile_domain_keywords",
         allow_empty=True,
     )
-    require_optional_positive_int(
-        matching.get("salary_target_eur"),
-        "matching.salary_target_eur",
-    )
-    require_optional_positive_int(
-        matching.get("salary_minimum_eur"),
-        "matching.salary_minimum_eur",
-    )
+    require_optional_positive_int(matching.get("salary_target_eur"), "matching.salary_target_eur")
+    require_optional_positive_int(matching.get("salary_minimum_eur"), "matching.salary_minimum_eur")
     return values
 
 
@@ -131,18 +114,13 @@ def require_commuter_locations(value, name):
         require_text(item.get("search_location"), f"{item_name}.search_location")
         require_text_list(item.get("aliases"), f"{item_name}.aliases")
         require_text_list(
-            item.get("excluded_aliases", []),
-            f"{item_name}.excluded_aliases",
-            allow_empty=True,
+            item.get("excluded_aliases", []), f"{item_name}.excluded_aliases", allow_empty=True
         )
         percentage = require_positive_int(
-            item.get("minimum_remote_percentage"),
-            f"{item_name}.minimum_remote_percentage",
+            item.get("minimum_remote_percentage"), f"{item_name}.minimum_remote_percentage"
         )
         if percentage > 100:
-            raise ValueError(
-                f"{item_name}.minimum_remote_percentage darf hoechstens 100 sein"
-            )
+            raise ValueError(f"{item_name}.minimum_remote_percentage darf hoechstens 100 sein")
     return value
 
 

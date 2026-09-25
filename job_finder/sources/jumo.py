@@ -34,30 +34,20 @@ def collect_links():
         raise ValueError("JUMO-CSRF-Kennung nicht gefunden")
     csrf = unescape(csrf_match.group(1))
 
-    post_text(
-        opener,
-        f"{LIST_URL}?search=true",
-        {"j": "jobexchange", "_csrf": csrf},
-    )
+    post_text(opener, f"{LIST_URL}?search=true", {"j": "jobexchange", "_csrf": csrf})
     identifiers = []
     seen = set()
 
     for _batch in range(MAX_RESULT_BATCHES):
         html = post_text(
-            opener,
-            LIST_URL,
-            {"showNextJobOffers": "true", "j": "jobexchange", "_csrf": csrf},
+            opener, LIST_URL, {"showNextJobOffers": "true", "j": "jobexchange", "_csrf": csrf}
         )
         for identifier in extract_job_ids(html):
             if identifier not in seen:
                 seen.add(identifier)
                 identifiers.append(identifier)
 
-        has_next = post_text(
-            opener,
-            LIST_URL,
-            {"hasNextJobOffers": "true", "_csrf": csrf},
-        )
+        has_next = post_text(opener, LIST_URL, {"hasNextJobOffers": "true", "_csrf": csrf})
         if not json.loads(has_next.lower()):
             break
 
@@ -70,9 +60,7 @@ def collect_links():
 
 def extract_job_ids(html):
     """Return unique hexadecimal offer IDs in their first-seen order."""
-    return list(
-        dict.fromkeys(re.findall(r"jobOfferId=([a-f0-9]+)", html, re.IGNORECASE))
-    )
+    return list(dict.fromkeys(re.findall(r"jobOfferId=([a-f0-9]+)", html, re.IGNORECASE)))
 
 
 def open_text(opener, url):

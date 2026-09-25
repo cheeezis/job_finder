@@ -108,9 +108,7 @@ def job_from_record(record):
         title=title,
         company=company,
         locations=locations,
-        sources=[
-            JobSource(source=SOURCE_NAME, source_id=record_identifier(record), url=url)
-        ],
+        sources=[JobSource(source=SOURCE_NAME, source_id=record_identifier(record), url=url)],
         description_raw=raw_description,
         description_clean=html_to_text(raw_description),
         work_mode=WorkMode.REMOTE,
@@ -144,9 +142,7 @@ def annual_salary_eur(record):
         return None, None
     if str(record.get("salaryPeriod") or "annual").casefold() != "annual":
         return None, None
-    return numeric_salary(record.get("minSalary")), numeric_salary(
-        record.get("maxSalary")
-    )
+    return numeric_salary(record.get("minSalary")), numeric_salary(record.get("maxSalary"))
 
 
 def parse_api_date(value):

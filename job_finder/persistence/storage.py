@@ -10,10 +10,7 @@ from job_finder.paths import DATA_DIR, INTERNAL_DIR, OUTPUT_DIR
 def dataset_name(path):
     """Default runtime locations identify database datasets, not live JSON files."""
     target = Path(path).resolve()
-    if (
-        target.parent in {INTERNAL_DIR.resolve(), OUTPUT_DIR.resolve()}
-        and target.suffix == ".json"
-    ):
+    if target.parent in {INTERNAL_DIR.resolve(), OUTPUT_DIR.resolve()} and target.suffix == ".json":
         return target.relative_to(DATA_DIR.resolve()).as_posix()
     return None
 
@@ -42,10 +39,7 @@ def write_json_atomic(path, value, *, indent=2):
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_suffix(f"{destination.suffix}.tmp")
-    temporary.write_text(
-        json.dumps(value, indent=indent, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    temporary.write_text(json.dumps(value, indent=indent, ensure_ascii=False), encoding="utf-8")
     temporary.replace(destination)
 
 
@@ -88,9 +82,7 @@ def publish_results(jobs, results, *, jobs_path, writer, exclude_sources=frozens
                 for value in previous
                 if value["id"] not in ids
                 and _kept_from_previous(
-                    value.get("source_links", []),
-                    exclude_sources,
-                    ignore={"original"},
+                    value.get("source_links", []), exclude_sources, ignore={"original"}
                 )
             )
             write_json_atomic(RECOMMENDATIONS_JSON, updated)

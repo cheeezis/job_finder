@@ -29,8 +29,7 @@ class OperationsTests(unittest.TestCase):
             backup_dir = root / "backups"
             for index in range(3):
                 (backup_dir / f"state-2026071{index}-090000.zip").parent.mkdir(
-                    parents=True,
-                    exist_ok=True,
+                    parents=True, exist_ok=True
                 )
                 (backup_dir / f"state-2026071{index}-090000.zip").write_bytes(b"old")
 

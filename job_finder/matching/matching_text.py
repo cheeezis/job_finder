@@ -2,10 +2,7 @@
 
 import re
 
-from job_finder.matching.matching_rules import (
-    BODY_ENTRY_LEVEL_PHRASES,
-    ENTRY_LEVEL_WORDS,
-)
+from job_finder.matching.matching_rules import BODY_ENTRY_LEVEL_PHRASES, ENTRY_LEVEL_WORDS
 from job_finder.text import normalize_text
 
 
@@ -17,8 +14,7 @@ def contains_any(text, words):
 def is_entry_level(title, description=""):
     """Return whether this specific vacancy explicitly welcomes beginners."""
     return contains_any(title, ENTRY_LEVEL_WORDS) or contains_any(
-        description,
-        BODY_ENTRY_LEVEL_PHRASES,
+        description, BODY_ENTRY_LEVEL_PHRASES
     )
 
 

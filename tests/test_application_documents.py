@@ -42,9 +42,7 @@ class ApplicationDocumentTests(unittest.TestCase):
         self.assertEqual(documents[0]["name"], "Anschreiben.pdf")
         self.assertEqual(path.name, "Anschreiben.pdf")
         self.assertTrue(
-            path.parent.name.startswith(
-                "Example GmbH - Junior Python Developer (m_w_d) ["
-            )
+            path.parent.name.startswith("Example GmbH - Junior Python Developer (m_w_d) [")
         )
 
     def test_equal_titles_for_different_jobs_use_distinct_folders(self):

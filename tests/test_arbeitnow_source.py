@@ -19,14 +19,8 @@ from job_finder.sources.common import (
 class ArbeitnowTests(unittest.TestCase):
     def test_collect_records_paginates_and_removes_repeated_slugs(self):
         pages = [
-            {
-                "data": [{"slug": "one"}, {"slug": "two"}],
-                "links": {"next": "page-2"},
-            },
-            {
-                "data": [{"slug": "two"}, {"slug": "three"}],
-                "links": {"next": None},
-            },
+            {"data": [{"slug": "one"}, {"slug": "two"}], "links": {"next": "page-2"}},
+            {"data": [{"slug": "two"}, {"slug": "three"}], "links": {"next": None}},
         ]
 
         with (
@@ -35,9 +29,7 @@ class ArbeitnowTests(unittest.TestCase):
         ):
             records = arbeitnow.collect_records()
 
-        self.assertEqual(
-            [record["slug"] for record in records], ["one", "two", "three"]
-        )
+        self.assertEqual([record["slug"] for record in records], ["one", "two", "three"])
         self.assertEqual(fetch.call_count, 2)
         sleep.assert_called_once_with(arbeitnow.REQUEST_PAUSE_SECONDS)
 
@@ -108,23 +100,13 @@ class ArbeitnowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             cache_path = Path(directory) / "arbeitnow.json"
             save_detail_cache(cache_path, {url: enriched})
-            with patch.object(
-                arbeitnow,
-                "collect_records",
-                return_value=[full_text_record],
-            ):
+            with patch.object(arbeitnow, "collect_records", return_value=[full_text_record]):
                 full_text_jobs = arbeitnow.fetch_jobs(cache_path=cache_path)
-            with patch.object(
-                arbeitnow,
-                "collect_records",
-                return_value=[placeholder_record],
-            ):
+            with patch.object(arbeitnow, "collect_records", return_value=[placeholder_record]):
                 placeholder_jobs = arbeitnow.fetch_jobs(cache_path=cache_path)
             with patch.object(arbeitnow, "fetch_text_with_final_url") as fetch:
                 enriched_count = arbeitnow.enrich_candidate_jobs(
-                    placeholder_jobs,
-                    {placeholder_jobs[0].id},
-                    cache_path=cache_path,
+                    placeholder_jobs, {placeholder_jobs[0].id}, cache_path=cache_path
                 )
 
         self.assertEqual(full_text_jobs[0].description_clean, portal_text.strip())
@@ -198,24 +180,14 @@ class ArbeitnowTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             cache_path = Path(directory) / "arbeitnow.json"
-            save_detail_cache(
-                cache_path,
-                {current_url: enriched, removed_url: removed},
-            )
-            with patch.object(
-                arbeitnow,
-                "collect_records",
-                return_value=[current_record],
-            ):
+            save_detail_cache(cache_path, {current_url: enriched, removed_url: removed})
+            with patch.object(arbeitnow, "collect_records", return_value=[current_record]):
                 jobs = arbeitnow.fetch_jobs(cache_path=cache_path)
             saved = load_detail_cache(cache_path)
 
         self.assertEqual(len(jobs), 1)
         self.assertIn("Original Python job", jobs[0].description_clean)
-        self.assertEqual(
-            jobs[0].sources[0].application_url,
-            "https://company.test/jobs/current",
-        )
+        self.assertEqual(jobs[0].sources[0].application_url, "https://company.test/jobs/current")
         self.assertEqual(list(saved), [current_url])
 
     def test_direct_description_never_requests_original_page(self):
@@ -234,11 +206,7 @@ class ArbeitnowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             cache_path = Path(directory) / "arbeitnow.json"
             with patch.object(arbeitnow, "fetch_text_with_final_url") as fetch:
-                count = arbeitnow.enrich_candidate_jobs(
-                    [job],
-                    {job.id},
-                    cache_path=cache_path,
-                )
+                count = arbeitnow.enrich_candidate_jobs([job], {job.id}, cache_path=cache_path)
 
         self.assertEqual(count, 0)
         fetch.assert_not_called()
@@ -255,9 +223,7 @@ class ArbeitnowTests(unittest.TestCase):
         }
         previous = arbeitnow.job_from_record(record)
         previous.description_clean = "Cached but invalid description " * 20
-        previous.sources[
-            0
-        ].application_url = "https://company.test/jobs/missing?not_found=true"
+        previous.sources[0].application_url = "https://company.test/jobs/missing?not_found=true"
         current = arbeitnow.job_from_record(record)
 
         reused = arbeitnow.reuse_cached_enrichment(current, previous)
@@ -278,9 +244,7 @@ class ArbeitnowTests(unittest.TestCase):
                 "location": "Fulda",
             }
         )
-        html = (
-            '<meta property="og:description" content="' + ("Python APIs " * 30) + '">'
-        )
+        html = '<meta property="og:description" content="' + ("Python APIs " * 30) + '">'
 
         with tempfile.TemporaryDirectory() as directory:
             cache_path = Path(directory) / "arbeitnow.json"
@@ -289,14 +253,10 @@ class ArbeitnowTests(unittest.TestCase):
                 "fetch_text_with_final_url",
                 return_value=("https://company.test/jobs/one", html),
             ):
-                count = arbeitnow.enrich_candidate_jobs(
-                    [job], {job.id}, cache_path=cache_path
-                )
+                count = arbeitnow.enrich_candidate_jobs([job], {job.id}, cache_path=cache_path)
 
         self.assertEqual(count, 1)
-        self.assertEqual(
-            job.sources[0].application_url, "https://company.test/jobs/one"
-        )
+        self.assertEqual(job.sources[0].application_url, "https://company.test/jobs/one")
         self.assertIn("Python APIs", job.description_clean)
 
     def test_external_description_prefers_structured_job_posting(self):
@@ -304,19 +264,11 @@ class ArbeitnowTests(unittest.TestCase):
         html = (
             '<meta content="Short portal summary" property="og:description">'
             '<script type="application/ld+json">'
-            + json.dumps(
-                {
-                    "@type": "JobPosting",
-                    "description": f"<p>{structured_description}</p>",
-                }
-            )
+            + json.dumps({"@type": "JobPosting", "description": f"<p>{structured_description}</p>"})
             + "</script>"
         )
 
-        self.assertEqual(
-            arbeitnow.external_description(html),
-            structured_description.strip(),
-        )
+        self.assertEqual(arbeitnow.external_description(html), structured_description.strip())
 
     def test_unreachable_original_page_is_recorded_as_candidate_failure(self):
         job = arbeitnow.job_from_record(
@@ -335,9 +287,7 @@ class ArbeitnowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             with (
                 patch.object(
-                    arbeitnow,
-                    "fetch_text_with_final_url",
-                    side_effect=OSError("timeout"),
+                    arbeitnow, "fetch_text_with_final_url", side_effect=OSError("timeout")
                 ),
                 patch("builtins.print"),
             ):
@@ -370,11 +320,7 @@ class ArbeitnowTests(unittest.TestCase):
                 "fetch_text_with_final_url",
                 return_value=("https://company.test/jobs?not_found=true", html),
             ):
-                count = arbeitnow.enrich_candidate_jobs(
-                    [job],
-                    {job.id},
-                    cache_path=cache_path,
-                )
+                count = arbeitnow.enrich_candidate_jobs([job], {job.id}, cache_path=cache_path)
             with patch.object(
                 arbeitnow,
                 "fetch_text_with_final_url",
@@ -384,9 +330,7 @@ class ArbeitnowTests(unittest.TestCase):
                 ),
             ):
                 short_count = arbeitnow.enrich_candidate_jobs(
-                    [job],
-                    {job.id},
-                    cache_path=cache_path,
+                    [job], {job.id}, cache_path=cache_path
                 )
 
         self.assertEqual(count, 0)

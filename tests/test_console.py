@@ -5,12 +5,7 @@ import unittest
 from contextlib import redirect_stdout
 from unittest.mock import patch
 
-from job_finder.console import (
-    print_phase,
-    print_progress,
-    progress_bar,
-    progress_line,
-)
+from job_finder.console import print_phase, print_progress, progress_bar, progress_line
 from job_finder.operations import TeeStream
 
 
@@ -40,12 +35,7 @@ class ConsoleProgressTests(unittest.TestCase):
         self.assertNotIn("\r", text)
 
     def test_tqdm_style_line_contains_timing_eta_and_rate(self):
-        line = progress_line(
-            "Remotely Details",
-            128,
-            2598,
-            elapsed_seconds=20,
-        )
+        line = progress_line("Remotely Details", 128, 2598, elapsed_seconds=20)
 
         self.assertIn("(5%)", line)
         self.assertIn("128/2598", line)
@@ -77,10 +67,7 @@ class ConsoleProgressTests(unittest.TestCase):
 
     def test_nonterminal_progress_is_throttled_but_completion_is_always_printed(self):
         output = io.StringIO()
-        with (
-            redirect_stdout(output),
-            patch("job_finder.console.time.monotonic", return_value=100),
-        ):
+        with redirect_stdout(output), patch("job_finder.console.time.monotonic", return_value=100):
             print_progress("Synthetic", 0, 100)
             for count in range(1, 100):
                 print_progress("Synthetic", count, 100)

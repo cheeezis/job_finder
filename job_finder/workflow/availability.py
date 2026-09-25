@@ -92,10 +92,7 @@ def listing_is_closed(url):
     """
     try:
         final_url, html = fetch_text_with_final_url(
-            url,
-            timeout=10,
-            max_bytes=2 * 1024 * 1024,
-            url_validator=validate_public_url,
+            url, timeout=10, max_bytes=2 * 1024 * 1024, url_validator=validate_public_url
         )
     except HTTPError as error:
         # A failed redirected login or another site's error is inconclusive.
@@ -115,9 +112,7 @@ def listing_is_closed(url):
         return True
     if extract_json_ld_job_posting(html):
         return False
-    return any(
-        CLOSED_MESSAGE.fullmatch(" ".join(text.split())) for text in parser.lines
-    )
+    return any(CLOSED_MESSAGE.fullmatch(" ".join(text.split())) for text in parser.lines)
 
 
 MAX_CHECK_URLS = 200
@@ -214,9 +209,7 @@ def _plan_checks(jobs, snapshot, successful_sources, now):
             if recent_check(check, now):
                 continue
             # Never-checked/oldest URLs first; URL breaks ties.
-            timestamp = (
-                str(check.get("checked_at", "")) if isinstance(check, dict) else ""
-            )
+            timestamp = str(check.get("checked_at", "")) if isinstance(check, dict) else ""
             priority = (timestamp, url)
             due[url] = min(due.get(url, priority), priority)
     return candidates, due
@@ -232,10 +225,7 @@ def _check_urls(selected, now, budget_seconds, progress):
         # No new request after the budget; an already running request may finish.
         if time.monotonic() - started >= budget_seconds:
             break
-        checked_urls[url] = {
-            "checked_at": now.isoformat(),
-            "closed": listing_is_closed(url),
-        }
+        checked_urls[url] = {"checked_at": now.isoformat(), "closed": listing_is_closed(url)}
         if progress is not None:
             progress(len(checked_urls), len(selected))
     return checked_urls

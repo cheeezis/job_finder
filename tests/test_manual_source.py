@@ -92,10 +92,7 @@ class ManualSourceTests(unittest.TestCase):
         </main><footer>Impressum und Datenschutz</footer></body></html>
         """
 
-        job = manual.job_from_page(
-            "https://www.ncsolution.de/jobs/junior_python_entwickler/",
-            html,
-        )
+        job = manual.job_from_page("https://www.ncsolution.de/jobs/junior_python_entwickler/", html)
 
         self.assertEqual(job.title, "Junior Python Entwickler (m/w/d)")
         self.assertEqual(job.company, "NCSolution")
@@ -129,26 +126,18 @@ class ManualSourceTests(unittest.TestCase):
                     return_value=("https://example.com/jobs/python", html),
                 ) as fetch,
             ):
-                job = manual.add_url(
-                    "https://example.com/jobs/python",
-                    cache_path=cache_path,
-                )
+                job = manual.add_url("https://example.com/jobs/python", cache_path=cache_path)
 
             cache = load_detail_cache(cache_path)
 
         fetch.assert_called_once_with(
-            "https://example.com/jobs/python",
-            url_validator=manual.validate_public_url,
+            "https://example.com/jobs/python", url_validator=manual.validate_public_url
         )
         self.assertEqual(list(cache), ["https://example.com/jobs/python"])
         self.assertEqual(job.primary_source.source, "manual")
 
     def test_local_network_url_is_rejected(self):
-        for url in (
-            "http://localhost/job",
-            "http://127.0.0.1/job",
-            "file:///C:/secret.txt",
-        ):
+        for url in ("http://localhost/job", "http://127.0.0.1/job", "file:///C:/secret.txt"):
             with self.subTest(url=url), self.assertRaises(ValueError):
                 manual.validate_public_url(url)
 

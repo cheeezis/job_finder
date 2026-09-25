@@ -23,10 +23,7 @@ from job_finder.sources.common import (
     source_job_id,
     utc_now,
 )
-from job_finder.sources.company_careers import (
-    identifier_from_url,
-    job_from_posting,
-)
+from job_finder.sources.company_careers import identifier_from_url, job_from_posting
 from job_finder.structured_data import extract_json_ld_job_posting
 from job_finder.text import normalize_text
 
@@ -54,9 +51,7 @@ _VOID_TAGS = {
 def add_url(url, cache_path=MANUAL_CACHE_FILE):
     """Fetch and persist one explicitly supplied public job URL."""
     requested_url = validate_public_url(url)
-    final_url, html = fetch_text_with_final_url(
-        requested_url, url_validator=validate_public_url
-    )
+    final_url, html = fetch_text_with_final_url(requested_url, url_validator=validate_public_url)
     cache_file = Path(cache_path)
     cache = load_detail_cache(cache_file)
     cache_key = canonical_detail_url(final_url)
@@ -130,9 +125,7 @@ def applicant_region(posting):
         return str(requirement.get("name") or "").strip()
     if isinstance(requirement, list):
         names = [
-            str(item.get("name") or "").strip()
-            for item in requirement
-            if isinstance(item, dict)
+            str(item.get("name") or "").strip() for item in requirement if isinstance(item, dict)
         ]
         return ", ".join(name for name in names if name)
     return ""
@@ -146,18 +139,13 @@ def job_from_visible_page(url, html):
     company = parser.metadata.get("og:site_name", "") or urlsplit(url).hostname
     description_html = parser.main_fragment(html)
     description = " ".join(parser.lines)
-    locations = extract_labeled_values(
-        parser.lines, {"standort", "arbeitsort", "location"}
-    )
+    locations = extract_labeled_values(parser.lines, {"standort", "arbeitsort", "location"})
     employment = first_labeled_value(
-        parser.lines,
-        {"beschaeftigungsart", "anstellungsart", "employment type"},
+        parser.lines, {"beschaeftigungsart", "anstellungsart", "employment type"}
     )
 
     if not title or not company or len(description) < 200:
-        raise ValueError(
-            "Auf der Seite wurde keine vollständige Stellenanzeige erkannt"
-        )
+        raise ValueError("Auf der Seite wurde keine vollständige Stellenanzeige erkannt")
 
     remote = detect_remote(title, " ".join(locations), description)
     work_mode, remote_percentage = classify_remote(remote)
@@ -168,20 +156,14 @@ def job_from_visible_page(url, html):
         company=company,
         locations=locations,
         sources=[
-            JobSource(
-                source=SOURCE_NAME,
-                source_id=identifier,
-                url=canonical_detail_url(url),
-            )
+            JobSource(source=SOURCE_NAME, source_id=identifier, url=canonical_detail_url(url))
         ],
         description_raw=description_html,
         description_clean=description,
         work_mode=work_mode,
         remote_percentage=remote_percentage,
         employment_type=normalize_employment_type(employment),
-        published_at=parse_published_date(
-            parser.metadata.get("article:published_time")
-        ),
+        published_at=parse_published_date(parser.metadata.get("article:published_time")),
         fetched_at=utc_now(),
     )
 
@@ -219,12 +201,8 @@ def validate_public_url(value):
     try:
         addresses = {item[4][0] for item in socket.getaddrinfo(hostname, parts.port)}
     except socket.gaierror as error:
-        raise ValueError(
-            "Adresse der Stellenanzeige konnte nicht aufgelöst werden"
-        ) from error
-    if not addresses or any(
-        not ipaddress.ip_address(item).is_global for item in addresses
-    ):
+        raise ValueError("Adresse der Stellenanzeige konnte nicht aufgelöst werden") from error
+    if not addresses or any(not ipaddress.ip_address(item).is_global for item in addresses):
         raise ValueError("Private Netzwerkadressen können nicht importiert werden")
     # Preserve functional query parameters; canonicalization is only a cache concern.
     return parts._replace(fragment="").geturl()
@@ -256,9 +234,7 @@ class VisibleJobParser(HTMLParser):
             offsets.append(offsets[-1] + len(line))
         start_line, start_column = self.fragment_start
         end_line, end_column = self.fragment_end
-        return html[
-            offsets[start_line - 1] + start_column : offsets[end_line - 1] + end_column
-        ]
+        return html[offsets[start_line - 1] + start_column : offsets[end_line - 1] + end_column]
 
     def handle_starttag(self, tag, attrs):
         """Track the main container and skip non-job blocks, respecting void tags."""
@@ -269,8 +245,7 @@ class VisibleJobParser(HTMLParser):
             if name and content:
                 self.metadata[name.casefold()] = content.strip()
         if (
-            tag in {"main", "article"}
-            or attributes.get("role", "").casefold() == "main"
+            tag in {"main", "article"} or attributes.get("role", "").casefold() == "main"
         ) and self.fragment_start is None:
             self._in_main = True
             self._main_stack = [tag]

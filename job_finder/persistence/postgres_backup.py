@@ -18,9 +18,7 @@ from job_finder.persistence.postgres_store import (
 )
 
 
-def create_postgres_backup(
-    backup_dir=BACKUP_DIR, documents_dir=APPLICATION_DOCUMENTS_DIR
-):
+def create_postgres_backup(backup_dir=BACKUP_DIR, documents_dir=APPLICATION_DOCUMENTS_DIR):
     """Back up a consistent database snapshot and verify referenced file bytes."""
     directory = Path(backup_dir)
     directory.mkdir(parents=True, exist_ok=True)
@@ -33,9 +31,7 @@ def create_postgres_backup(
             transaction() as connection,
             zipfile.ZipFile(temporary, "w", zipfile.ZIP_DEFLATED) as archive,
         ):
-            connection.execute(
-                "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"
-            )
+            connection.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
             memory = read_memory(connection, "default")
             documents = live_document_manifest(memory, documents_dir)
 
@@ -44,23 +40,15 @@ def create_postgres_backup(
                 hashes[name] = hashlib.sha256(content).hexdigest()
 
             add("memory.json", json.dumps(memory, ensure_ascii=False).encode())
-            names = [
-                r[0]
-                for r in connection.execute("SELECT name FROM datasets ORDER BY name")
-            ]
+            names = [r[0] for r in connection.execute("SELECT name FROM datasets ORDER BY name")]
             for name in names:
-                add(
-                    "datasets/" + name,
-                    json.dumps(read_dataset(name), ensure_ascii=False).encode(),
-                )
+                add("datasets/" + name, json.dumps(read_dataset(name), ensure_ascii=False).encode())
             for name, expected in documents.items():
                 content = document_store.read(name, documents_dir)
                 if hashlib.sha256(content).hexdigest() != expected:
                     raise RuntimeError("Dokument während der Sicherung geändert.")
                 add("documents/" + name, content)
-            archive.writestr(
-                "manifest.json", json.dumps({"version": 1, "hashes": hashes})
-            )
+            archive.writestr("manifest.json", json.dumps({"version": 1, "hashes": hashes}))
         temporary.replace(target)
         return target
     except BaseException:
@@ -82,12 +70,7 @@ def restore_backup(archive_path, documents_dir):
             raise ValueError("Unbekanntes Backup-Format")
         for name, expected in manifest["hashes"].items():
             relative = PurePosixPath(name)
-            if (
-                relative.is_absolute()
-                or ".." in relative.parts
-                or "\\" in name
-                or ":" in name
-            ):
+            if relative.is_absolute() or ".." in relative.parts or "\\" in name or ":" in name:
                 raise ValueError("Ungültiger Backup-Pfad")
             if hashlib.sha256(archive.read(name)).hexdigest() != expected:
                 raise ValueError("Backup-Prüfsumme stimmt nicht überein")
@@ -120,9 +103,7 @@ def restore_backup(archive_path, documents_dir):
                         document_store.write(key, archive.read(name), documents_dir)
                         written.append(key)
                 if read_memory(connection, "default") != memory:
-                    raise RuntimeError(
-                        "Gedächtnis stimmt nach Wiederherstellung nicht überein"
-                    )
+                    raise RuntimeError("Gedächtnis stimmt nach Wiederherstellung nicht überein")
                 live_document_manifest(memory, documents_dir)
         except BaseException:
             for key in written:

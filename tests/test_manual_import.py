@@ -36,18 +36,16 @@ class ManualImportTests(unittest.TestCase):
                 "job_finder.workflow.manual_import.manual.add_url", return_value=job
             ) as add_url:
                 result = import_manual_url("https://example.com/jobs/python", **paths)
-            recommendations = json.loads(
-                paths["recommendations_path"].read_text(encoding="utf-8")
-            )["recommendations"]
+            recommendations = json.loads(paths["recommendations_path"].read_text(encoding="utf-8"))[
+                "recommendations"
+            ]
             saved_jobs = json.loads(paths["jobs_path"].read_text(encoding="utf-8"))
             memory = load_memory(paths["memory_path"])
 
         add_url.assert_called_once()
         self.assertEqual(result["prefilter_warning"], "Ort/Remote passt nicht")
         self.assertIsInstance(result["match_percent"], int)
-        self.assertEqual(
-            recommendations[0]["prefilter_warning"], "Ort/Remote passt nicht"
-        )
+        self.assertEqual(recommendations[0]["prefilter_warning"], "Ort/Remote passt nicht")
         self.assertNotIn("llm_score", recommendations[0])
         self.assertEqual(saved_jobs[0]["id"], "manual:python")
         self.assertIn("manual:python", memory)
@@ -67,9 +65,7 @@ class ManualImportTests(unittest.TestCase):
         )
         results = score_jobs([job])
         self.assertEqual(len(results["included"]), 1)
-        self.assertEqual(
-            results["included"][0]["prefilter_warning"], "Ort/Remote passt nicht"
-        )
+        self.assertEqual(results["included"][0]["prefilter_warning"], "Ort/Remote passt nicht")
 
     def test_old_manual_job_remains_reviewable_with_warning(self):
         from job_finder.workflow.main import score_jobs

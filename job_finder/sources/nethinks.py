@@ -21,9 +21,7 @@ def fetch_jobs(cache_path=CACHE_FILE, now=None):
 def collect_links():
     """Collect unique NETHINKS detail links across all advertised pages."""
     first_html = fetch_text(LIST_URL)
-    pages = [
-        int(value) for value in re.findall(r"/nethinks_jobs/page/(\d+)/", first_html)
-    ]
+    pages = [int(value) for value in re.findall(r"/nethinks_jobs/page/(\d+)/", first_html)]
     last_page = max(pages, default=1)
     links = extract_job_links(first_html)
     seen = set(links)
@@ -39,8 +37,4 @@ def collect_links():
 
 def extract_job_links(html):
     """Extract job-detail URLs while excluding pagination and feed links."""
-    return extract_links(
-        html,
-        LIST_URL,
-        r"nethinks\.com/nethinks_jobs/(?!page/|feed/?$)[^/]+/$",
-    )
+    return extract_links(html, LIST_URL, r"nethinks\.com/nethinks_jobs/(?!page/|feed/?$)[^/]+/$")

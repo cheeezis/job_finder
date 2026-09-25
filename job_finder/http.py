@@ -3,9 +3,7 @@
 import json
 from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 
-DEFAULT_HEADERS = {
-    "User-Agent": "job-finder/0.1",
-}
+DEFAULT_HEADERS = {"User-Agent": "job-finder/0.1"}
 MAX_RESPONSE_BYTES = 20 * 1024 * 1024
 
 
@@ -22,12 +20,7 @@ def fetch_json(url, headers=None, timeout=20):
 
 
 def fetch_text_with_final_url(
-    url,
-    headers=None,
-    timeout=20,
-    *,
-    url_validator=None,
-    max_bytes=MAX_RESPONSE_BYTES,
+    url, headers=None, timeout=20, *, url_validator=None, max_bytes=MAX_RESPONSE_BYTES
 ):
     """Fetch text while optionally validating every redirect destination."""
     if url_validator is not None:

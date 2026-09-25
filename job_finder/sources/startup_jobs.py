@@ -37,10 +37,7 @@ def fetch_jobs(api_key=None):
     key = str(api_key or os.getenv(API_KEY_ENV) or "").strip()
     if not key:
         raise ValueError(f"{API_KEY_ENV} fehlt")
-    headers = {
-        "Accept": "application/json",
-        "Authorization": f"Bearer {key}",
-    }
+    headers = {"Accept": "application/json", "Authorization": f"Bearer {key}"}
     return [
         job_from_record(record)
         for record in collect_records(headers)
@@ -80,8 +77,7 @@ def available_from_germany(record):
     """Reject explicit foreign-only locations from the global remote scope."""
     location = record.get("location") or {}
     return remote_region_allows_germany(
-        location.get("country"),
-        country_code=location.get("country_code"),
+        location.get("country"), country_code=location.get("country_code")
     )
 
 
@@ -103,11 +99,7 @@ def job_from_record(record):
         company=company,
         locations=location_names(record.get("location")),
         sources=[
-            JobSource(
-                source=SOURCE_NAME,
-                source_id=str(record.get("id") or "") or None,
-                url=url,
-            )
+            JobSource(source=SOURCE_NAME, source_id=str(record.get("id") or "") or None, url=url)
         ],
         description_raw=raw_description,
         description_clean=html_to_text(raw_description),

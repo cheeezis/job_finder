@@ -18,15 +18,8 @@ from job_finder.models import Job, JobSource
 from job_finder.persistence.application_documents import store_documents
 from job_finder.persistence.database import transaction
 from job_finder.persistence.migration import migrate
-from job_finder.persistence.postgres_backup import (
-    create_postgres_backup,
-    restore_backup,
-)
-from job_finder.persistence.postgres_store import (
-    prune_cache,
-    read_dataset,
-    write_dataset,
-)
+from job_finder.persistence.postgres_backup import create_postgres_backup, restore_backup
+from job_finder.persistence.postgres_store import prune_cache, read_dataset, write_dataset
 from job_finder.workflow.memory import edit_job, edit_memory, load_memory, save_memory
 from job_finder.workflow.review_actions import update_review_decision
 from job_finder.workflow.review_data import load_review_jobs
@@ -84,15 +77,9 @@ class PostgresTests(unittest.TestCase):
                 "sent": {"x": {"job_id": "x", "sent_at": "2026-09-18"}},
                 "pending": {"y": {"attempts": 2, "job": {"title": "pending"}}},
             },
-            "internal/test_cache.json": {
-                "version": 1,
-                "jobs": {"url": {"title": "cache"}},
-            },
+            "internal/test_cache.json": {"version": 1, "jobs": {"url": {"title": "cache"}}},
             "internal/feed_cache.json": {"version": 1, "jobs": [{"id": "feed"}]},
-            "internal/checks.json": {
-                "version": 1,
-                "checks": {"url": {"closed": False}},
-            },
+            "internal/checks.json": {"version": 1, "checks": {"url": {"closed": False}}},
         }
         for name, value in samples.items():
             write_dataset(name, value)
@@ -108,9 +95,7 @@ class PostgresTests(unittest.TestCase):
         self.assertIsNone(read_dataset("internal/jobs.json"))
 
     def test_individual_edits_preserve_concurrent_changes(self):
-        save_memory(
-            {"job:1": {"workflow_status": "new"}, "job:2": {"workflow_status": "new"}}
-        )
+        save_memory({"job:1": {"workflow_status": "new"}, "job:2": {"workflow_status": "new"}})
         finished = threading.Event()
         errors = []
 
@@ -126,9 +111,7 @@ class PostgresTests(unittest.TestCase):
         with edit_job("job:1") as entry:
             thread = threading.Thread(target=other_job)
             thread.start()
-            self.assertTrue(
-                finished.wait(5), "Different jobs must not block each other"
-            )
+            self.assertTrue(finished.wait(5), "Different jobs must not block each other")
             entry["workflow_status"] = "applied"
         thread.join(5)
         self.assertEqual(errors, [])
@@ -159,8 +142,7 @@ class PostgresTests(unittest.TestCase):
         self.assertFalse(thread.is_alive())
         self.assertEqual(errors, [])
         self.assertEqual(
-            load_memory()["job:1"],
-            {"title": "updated by worker", "workflow_status": "applied"},
+            load_memory()["job:1"], {"title": "updated by worker", "workflow_status": "applied"}
         )
 
     def test_manual_sources_survive_an_outdated_cache_save(self):
@@ -176,17 +158,14 @@ class PostgresTests(unittest.TestCase):
             {"version": 1, "jobs": {"old": {"id": "old"}, "fresh": {"id": "fresh"}}},
         )
         write_dataset(
-            "internal/manual_jobs_cache.json",
-            {"version": 1, "jobs": {"manual": {"id": "manual"}}},
+            "internal/manual_jobs_cache.json", {"version": 1, "jobs": {"manual": {"id": "manual"}}}
         )
         with transaction() as connection:
             connection.execute(
                 "UPDATE source_cache SET stored_at=now()-interval '40 days' WHERE cache_key='old'"
             )
         self.assertEqual(prune_cache(30), 1)
-        self.assertEqual(
-            list(read_dataset("internal/test_cache.json")["jobs"]), ["fresh"]
-        )
+        self.assertEqual(list(read_dataset("internal/test_cache.json")["jobs"]), ["fresh"])
         self.assertIn("manual", read_dataset("internal/manual_jobs_cache.json")["jobs"])
 
     def test_two_worker_runs_and_review_share_persistent_state(self):
@@ -234,9 +213,7 @@ class PostgresTests(unittest.TestCase):
         }
         manual_result = {"id": "manual:1", "source_links": manual_job["sources"]}
         write_dataset("internal/jobs.json", [manual_job])
-        write_dataset(
-            "output/recommendations.json", {"recommendations": [manual_result]}
-        )
+        write_dataset("output/recommendations.json", {"recommendations": [manual_result]})
         publish_results(
             [],
             {},
@@ -247,8 +224,7 @@ class PostgresTests(unittest.TestCase):
         )
         self.assertEqual(read_dataset("internal/jobs.json"), [manual_job])
         self.assertEqual(
-            read_dataset("output/recommendations.json")["recommendations"],
-            [manual_result],
+            read_dataset("output/recommendations.json")["recommendations"], [manual_result]
         )
 
     def test_worker_publication_preserves_entries_from_excluded_sources(self):
@@ -260,10 +236,7 @@ class PostgresTests(unittest.TestCase):
             "id": "arbeitsagentur:1",
             "sources": [{"source": "arbeitsagentur", "url": "https://example.test/1"}],
         }
-        skipped_result = {
-            "id": "arbeitsagentur:1",
-            "source_links": skipped_job["sources"],
-        }
+        skipped_result = {"id": "arbeitsagentur:1", "source_links": skipped_job["sources"]}
         stale_job = {
             "id": "stepstone:2",
             "sources": [{"source": "stepstone", "url": "https://example.test/2"}],
@@ -271,8 +244,7 @@ class PostgresTests(unittest.TestCase):
         stale_result = {"id": "stepstone:2", "source_links": stale_job["sources"]}
         write_dataset("internal/jobs.json", [skipped_job, stale_job])
         write_dataset(
-            "output/recommendations.json",
-            {"recommendations": [skipped_result, stale_result]},
+            "output/recommendations.json", {"recommendations": [skipped_result, stale_result]}
         )
         publish_results(
             [],
@@ -285,8 +257,7 @@ class PostgresTests(unittest.TestCase):
         )
         self.assertEqual(read_dataset("internal/jobs.json"), [skipped_job])
         self.assertEqual(
-            read_dataset("output/recommendations.json")["recommendations"],
-            [skipped_result],
+            read_dataset("output/recommendations.json")["recommendations"], [skipped_result]
         )
 
     def test_backup_restore_includes_document_bytes_and_refuses_overwrite(self):
@@ -304,12 +275,7 @@ class PostgresTests(unittest.TestCase):
                 ],
                 root / "documents",
             )
-            memory = {
-                "job:1": {
-                    "workflow_status": "applied",
-                    "application_documents": metadata,
-                }
-            }
+            memory = {"job:1": {"workflow_status": "applied", "application_documents": metadata}}
             save_memory(memory)
             write_dataset(
                 "internal/notifications.json",
@@ -322,9 +288,7 @@ class PostgresTests(unittest.TestCase):
             result = restore_backup(backup, root / "restored")
             self.assertTrue(result["verified"])
             self.assertEqual(load_memory(), memory)
-            self.assertEqual(
-                next((root / "restored").rglob("*.pdf")).read_bytes(), content
-            )
+            self.assertEqual(next((root / "restored").rglob("*.pdf")).read_bytes(), content)
             self.assertIn("job:1", read_dataset("internal/notifications.json")["sent"])
 
     def test_legacy_migration_is_verified_repeatable_and_keeps_source(self):
@@ -338,8 +302,7 @@ class PostgresTests(unittest.TestCase):
                 "CREATE TABLE metadata(key TEXT,value TEXT); INSERT INTO metadata VALUES ('schema_version','1'); CREATE TABLE job_state(job_id TEXT,payload_json TEXT);"
             )
             connection.execute(
-                "INSERT INTO job_state VALUES (?,?)",
-                ("job:1", json.dumps(expected["job:1"])),
+                "INSERT INTO job_state VALUES (?,?)", ("job:1", json.dumps(expected["job:1"]))
             )
             connection.commit()
             connection.close()

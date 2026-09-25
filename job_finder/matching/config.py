@@ -70,27 +70,18 @@ SEARCH_SETTINGS = USER_SETTINGS["search"]
 LOCAL_SEARCH_LOCATION = SEARCH_SETTINGS["local_location"]
 LOCAL_SEARCH_POSTAL_CODE = SEARCH_SETTINGS["local_postal_code"]
 LOCAL_SEARCH_RADIUS_KM = SEARCH_SETTINGS["local_radius_km"]
-STUDYSMARTER_LOCAL_SEARCH_LOCATION = USER_SETTINGS["matching"][
-    "preferred_location_label"
-]
+STUDYSMARTER_LOCAL_SEARCH_LOCATION = USER_SETTINGS["matching"]["preferred_location_label"]
 
-SEARCH_LOCATIONS = [
-    LOCAL_SEARCH_LOCATION,
-    "Remote",
-]
+SEARCH_LOCATIONS = [LOCAL_SEARCH_LOCATION, "Remote"]
 
-STEPSTONE_SEARCH_LOCATIONS = [
-    LOCAL_SEARCH_POSTAL_CODE,
-    "Remote",
-]
+STEPSTONE_SEARCH_LOCATIONS = [LOCAL_SEARCH_POSTAL_CODE, "Remote"]
 STEPSTONE_SEARCH_RADIUS_KM = LOCAL_SEARCH_RADIUS_KM
 
 GET_IN_IT_SEARCH_TERMS = SEARCH_TERMS
 GET_IN_IT_SEARCH_LOCATIONS = SEARCH_LOCATIONS
 
 COMMUTER_SEARCH_LOCATIONS = [
-    item["search_location"]
-    for item in USER_SETTINGS["matching"].get("commuter_locations", [])
+    item["search_location"] for item in USER_SETTINGS["matching"].get("commuter_locations", [])
 ]
 COMMUTER_SEARCH_TERMS = [
     "Junior IT",

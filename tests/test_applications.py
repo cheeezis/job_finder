@@ -29,12 +29,7 @@ class ApplicationTrackingTests(unittest.TestCase):
         save_memory(jobs, self.memory_path)
 
     def test_initial_discovery_date_is_recovered_without_guessing_decision_dates(self):
-        self.save_job(
-            {
-                "workflow_status": "new",
-                "first_seen_at": "2026-08-01T12:00:00+00:00",
-            }
-        )
+        self.save_job({"workflow_status": "new", "first_seen_at": "2026-08-01T12:00:00+00:00"})
         update_workflow_status("job:1", "interesting", self.memory_path, "2026-08-03")
         history = load_memory(self.memory_path)["job:1"]["workflow_history"]
         self.assertEqual(
@@ -59,17 +54,11 @@ class ApplicationTrackingTests(unittest.TestCase):
             "applications"
         ][0]["workflow_history"]
         dates = {event["status"]: event["occurred_on"] for event in history}
-        self.assertEqual(
-            dates, {"new": "2026-08-01", "interesting": None, "applied": "2026-08-04"}
-        )
+        self.assertEqual(dates, {"new": "2026-08-01", "interesting": None, "applied": "2026-08-04"})
 
     def test_every_manual_status_change_is_kept_with_its_date(self):
         self.save_job(
-            {
-                "title": "IT Consultant",
-                "company": "Example GmbH",
-                "workflow_status": "interesting",
-            }
+            {"title": "IT Consultant", "company": "Example GmbH", "workflow_status": "interesting"}
         )
 
         update_workflow_status("job:1", "applied", self.memory_path, "2026-08-01")
@@ -92,19 +81,12 @@ class ApplicationTrackingTests(unittest.TestCase):
 
     def test_reselecting_same_status_without_date_does_not_duplicate_it(self):
         self.save_job(
-            {
-                "title": "IT Consultant",
-                "company": "Example GmbH",
-                "workflow_status": "interesting",
-            }
+            {"title": "IT Consultant", "company": "Example GmbH", "workflow_status": "interesting"}
         )
 
         update_workflow_status("job:1", "interesting", self.memory_path)
 
-        self.assertEqual(
-            load_memory(self.memory_path)["job:1"].get("workflow_history", []),
-            [],
-        )
+        self.assertEqual(load_memory(self.memory_path)["job:1"].get("workflow_history", []), [])
 
     def test_interview_can_store_one_upcoming_appointment(self):
         self.save_job(
@@ -112,9 +94,7 @@ class ApplicationTrackingTests(unittest.TestCase):
                 "title": "IT Consultant",
                 "company": "Example GmbH",
                 "workflow_status": "applied",
-                "workflow_history": [
-                    {"status": "applied", "occurred_on": "2026-08-01"}
-                ],
+                "workflow_history": [{"status": "applied", "occurred_on": "2026-08-01"}],
             }
         )
 
@@ -135,10 +115,7 @@ class ApplicationTrackingTests(unittest.TestCase):
                 "scheduled_for": "2099-08-21T14:30",
             },
         )
-        self.assertEqual(
-            overview["applications"][0]["next_interview_at"],
-            "2099-08-21T14:30",
-        )
+        self.assertEqual(overview["applications"][0]["next_interview_at"], "2099-08-21T14:30")
 
     def test_interview_appointment_can_be_edited_and_snapshot_is_checked(self):
         jobs = {
@@ -186,9 +163,7 @@ class ApplicationTrackingTests(unittest.TestCase):
         jobs = {
             "job:1": {
                 "workflow_status": "applied",
-                "workflow_history": [
-                    {"status": "applied", "occurred_on": "2026-08-01"}
-                ],
+                "workflow_history": [{"status": "applied", "occurred_on": "2026-08-01"}],
             }
         }
         self.save_jobs(jobs)
@@ -206,25 +181,13 @@ class ApplicationTrackingTests(unittest.TestCase):
 
     def test_invalid_date_does_not_change_current_status(self):
         self.save_job(
-            {
-                "title": "IT Consultant",
-                "company": "Example GmbH",
-                "workflow_status": "interesting",
-            }
+            {"title": "IT Consultant", "company": "Example GmbH", "workflow_status": "interesting"}
         )
 
         with self.assertRaisesRegex(ValueError, "Ungueltiges Datum"):
-            update_workflow_status(
-                "job:1",
-                "applied",
-                self.memory_path,
-                "11.08.2026",
-            )
+            update_workflow_status("job:1", "applied", self.memory_path, "11.08.2026")
 
-        self.assertEqual(
-            load_memory(self.memory_path)["job:1"]["workflow_status"],
-            "interesting",
-        )
+        self.assertEqual(load_memory(self.memory_path)["job:1"]["workflow_status"], "interesting")
 
     def test_legacy_application_remains_visible_without_invented_date(self):
         self.save_jobs(
@@ -257,9 +220,7 @@ class ApplicationTrackingTests(unittest.TestCase):
         self.save_job(
             {
                 "workflow_status": "applied",
-                "workflow_history": [
-                    {"status": "applied", "occurred_on": "2026-08-01"}
-                ],
+                "workflow_history": [{"status": "applied", "occurred_on": "2026-08-01"}],
                 "application_documents": [
                     {
                         "id": "document-1",
@@ -271,20 +232,12 @@ class ApplicationTrackingTests(unittest.TestCase):
             }
         )
 
-        documents = load_application_overview(
-            self.memory_path,
-            as_of=date(2026, 8, 2),
-        )["applications"][0]["documents"]
+        documents = load_application_overview(self.memory_path, as_of=date(2026, 8, 2))[
+            "applications"
+        ][0]["documents"]
 
         self.assertEqual(
-            documents,
-            [
-                {
-                    "id": "document-1",
-                    "kind": "cover_letter",
-                    "name": "Anschreiben.pdf",
-                }
-            ],
+            documents, [{"id": "document-1", "kind": "cover_letter", "name": "Anschreiben.pdf"}]
         )
 
     def test_statistics_use_complete_history_and_response_dates(self):
@@ -314,17 +267,14 @@ class ApplicationTrackingTests(unittest.TestCase):
                     "title": "Analyst",
                     "company": "C GmbH",
                     "workflow_status": "applied",
-                    "workflow_history": [
-                        {"status": "applied", "occurred_on": "2026-08-03"},
-                    ],
+                    "workflow_history": [{"status": "applied", "occurred_on": "2026-08-03"}],
                 },
             }
         )
 
-        statistics = load_application_overview(
-            self.memory_path,
-            as_of=date(2026, 8, 10),
-        )["statistics"]
+        statistics = load_application_overview(self.memory_path, as_of=date(2026, 8, 10))[
+            "statistics"
+        ]
 
         self.assertEqual(
             statistics,
@@ -345,20 +295,12 @@ class ApplicationTrackingTests(unittest.TestCase):
 
     def test_application_overview_exposes_salary_expectation(self):
         self.save_jobs(
-            {
-                "job:salary": {
-                    "workflow_status": "applied",
-                    "salary_expectation_eur": 58_000,
-                }
-            }
+            {"job:salary": {"workflow_status": "applied", "salary_expectation_eur": 58_000}}
         )
 
         application = load_application_overview(self.memory_path)["applications"][0]
 
-        self.assertEqual(
-            application["salary_expectation_eur"],
-            58_000,
-        )
+        self.assertEqual(application["salary_expectation_eur"], 58_000)
 
     def test_application_overview_normalizes_legacy_salary_text(self):
         self.save_jobs(
@@ -418,10 +360,7 @@ class ApplicationTrackingTests(unittest.TestCase):
 
         self.assertEqual(overview["applications"], [])
         self.assertEqual(overview["statistics"]["completed"], 1)
-        self.assertEqual(
-            overview["completed_applications"][0]["workflow_status"],
-            "ignored",
-        )
+        self.assertEqual(overview["completed_applications"][0]["workflow_status"], "ignored")
 
     def test_legacy_application_survives_future_status_changes(self):
         self.save_jobs(
@@ -434,18 +373,8 @@ class ApplicationTrackingTests(unittest.TestCase):
             }
         )
 
-        update_workflow_status(
-            "job:legacy",
-            "response",
-            self.memory_path,
-            "2026-08-11",
-        )
-        update_workflow_status(
-            "job:legacy",
-            "ignored",
-            self.memory_path,
-            "2026-08-12",
-        )
+        update_workflow_status("job:legacy", "response", self.memory_path, "2026-08-11")
+        update_workflow_status("job:legacy", "ignored", self.memory_path, "2026-08-12")
         overview = load_application_overview(self.memory_path)
 
         self.assertEqual(overview["applications"], [])
@@ -472,12 +401,7 @@ class ApplicationTrackingTests(unittest.TestCase):
         self.assertEqual(application["days_to_response"], 2)
 
     def test_invalid_history_shape_is_ignored(self):
-        self.save_job(
-            {
-                "workflow_status": "applied",
-                "workflow_history": None,
-            }
-        )
+        self.save_job({"workflow_status": "applied", "workflow_history": None})
 
         overview = load_application_overview(self.memory_path)
 
@@ -503,20 +427,10 @@ class ApplicationTrackingTests(unittest.TestCase):
         self.assertEqual(overview["statistics"]["response_time_samples"], 0)
 
     def test_no_response_is_a_manual_terminal_status(self):
-        self.save_job(
-            {
-                "workflow_status": "applied",
-                "active": False,
-            }
-        )
+        self.save_job({"workflow_status": "applied", "active": False})
 
         before = load_application_overview(self.memory_path)
-        update_workflow_status(
-            "job:1",
-            "no_response",
-            self.memory_path,
-            "2026-08-20",
-        )
+        update_workflow_status("job:1", "no_response", self.memory_path, "2026-08-20")
         after = load_application_overview(self.memory_path)
 
         self.assertEqual(before["statistics"]["open"], 1)
@@ -527,30 +441,19 @@ class ApplicationTrackingTests(unittest.TestCase):
         self.assertEqual(after["statistics"]["responses"], 0)
         self.assertEqual(after["statistics"]["no_responses"], 1)
         self.assertEqual(after["applications"], [])
-        self.assertEqual(
-            after["completed_applications"][0]["workflow_status"],
-            "no_response",
-        )
+        self.assertEqual(after["completed_applications"][0]["workflow_status"], "no_response")
         self.assertFalse(after["completed_applications"][0]["automatic_no_response"])
 
     def test_no_response_is_derived_after_fourteen_days_without_event(self):
         self.save_job(
             {
                 "workflow_status": "applied",
-                "workflow_history": [
-                    {"status": "applied", "occurred_on": "2026-08-01"}
-                ],
+                "workflow_history": [{"status": "applied", "occurred_on": "2026-08-01"}],
             }
         )
 
-        before = load_application_overview(
-            self.memory_path,
-            as_of=date(2026, 8, 14),
-        )
-        after = load_application_overview(
-            self.memory_path,
-            as_of=date(2026, 8, 15),
-        )
+        before = load_application_overview(self.memory_path, as_of=date(2026, 8, 14))
+        after = load_application_overview(self.memory_path, as_of=date(2026, 8, 15))
 
         self.assertEqual(before["statistics"]["open"], 1)
         self.assertEqual(before["statistics"]["no_responses"], 0)
@@ -561,44 +464,22 @@ class ApplicationTrackingTests(unittest.TestCase):
         self.assertTrue(application["automatic_no_response"])
         self.assertEqual(
             application["workflow_history"],
-            [
-                {
-                    "status": "applied",
-                    "occurred_on": "2026-08-01",
-                    "event_index": 0,
-                }
-            ],
+            [{"status": "applied", "occurred_on": "2026-08-01", "event_index": 0}],
         )
-        self.assertEqual(
-            load_memory(self.memory_path)["job:1"]["workflow_status"],
-            "applied",
-        )
+        self.assertEqual(load_memory(self.memory_path)["job:1"]["workflow_status"], "applied")
         self.assertNotIn("no_response", after["application_statuses"])
 
     def test_response_reopens_automatically_derived_no_response(self):
         self.save_job(
             {
                 "workflow_status": "applied",
-                "workflow_history": [
-                    {"status": "applied", "occurred_on": "2026-08-01"}
-                ],
+                "workflow_history": [{"status": "applied", "occurred_on": "2026-08-01"}],
             }
         )
 
-        before = load_application_overview(
-            self.memory_path,
-            as_of=date(2026, 8, 20),
-        )
-        update_workflow_status(
-            "job:1",
-            "response",
-            self.memory_path,
-            "2026-08-21",
-        )
-        after = load_application_overview(
-            self.memory_path,
-            as_of=date(2026, 8, 21),
-        )
+        before = load_application_overview(self.memory_path, as_of=date(2026, 8, 20))
+        update_workflow_status("job:1", "response", self.memory_path, "2026-08-21")
+        after = load_application_overview(self.memory_path, as_of=date(2026, 8, 21))
 
         self.assertEqual(before["statistics"]["no_responses"], 1)
         self.assertEqual(after["statistics"]["no_responses"], 0)
@@ -615,20 +496,12 @@ class ApplicationTrackingTests(unittest.TestCase):
             }
         )
 
-        update_workflow_status(
-            "job:1",
-            "response",
-            self.memory_path,
-            "2026-08-25",
-        )
+        update_workflow_status("job:1", "response", self.memory_path, "2026-08-25")
         overview = load_application_overview(self.memory_path)
 
         self.assertEqual(overview["statistics"]["responses"], 1)
         self.assertEqual(overview["statistics"]["no_responses"], 0)
-        self.assertEqual(
-            overview["applications"][0]["workflow_status"],
-            "response",
-        )
+        self.assertEqual(overview["applications"][0]["workflow_status"], "response")
 
     def test_history_event_can_be_edited_and_reopens_application(self):
         self.save_job(
@@ -642,13 +515,7 @@ class ApplicationTrackingTests(unittest.TestCase):
         )
 
         result = update_workflow_history(
-            "job:1",
-            1,
-            "no_response",
-            "2026-08-20",
-            "response",
-            "2026-08-25",
-            self.memory_path,
+            "job:1", 1, "no_response", "2026-08-20", "response", "2026-08-25", self.memory_path
         )
         overview = load_application_overview(self.memory_path)
 
@@ -672,17 +539,8 @@ class ApplicationTrackingTests(unittest.TestCase):
             }
         )
 
-        result = delete_workflow_history(
-            "job:1",
-            1,
-            "no_response",
-            "2026-08-20",
-            self.memory_path,
-        )
-        overview = load_application_overview(
-            self.memory_path,
-            as_of=date(2026, 8, 10),
-        )
+        result = delete_workflow_history("job:1", 1, "no_response", "2026-08-20", self.memory_path)
+        overview = load_application_overview(self.memory_path, as_of=date(2026, 8, 10))
 
         self.assertEqual(result["workflow_status"], "applied")
         self.assertEqual(overview["statistics"]["open"], 1)
@@ -696,22 +554,14 @@ class ApplicationTrackingTests(unittest.TestCase):
         jobs = {
             "job:1": {
                 "workflow_status": "applied",
-                "workflow_history": [
-                    {"status": "applied", "occurred_on": "2026-08-01"}
-                ],
+                "workflow_history": [{"status": "applied", "occurred_on": "2026-08-01"}],
             }
         }
         self.save_jobs(jobs)
 
         with self.assertRaisesRegex(ValueError, "nicht gefunden"):
             update_workflow_history(
-                "job:1",
-                4,
-                "applied",
-                "2026-08-01",
-                "response",
-                "2026-08-02",
-                self.memory_path,
+                "job:1", 4, "applied", "2026-08-01", "response", "2026-08-02", self.memory_path
             )
 
         self.assertEqual(load_memory(self.memory_path), jobs)
@@ -720,20 +570,12 @@ class ApplicationTrackingTests(unittest.TestCase):
         self.save_job(
             {
                 "workflow_status": "applied",
-                "workflow_history": [
-                    {"status": "applied", "occurred_on": "2026-08-01"}
-                ],
+                "workflow_history": [{"status": "applied", "occurred_on": "2026-08-01"}],
             }
         )
 
         update_workflow_history(
-            "job:1",
-            0,
-            "applied",
-            "2026-08-01",
-            "applied",
-            None,
-            self.memory_path,
+            "job:1", 0, "applied", "2026-08-01", "applied", None, self.memory_path
         )
 
         event = load_memory(self.memory_path)["job:1"]["workflow_history"][0]
@@ -743,21 +585,13 @@ class ApplicationTrackingTests(unittest.TestCase):
         jobs = {
             "job:1": {
                 "workflow_status": "applied",
-                "workflow_history": [
-                    {"status": "applied", "occurred_on": "2026-08-01"}
-                ],
+                "workflow_history": [{"status": "applied", "occurred_on": "2026-08-01"}],
             }
         }
         self.save_jobs(jobs)
 
         with self.assertRaisesRegex(ValueError, "zwischenzeitlich geändert"):
-            delete_workflow_history(
-                "job:1",
-                0,
-                "applied",
-                "2026-08-02",
-                self.memory_path,
-            )
+            delete_workflow_history("job:1", 0, "applied", "2026-08-02", self.memory_path)
 
         self.assertEqual(load_memory(self.memory_path), jobs)
 
@@ -792,13 +626,7 @@ class ApplicationTrackingTests(unittest.TestCase):
         )
 
         result = update_workflow_history(
-            "job:1",
-            0,
-            "applied",
-            "2026-08-01",
-            "applied",
-            "2026-08-02",
-            self.memory_path,
+            "job:1", 0, "applied", "2026-08-01", "applied", "2026-08-02", self.memory_path
         )
         application = load_application_overview(self.memory_path)["applications"][0]
 

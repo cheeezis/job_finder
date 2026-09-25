@@ -25,9 +25,7 @@ from job_finder.persistence.state_compat import decode_legacy_memory
 def digest(value):
     """Compare logical values independently of JSON key order."""
     return hashlib.sha256(
-        json.dumps(
-            value, sort_keys=True, ensure_ascii=False, separators=(",", ":")
-        ).encode()
+        json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()
     ).hexdigest()
 
 
@@ -36,9 +34,7 @@ def read_legacy_memory(path):
     path = Path(path)
     if path.suffix == ".json":
         return decode_legacy_memory(json.loads(path.read_text(encoding="utf-8")))
-    with closing(
-        sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True)
-    ) as connection:
+    with closing(sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True)) as connection:
         version = connection.execute(
             "SELECT value FROM metadata WHERE key='schema_version'"
         ).fetchone()
@@ -46,9 +42,7 @@ def read_legacy_memory(path):
             raise ValueError("Nicht unterstützte SQLite-Schemaversion")
         return {
             key: json.loads(value)
-            for key, value in connection.execute(
-                "SELECT job_id,payload_json FROM job_state"
-            )
+            for key, value in connection.execute("SELECT job_id,payload_json FROM job_state")
         }
 
 
@@ -77,9 +71,7 @@ def snapshot_legacy(source):
         with closing(
             sqlite3.connect(sqlite_path.resolve().as_uri() + "?mode=ro", uri=True)
         ) as origin:
-            with closing(
-                sqlite3.connect(target / "internal" / "job_finder.sqlite3")
-            ) as backup:
+            with closing(sqlite3.connect(target / "internal" / "job_finder.sqlite3")) as backup:
                 origin.backup(backup)
     return target
 
@@ -92,13 +84,9 @@ def migrate(source=DATA_DIR):
         snapshot = snapshot_legacy(source)
         sqlite_path = snapshot / "internal" / "job_finder.sqlite3"
         memory = read_legacy_memory(
-            sqlite_path
-            if sqlite_path.exists()
-            else snapshot / "internal" / "seen_jobs.json"
+            sqlite_path if sqlite_path.exists() else snapshot / "internal" / "seen_jobs.json"
         )
-        documents = document_manifest(
-            memory, snapshot / "internal" / "application_documents"
-        )
+        documents = document_manifest(memory, snapshot / "internal" / "application_documents")
         original_documents = document_manifest(
             memory, source / "internal" / "application_documents"
         )
@@ -111,9 +99,7 @@ def migrate(source=DATA_DIR):
             for path in sorted((snapshot / directory).glob("*.json")):
                 if path.name == "seen_jobs.json":
                     continue  # Superseded by SQLite; retained in the source backup.
-                datasets[f"{directory}/{path.name}"] = json.loads(
-                    path.read_text(encoding="utf-8")
-                )
+                datasets[f"{directory}/{path.name}"] = json.loads(path.read_text(encoding="utf-8"))
         hashes = {name: digest(value) for name, value in datasets.items()}
         hashes["memory"] = digest(memory)
         hashes["documents"] = digest(documents)
@@ -122,8 +108,7 @@ def migrate(source=DATA_DIR):
             lock(connection, "finder-publication")
             lock(connection, "memory:default")
             completed = connection.execute(
-                "SELECT summary FROM migration_runs WHERE source_fingerprint=%s",
-                (fingerprint,),
+                "SELECT summary FROM migration_runs WHERE source_fingerprint=%s", (fingerprint,)
             ).fetchone()
             if completed:
                 return {"already_migrated": True, **completed[0]}
@@ -138,18 +123,14 @@ def migrate(source=DATA_DIR):
             for name, value in datasets.items():
                 write_dataset(name, value)
             if digest(read_memory(connection, "default")) != hashes["memory"]:
-                raise RuntimeError(
-                    "Die übernommenen Zustandsdaten stimmen nicht überein."
-                )
+                raise RuntimeError("Die übernommenen Zustandsdaten stimmen nicht überein.")
             for name, value in datasets.items():
                 # JSON numeric equality intentionally accepts 82 and 82.0.
                 if read_dataset(name) != value:
                     raise RuntimeError(f"Datenvergleich fehlgeschlagen: {name}")
             summary = {
                 "jobs_remembered": len(memory),
-                "history_events": sum(
-                    len(e.get("workflow_history", [])) for e in memory.values()
-                ),
+                "history_events": sum(len(e.get("workflow_history", [])) for e in memory.values()),
                 "documents": len(documents),
                 "datasets": len(datasets),
                 "source_backup": str(snapshot),
@@ -161,9 +142,7 @@ def migrate(source=DATA_DIR):
                 (fingerprint, Jsonb(summary)),
             )
         (snapshot / "migration-report.json").write_text(
-            json.dumps(
-                {**summary, "hashes": hashes, "documents_manifest": documents}, indent=2
-            ),
+            json.dumps({**summary, "hashes": hashes, "documents_manifest": documents}, indent=2),
             encoding="utf-8",
         )
         return summary

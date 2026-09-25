@@ -5,10 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from job_finder.workflow.reporting import (
-    is_international_listing,
-    write_recommendations,
-)
+from job_finder.workflow.reporting import is_international_listing, write_recommendations
 
 
 def included_job(job_id="test:1"):
@@ -48,8 +45,7 @@ class ReportingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "recommendations.json"
             write_recommendations(
-                {"included": [first, second], "excluded": [included_job("excluded")]},
-                path,
+                {"included": [first, second], "excluded": [included_job("excluded")]}, path
             )
             stored = json.loads(path.read_text(encoding="utf-8"))["recommendations"]
 
@@ -106,19 +102,13 @@ class ReportingTests(unittest.TestCase):
                         "You own your work and communicate with customers."
                     ),
                     "locations": ["Germany"],
-                    "sources": [
-                        {"source": "jobicy"},
-                        {"source": "stepstone"},
-                    ],
+                    "sources": [{"source": "jobicy"}, {"source": "stepstone"}],
                 }
             )
         )
         self.assertTrue(
             is_international_listing(
-                {
-                    "locations": ["Canada", "Germany", "India"],
-                    "sources": [{"source": "himalayas"}],
-                }
+                {"locations": ["Canada", "Germany", "India"], "sources": [{"source": "himalayas"}]}
             )
         )
 

@@ -24,14 +24,24 @@ job_finder = ["*.html", "*.css", "*.js"]
 [tool.ruff]
 required-version = "==0.16.7"
 target-version = "py311"
-line-length = 88
+line-length = 100
 extend-exclude = ["data", "tmp", "llm_evaluation"]
+
+[tool.ruff.format]
+# Use one line whenever it fits; a trailing comma alone does not force one
+# item per line.
+skip-magic-trailing-comma = true
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I", "D"]
 # Class docstrings describe construction; standard protocol methods need
 # no repeated documentation unless their behavior differs from the protocol.
 ignore = ["D105", "D107"]
+
+[tool.ruff.lint.isort]
+# Keep all names imported from one module in one statement.
+split-on-trailing-comma = false
+combine-as-imports = true
 
 [tool.ruff.lint.pydocstyle]
 convention = "pep257"

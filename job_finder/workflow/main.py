@@ -34,43 +34,23 @@ def build_score_results(evaluated_jobs):
     """Serialize current job metadata with its already validated score."""
     results = []
     for job, result in evaluated_jobs:
-        results.append(
-            {
-                **job.to_dict(),
-                "is_new": job.is_new,
-                **result,
-            }
-        )
+        results.append({**job.to_dict(), "is_new": job.is_new, **result})
 
     # Preserve exclusion reasons for console diagnostics and notifications.
-    included = [
-        job for job in results if job["filter_status"] == FilterStatus.INCLUDED.value
-    ]
-    excluded = [
-        job for job in results if job["filter_status"] == FilterStatus.EXCLUDED.value
-    ]
+    included = [job for job in results if job["filter_status"] == FilterStatus.INCLUDED.value]
+    excluded = [job for job in results if job["filter_status"] == FilterStatus.EXCLUDED.value]
 
     included.sort(
-        key=lambda job: (
-            -job["match_percent"],
-            job["experience_rank"],
-            job["title"].lower(),
-        )
+        key=lambda job: (-job["match_percent"], job["experience_rank"], job["title"].lower())
     )
 
-    return {
-        "included": included,
-        "excluded": excluded,
-    }
+    return {"included": included, "excluded": excluded}
 
 
 def score_for_pipeline(job):
     """Keep explicit manual submissions reviewable without weakening searches."""
     result = score_job(job)
-    if (
-        result["filter_status"] != FilterStatus.EXCLUDED.value
-        or "manual" not in job.source_names
-    ):
+    if result["filter_status"] != FilterStatus.EXCLUDED.value or "manual" not in job.source_names:
         return result
 
     warning = result["reasons"][0]
@@ -81,9 +61,7 @@ def score_for_pipeline(job):
         "experience_rank": 99,
         "experience_level": "manuell zur Prüfung eingereicht",
         "role_group": "manual_review",
-        "location_precheck": (
-            f"Konflikt: {warning}" if location_conflict else "Manuelle Prüfung"
-        ),
+        "location_precheck": (f"Konflikt: {warning}" if location_conflict else "Manuelle Prüfung"),
         "reasons": [f"Manuell geprüft trotz Vorfilter: {warning}"],
         "prefilter_warning": warning,
     }

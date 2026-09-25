@@ -17,14 +17,7 @@ MAX_FOLDER_NAME_LENGTH = 140
 INVALID_WINDOWS_NAME_CHARACTERS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
 
-def store_documents(
-    job_id,
-    documents,
-    root=APPLICATION_DOCUMENTS_DIR,
-    *,
-    company="",
-    title="",
-):
+def store_documents(job_id, documents, root=APPLICATION_DOCUMENTS_DIR, *, company="", title=""):
     """Validate and persist at most one document of each supported kind."""
     prepared = _prepare_documents(documents)
     if not prepared:
@@ -134,11 +127,7 @@ def public_documents(entry):
     if not isinstance(documents, list):
         return []
     return [
-        {
-            "id": document.get("id"),
-            "kind": document.get("kind"),
-            "name": document.get("name"),
-        }
+        {"id": document.get("id"), "kind": document.get("kind"), "name": document.get("name")}
         for document in documents
         if isinstance(document, dict)
         and document.get("id")
@@ -177,9 +166,7 @@ def document_directory(job_id, root=APPLICATION_DOCUMENTS_DIR, folder_name=None)
 def application_folder_name(company, title, job_id):
     """Create a readable folder whose stable suffix prevents cross-job collisions."""
     label = " - ".join(
-        value
-        for value in [str(company or "").strip(), str(title or "").strip()]
-        if value
+        value for value in [str(company or "").strip(), str(title or "").strip()] if value
     )
     identifier = hashlib.sha256(str(job_id).encode("utf-8")).hexdigest()[:12]
     suffix = f" [{identifier}]"

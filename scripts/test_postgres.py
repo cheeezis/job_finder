@@ -17,13 +17,11 @@ def main():
     production = database_url()
     target = os.environ.get("JOBFINDER_TEST_DATABASE_URL")
     if not target:
-        raise SystemExit(
-            "JOBFINDER_TEST_DATABASE_URL fehlt; keine Tests gegen Produktivdaten."
-        )
+        raise SystemExit("JOBFINDER_TEST_DATABASE_URL fehlt; keine Tests gegen Produktivdaten.")
     info = conninfo_to_dict(target)
-    if not info.get("dbname", "").endswith("_test") or info.get(
-        "dbname"
-    ) == conninfo_to_dict(production).get("dbname"):
+    if not info.get("dbname", "").endswith("_test") or info.get("dbname") == conninfo_to_dict(
+        production
+    ).get("dbname"):
         raise SystemExit("Tests benötigen eine separate Datenbank mit Suffix _test.")
     os.environ["JOBFINDER_DATABASE_URL"] = target
     # The disposable test database has no app/admin split; the same superuser

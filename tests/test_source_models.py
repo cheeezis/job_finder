@@ -95,10 +95,7 @@ class SourceJobModelTests(unittest.TestCase):
         with patch.object(get_in_it, "fetch_text", return_value=json_ld_html(posting)):
             job = get_in_it.fetch_job(url)
 
-        self.assertEqual(
-            job.career_levels,
-            ["Absolventinnen & Absolventen", "Berufserfahrene"],
-        )
+        self.assertEqual(job.career_levels, ["Absolventinnen & Absolventen", "Berufserfahrene"])
 
     def test_get_in_it_ignores_portal_remote_boilerplate(self):
         url = "https://www.get-in-it.de/jobsuche/p309920"
@@ -135,10 +132,7 @@ class SourceJobModelTests(unittest.TestCase):
     def test_company_json_ld_creates_job_model(self):
         url = "https://careers.example.test/job/123"
         job = job_from_json_ld(
-            "example_company",
-            "Fallback GmbH",
-            url,
-            json_ld_html(self.posting()),
+            "example_company", "Fallback GmbH", url, json_ld_html(self.posting())
         )
 
         self.assert_common_job(job, "example_company:123")
@@ -150,19 +144,13 @@ class SourceJobModelTests(unittest.TestCase):
         posting = self.posting()
         posting["identifier"] = {"value": "123456SM"}
 
-        job = job_from_json_ld(
-            "example_company",
-            "Fallback GmbH",
-            url,
-            json_ld_html(posting),
-        )
+        job = job_from_json_ld("example_company", "Fallback GmbH", url, json_ld_html(posting))
 
         self.assertEqual(job.id, "example_company:456")
 
     def test_edag_visible_detail_creates_job_model(self):
         url = (
-            "https://www.edag.com/de/karriere/stellenanzeigen/detail/"
-            "junior-python-developer-58815"
+            "https://www.edag.com/de/karriere/stellenanzeigen/detail/junior-python-developer-58815"
         )
         html = """
             <div class="short-facts">
@@ -206,19 +194,13 @@ class SourceJobModelTests(unittest.TestCase):
             "@type": "JobPosting",
             "title": "Junior Python Developer",
             "hiringOrganization": {"name": "Example GmbH"},
-            "jobLocation": {
-                "address": {"addressLocality": "Fulda"},
-            },
+            "jobLocation": {"address": {"addressLocality": "Fulda"}},
             "description": "<p>Python und APIs, Homeoffice</p>",
             "employmentType": "FULL_TIME",
             "datePosted": "2026-07-10",
             "baseSalary": {
                 "currency": "EUR",
-                "value": {
-                    "minValue": 73_000,
-                    "maxValue": 91_000,
-                    "unitText": "YEAR",
-                },
+                "value": {"minValue": 73_000, "maxValue": 91_000, "unitText": "YEAR"},
             },
         }
 

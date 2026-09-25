@@ -291,10 +291,7 @@ GENERAL_IT_TITLE_KEYWORDS = [
     "anwendungsbetreuer",
 ]
 
-GENERAL_IT_ROLE = {
-    "id": "general_it",
-    "label": "Allgemeine IT-Rolle",
-}
+GENERAL_IT_ROLE = {"id": "general_it", "label": "Allgemeine IT-Rolle"}
 
 # Seniority and non-vacancy titles that are incompatible with the target search.
 BLOCKED_TITLE_WORDS = [
@@ -346,12 +343,7 @@ ENTRY_LEVEL_TITLE_EXCEPTIONS = {
 }
 
 
-GERMANY_LOCATION_WORDS = [
-    "deutschland",
-    "germany",
-    "bundesweit",
-    "deutschlandweit",
-]
+GERMANY_LOCATION_WORDS = ["deutschland", "germany", "bundesweit", "deutschlandweit"]
 
 FOREIGN_ONLY_LOCATION_WORDS = [
     "portugal",

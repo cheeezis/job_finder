@@ -58,16 +58,9 @@ def job_from_posting(source_name, fallback_company, url, posting):
     location_text = ", ".join(locations)
     title = unescape(str(posting.get("title") or "")).strip()
     structured_remote = (
-        "100%"
-        if str(posting.get("jobLocationType") or "").upper() == "TELECOMMUTE"
-        else ""
+        "100%" if str(posting.get("jobLocationType") or "").upper() == "TELECOMMUTE" else ""
     )
-    remote = detect_remote(
-        title,
-        description,
-        location_text,
-        structured_remote=structured_remote,
-    )
+    remote = detect_remote(title, description, location_text, structured_remote=structured_remote)
     work_mode, remote_percentage = classify_remote(remote)
     identifier = identifier_from_url(url)
     salary_min, salary_max = extract_annual_salary_eur(posting)
@@ -127,9 +120,7 @@ def ensure_url_identity(job, source_name, url):
 def identifier_from_url(url):
     """Prefer a numeric or hexadecimal ID at the end of a career URL."""
     match = re.search(
-        r"(?:jobOfferId=|/job/|[-/])([a-f0-9]{8,}|\d{3,})(?:\D*$|$)",
-        url,
-        re.IGNORECASE,
+        r"(?:jobOfferId=|/job/|[-/])([a-f0-9]{8,}|\d{3,})(?:\D*$|$)", url, re.IGNORECASE
     )
     if match:
         return match.group(1)

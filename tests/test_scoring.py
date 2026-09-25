@@ -33,12 +33,7 @@ def make_job(**overrides):
         title=values["title"],
         company=values["company"],
         locations=[values["location"]],
-        sources=[
-            JobSource(
-                source=values["source"],
-                url=values["url"],
-            )
-        ],
+        sources=[JobSource(source=values["source"], url=values["url"])],
         description_raw=values["description"],
         description_clean=values["description"],
         work_mode=work_mode,
@@ -57,8 +52,7 @@ class ScoringTests(unittest.TestCase):
         benefits = score_job(
             make_job(
                 description=(
-                    "Python APIs. Erste Erfahrung reicht. "
-                    "Wir bieten Weiterbildung und Mentoring."
+                    "Python APIs. Erste Erfahrung reicht. Wir bieten Weiterbildung und Mentoring."
                 )
             )
         )
@@ -68,9 +62,7 @@ class ScoringTests(unittest.TestCase):
         regular = score_job(make_job(employment_type="Vollzeit"))
         training = score_job(make_job(employment_type="Ausbildung"))
         self.assertEqual(regular["match_percent"] - training["match_percent"], 12)
-        self.assertTrue(
-            any("Ausbildungs-/Studienformat" in r for r in training["reasons"])
-        )
+        self.assertTrue(any("Ausbildungs-/Studienformat" in r for r in training["reasons"]))
 
     def test_training_course_title_stays_excluded(self):
         result = score_job(make_job(title="Weiterbildung Python Developer"))
@@ -96,38 +88,22 @@ class ScoringTests(unittest.TestCase):
             ),
             (
                 "non_it_remote_role_stays_excluded",
-                {
-                    "title": "Junior Sales Manager",
-                    "location": "Deutschland",
-                    "remote": "100%",
-                },
+                {"title": "Junior Sales Manager", "location": "Deutschland", "remote": "100%"},
                 {"filter_status": "excluded"},
             ),
             (
                 "junior_it_manager_reaches_personal_review",
-                {
-                    "title": "Junior IT Project Manager",
-                    "location": "Deutschland",
-                    "remote": "100%",
-                },
+                {"title": "Junior IT Project Manager", "location": "Deutschland", "remote": "100%"},
                 {"filter_status": "included"},
             ),
             (
                 "it_leadership_role_stays_excluded",
-                {
-                    "title": "Leitung IT-Entwicklung",
-                    "location": "Deutschland",
-                    "remote": "100%",
-                },
+                {"title": "Leitung IT-Entwicklung", "location": "Deutschland", "remote": "100%"},
                 {"filter_status": "excluded"},
             ),
             (
                 "distant_junior_hybrid_role_reaches_manual_review",
-                {
-                    "title": "Junior Python Developer",
-                    "location": "Berlin",
-                    "remote": "homeoffice",
-                },
+                {"title": "Junior Python Developer", "location": "Berlin", "remote": "homeoffice"},
                 {
                     "filter_status": "included",
                     "location_precheck": "Junior-Hybrid außerhalb des Suchgebiets; Präsenzumfang prüfen",
@@ -135,20 +111,12 @@ class ScoringTests(unittest.TestCase):
             ),
             (
                 "distant_junior_onsite_role_stays_excluded",
-                {
-                    "title": "Junior Python Developer",
-                    "location": "Berlin",
-                    "remote": "0%",
-                },
+                {"title": "Junior Python Developer", "location": "Berlin", "remote": "0%"},
                 {"filter_status": "excluded"},
             ),
             (
                 "foreign_junior_hybrid_role_stays_excluded",
-                {
-                    "title": "Junior Python Developer",
-                    "location": "Portugal",
-                    "remote": "hybrid",
-                },
+                {"title": "Junior Python Developer", "location": "Portugal", "remote": "hybrid"},
                 {"filter_status": "excluded"},
             ),
             (
@@ -193,10 +161,7 @@ class ScoringTests(unittest.TestCase):
                     "title": "Junior QA Automation Engineer",
                     "description": "Mit deiner mehrjaehrigen praktischen Erfahrung (mind. 3 Jahre) in QA.",
                 },
-                {
-                    "filter_status": "included",
-                    "experience_level": "3 Jahr(e) gefordert",
-                },
+                {"filter_status": "included", "experience_level": "3 Jahr(e) gefordert"},
             ),
             (
                 "blocked_staff_word_does_not_match_staffing",
@@ -205,24 +170,17 @@ class ScoringTests(unittest.TestCase):
             ),
             (
                 "incidental_sap_mention_is_not_a_hard_blocker",
-                {
-                    "description": "Python APIs verbinden bei Bedarf auch ein SAP-Nebensystem."
-                },
+                {"description": "Python APIs verbinden bei Bedarf auch ein SAP-Nebensystem."},
                 {"filter_status": "included"},
             ),
             (
                 "explicit_sap_focus_reaches_personal_review",
-                {
-                    "description": "Der Schwerpunkt SAP bestimmt deine taeglichen Aufgaben."
-                },
+                {"description": "Der Schwerpunkt SAP bestimmt deine taeglichen Aufgaben."},
                 {"filter_status": "included"},
             ),
             (
                 "supported_java_role_is_allowed",
-                {
-                    "title": "Junior Java Software Developer",
-                    "description": "Java und REST APIs.",
-                },
+                {"title": "Junior Java Software Developer", "description": "Java und REST APIs."},
                 {"filter_status": "included"},
             ),
             (
@@ -241,10 +199,7 @@ class ScoringTests(unittest.TestCase):
                     "remote": "100%",
                     "description": "Infrastructure as Code, Terraform und automatisierte Deployments.",
                 },
-                {
-                    "filter_status": "included",
-                    "role_group": "infrastructure_automation",
-                },
+                {"filter_status": "included", "role_group": "infrastructure_automation"},
             ),
             (
                 "rpa_with_ci_cd_remains_process_automation",
@@ -272,10 +227,7 @@ class ScoringTests(unittest.TestCase):
             ),
             (
                 "unfamiliar_core_technology_reaches_personal_review",
-                {
-                    "title": "Junior C# Software Developer",
-                    "description": "Reine C# Entwicklung.",
-                },
+                {"title": "Junior C# Software Developer", "description": "Reine C# Entwicklung."},
                 {"filter_status": "included"},
             ),
             (
@@ -305,10 +257,7 @@ class ScoringTests(unittest.TestCase):
     def test_posting_older_than_sixty_days_is_excluded(self):
         today = date(2026, 8, 31)
 
-        result = score_job(
-            make_job(published_at=today - timedelta(days=61)),
-            today=today,
-        )
+        result = score_job(make_job(published_at=today - timedelta(days=61)), today=today)
 
         self.assertEqual(result["filter_status"], "excluded")
         self.assertIn("älter als 60 Tage", result["reasons"][0])
@@ -316,10 +265,7 @@ class ScoringTests(unittest.TestCase):
     def test_sixty_day_boundary_and_unknown_date_remain_eligible(self):
         today = date(2026, 8, 31)
 
-        boundary = score_job(
-            make_job(published_at=today - timedelta(days=60)),
-            today=today,
-        )
+        boundary = score_job(make_job(published_at=today - timedelta(days=60)), today=today)
         unknown = score_job(make_job(published_at=None), today=today)
 
         self.assertEqual(boundary["filter_status"], "included")
@@ -335,18 +281,10 @@ class ScoringTests(unittest.TestCase):
         ]
         with patch("job_finder.matching.scoring.COMMUTER_LOCATIONS", locations):
             accepted = score_job(
-                make_job(
-                    title="Python Developer",
-                    location="Beispielstadt",
-                    remote="60%",
-                )
+                make_job(title="Python Developer", location="Beispielstadt", remote="60%")
             )
             rejected = score_job(
-                make_job(
-                    title="Python Developer",
-                    location="Beispielstadt",
-                    remote="40%",
-                )
+                make_job(title="Python Developer", location="Beispielstadt", remote="40%")
             )
 
         self.assertEqual(accepted["filter_status"], "included")
@@ -354,14 +292,8 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(rejected["filter_status"], "excluded")
 
     def test_remote_days_are_converted_to_weekly_percentage(self):
-        self.assertEqual(
-            detect_remote("Drei Tage pro Woche im Homeoffice"),
-            "60%",
-        )
-        self.assertEqual(
-            detect_remote("Zwei Präsenztage pro Woche"),
-            "60%",
-        )
+        self.assertEqual(detect_remote("Drei Tage pro Woche im Homeoffice"), "60%")
+        self.assertEqual(detect_remote("Zwei Präsenztage pro Woche"), "60%")
 
     def test_commuter_location_reads_remote_days_from_description(self):
         locations = [
@@ -415,21 +347,17 @@ class ScoringTests(unittest.TestCase):
     def test_apprenticeships_are_warned_instead_of_hard_excluded(self):
         result = score_job(
             make_job(
-                title="Auszu\u00adbil\u00addende Fachinformatiker Anwendungsentwicklung (m/w/d)",
+                title="Auszu\u00adbil\u00addende Fachinformatiker Anwendungsentwicklung (m/w/d)"
             )
         )
 
         self.assertEqual(result["filter_status"], "included")
-        self.assertTrue(
-            any("Ausbildungs-/Studienformat" in reason for reason in result["reasons"])
-        )
+        self.assertTrue(any("Ausbildungs-/Studienformat" in reason for reason in result["reasons"]))
 
     def test_homeoffice_outside_local_area_is_not_full_remote(self):
         result = score_job(
             make_job(
-                title="Python Developer",
-                location="Muenchen, Home-Office",
-                remote="homeoffice",
+                title="Python Developer", location="Muenchen, Home-Office", remote="homeoffice"
             )
         )
         self.assertEqual(result["filter_status"], "excluded")
@@ -459,25 +387,13 @@ class ScoringTests(unittest.TestCase):
         ]
         with patch("job_finder.matching.scoring.COMMUTER_LOCATIONS", locations):
             accepted = score_job(
-                make_job(
-                    title="Python Developer",
-                    location="Beispielstadt",
-                    remote="80%",
-                )
+                make_job(title="Python Developer", location="Beispielstadt", remote="80%")
             )
             rejected = score_job(
-                make_job(
-                    title="Python Developer",
-                    location="Beispielstadt",
-                    remote="60%",
-                )
+                make_job(title="Python Developer", location="Beispielstadt", remote="60%")
             )
             wrong_city = score_job(
-                make_job(
-                    title="Python Developer",
-                    location="Beispielstadt-West",
-                    remote="80%",
-                )
+                make_job(title="Python Developer", location="Beispielstadt-West", remote="80%")
             )
 
         self.assertEqual(accepted["filter_status"], "included")
@@ -486,9 +402,7 @@ class ScoringTests(unittest.TestCase):
 
     def test_four_required_years_are_excluded(self):
         result = score_job(
-            make_job(
-                description="Python APIs. Mindestens 4 Jahre Berufserfahrung erforderlich."
-            )
+            make_job(description="Python APIs. Mindestens 4 Jahre Berufserfahrung erforderlich.")
         )
         self.assertEqual(result["filter_status"], "excluded")
         self.assertIn("4 Jahre", result["reasons"][0])
@@ -502,9 +416,7 @@ class ScoringTests(unittest.TestCase):
         )
         self.assertEqual(result["filter_status"], "included")
         self.assertEqual(result["experience_rank"], 4)
-        self.assertTrue(
-            any(reason.startswith("+3 Erfahrung") for reason in result["reasons"])
-        )
+        self.assertTrue(any(reason.startswith("+3 Erfahrung") for reason in result["reasons"]))
 
     def test_required_experience_wins_over_separate_optional_experience(self):
         result = score_job(
@@ -520,9 +432,7 @@ class ScoringTests(unittest.TestCase):
 
         self.assertEqual(result["filter_status"], "included")
         self.assertEqual(result["experience_rank"], 4)
-        self.assertTrue(
-            any(reason.startswith("+8 Erfahrung") for reason in result["reasons"])
-        )
+        self.assertTrue(any(reason.startswith("+8 Erfahrung") for reason in result["reasons"]))
 
     def test_non_junior_strong_experience_is_excluded(self):
         german = score_job(
@@ -563,10 +473,7 @@ class ScoringTests(unittest.TestCase):
         ):
             with self.subTest(description=description):
                 result = score_job(
-                    make_job(
-                        title="Junior Software Engineer",
-                        description=description,
-                    )
+                    make_job(title="Junior Software Engineer", description=description)
                 )
                 self.assertEqual(result["filter_status"], "excluded")
 
@@ -588,18 +495,11 @@ class ScoringTests(unittest.TestCase):
             "Soda Core is used by teams at HelloFresh, 2K Games and Nubank. Our u…",
         ):
             with self.subTest(description=description):
-                result = score_job(
-                    make_job(title="Data Analyst", description=description)
-                )
+                result = score_job(make_job(title="Data Analyst", description=description))
                 self.assertEqual(result["filter_status"], "included")
-                self.assertEqual(
-                    result["experience_level"], "Beschreibung fehlt, Erfahrung unklar"
-                )
+                self.assertEqual(result["experience_level"], "Beschreibung fehlt, Erfahrung unklar")
                 self.assertTrue(
-                    any(
-                        reason.startswith("+8 Erfahrung")
-                        for reason in result["reasons"]
-                    )
+                    any(reason.startswith("+8 Erfahrung") for reason in result["reasons"])
                 )
 
     def test_missing_description_keeps_the_junior_title_signal(self):
@@ -651,9 +551,7 @@ class ScoringTests(unittest.TestCase):
         )
         self.assertEqual(result["filter_status"], "included")
         self.assertEqual(result["experience_level"], "2 Jahr(e) gefordert")
-        self.assertTrue(
-            any(reason.startswith("+8 Erfahrung") for reason in result["reasons"])
-        )
+        self.assertTrue(any(reason.startswith("+8 Erfahrung") for reason in result["reasons"]))
 
     def test_senior_is_excluded_but_mixed_junior_senior_is_reviewable(self):
         senior = score_job(make_job(title="Senior Python Developer"))
@@ -671,16 +569,11 @@ class ScoringTests(unittest.TestCase):
     def test_structured_seniority_is_a_hard_filter_without_entry_signal(self):
         senior = score_job(
             make_job(
-                title="Software Engineer",
-                description="Python APIs.",
-                career_levels=["Senior"],
+                title="Software Engineer", description="Python APIs.", career_levels=["Senior"]
             )
         )
         mixed = score_job(
-            make_job(
-                title="Junior Software Engineer",
-                career_levels=["Junior", "Senior"],
-            )
+            make_job(title="Junior Software Engineer", career_levels=["Junior", "Senior"])
         )
 
         self.assertEqual(senior["filter_status"], "excluded")
@@ -701,10 +594,7 @@ class ScoringTests(unittest.TestCase):
             ("Solutions Architect - DACH", "architect"),
             ("Software Architekt", "architekt"),
             ("Do Not Apply - IT Infrastructure Engineer", "do not apply"),
-            (
-                "Data Science & AI Weiterbildung mit IHK-Abschluss",
-                "weiterbildung",
-            ),
+            ("Data Science & AI Weiterbildung mit IHK-Abschluss", "weiterbildung"),
         ]
 
         for title, reason in titles_and_reasons:
@@ -725,14 +615,10 @@ class ScoringTests(unittest.TestCase):
 
     def test_devops_synonyms_are_allowed(self):
         sre = score_job(
-            make_job(
-                title="Site Reliability Engineer", description="Kubernetes und Python."
-            )
+            make_job(title="Site Reliability Engineer", description="Kubernetes und Python.")
         )
         netops = score_job(
-            make_job(
-                title="SysOps-/NetOps-Engineer", description="Netzwerk und Automation."
-            )
+            make_job(title="SysOps-/NetOps-Engineer", description="Netzwerk und Automation.")
         )
         self.assertEqual(sre["filter_status"], "included")
         self.assertEqual(netops["filter_status"], "included")
@@ -746,9 +632,7 @@ class ScoringTests(unittest.TestCase):
         )
         self.assertEqual(result["filter_status"], "included")
         self.assertEqual(result["role_group"], "rpa_automation")
-        self.assertTrue(
-            any(reason.startswith("+14 Rolle") for reason in result["reasons"])
-        )
+        self.assertTrue(any(reason.startswith("+14 Rolle") for reason in result["reasons"]))
 
     def test_microsoft_365_roles_reach_personal_review(self):
         junior = score_job(
@@ -860,9 +744,7 @@ class ScoringTests(unittest.TestCase):
 
     def test_mandatory_master_is_excluded(self):
         result = score_job(
-            make_job(
-                description="Ein Masterabschluss ist fuer diese Rolle erforderlich."
-            )
+            make_job(description="Ein Masterabschluss ist fuer diese Rolle erforderlich.")
         )
         self.assertEqual(result["filter_status"], "excluded")
         self.assertIn("Master", result["reasons"][0])
@@ -968,8 +850,7 @@ class DeduplicationTests(unittest.TestCase):
         result = deduplicate_jobs([first, second])
         self.assertEqual(len(result), 1)
         self.assertEqual(
-            [source.source for source in result[0].sources],
-            ["stepstone", "get_in_it"],
+            [source.source for source in result[0].sources], ["stepstone", "get_in_it"]
         )
         self.assertEqual(result[0].description_clean, second.description_clean)
         self.assertEqual(len(result[0].sources), 2)
@@ -991,8 +872,7 @@ class DeduplicationTests(unittest.TestCase):
         result = deduplicate_jobs([first, second])
         self.assertEqual(len(result), 1)
         self.assertEqual(
-            [source.source for source in result[0].sources],
-            ["stepstone", "get_in_it"],
+            [source.source for source in result[0].sources], ["stepstone", "get_in_it"]
         )
 
     def test_remote_duplicate_with_portal_company_prefix_is_merged(self):
@@ -1017,8 +897,7 @@ class DeduplicationTests(unittest.TestCase):
 
         self.assertEqual(len(result), 1)
         self.assertEqual(
-            [source.source for source in result[0].sources],
-            ["arbeitnow", "startup_jobs"],
+            [source.source for source in result[0].sources], ["arbeitnow", "startup_jobs"]
         )
 
     def test_remote_work_model_suffix_is_merged_across_sources(self):
@@ -1043,8 +922,7 @@ class DeduplicationTests(unittest.TestCase):
 
         self.assertEqual(len(result), 1)
         self.assertEqual(
-            [source.source for source in result[0].sources],
-            ["german_tech_jobs", "remotely"],
+            [source.source for source in result[0].sources], ["german_tech_jobs", "remotely"]
         )
 
     def test_hybrid_work_model_suffix_is_merged_at_same_location(self):

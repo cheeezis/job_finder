@@ -9,12 +9,7 @@ from pathlib import Path
 from job_finder.models import Job, JobSource, WorkflowStatus
 from job_finder.persistence.database import transaction
 from job_finder.persistence.migration import read_legacy_memory as load_json_memory
-from job_finder.workflow.memory import (
-    edit_memory,
-    load_memory,
-    save_memory,
-    update_memory,
-)
+from job_finder.workflow.memory import edit_memory, load_memory, save_memory, update_memory
 
 
 def make_job():
@@ -23,13 +18,7 @@ def make_job():
         title="Junior Python Developer",
         company="Example GmbH",
         locations=["Fulda"],
-        sources=[
-            JobSource(
-                source="test",
-                source_id="123",
-                url="https://example.test/jobs/123",
-            )
-        ],
+        sources=[JobSource(source="test", source_id="123", url="https://example.test/jobs/123")],
         description_raw="Python",
         description_clean="Python",
     )
@@ -42,10 +31,7 @@ class MemoryTests(unittest.TestCase):
 
         stats = update_memory([job], memory)
 
-        self.assertEqual(
-            stats,
-            {"new": 1, "known": 0, "inactive": 0, "reactivated": 0},
-        )
+        self.assertEqual(stats, {"new": 1, "known": 0, "inactive": 0, "reactivated": 0})
         self.assertTrue(job.is_new)
         self.assertIsNotNone(job.first_seen_at)
         self.assertEqual(job.first_seen_at, job.last_seen_at)
@@ -63,10 +49,7 @@ class MemoryTests(unittest.TestCase):
         known_job = make_job()
         stats = update_memory([known_job], memory)
 
-        self.assertEqual(
-            stats,
-            {"new": 0, "known": 1, "inactive": 0, "reactivated": 0},
-        )
+        self.assertEqual(stats, {"new": 0, "known": 1, "inactive": 0, "reactivated": 0})
         self.assertFalse(known_job.is_new)
         self.assertEqual(known_job.first_seen_at, first_job.first_seen_at)
         self.assertEqual(known_job.workflow_status, WorkflowStatus.INTERESTING)
@@ -135,13 +118,8 @@ class MemoryTests(unittest.TestCase):
                 "first_seen_at": "2026-07-01T08:00:00+00:00",
                 "last_seen_at": "2026-08-01T08:00:00+00:00",
                 "workflow_status": "applied",
-                "workflow_history": [
-                    {"status": "applied", "occurred_on": "2026-08-01"}
-                ],
-                "source_urls": [
-                    "https://stepstone.test/jobs/456",
-                    job.primary_url,
-                ],
+                "workflow_history": [{"status": "applied", "occurred_on": "2026-08-01"}],
+                "source_urls": ["https://stepstone.test/jobs/456", job.primary_url],
                 "source_names": ["stepstone", "test"],
                 "missed_runs": 2,
                 "active": True,
@@ -161,20 +139,15 @@ class MemoryTests(unittest.TestCase):
 
         stats = update_memory([job], memory, successful_sources={"test"})
 
-        self.assertEqual(
-            stats,
-            {"new": 0, "known": 1, "inactive": 0, "reactivated": 0},
-        )
+        self.assertEqual(stats, {"new": 0, "known": 1, "inactive": 0, "reactivated": 0})
         self.assertEqual(job.id, old_id)
         self.assertEqual(job.workflow_status, WorkflowStatus.APPLIED)
         self.assertNotIn("test:123", memory)
         self.assertEqual(
-            memory[old_id]["workflow_history"],
-            [{"status": "applied", "occurred_on": "2026-08-01"}],
+            memory[old_id]["workflow_history"], [{"status": "applied", "occurred_on": "2026-08-01"}]
         )
         self.assertEqual(
-            memory[old_id]["source_urls"],
-            ["https://stepstone.test/jobs/456", job.primary_url],
+            memory[old_id]["source_urls"], ["https://stepstone.test/jobs/456", job.primary_url]
         )
 
     def test_application_wins_over_conflicting_review_entry(self):
@@ -210,12 +183,7 @@ class MemoryTests(unittest.TestCase):
     def test_older_review_decision_wins_over_later_duplicate_decision(self):
         job = make_job()
         older_id = "remotely:older"
-        job.sources.append(
-            JobSource(
-                source="remotely",
-                url="https://remotely.test/jobs/older",
-            )
-        )
+        job.sources.append(JobSource(source="remotely", url="https://remotely.test/jobs/older"))
         memory = {
             older_id: {
                 "first_seen_at": "2026-09-04T08:00:00+00:00",
@@ -267,8 +235,7 @@ class MemoryTests(unittest.TestCase):
         self.assertEqual(job.id, old_id)
         self.assertEqual(job.workflow_status, WorkflowStatus.IGNORED)
         self.assertEqual(
-            memory[old_id]["source_urls"],
-            ["https://stepstone.test/jobs/old", job.primary_url],
+            memory[old_id]["source_urls"], ["https://stepstone.test/jobs/old", job.primary_url]
         )
 
     def test_existing_new_repost_is_folded_into_earlier_application(self):
@@ -362,9 +329,7 @@ class MemoryTests(unittest.TestCase):
             path = Path(directory) / "state.sqlite3"
             save_memory({"test:123": {"workflow_status": "new"}}, path)
             with transaction() as connection:
-                version = connection.execute(
-                    "SELECT version FROM schema_version"
-                ).fetchone()[0]
+                version = connection.execute("SELECT version FROM schema_version").fetchone()[0]
             self.assertEqual(version, 2)
             self.assertIn("test:123", load_memory(path))
 

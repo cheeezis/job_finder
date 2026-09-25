@@ -21,9 +21,7 @@ def main():
     )
     outputs = json.loads(result.stdout)
     settings = json.loads(
-        (PROJECT / "infrastructure/postgres.auto.tfvars.json").read_text(
-            encoding="utf-8"
-        )
+        (PROJECT / "infrastructure/postgres.auto.tfvars.json").read_text(encoding="utf-8")
     )
     # libpq needs a PEM bundle. Export the OS trust store through Python's SSL
     # context so Windows can verify the server without disabling certificate checks.
@@ -33,8 +31,7 @@ def main():
     bundle = PROJECT / "tmp/azure-postgres-trusted-roots.pem"
     bundle.parent.mkdir(parents=True, exist_ok=True)
     bundle.write_text(
-        "".join(ssl.DER_cert_to_PEM_cert(cert) for cert in certificates),
-        encoding="ascii",
+        "".join(ssl.DER_cert_to_PEM_cert(cert) for cert in certificates), encoding="ascii"
     )
     with psycopg.connect(
         host=outputs["postgres_host"]["value"],

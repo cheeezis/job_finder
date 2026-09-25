@@ -78,10 +78,7 @@ def build_fetch_report(jobs, failed_segments, total_segments):
     return {
         "jobs": jobs,
         "status": "partial" if failed_segments else ("success" if jobs else "empty"),
-        "details": {
-            "failed_segments": failed_segments,
-            "total_segments": total_segments,
-        },
+        "details": {"failed_segments": failed_segments, "total_segments": total_segments},
     }
 
 
@@ -103,15 +100,7 @@ def canonical_detail_url(url):
         if not name.casefold().startswith("utm_")
         and name.casefold() not in {"fbclid", "gclid", "msclkid", "language", "j"}
     ]
-    return urlunsplit(
-        (
-            parts.scheme,
-            parts.netloc,
-            parts.path,
-            urlencode(stable_parameters),
-            "",
-        )
-    )
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(stable_parameters), ""))
 
 
 def load_detail_cache(path):
@@ -123,9 +112,7 @@ def load_detail_cache(path):
         return {}
     if document.get("version") != DETAIL_CACHE_VERSION:
         return {}
-    return {
-        url: Job.from_dict(values) for url, values in document.get("jobs", {}).items()
-    }
+    return {url: Job.from_dict(values) for url, values in document.get("jobs", {}).items()}
 
 
 def save_detail_cache(path, jobs):
@@ -207,10 +194,7 @@ def fetch_cached_details(
                 stale_fallbacks += 1
         if progress_checkpoint(link_index, total_links):
             print_progress(
-                f"{source_label} Details",
-                link_index,
-                total_links,
-                f"{len(jobs)} übernommen",
+                f"{source_label} Details", link_index, total_links, f"{len(jobs)} übernommen"
             )
 
     if cache_changed:
@@ -223,8 +207,7 @@ def fetch_cached_details(
         )
     if unavailable:
         print(
-            f"HINWEIS {source_label}: {unavailable} nicht mehr verfügbare "
-            "Anzeige(n) übersprungen"
+            f"HINWEIS {source_label}: {unavailable} nicht mehr verfügbare Anzeige(n) übersprungen"
         )
     return jobs
 
@@ -363,13 +346,7 @@ def integer(value, default):
 
 
 def enrich_cached_candidates(
-    jobs,
-    candidate_ids,
-    cache_path,
-    source_name,
-    label,
-    fetch_detail,
-    now=None,
+    jobs, candidate_ids, cache_path, source_name, label, fetch_detail, now=None
 ):
     """Replace only eligible source summaries whose details need refreshing."""
     cache = load_detail_cache(cache_path)
@@ -420,9 +397,7 @@ def with_current_summary(cached_job, summary, **details):
         title=summary.title or cached_job.title,
         company=summary.company or cached_job.company,
         locations=(
-            summary.locations
-            if summary.locations != ["unbekannt"]
-            else cached_job.locations
+            summary.locations if summary.locations != ["unbekannt"] else cached_job.locations
         ),
         sources=summary.sources,
         **details,

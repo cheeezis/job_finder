@@ -8,11 +8,9 @@ from job_finder.persistence.application_documents import public_documents
 from job_finder.persistence.state_compat import legacy_salary_expectation
 from job_finder.workflow.memory import (
     first_seen_date,
+    has_application_state as is_application,
     load_memory,
     memory_source_links,
-)
-from job_finder.workflow.memory import (
-    has_application_state as is_application,
 )
 
 OPEN_APPLICATION_STATUSES = {
@@ -28,25 +26,15 @@ RESPONSE_STATUSES = {
 }
 NO_RESPONSE_AFTER_DAYS = 14
 MANUAL_APPLICATION_STATUSES = tuple(
-    status
-    for status in APPLICATION_STATUSES
-    if status != WorkflowStatus.NO_RESPONSE.value
+    status for status in APPLICATION_STATUSES if status != WorkflowStatus.NO_RESPONSE.value
 )
 
 
-def record_status_change(
-    entry,
-    workflow_status,
-    occurred_on=None,
-    scheduled_for=None,
-):
+def record_status_change(entry, workflow_status, occurred_on=None, scheduled_for=None):
     """Set the current status and append one dated manual transition."""
     status = WorkflowStatus(workflow_status).value
     explicit_event = occurred_on is not None or scheduled_for is not None
-    event = {
-        "status": status,
-        "occurred_on": validated_date(occurred_on),
-    }
+    event = {"status": status, "occurred_on": validated_date(occurred_on)}
     appointment = validated_scheduled_for(status, scheduled_for)
     if appointment is not None:
         event["scheduled_for"] = appointment
@@ -65,9 +53,7 @@ def record_status_change(
             history.append(
                 {
                     "status": previous_status,
-                    "occurred_on": first_seen_date(entry)
-                    if previous_status == "new"
-                    else None,
+                    "occurred_on": first_seen_date(entry) if previous_status == "new" else None,
                 }
             )
             history_changed = True
@@ -102,13 +88,10 @@ def load_application_overview(memory_path=MEMORY_FILE, as_of=None):
         if is_application(entry)
     ]
     all_applications.sort(
-        key=lambda item: item["applied_on"] or item["last_event_on"] or "",
-        reverse=True,
+        key=lambda item: item["applied_on"] or item["last_event_on"] or "", reverse=True
     )
     applications = [
-        item
-        for item in all_applications
-        if item["workflow_status"] in OPEN_APPLICATION_STATUSES
+        item for item in all_applications if item["workflow_status"] in OPEN_APPLICATION_STATUSES
     ]
     completed_applications = [
         item
@@ -136,11 +119,7 @@ def update_history_event(
 ):
     """Edit one stored workflow event and recalculate the current status."""
     history, index = editable_history_event(
-        entry,
-        event_index,
-        previous_status,
-        previous_occurred_on,
-        previous_scheduled_for,
+        entry, event_index, previous_status, previous_occurred_on, previous_scheduled_for
     )
     updated_event = history_event(workflow_status, occurred_on, scheduled_for)
     for other_index, other_event in enumerate(history):
@@ -163,30 +142,18 @@ def update_history_event(
 
 
 def delete_history_event(
-    entry,
-    event_index,
-    previous_status,
-    previous_occurred_on,
-    previous_scheduled_for=None,
+    entry, event_index, previous_status, previous_occurred_on, previous_scheduled_for=None
 ):
     """Delete one stored workflow event and recalculate the current status."""
     history, index = editable_history_event(
-        entry,
-        event_index,
-        previous_status,
-        previous_occurred_on,
-        previous_scheduled_for,
+        entry, event_index, previous_status, previous_occurred_on, previous_scheduled_for
     )
     history.pop(index)
     return synchronize_current_status(entry)
 
 
 def editable_history_event(
-    entry,
-    event_index,
-    previous_status,
-    previous_occurred_on,
-    previous_scheduled_for=None,
+    entry, event_index, previous_status, previous_occurred_on, previous_scheduled_for=None
 ):
     """Return a mutable history and one validated raw event index."""
     if isinstance(event_index, bool) or not isinstance(event_index, int):
@@ -199,11 +166,7 @@ def editable_history_event(
     current_event = normalized_history_event(history[event_index])
     if current_event is None:
         raise ValueError("Verlaufsereignis ist ungültig")
-    expected_event = history_event(
-        previous_status,
-        previous_occurred_on,
-        previous_scheduled_for,
-    )
+    expected_event = history_event(previous_status, previous_occurred_on, previous_scheduled_for)
     current_event.pop("reason", None)
     if current_event != expected_event:
         raise ValueError("Verlauf wurde zwischenzeitlich geändert; Seite neu laden")
@@ -261,11 +224,7 @@ def application_row(job_id, entry, as_of=None):
             else None
         ),
         "last_event_on": max(
-            (
-                event["occurred_on"]
-                for event in history
-                if event["occurred_on"] is not None
-            ),
+            (event["occurred_on"] for event in history if event["occurred_on"] is not None),
             default=None,
         ),
         "workflow_history": history,
@@ -306,12 +265,7 @@ def valid_history(history):
         if normalized is None:
             continue
         valid.append(normalized)
-    valid.sort(
-        key=lambda event: (
-            event["occurred_on"] is not None,
-            event["occurred_on"] or "",
-        )
-    )
+    valid.sort(key=lambda event: (event["occurred_on"] is not None, event["occurred_on"] or ""))
     return valid
 
 
@@ -321,9 +275,7 @@ def normalized_history_event(event, event_index=None):
         return None
     try:
         normalized = history_event(
-            event.get("status"),
-            event.get("occurred_on"),
-            event.get("scheduled_for"),
+            event.get("status"), event.get("occurred_on"), event.get("scheduled_for")
         )
     except (TypeError, ValueError):
         return None
@@ -362,9 +314,7 @@ def validated_scheduled_for(status, value):
     try:
         appointment = datetime.strptime(value, "%Y-%m-%dT%H:%M")
     except ValueError as error:
-        raise ValueError(
-            "Ungültiger Gesprächstermin; erwartet wird YYYY-MM-DDTHH:MM"
-        ) from error
+        raise ValueError("Ungültiger Gesprächstermin; erwartet wird YYYY-MM-DDTHH:MM") from error
     return appointment.strftime("%Y-%m-%dT%H:%M")
 
 
@@ -406,18 +356,12 @@ def application_statistics(applications):
     """Derive compact application funnel metrics."""
     total = len(applications)
     response_days = [
-        item["days_to_response"]
-        for item in applications
-        if item["days_to_response"] is not None
+        item["days_to_response"] for item in applications if item["days_to_response"] is not None
     ]
     responses = sum(item["has_response"] for item in applications)
-    open_count = sum(
-        item["workflow_status"] in OPEN_APPLICATION_STATUSES for item in applications
-    )
+    open_count = sum(item["workflow_status"] in OPEN_APPLICATION_STATUSES for item in applications)
     completed = [
-        item
-        for item in applications
-        if item["workflow_status"] not in OPEN_APPLICATION_STATUSES
+        item for item in applications if item["workflow_status"] not in OPEN_APPLICATION_STATUSES
     ]
     completed_responses = sum(item["has_response"] for item in completed)
     return {

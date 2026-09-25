@@ -5,19 +5,10 @@ import os
 import time
 from collections import Counter
 
-from job_finder.console import (
-    configure_utf8_output,
-    log_event,
-    print_phase,
-    print_progress,
-)
+from job_finder.console import configure_utf8_output, log_event, print_phase, print_progress
 from job_finder.matching.deduplication import deduplicate_jobs
 from job_finder.operations import RunLog, create_backup, timed_step
-from job_finder.paths import (
-    JOBS_FILE,
-    MEMORY_FILE,
-    NOTIFICATION_STATE_FILE,
-)
+from job_finder.paths import JOBS_FILE, MEMORY_FILE, NOTIFICATION_STATE_FILE
 from job_finder.persistence.database import worker_lock
 from job_finder.persistence.storage import publish_results
 from job_finder.sources import (
@@ -43,8 +34,6 @@ from job_finder.sources import (
 )
 from job_finder.sources.common import (
     canonical_detail_url as canonical_url,
-)
-from job_finder.sources.common import (
     fetch_diagnostics,
     reset_fetch_diagnostics,
 )
@@ -52,10 +41,7 @@ from job_finder.workflow.availability import ignore_closed_listings
 from job_finder.workflow.main import build_score_results, evaluate_jobs, score_jobs
 from job_finder.workflow.memory import edit_memory, update_memory
 from job_finder.workflow.notifications import process_notifications, send_run_summary
-from job_finder.workflow.reporting import (
-    is_visible_in_default_review,
-    write_recommendations,
-)
+from job_finder.workflow.reporting import is_visible_in_default_review, write_recommendations
 
 SOURCES = [
     arbeitsagentur,
@@ -139,8 +125,7 @@ def main():
     args = parse_args()
     with worker_lock(), RunLog() as run_log:
         run_pipeline(
-            exclude_sources=parse_source_names(args.exclude_sources),
-            run_id=run_log.run_id,
+            exclude_sources=parse_source_names(args.exclude_sources), run_id=run_log.run_id
         )
 
 
@@ -180,17 +165,11 @@ def run_pipeline(exclude_sources=frozenset(), run_id=None):
     # Persist only the final post-enrichment set; enrichers may remove closed ads.
     print_phase(3, 4, "Bestand und Verfügbarkeit")
     complete_sources = {
-        report["name"]
-        for report in source_reports
-        if report["status"] in {"success", "empty"}
+        report["name"] for report in source_reports if report["status"] in {"success", "empty"}
     }
     with timed_step("Gedächtnis speichern"):
         with edit_memory(MEMORY_FILE) as memory:
-            memory_stats = update_memory(
-                jobs,
-                memory,
-                successful_sources=complete_sources,
-            )
+            memory_stats = update_memory(jobs, memory, successful_sources=complete_sources)
 
     with timed_step("Offline-Prüfung"):
         closed_ids = ignore_closed_listings(
@@ -201,14 +180,9 @@ def run_pipeline(exclude_sources=frozenset(), run_id=None):
         )
 
     if closed_ids:
-        print(
-            f"Nicht mehr verfügbar: {len(closed_ids)} Stelle(n) auf Nicht interessant gesetzt"
-        )
+        print(f"Nicht mehr verfügbar: {len(closed_ids)} Stelle(n) auf Nicht interessant gesetzt")
     results = build_score_results(evaluated_jobs)
-    print(
-        f"{memory_stats['inactive']} neu inaktiv · "
-        f"{memory_stats['reactivated']} reaktiviert"
-    )
+    print(f"{memory_stats['inactive']} neu inaktiv · {memory_stats['reactivated']} reaktiviert")
     with timed_step("Ergebnisdateien schreiben"):
         publish_results(
             jobs,
@@ -310,12 +284,7 @@ def collect_jobs(sources=None, run_id=None):
     selected_sources = list(sources or SOURCES)
     for source in selected_sources:
         label = source_label(source.SOURCE_NAME)
-        print_progress(
-            label,
-            0,
-            1,
-            "wird geladen",
-        )
+        print_progress(label, 0, 1, "wird geladen")
         reset_fetch_diagnostics()
         started = time.monotonic()
         try:
@@ -329,12 +298,7 @@ def collect_jobs(sources=None, run_id=None):
                     "error": source_error_label(error),
                 }
             )
-            print_progress(
-                label,
-                1,
-                1,
-                f"fehlgeschlagen ({source_error_label(error)})",
-            )
+            print_progress(label, 1, 1, f"fehlgeschlagen ({source_error_label(error)})")
             log_event(
                 "source_completed",
                 run_id=run_id,
@@ -401,10 +365,7 @@ def fetch_source_jobs(source):
     handled_failures = fetch_diagnostics()["failed_segments"]
     if handled_failures and source_status != "partial":
         source_status = "partial"
-        report_details = {
-            **report_details,
-            "failed_segments": handled_failures,
-        }
+        report_details = {**report_details, "failed_segments": handled_failures}
     return source_jobs, source_status, report_details
 
 
@@ -461,9 +422,7 @@ def build_run_summary(
     enrichment_reports=(),
 ):
     """Collect the reliable counts shown in Discord after one complete run."""
-    new_by_source = Counter(
-        source.source for job in jobs if job.is_new for source in job.sources
-    )
+    new_by_source = Counter(source.source for job in jobs if job.is_new for source in job.sources)
 
     review_new = sum(bool(job.get("is_new")) for job in results["included"])
     summary_sources = [
@@ -496,9 +455,7 @@ def build_run_summary(
 def source_error_label(error):
     """Describe a source failure without leaking request URLs or messages."""
     status_code = getattr(error, "code", None) or getattr(error, "status_code", None)
-    return (
-        f"HTTP {status_code}" if isinstance(status_code, int) else type(error).__name__
-    )
+    return f"HTTP {status_code}" if isinstance(status_code, int) else type(error).__name__
 
 
 def format_duration(duration_seconds):

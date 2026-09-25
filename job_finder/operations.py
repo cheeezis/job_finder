@@ -107,11 +107,7 @@ class RunLog(AbstractContextManager):
             print(
                 f"Lauf erfolgreich beendet · Gesamtdauer {format_clock(time.monotonic() - self.started_monotonic)}"
             )
-            log_event(
-                "run_finished",
-                run_id=self.run_id,
-                duration_seconds=duration_seconds,
-            )
+            log_event("run_finished", run_id=self.run_id, duration_seconds=duration_seconds)
         else:
             print(f"Lauf fehlgeschlagen: {type(error).__name__}: {error}")
             traceback_module.print_exception(error_type, error, traceback)
@@ -173,7 +169,4 @@ def timed_step(label):
         completed = True
     finally:
         outcome = "fertig" if completed else "abgebrochen/fehlgeschlagen"
-        print(
-            f"  {label}: {format_clock(time.monotonic() - started)} · {outcome}",
-            flush=True,
-        )
+        print(f"  {label}: {format_clock(time.monotonic() - started)} · {outcome}", flush=True)

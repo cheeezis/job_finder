@@ -29,12 +29,8 @@ def update_review_decision(job_id, workflow_status, memory_path=MEMORY_FILE):
         raise ValueError("Ungueltiger Review-Status")
     with edit_job(job_id, memory_path) as entry:
         if is_application(entry):
-            return {
-                "workflow_status": entry.get("workflow_status", WorkflowStatus.APPLIED.value),
-                "application_tracked": True,
-            }
-        current_status = record_status_change(entry, status)
-    return {"workflow_status": current_status, "application_tracked": False}
+            return status_result(entry.get("workflow_status", WorkflowStatus.APPLIED.value), True)
+        return status_result(record_status_change(entry, status), False)
 
 
 def undo_ignored_decision(job_id, expected_status, memory_path=MEMORY_FILE):
@@ -53,8 +49,7 @@ def undo_ignored_decision(job_id, expected_status, memory_path=MEMORY_FILE):
         if not isinstance(last_event, dict) or last_event.get("status") != expected_status:
             raise ValueError("Die letzte Entscheidung hat sich zwischenzeitlich geändert")
         history.pop()
-        status = synchronize_current_status(entry)
-    return {"workflow_status": status, "application_tracked": False}
+        return status_result(synchronize_current_status(entry), False)
 
 
 def start_application(
@@ -70,10 +65,9 @@ def start_application(
     try:
         with edit_job(job_id, memory_path) as entry:
             if is_application(entry):
-                return {
-                    "workflow_status": entry.get("workflow_status", WorkflowStatus.APPLIED.value),
-                    "application_tracked": True,
-                }
+                return status_result(
+                    entry.get("workflow_status", WorkflowStatus.APPLIED.value), True
+                )
             salary_eur = validated_salary_expectation_eur(salary_expectation_eur, salary_period)
             stored_documents = store_documents(
                 job_id,
@@ -86,13 +80,17 @@ def start_application(
                 entry["application_documents"] = stored_documents
             if salary_eur is not None:
                 entry["salary_expectation_eur"] = salary_eur
-            status = record_status_change(entry, WorkflowStatus.APPLIED)
+            return status_result(record_status_change(entry, WorkflowStatus.APPLIED), True)
     except Exception:
         # Files are created before the database commit and must not survive a
         # failed transaction as unreferenced application documents.
         remove_documents(job_id, stored_documents, documents_dir)
         raise
-    return {"workflow_status": status, "application_tracked": True}
+
+
+def status_result(workflow_status, application_tracked):
+    """Describe the stored workflow status and whether an application is tracked."""
+    return {"workflow_status": workflow_status, "application_tracked": application_tracked}
 
 
 def validated_salary_expectation_eur(value, period="year"):
@@ -101,14 +99,9 @@ def validated_salary_expectation_eur(value, period="year"):
         raise ValueError("Gehaltszeitraum muss Jahr oder Monat sein")
     if value is None or value == "":
         return None
-    if isinstance(value, bool):
-        raise ValueError("Gehaltsvorstellung muss eine ganze Zahl sein")
-    if isinstance(value, str):
-        normalized = value.strip()
-        if not normalized.isdecimal():
-            raise ValueError("Gehaltsvorstellung muss eine ganze Zahl sein")
-        salary = int(normalized)
-    elif isinstance(value, int):
+    if isinstance(value, str) and value.strip().isdecimal():
+        salary = int(value.strip())
+    elif isinstance(value, int) and not isinstance(value, bool):
         salary = value
     else:
         raise ValueError("Gehaltsvorstellung muss eine ganze Zahl sein")

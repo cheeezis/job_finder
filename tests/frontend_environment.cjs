@@ -68,4 +68,4 @@ function page(name, helpers = {}, fetch = () => new Promise(() => {})) {
   return {context, elements, run: code => vm.runInContext(code, context)};
 }
 
-module.exports = {page};
+module.exports = {node, page};

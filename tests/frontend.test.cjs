@@ -3,12 +3,9 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
+const {node, page} = require("./frontend_environment.cjs");
 
 const source = fs.readFileSync(path.join(__dirname, "../job_finder/app.js"), "utf8");
-
-function node(tagName) {
-  return {tagName, children: [], append(...children) { this.children.push(...children); }};
-}
 
 function helpers(fetch) {
   return vm.runInNewContext(source + "\nJobFinder;", {
@@ -80,7 +77,6 @@ test("monthly salary preview converts twelve payments without changing annual in
 });
 
 
-const {page} = require("./frontend_environment.cjs");
 const reviewHtml = fs.readFileSync(path.join(__dirname, "../job_finder/review.html"), "utf8");
 
 test("shared options retain labels, selection and plain text rendering", () => {

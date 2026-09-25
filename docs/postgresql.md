@@ -184,13 +184,14 @@ lokalen Rolle oben, aber gegen den Azure-Server):
 .\.venv\Scripts\python.exe scripts/create_app_role.py --azure
 ```
 
-Neue Tabellen legt ausschließlich `job_finder.db init` an, die Anwendung selbst
-ändert das Schema nie. Nach einer Schemaerweiterung (zuletzt `agent_usage`, das
-Kostenbuch des KI-Agenten) läuft der Befehl deshalb einmal gegen Azure, mit den
+Neue Tabellen und Spalten legt ausschließlich `job_finder.db init` an, die
+Anwendung selbst ändert das Schema nie. Nach einer Schemaerweiterung (zuletzt
+für den KI-Agenten: `agent_fact_sheets` und die Spalte `web_searches` in
+`agent_usage`) läuft der Befehl deshalb einmal gegen Azure, mit den
 Verbindungsdaten aus `.env.postgres-azure`, die nur für diesen Aufruf gesetzt
-werden. `init` legt nur fehlende Tabellen an und lässt vorhandene Daten
-unverändert; `check` zählt danach als App-Rolle die Zeilen und zeigt so, dass
-sie die neue Tabelle lesen darf:
+werden. `init` legt nur Fehlendes an und lässt vorhandene Daten unverändert;
+`check` zählt danach als App-Rolle die Zeilen und zeigt so, dass sie die neuen
+Tabellen lesen darf:
 
 ```powershell
 $azure = Get-Content .env.postgres-azure -Raw | ConvertFrom-StringData

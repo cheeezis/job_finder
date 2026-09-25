@@ -8,17 +8,17 @@ from unittest.mock import patch
 from urllib.parse import parse_qsl
 
 from job_finder.models import Job, JobSource, WorkMode
-from job_finder.sources import (
-    bytewerk,
-    company_careers,
-    compose_it,
-    edag,
-    jumo,
-    nethinks,
-    rhoenenergie,
-)
+from job_finder.sources import company_careers, compose_it, edag, jumo
 from job_finder.sources.common import canonical_detail_url, load_detail_cache, save_detail_cache
-from job_finder.sources.company_careers import CSS, PROEMION, CareerPage, fetch_company_jobs
+from job_finder.sources.company_careers import (
+    BYTEWERK,
+    CSS,
+    NETHINKS,
+    PROEMION,
+    RHOENENERGIE,
+    CareerPage,
+    fetch_company_jobs,
+)
 
 
 class FakeJumoSession:
@@ -118,13 +118,13 @@ COMPANY_SOURCES = [
         ["https://proemion.jobs.personio.de/job/77"],
     ),
     (
-        bytewerk,
+        BYTEWERK,
         "bytewerk GmbH",
         {"https://bytewerk-gmbh.jobs.personio.de/?language=de": '<a href="/job/55"><a href="/">'},
         ["https://bytewerk-gmbh.jobs.personio.de/job/55"],
     ),
     (
-        rhoenenergie,
+        RHOENENERGIE,
         "RhönEnergie Fulda GmbH",
         {
             "https://re-gruppe.de/karriere/": '<a href="/karriere/it-admin-de-j123.html">'
@@ -133,7 +133,7 @@ COMPANY_SOURCES = [
         ["https://re-gruppe.de/karriere/it-admin-de-j123.html"],
     ),
     (
-        nethinks,
+        NETHINKS,
         "NETHINKS GmbH",
         {
             "https://nethinks.com/nethinks_jobs/": '<a href="/nethinks_jobs/page/2/">'
@@ -264,8 +264,8 @@ class BytewerkSourceTests(unittest.TestCase):
         <a href="https://other.jobs.personio.de/job/123">Andere Firma</a>
         """
 
-        with patch.object(bytewerk, "fetch_text", return_value=html):
-            links = bytewerk.collect_links()
+        with patch.object(company_careers, "fetch_text", return_value=html):
+            links = BYTEWERK.collect_links()
 
         self.assertEqual(links, ["https://bytewerk-gmbh.jobs.personio.de/job/1249333"])
 
@@ -279,8 +279,8 @@ class RhoenenergieSourceTests(unittest.TestCase):
         <a href="https://other.test/karriere/Developer-de-j999.html">Andere</a>
         """
 
-        with patch.object(rhoenenergie, "fetch_text", return_value=html):
-            links = rhoenenergie.collect_links()
+        with patch.object(company_careers, "fetch_text", return_value=html):
+            links = RHOENENERGIE.collect_links()
 
         self.assertEqual(
             links,

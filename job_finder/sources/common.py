@@ -1,7 +1,6 @@
 """Shared normalization helpers for source adapters."""
 
 import hashlib
-import json
 import re
 from dataclasses import fields, replace
 from datetime import UTC, date, datetime, timedelta
@@ -9,7 +8,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit
 
 from job_finder.console import print_progress, progress_checkpoint
 from job_finder.models import Job
-from job_finder.persistence.storage import read_json, write_json_atomic
+from job_finder.persistence.storage import read_versioned, write_versioned
 
 DETAIL_CACHE_VERSION = 1
 DETAIL_REFRESH_AGE = timedelta(days=7)
@@ -90,24 +89,14 @@ def canonical_detail_url(url):
 
 def load_detail_cache(path):
     """Load one source's current URL-to-job detail cache."""
-    try:
-        document = read_json(path, {})
-    except (json.JSONDecodeError, OSError):
-        return {}
-    if document.get("version") != DETAIL_CACHE_VERSION:
-        return {}
+    document = read_versioned(path, DETAIL_CACHE_VERSION)
     return {url: Job.from_dict(values) for url, values in document.get("jobs", {}).items()}
 
 
 def save_detail_cache(path, jobs):
     """Persist reusable source fields via an atomic replacement."""
-    write_json_atomic(
-        path,
-        {
-            "version": DETAIL_CACHE_VERSION,
-            "jobs": {url: detail_cache_job_dict(job) for url, job in jobs.items()},
-        },
-    )
+    jobs = {url: detail_cache_job_dict(job) for url, job in jobs.items()}
+    write_versioned(path, DETAIL_CACHE_VERSION, jobs=jobs)
 
 
 def fetch_cached_details(

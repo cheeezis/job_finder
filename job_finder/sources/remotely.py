@@ -1,6 +1,5 @@
 """Remotely.de source adapter for recent remote and home-office jobs."""
 
-import json
 import re
 import time
 from datetime import date, datetime, timedelta
@@ -13,7 +12,7 @@ from job_finder.http import fetch_text, fetch_text_with_final_url
 from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource
 from job_finder.paths import REMOTELY_LINKEDIN_STATUS_FILE, cache_file
-from job_finder.persistence.storage import read_json, write_json_atomic
+from job_finder.persistence.storage import read_versioned, write_versioned
 from job_finder.sources.common import (
     ListingUnavailableError,
     as_utc,
@@ -182,18 +181,12 @@ def linkedin_job_key(url):
 
 def load_linkedin_status_cache(path):
     """Return cached checks or {} for unreadable or incompatible cache data."""
-    try:
-        document = read_json(path, {})
-    except (FileNotFoundError, OSError, json.JSONDecodeError):
-        return {}
-    if document.get("version") != 1:
-        return {}
-    return document.get("checks", {})
+    return read_versioned(path, 1).get("checks", {})
 
 
 def save_linkedin_status_cache(path, checks):
     """Atomically persist LinkedIn checks with the supported cache version."""
-    write_json_atomic(path, {"version": 1, "checks": checks})
+    write_versioned(path, 1, checks=checks)
 
 
 def fresh_linkedin_status(entry, now):

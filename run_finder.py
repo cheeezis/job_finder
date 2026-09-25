@@ -14,7 +14,6 @@ from job_finder.persistence.storage import publish_results
 from job_finder.sources import (
     arbeitnow,
     arbeitsagentur,
-    bytewerk,
     compose_it,
     edag,
     german_tech_jobs,
@@ -23,9 +22,7 @@ from job_finder.sources import (
     jobicy,
     jumo,
     manual,
-    nethinks,
     remotely,
-    rhoenenergie,
     startup_jobs,
     stepstone,
     studysmarter,
@@ -35,7 +32,7 @@ from job_finder.sources.common import (
     fetch_diagnostics,
     reset_fetch_diagnostics,
 )
-from job_finder.sources.company_careers import CSS, PROEMION
+from job_finder.sources.company_careers import BYTEWERK, CSS, NETHINKS, PROEMION, RHOENENERGIE
 from job_finder.workflow.availability import ignore_closed_listings
 from job_finder.workflow.main import build_score_results, evaluate_jobs, score_jobs
 from job_finder.workflow.memory import edit_memory, update_memory
@@ -55,13 +52,13 @@ SOURCES = [
     studysmarter,
     manual,
     compose_it,
-    bytewerk,
-    rhoenenergie,
+    BYTEWERK,
+    RHOENENERGIE,
     jumo,
     edag,
     CSS,
     PROEMION,
-    nethinks,
+    NETHINKS,
 ]
 
 

@@ -8,7 +8,7 @@ from job_finder.http import fetch_text
 from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource
 from job_finder.paths import cache_file
-from job_finder.persistence.storage import read_json, write_json_atomic
+from job_finder.persistence.storage import read_json, write_versioned
 from job_finder.sources.common import (
     as_utc,
     build_fetch_report,
@@ -144,14 +144,8 @@ def annual_salary_eur(value):
 
 def save_feed_cache(path, jobs, fetched_at):
     """Atomically store the last complete parsed feed for short outages."""
-    write_json_atomic(
-        path,
-        {
-            "version": CACHE_VERSION,
-            "fetched_at": fetched_at.isoformat(),
-            "jobs": [job.to_dict() for job in jobs],
-        },
-    )
+    jobs = [job.to_dict() for job in jobs]
+    write_versioned(path, CACHE_VERSION, fetched_at=fetched_at.isoformat(), jobs=jobs)
 
 
 def load_feed_cache(path, now=None):

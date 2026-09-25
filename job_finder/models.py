@@ -1,6 +1,6 @@
 """Shared domain models for jobs collected from different sources."""
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from datetime import date, datetime
 from enum import Enum
 
@@ -60,12 +60,7 @@ class JobSource:
 
     def to_dict(self):
         """Return JSON-compatible source data."""
-        return {
-            "source": self.source,
-            "url": self.url,
-            "source_id": self.source_id,
-            "application_url": self.application_url,
-        }
+        return asdict(self)
 
     @classmethod
     def from_dict(cls, values):
@@ -105,7 +100,8 @@ class Job:
 
     def __post_init__(self):
         """Reject invalid remote percentages and salary ranges."""
-        validate_percentage("remote_percentage", self.remote_percentage)
+        if self.remote_percentage is not None and not 0 <= self.remote_percentage <= 100:
+            raise ValueError("remote_percentage must be between 0 and 100")
 
         salary_values = [self.salary_min_eur, self.salary_max_eur]
         if any(value is not None and value < 0 for value in salary_values):
@@ -143,28 +139,10 @@ class Job:
         return format_remote(self.remote_percentage, self.work_mode)
 
     def to_dict(self):
-        """Return the complete job as JSON-compatible values."""
-        return {
-            "id": self.id,
-            "title": self.title,
-            "company": self.company,
-            "locations": list(self.locations),
-            "sources": [source.to_dict() for source in self.sources],
-            "description_raw": self.description_raw,
-            "description_clean": self.description_clean,
-            "work_mode": self.work_mode.value,
-            "remote_percentage": self.remote_percentage,
-            "employment_type": self.employment_type,
-            "career_levels": list(self.career_levels),
-            "salary_min_eur": self.salary_min_eur,
-            "salary_max_eur": self.salary_max_eur,
-            "published_at": format_temporal(self.published_at),
-            "first_seen_at": format_temporal(self.first_seen_at),
-            "last_seen_at": format_temporal(self.last_seen_at),
-            "fetched_at": format_temporal(self.fetched_at),
-            "workflow_status": self.workflow_status.value,
-            "cache_stale": self.cache_stale,
-        }
+        """Return the job as JSON-compatible values; is_new only describes the current run."""
+        values = {item.name: getattr(self, item.name) for item in fields(self)}
+        del values["is_new"]
+        return {name: json_value(value) for name, value in values.items()}
 
     @classmethod
     def from_dict(cls, values):
@@ -192,12 +170,6 @@ class Job:
         )
 
 
-def validate_percentage(name, value):
-    """Validate an optional integer percentage on the fixed 0-100 scale."""
-    if value is not None and not 0 <= value <= 100:
-        raise ValueError(f"{name} must be between 0 and 100")
-
-
 def format_remote(remote_percentage, work_mode):
     """Return remote information as display text for scoring and notifications."""
     if remote_percentage is not None:
@@ -205,9 +177,15 @@ def format_remote(remote_percentage, work_mode):
     return "homeoffice" if work_mode == WorkMode.HYBRID else "0%"
 
 
-def format_temporal(value):
-    """Format an optional date or datetime for JSON storage."""
-    return value.isoformat() if value is not None else None
+def json_value(value):
+    """Convert one Job field to JSON: enums by value, dates as ISO text, lists copied."""
+    if isinstance(value, Enum):
+        return value.value
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, list):
+        return [item.to_dict() if isinstance(item, JobSource) else item for item in value]
+    return value
 
 
 def parse_date(value):

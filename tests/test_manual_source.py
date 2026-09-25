@@ -1,13 +1,29 @@
 """Tests for user-supplied job links."""
 
+import io
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
 from job_finder.models import WorkMode
 from job_finder.sources import manual
-from job_finder.sources.common import load_detail_cache
+from job_finder.sources.common import (
+    fetch_diagnostics,
+    load_detail_cache,
+    reset_fetch_diagnostics,
+    save_detail_cache,
+)
+
+
+def career_page(title):
+    return f"""<meta property="og:site_name" content="Example GmbH">
+        <main><h1>{title}</h1><p>Standort: Fulda</p>
+        <p>Wir suchen Verstärkung für die Entwicklung, das Testen und die Wartung
+        unserer Anwendungen im agilen Produktteam mit Python und Datenbanken.
+        Erste Erfahrungen mit Tests und Versionsverwaltung sind willkommen.</p></main>"""
 
 
 class ManualSourceTests(unittest.TestCase):
@@ -135,6 +151,46 @@ class ManualSourceTests(unittest.TestCase):
         )
         self.assertEqual(list(cache), ["https://example.com/jobs/python"])
         self.assertEqual(job.primary_source.source, "manual")
+
+    def test_fetch_jobs_refreshes_stale_pages_and_keeps_manual_input(self):
+        now = datetime(2026, 9, 24, 12, tzinfo=timezone.utc)
+        ages = {"fresh": 1, "stale-ok": 10, "stale-error": 10, "too-old": 20}
+        cache = {}
+        for name, days in ages.items():
+            url = f"https://example.com/{name}"
+            cache[url] = manual.job_from_page(url, career_page(name))
+            cache[url].fetched_at = now - timedelta(days=days)
+
+        def fetch(url, url_validator):
+            if url.endswith("/stale-ok"):
+                return "https://example.com/moved", career_page("moved")
+            raise OSError("offline")
+
+        with tempfile.TemporaryDirectory() as directory:
+            cache_path = Path(directory) / "manual.json"
+            save_detail_cache(cache_path, cache)
+            reset_fetch_diagnostics()
+            output = io.StringIO()
+            with (
+                patch.object(manual, "fetch_text_with_final_url", side_effect=fetch) as fetched,
+                redirect_stdout(output),
+            ):
+                jobs = manual.fetch_jobs(cache_path, now=now)
+            saved = load_detail_cache(cache_path)
+
+        self.assertEqual(
+            [(job.title, job.cache_stale) for job in jobs],
+            [("fresh", False), ("moved", False), ("stale-error", True)],
+        )
+        self.assertEqual(
+            [call.args[0].rsplit("/", 1)[1] for call in fetched.call_args_list],
+            ["stale-ok", "stale-error", "too-old"],
+        )
+        self.assertEqual(
+            [url.rsplit("/", 1)[1] for url in saved], ["fresh", "moved", "stale-error", "too-old"]
+        )
+        self.assertEqual(fetch_diagnostics()["failed_segments"], 2)
+        self.assertIn("WARNUNG Manuell: 2 Detailseite(n) nicht erreichbar", output.getvalue())
 
     def test_local_network_url_is_rejected(self):
         for url in ("http://localhost/job", "http://127.0.0.1/job", "file:///C:/secret.txt"):

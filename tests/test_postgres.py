@@ -2,6 +2,7 @@
 
 import base64
 import io
+import json
 import os
 import tempfile
 import threading
@@ -11,12 +12,15 @@ from copy import deepcopy
 from pathlib import Path
 from unittest.mock import patch
 
+from job_finder import db
 from job_finder.matching.scoring import LOCAL_PLACES
 from job_finder.models import Job, JobSource
 from job_finder.persistence.application_documents import store_documents
 from job_finder.persistence.database import transaction
 from job_finder.persistence.postgres_backup import create_postgres_backup, restore_backup
 from job_finder.persistence.postgres_store import prune_cache, read_dataset, write_dataset
+from job_finder.sources import manual
+from job_finder.workflow.manual_import import import_manual_url
 from job_finder.workflow.memory import edit_job, edit_memory, load_memory, save_memory
 from job_finder.workflow.review_actions import update_review_decision
 from job_finder.workflow.review_data import load_review_jobs
@@ -32,6 +36,72 @@ class PostgresTests(unittest.TestCase):
         with transaction() as connection:
             self.assertTrue(connection.info.dbname.endswith("_test"))
             connection.execute("TRUNCATE job_state,datasets,migration_runs CASCADE")
+
+    def test_default_manual_import_writes_source_state_and_review_to_the_database(self):
+        page = """<meta property="og:site_name" content="Example GmbH">
+            <main><h1>Junior Python Developer</h1><p>Standort: Fulda</p>
+            <p>Wir suchen einen Junior Python Developer für die Entwicklung, das Testen und
+            die Wartung unserer Anwendungen im agilen Produktteam. Erste Kenntnisse in
+            Python und Datenbanken sind willkommen.</p></main>"""
+        with (
+            patch.object(
+                manual.socket,
+                "getaddrinfo",
+                return_value=[(None, None, None, None, ("93.184.216.34", 443))],
+            ),
+            patch.object(
+                manual,
+                "fetch_text_with_final_url",
+                return_value=("https://example.com/jobs/python", page),
+            ),
+        ):
+            result = import_manual_url("https://example.com/jobs/python")
+
+        job_id = result["job_id"]
+        cache = read_dataset("internal/manual_jobs_cache.json")
+        self.assertEqual(result["title"], "Junior Python Developer")
+        self.assertEqual(list(cache["jobs"]), ["https://example.com/jobs/python"])
+        self.assertEqual([job["id"] for job in read_dataset("internal/jobs.json")], [job_id])
+        self.assertEqual(
+            [card["id"] for card in read_dataset("output/recommendations.json")["recommendations"]],
+            [job_id],
+        )
+        self.assertIn(job_id, load_memory())
+
+    def test_db_commands_dispatch_and_print_json(self):
+        def run(*argv):
+            output = io.StringIO()
+            with patch("sys.argv", ["db.py", *argv]), redirect_stdout(output):
+                db.main()
+            return json.loads(output.getvalue())
+
+        with patch.object(db, "initialize") as initialize:
+            self.assertEqual(run("init"), {"initialized": True})
+        initialize.assert_called_once_with()
+        with patch.object(db, "prune_cache", return_value=3) as prune:
+            self.assertEqual(run("prune-cache", "--days", "5"), {"removed_cache_entries": 3})
+        prune.assert_called_once_with(5)
+        with patch.object(db, "create_postgres_backup", return_value=Path("b.zip")) as backup:
+            self.assertEqual(run("backup", "--documents-dir", "docs"), {"backup": "b.zip"})
+        backup.assert_called_once_with(documents_dir="docs")
+        with patch.object(db, "restore_backup", return_value={"verified": True}) as restore:
+            self.assertEqual(run("restore", "a.zip", "--documents-dir", "docs"), {"verified": True})
+        restore.assert_called_once_with("a.zip", "docs")
+        counts = run("check")
+        self.assertEqual(
+            list(counts),
+            [
+                "job_state",
+                "workflow_history",
+                "application_documents",
+                "jobs",
+                "recommendations",
+                "notifications",
+                "manual_sources",
+                "source_cache",
+            ],
+        )
+        self.assertTrue(all(isinstance(count, int) for count in counts.values()))
 
     def test_typed_state_history_and_unknown_fields_round_trip(self):
         value = {

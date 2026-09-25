@@ -21,12 +21,13 @@ def load_review_jobs(recommendations_path=RECOMMENDATIONS_JSON, memory_path=MEMO
         document = read_json(path, {})
         memory = load_memory(memory_path)
     recommendations = document.get("recommendations", [])
+    find_memory_ids = memory_id_finder(memory)
     review_jobs = []
     represented_memory_ids = set()
     for recommendation in recommendations:
         job = dict(recommendation)
         job["international"] = bool(job.get("international")) or is_international_listing(job)
-        candidates = memory_ids_for_job(job, memory)
+        candidates = find_memory_ids(job)
         represented_memory_ids.update(candidates)
         memory_id = preferred_memory_id(candidates, memory, job["id"]) if candidates else job["id"]
         entry = memory.get(memory_id, {})
@@ -86,9 +87,44 @@ def remembered_review_job(job_id, entry):
     return job
 
 
+def memory_id_finder(memory):
+    """Look up the memory rows of each recommendation through one per-request URL index.
+
+    The rows keep the memory's insertion order. If an entry's source_urls cannot
+    be indexed, every lookup falls back to scanning, so such data fails exactly
+    where it failed before instead of already while indexing.
+    """
+    index = {}
+    try:
+        for memory_id, entry in memory.items():
+            for url in entry.get("source_urls", []):
+                index.setdefault(url, []).append(memory_id)
+    except Exception:
+        return lambda job: memory_ids_for_job(job, memory)
+    positions = {memory_id: position for position, memory_id in enumerate(memory)}
+
+    def find(job):
+        found = {memory_id for url in job_urls(job) for memory_id in index.get(url, [])}
+        if job["id"] in memory:
+            found.add(job["id"])
+        return sorted(found, key=positions.__getitem__)
+
+    return find
+
+
 def memory_ids_for_job(job, memory):
     """Return every memory row represented by one merged recommendation."""
     job_id = job["id"]
+    urls = job_urls(job)
+    return [
+        memory_id
+        for memory_id, entry in memory.items()
+        if memory_id == job_id or urls.intersection(entry.get("source_urls", []))
+    ]
+
+
+def job_urls(job):
+    """Return the listing URLs a recommendation can be matched by."""
     urls = {
         link.get("url")
         for link in job.get("source_links", [])
@@ -96,8 +132,4 @@ def memory_ids_for_job(job, memory):
     }
     if job.get("url"):
         urls.add(job["url"])
-    return [
-        memory_id
-        for memory_id, entry in memory.items()
-        if memory_id == job_id or urls.intersection(entry.get("source_urls", []))
-    ]
+    return urls

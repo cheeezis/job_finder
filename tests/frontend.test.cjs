@@ -253,3 +253,76 @@ test("complete application loading renders history and keeps event identity on e
     assert.equal(payload.previous_occurred_on, "2026-09-01");
   }
 });
+
+// Payloads come from the page's VM realm; compare them as plain JSON values.
+const plain = value => JSON.parse(JSON.stringify(value));
+
+function applicationsPage(posts) {
+  const view = page("applications", {async postJson(route, payload) { posts.push([route, payload]); }},
+    async () => ({ok: true, json: async () => ({applications: [], completed_applications: [], statistics: {total: 0}, application_statuses: ["applied", "interview"], workflow_statuses: ["new", "applied", "interview"]})}));
+  view.context.load = async () => {};
+  return view;
+}
+
+test("new application events default to a required local today and send named fields", async () => {
+  const posts = [];
+  const view = applicationsPage(posts);
+  await new Promise(setImmediate);
+  const form = view.context.eventForm("job:1");
+  const [statusLabel, dateLabel, appointmentLabel] = form.children;
+  const [select] = statusLabel.children;
+  const [date] = dateLabel.children;
+  const now = new Date();
+  const today = [now.getFullYear(), now.getMonth() + 1, now.getDate()]
+    .map((part, index) => String(part).padStart(index ? 2 : 4, "0")).join("-");
+  assert.equal(select.name, "workflow_status");
+  assert.equal(date.name, "occurred_on");
+  assert.equal(date.type, "date");
+  assert.equal(date.required, true);
+  assert.equal(date.value, today);
+  assert.equal(appointmentLabel.hidden, true);
+  await form.emit("submit");
+  assert.deepEqual(plain(posts), [["/api/status", {job_id: "job:1", workflow_status: "applied", occurred_on: today, scheduled_for: null}]]);
+});
+
+test("editing an event with an unknown date keeps it unknown and sends the previous values", async () => {
+  const posts = [];
+  const view = applicationsPage(posts);
+  await new Promise(setImmediate);
+  const event = {status: "interview", occurred_on: null, event_index: 2, scheduled_for: "2026-10-01T10:00"};
+  const form = view.context.historyEventForm("job:1", event).children[0];
+  const [statusLabel, dateLabel, appointmentLabel] = form.children;
+  assert.equal(statusLabel.children[0].name, undefined);
+  assert.equal(dateLabel.children[0].required, undefined);
+  assert.equal(dateLabel.children[0].value, "");
+  assert.equal(appointmentLabel.hidden, false);
+  assert.equal(appointmentLabel.children[0].value, "2026-10-01T10:00");
+  await form.emit("submit");
+  assert.deepEqual(plain(posts), [["/api/history", {
+    job_id: "job:1", event_index: 2, previous_status: "interview", previous_occurred_on: null,
+    previous_scheduled_for: "2026-10-01T10:00", workflow_status: "interview", occurred_on: null,
+    scheduled_for: "2026-10-01T10:00"
+  }]]);
+});
+
+test("appointments are offered and sent only for interviews", async () => {
+  const posts = [];
+  const view = applicationsPage(posts);
+  await new Promise(setImmediate);
+  const forms = [view.context.eventForm("job:1"),
+    view.context.historyEventForm("job:1", {status: "applied", occurred_on: "2026-09-01", event_index: 0}).children[0]];
+  for (const form of forms) {
+    const [statusLabel, , appointmentLabel] = form.children;
+    const [select] = statusLabel.children;
+    appointmentLabel.children[0].value = "2026-10-02T09:30";
+    select.value = "interview";
+    await select.emit("change");
+    assert.equal(appointmentLabel.hidden, false);
+    await form.emit("submit");
+    select.value = "applied";
+    await select.emit("change");
+    assert.equal(appointmentLabel.hidden, true);
+    await form.emit("submit");
+  }
+  assert.deepEqual(posts.map(([, payload]) => payload.scheduled_for), ["2026-10-02T09:30", null, "2026-10-02T09:30", null]);
+});

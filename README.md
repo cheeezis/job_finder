@@ -90,6 +90,17 @@ lokale Datei wird die anonymisierte Beispielkonfiguration verwendet.
 Die Einstellungen werden beim Start geladen. Nach Änderungen die laufende
 Review-Anwendung neu starten; ein Neuladen der Browserseite genügt nicht.
 
+Ins Docker-Image kommt die Datei nicht. Worker und Review in Azure lesen ihren
+Inhalt aus dem Key-Vault-Secret `JobfinderUserSettings` (Umgebungsvariable
+`JOBFINDER_USER_SETTINGS`), der lokale Hybrid-Lauf reicht die Datei selbst
+weiter. Jeder Finder-Lauf nennt zu Beginn, woher seine Einstellungen stammen.
+Nach Änderungen das Secret neu setzen; Azure übernimmt es beim nächsten Start
+von Worker und Review:
+
+```powershell
+az keyvault secret set --vault-name kv-jobfinder-e64bfdce --name JobfinderUserSettings --file user_settings.local.yaml --output none
+```
+
 Der Finder bewertet und sortiert Stellen eigenständig, auch ohne KI-Stufe.
 Der Vorfilter verwendet wieder die bewährte Punkteverteilung: bis zu 30 für
 die Rolle, 25 für Technologien, 25 für Einstiegseignung, 15 für den Standort

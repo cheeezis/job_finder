@@ -7,6 +7,7 @@ from collections import Counter
 
 from job_finder.console import configure_utf8_output, log_event, print_phase, print_progress
 from job_finder.matching.deduplication import deduplicate_jobs
+from job_finder.matching.user_settings import SETTINGS_SOURCE
 from job_finder.operations import RunLog, create_backup, timed_step
 from job_finder.paths import JOBS_FILE, MEMORY_FILE
 from job_finder.persistence.database import worker_lock
@@ -141,6 +142,7 @@ def run_pipeline(exclude_sources=frozenset(), run_id=None):
         with timed_step("Backup"):
             create_backup()
 
+    print(f"  Einstellungen: {SETTINGS_SOURCE}")
     print_phase(1, 4, "Quellen")
     with timed_step("Quellen und Deduplizierung"):
         selected_sources = [

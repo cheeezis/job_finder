@@ -124,6 +124,13 @@ resource "azurerm_container_app_job" "finder" {
     key_vault_secret_id = "${azurerm_key_vault.jobfinder.vault_uri}secrets/JobfinderDatabaseUrl"
     identity            = azurerm_user_assigned_identity.jobfinder.id
   }
+  # Persönliche Sucheinstellungen (Inhalt von user_settings.local.yaml); sie
+  # gehören weder ins öffentliche Repo noch ins Image.
+  secret {
+    name                = "jobfinder-user-settings"
+    key_vault_secret_id = "${azurerm_key_vault.jobfinder.vault_uri}secrets/JobfinderUserSettings"
+    identity            = azurerm_user_assigned_identity.jobfinder.id
+  }
 
   # Hybrid-Aufteilung: StepStone und Remotely liefern aus Azure heraus keine
   # Treffer (Bot-Abwehr blockiert bekannte Cloud-IP-Bereiche); diese beiden
@@ -178,6 +185,10 @@ resource "azurerm_container_app_job" "finder" {
       env {
         name        = "JOBFINDER_DATABASE_URL"
         secret_name = "jobfinder-database-url"
+      }
+      env {
+        name        = "JOBFINDER_USER_SETTINGS"
+        secret_name = "jobfinder-user-settings"
       }
 
       env {

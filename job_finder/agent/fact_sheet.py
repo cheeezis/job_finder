@@ -6,6 +6,7 @@ symbols: gruen 🟢, gelb 🟡, orange 🟠, rot 🔴, unbekannt ⚪, hinweis �
 """
 
 import json
+import re
 
 FIXED_LINES = (
     ("status", "Status"),
@@ -18,6 +19,12 @@ FIXED_LINES = (
 )
 LIGHTS = ("gruen", "gelb", "orange", "rot", "unbekannt", "hinweis")
 VERDICTS = ("bewerben", "erst_klaeren", "eher_streichen", "streichen")
+# Clutter the review would show as text: citations the web search appends,
+# as in "([example.com](https://example.com/x))", other Markdown links and a
+# leading light word, as in "gruen – offen".
+CITATION = re.compile(r"\s*\(\[[^\]]*\]\([^)]*\)\)")
+MARKDOWN_LINK = re.compile(r"\[([^\]]*)\]\([^)]*\)")
+LEADING_LIGHT = re.compile(rf"^\s*(?:{'|'.join(LIGHTS)})\s*[–-]\s*", re.IGNORECASE)
 MAX_EXTRA_LINES = 2
 
 
@@ -76,6 +83,7 @@ def parse_fact_sheet(text):
         raise ValueError("Fazit hat keine gültige Stufe")
     if not non_empty_text(verdict.get("text")) or not non_empty_text(sheet["kurzgrund"]):
         raise ValueError("Fazit oder Kurzgrund ist leer")
+    verdict["text"], sheet["kurzgrund"] = tidy(verdict["text"]), tidy(sheet["kurzgrund"])
     if not isinstance(sheet["quellen"], list) or not all(
         isinstance(source, str) for source in sheet["quellen"]
     ):
@@ -88,6 +96,15 @@ def check_line(line, label):
         raise ValueError(f"{label}: keine gültige Ampel")
     if not non_empty_text(line.get("text")):
         raise ValueError(f"{label}: Text fehlt")
+    line["text"] = tidy(line["text"])
+    if not line["text"]:
+        raise ValueError(f"{label}: Text fehlt")
+
+
+def tidy(text):
+    """Keep the words, drop link markup and a leading light word; the sources list the links."""
+    text = MARKDOWN_LINK.sub(r"\1", CITATION.sub("", text))
+    return LEADING_LIGHT.sub("", text).strip()
 
 
 def non_empty_text(value):

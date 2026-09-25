@@ -98,7 +98,7 @@ def parse_args():
     )
     selection.add_argument(
         "--only-sources",
-        default="",
+        default=None,
         help=(
             "Comma-separated SOURCE_NAME values to run exclusively; every other "
             "source keeps its previous jobs like an excluded one"
@@ -113,14 +113,21 @@ def parse_source_names(value):
 
 
 def excluded_source_names(args):
-    """Return the sources to skip; --only-sources skips every source it does not name."""
-    if not args.only_sources:
-        return parse_source_names(args.exclude_sources)
-    only = parse_source_names(args.only_sources)
+    """Return the sources to skip; --only-sources skips every source it does not name.
+
+    A selection that leaves no source is refused instead of running nothing.
+    """
     known = {source.SOURCE_NAME for source in SOURCES}
-    if unknown := only - known:
-        raise SystemExit(f"Unbekannte Quellen: {', '.join(sorted(unknown))}")
-    return known - only
+    if args.only_sources is None:
+        excluded = parse_source_names(args.exclude_sources)
+    else:
+        only = parse_source_names(args.only_sources)
+        if unknown := only - known:
+            raise SystemExit(f"Unbekannte Quellen: {', '.join(sorted(unknown))}")
+        excluded = known - only
+    if known <= excluded:
+        raise SystemExit("Keine Quelle ausgewählt; der Lauf würde nichts abrufen.")
+    return excluded
 
 
 def main():
@@ -158,7 +165,9 @@ def run_pipeline(exclude_sources=frozenset(), run_id=None):
 
     candidate_ids = {job["id"] for job in results["included"]}
     with timed_step("Detailanreicherung"):
-        enrichment_reports = enrich_candidate_jobs(jobs, candidate_ids, run_id=run_id)
+        enrichment_reports = enrich_candidate_jobs(
+            jobs, candidate_ids, sources=selected_sources, run_id=run_id
+        )
 
     # Validate final details before committing any workflow state. The score
     # stays attached to the job as memory resolves its ID and timestamps.
@@ -282,7 +291,7 @@ def collect_jobs(sources=None, run_id=None):
     seen_urls = set()
     source_reports = []
 
-    for source in sources or SOURCES:
+    for source in SOURCES if sources is None else sources:
         label = source_label(source.SOURCE_NAME)
         print_progress(label, 0, 1, "wird geladen")
         reset_fetch_diagnostics()
@@ -342,7 +351,7 @@ def enrich_candidate_jobs(jobs, candidate_ids, sources=None, run_id=None):
     pipeline.
     """
     reports = []
-    for source in sources or SOURCES:
+    for source in SOURCES if sources is None else sources:
         enricher = getattr(source, "enrich_candidate_jobs", None)
         if enricher is not None:
             name = getattr(source, "SOURCE_NAME", "Details")

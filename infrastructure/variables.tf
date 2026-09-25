@@ -35,7 +35,7 @@ variable "local_docker_sp_object_id" {
 }
 
 variable "alert_email" {
-  description = "Empfängeradresse für Azure-Monitor-Alerts (fehlgeschlagene Finder-Läufe)."
+  description = "Empfängeradresse für Azure-Monitor-Alerts (fehlgeschlagene Finder-Läufe, Kostenwarnungen)."
   type        = string
   default     = "jannis.hauke@t-online.de"
 }

@@ -75,7 +75,7 @@ jobs:
         working-directory: infrastructure
     steps:
       - uses: actions/checkout@v7
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "1.16.2"
       # Eigene Identität, die nur lesen darf. Ohne Sperre (-lock=false), weil
@@ -83,7 +83,7 @@ jobs:
       # Nachladen aus Azure (-refresh=false): azurerm liest die Container Apps
       # per listSecrets, und das liefert die echten Geheimniswerte. Der Plan
       # vergleicht Code mit dem State; das Apply lädt weiterhin vollständig nach.
-      - uses: azure/login@v2
+      - uses: azure/login@v3
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID_PLAN }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
@@ -116,7 +116,7 @@ jobs:
       - id: tag
         run: echo "tag=sha-${GITHUB_SHA:0:12}" >> "$GITHUB_OUTPUT"
       # Eigene Identität, die nur Images hochladen darf - nicht die des Applys.
-      - uses: azure/login@v2
+      - uses: azure/login@v3
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID_BUILD }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
@@ -159,10 +159,10 @@ jobs:
             echo "::error::Veralteter Stand ${GITHUB_SHA::12}, main steht auf ${latest::12}. Deploy abgebrochen."
             exit 1
           fi
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "1.16.2"
-      - uses: azure/login@v2
+      - uses: azure/login@v3
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}

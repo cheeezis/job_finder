@@ -54,17 +54,18 @@ beschreibt Titel und Beschreibung.
 | `job_finder/workflow/memory.py` | PostgreSQL-Zustand, stabile IDs und frühere Entscheidungen |
 | `job_finder/workflow/availability.py` | Fehlende interessante Stellen auf bestätigte Schließung prüfen |
 | `job_finder/review.py`, `job_finder/workflow/review_data.py`, `review_actions.py` | HTTP-Server, Review-Datenaufbereitung und transaktionale Aktionen |
-| `job_finder/workflow/applications.py`; `job_finder/persistence/application_documents.py`, `state_compat.py` | Bewerbungsverlauf, lokale Unterlagen und unterstützte Speicherformate |
+| `job_finder/workflow/applications.py`; `job_finder/persistence/application_documents.py`, `document_store.py`, `state_compat.py` | Bewerbungsverlauf, Unterlagen (lokal oder im Blob Storage) und unterstützte Speicherformate |
 | `job_finder/app.js`, `landing.js`, `review.js`, `applications.js` und zugehörige HTML-Dateien | Gemeinsame Browser-Helfer, Seitenskripte und Arbeitsansichten |
 | `job_finder/workflow/reporting.py`, `notifications.py` | Review-Ausgabe und Discord-Warteschlange |
 | `job_finder/matching/user_settings.py`, `config.py`; `job_finder/paths.py` | Konfiguration, Suche und lokale Dateipfade |
 
 ### Datenfluss eines Finder-Laufs
 
-1. Die vorhandenen Zustandsdateien werden gesichert. Danach liefern Quellen
-   Treffer und Abdeckungsberichte; URLs und quellenübergreifende Duplikate
-   werden zusammengeführt. Sind mehr als die Hälfte der Quellen unbrauchbar,
-   stoppt der Lauf vor dem Ersetzen von Job-Snapshot und Review-Ausgabe.
+1. Lokal wird zuerst der Datenbestand gesichert; in Containern entfällt
+   dieses Backup. Danach liefern Quellen Treffer und Abdeckungsangaben; URLs
+   und quellenübergreifende Duplikate werden zusammengeführt. Sind mehr als
+   die Hälfte der Quellen unbrauchbar, stoppt der Lauf vor dem Ersetzen von
+   Job-Snapshot und Review-Ausgabe.
 2. Ein erster Vorfilter bestimmt die Kandidaten für optionale Detailabrufe.
    Quellen dürfen deren Job-Objekte ersetzen oder bestätigte geschlossene
    Anzeigen aus der Liste entfernen.
@@ -73,7 +74,7 @@ beschreibt Titel und Beschreibung.
    IDs, Erstfund-Merkmale und bestehende Workflow-Entscheidungen zuordnet.
 4. Die Offline-Prüfung betrachtet fehlende interessante Stellen ohne
    Bewerbungsverlauf und nur bei vollständig erfolgreichen bekannten Quellen.
-   Netzwerkabrufe erfolgen außerhalb der SQLite-Schreibtransaktionen;
+   Netzwerkabrufe erfolgen außerhalb der PostgreSQL-Schreibtransaktionen;
    vor einer Statusänderung wird der aktuelle Nutzerentscheid erneut geprüft.
 5. Job-Snapshot und Empfehlungen werden geschrieben. Die Discord-Warteschlange
    wird aktualisiert und bei jedem Lauf direkt versendet.
@@ -87,16 +88,20 @@ Diese Merkmale dürfen bei Änderungen nicht gleichgesetzt werden.
 
 `manual_import.import_manual_url` verarbeitet genau die eingereichte URL und
 behält die übrigen Empfehlungen. Ein Vorfilterkonflikt bleibt als Warnung
-sichtbar; er verhindert die manuelle Sichtung nicht. Die Funktion schreibt
-Cache, PostgreSQL-Zustand, Job-Snapshot und Empfehlungen nacheinander. Diese
-Speicheroperationen bilden keine gemeinsame Transaktion über alle Dateien.
+sichtbar; er verhindert die manuelle Sichtung nicht. Im Standardbetrieb lädt
+sie die Seite vor jeder Sperre und schreibt danach manuelle Quelle, Gedächtnis,
+Job-Snapshot und Empfehlungen in einer gemeinsamen PostgreSQL-Transaktion.
+Mit ausdrücklich anderen Dateipfaden, etwa in Tests, laufen diese
+Schreibvorgänge nacheinander ohne gemeinsame Transaktion.
 
 ## Eine Quelle ergänzen
 
 Eine Quelle liegt unter `job_finder/sources/<name>.py` und liefert Instanzen
 des gemeinsamen Modells statt eigener Job-Dictionaries. Zunächst eine vorhandene
-ähnliche Quelle prüfen; direkte JSON-LD-Karriereseiten können viele Aufgaben
-an `sources/company_careers.py` delegieren.
+ähnliche Quelle prüfen. Eine Karriereseite, deren Detailseiten JSON-LD liefern
+und einem gemeinsamen URL-Muster folgen, braucht kein eigenes Modul: Dafür
+genügt ein `CareerPage`-Eintrag in `sources/company_careers.py`, bei
+nummerierten Seiten `PaginatedCareerPage`.
 
 Der vom Runner erwartete Vertrag:
 
@@ -142,9 +147,10 @@ Beim Ergänzen einer Quelle:
 2. Gemeinsame HTTP-, Text-, JSON-LD- und Remote-Helfer verwenden, soweit sie
    zur Seite passen. Bei manuell eingegebenen URLs auch Weiterleitungen durch
    `validate_public_url` prüfen lassen.
-3. Das Modul in `run_finder.py` importieren und in `SOURCES` registrieren.
-   Optionale Zugangsdaten nur über Umgebungsvariablen beziehen; bei Bedarf
-   die Quelle nur bei vorhandener Konfiguration aktivieren.
+3. Das Modul beziehungsweise den `CareerPage`-Eintrag in `run_finder.py`
+   importieren und in `SOURCES` registrieren. Optionale Zugangsdaten nur über
+   Umgebungsvariablen beziehen; bei Bedarf die Quelle nur bei vorhandener
+   Konfiguration aktivieren.
 4. Parser und Quellenausfälle mit kleinen Fixtures testen: reguläre Anzeige,
    fehlende optionale Felder, Teilfehler und Cache-/Schließungsfälle. Keine
    kompletten fremden Webseiten mit Trackingdaten als Fixtures übernehmen.
@@ -157,21 +163,28 @@ Speicherung bleiben in den gemeinsamen Modulen.
 ## Zustandsänderungen und Konfiguration
 
 `paths.py` legt alle Pfade relativ zum Projekt fest. Es gibt keinen allgemeinen
-`DATA_DIR`-Umgebungsvariablen-Schalter. Tests reichen abweichende Pfade über
+`DATA_DIR`-Umgebungsvariablen-Schalter; nur der Dokumentordner lässt sich über
+`JOBFINDER_DOCUMENTS_DIR` verlegen. Tests reichen abweichende Pfade über
 Funktionsparameter oder gezielte Patches ein.
 
-- `data/internal/job_finder.sqlite3` ist der dauerhafte Stellen- und
-  Bewerbungszustand. Für Änderungen `edit_memory` verwenden, damit Lesen,
-  Ändern und Speichern gemeinsam gesperrt sind. `update_memory` verändert die
-  übergebenen Objekte, schreibt allein aber nicht in die Datenbank.
-- `jobs.json` und `recommendations.json` sind neu erzeugbare Ausgaben;
-  `*_cache.json` enthält wiederverwendbare Quelldetails.
+- Der dauerhafte Stellen- und Bewerbungszustand liegt in PostgreSQL.
+  `MEMORY_FILE` (`data/internal/job_finder.sqlite3`) ist nur noch der Schlüssel
+  dieses Bestands; andere Pfade sind allein in isolierten Tests erlaubt. Für
+  Änderungen `edit_memory` verwenden, damit Lesen, Ändern und Speichern
+  gemeinsam gesperrt sind. `update_memory` verändert die übergebenen Objekte,
+  schreibt allein aber nicht in die Datenbank.
+- JSON-Pfade direkt unter `data/internal` und `data/output` benennen
+  PostgreSQL-Datensätze (`storage.dataset_name`), keine Dateien; nur andere
+  Pfade werden als JSON-Datei gelesen oder geschrieben. `jobs.json` und
+  `recommendations.json` sind neu erzeugbare Ausgaben; `*_cache.json` enthält
+  wiederverwendbare Quelldetails.
 - `notifications.json` enthält die Discord-Warteschlange und den Versandstatus.
-  Auch `process_notifications(send=False)` verändert diese Datei.
-- Bewerbungsunterlagen liegen separat unter `application_documents`.
-  Die rotierenden Zustandsbackups enthalten diese Dateien nicht. Für eine
-  vollständige Sicherung den gesamten Datenordner bei beendeter Anwendung
-  sichern, wie in der README beschrieben.
+  Auch `process_notifications(send=False)` verändert diesen Datensatz.
+- Bewerbungsunterlagen liegen je nach `JOBFINDER_DOCUMENTS_BACKEND` im
+  Dokumentordner (`local`, Standard) oder im Blob Storage (`blob`); ihre
+  Metadaten stehen in PostgreSQL. `python -m job_finder.db backup` und das
+  automatische Backup vor lokalen Finder-Läufen enthalten die referenzierten
+  Dokumente samt Prüfsummen.
 
 `user_settings.local.yaml` wird beim Import der Konfigurationsmodule gelesen.
 Ohne diese Datei wird die anonymisierte Beispielkonfiguration verwendet.
@@ -235,10 +248,10 @@ Fehlerantworten und Antwortheader bleiben zentral. Im Browser verwenden die
 Bewerbungsformulare denselben Speicherablauf, der ihre Aktionsbuttons auch nach
 einem Fehler wieder freigibt.
 
-Die ursprünglichen fachlichen Funktionen bleiben über `job_finder.review`
-importierbar. Ebenso behält `job_finder.scoring` seine bisherigen Analyse-Helfer;
-die spezialisierten Module übernehmen deren Implementierung. Standortregeln
-bekommen lokale Einstellungen explizit vom Scoring-Einstiegspunkt übergeben.
+Fachliche Funktionen werden aus ihrem zuständigen Modul importiert;
+Kompatibilitätspfade über `job_finder.review` oder das frühere
+`job_finder.scoring` gibt es nicht mehr. Standortregeln bekommen lokale
+Einstellungen explizit vom Scoring-Einstiegspunkt übergeben.
 
 ## Python-Stil und hilfreiche Dokumentation
 

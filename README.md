@@ -1,24 +1,25 @@
 # Job Finder
 
-Ein lokal betriebener Python-Job-Finder für IT-Einstiegsstellen. Er sammelt
-Anzeigen aus mehreren Quellen, vereinheitlicht und dedupliziert sie, verwirft
-klare Fehlgriffe regelbasiert und unterstützt die persönliche Sichtung bis zur
-Bewerbungsnachverfolgung. Der vollständige Stellenbestand sowie Bewerbungs-
-und Dokumentdaten verbleiben auf dem eigenen Rechner. Bei aktiviertem
-Discord-Versand werden ausschließlich die dafür vorgesehenen kompakten
-Stellenkarten und Laufstatistiken an Discord übertragen.
+Ein Python-Job-Finder für IT-Einstiegsstellen. Er sammelt Anzeigen aus
+mehreren Quellen, vereinheitlicht und dedupliziert sie, verwirft klare
+Fehlgriffe regelbasiert und unterstützt die persönliche Sichtung bis zur
+Bewerbungsnachverfolgung. Er läuft lokal oder in Azure (siehe
+[Betrieb](#betrieb)); Stellenbestand, Bewerbungs- und Dokumentdaten liegen
+entsprechend auf dem eigenen Rechner oder in der eigenen Azure-Subscription.
+Bei aktiviertem Discord-Versand werden ausschließlich die dafür vorgesehenen
+kompakten Stellenkarten und Laufstatistiken an Discord übertragen.
 
 ## Funktionen
 
 - öffentliche Jobportale, offene Feeds und ausgewählte direkte Karriereseiten
 - ein einheitliches Jobmodell und quellenübergreifende Deduplizierung
-- lokale Detail-Caches und ein Gedächtnis für bekannte und inaktive Stellen
+- Detail-Caches und ein Gedächtnis für bekannte und inaktive Stellen
 - regelbasierter Vorfilter für Standort, Remote-Anteil, Erfahrungsniveau,
   Beschäftigungsart, Reisetätigkeit und grobe IT-Eignung
 - sichtbare Junior-Hybrid-Sonderfälle und internationale Stellen, die sich im
   Review bei Bedarf zuschalten lassen
 - manueller Import einer einzelnen Stellenanzeige per URL
-- lokale Review-Oberfläche mit Interessant-, Rückfrage-, Ignorieren- und
+- Review-Oberfläche mit Interessant-, Rückfrage-, Ignorieren- und
   Bewerben-Workflow
 - Bewerbungsübersicht mit Verlauf, Gesprächsterminen, optional gespeicherter
   Gehaltsvorstellung (Eingabe pro Monat oder Jahr, gespeichert als Jahresbrutto) und Statistik; die Antwortquote
@@ -27,8 +28,8 @@ Stellenkarten und Laufstatistiken an Discord übertragen.
   eine strukturierte Laufstatistik, die Fundmenge, Vorfilter, tatsächlich
   versendete Karten und die im Standard-Review sichtbare Anzahl trennt und
   Kandidaten ohne ladbare Detailseite ausweist
-- isolierte Quellenfehler, Laufprotokolle und rotierende Backups wichtiger
-  lokaler Zustände
+- isolierte Quellenfehler, Laufprotokolle und bei lokalen Läufen rotierende
+  Backups des Datenbestands
 - dynamische Fortschrittsanzeigen je Quelle und Detailabruf; im Terminal wird
   eine kompakte Zeile mit Zähler, Prozent und Laufzeit aktualisiert; eine
   geschätzte Restzeit erscheint nur bei längeren laufenden Abrufen. Keine 1/1-Balken.
@@ -72,9 +73,9 @@ Unterstützt wird Python 3.11 oder neuer. Die Projektmetadaten stehen zusätzlic
 in `pyproject.toml`; eine bearbeitbare Installation ist mit
 `.\.venv\Scripts\python.exe -m pip install -e .` möglich.
 
-Vor dem ersten Start PostgreSQL einrichten beziehungsweise vorhandene Daten
-übernehmen: [PostgreSQL-Anleitung](docs/postgresql.md). Die Datenbank ist für
-Finder und Review erforderlich.
+Vor dem ersten Start PostgreSQL einrichten:
+[PostgreSQL-Anleitung](docs/postgresql.md). Die Datenbank ist für Finder und
+Review erforderlich.
 
 Persönliche Sucheinstellungen anlegen:
 
@@ -151,6 +152,26 @@ unabhängig vom Fundlauf. Nach einer Entscheidung verschwindet die Stelle aus
 diesem Filter. Internationale Anzeigen und
 Junior-Hybrid-Sonderfälle sind eigene, standardmäßig deaktivierte Filter.
 
+## Betrieb
+
+- **Lokal:** Finder und Review laufen wie oben beschrieben auf dem eigenen
+  Rechner, PostgreSQL kommt aus Docker Compose. Dokumente liegen unter
+  `data/internal/application_documents`; vor jedem Finder-Lauf entsteht ein
+  rotierendes Backup.
+- **Azure:** Der Finder läuft als Container-Apps-Job täglich um 06:00 und
+  16:00 UTC, ohne StepStone und Remotely. Die Review ist eine Container App
+  hinter einer Entra-ID-Anmeldung, die nur das eigene Konto zulässt. Daten
+  liegen in einem Azure-PostgreSQL-Server, Dokumente im Blob Storage;
+  Zugangsdaten kommen aus dem Key Vault. Statt der ZIP-Backups sichern
+  Point-in-Time-Restore und Blob-Versionierung.
+- **Hybrid:** StepStone und Remotely liefern aus Azure keine Treffer. Ein
+  lokaler Windows-Task startet sie einmal täglich in Docker, mit dem Image des
+  Azure-Workers und gegen dieselbe Azure-Datenbank
+  (`scripts/run_local_hybrid.py`).
+
+Einrichtung und Zugriffswege beschreiben [PostgreSQL betreiben](docs/postgresql.md)
+und [Netzwerkpfade](docs/networking.md).
+
 ## Ablauf
 
 1. Die Quellen liefern Suchtreffer und Detaildaten.
@@ -184,8 +205,9 @@ Bestehende Bewerbungen bleiben davon ausgenommen. Der automatische Wechsel wird
 mit Datum und Grund gespeichert.
 
 Der Stellen- und Bewerbungszustand, Empfehlungen, Versandstatus und Quellencaches
-liegen in PostgreSQL. Bewerbungsunterlagen bleiben separate Dateien unter
-`data/internal/application_documents`; ihre Zuordnung steht in der Datenbank.
+liegen in PostgreSQL. Bewerbungsunterlagen bleiben separate Dateien, lokal
+unter `data/internal/application_documents`, in Azure im Blob Storage; ihre
+Zuordnung steht in der Datenbank.
 
 Einrichtung, Backups und Wiederherstellung sind in
 [PostgreSQL betreiben](docs/postgresql.md) beschrieben. Die alten SQLite-
@@ -200,7 +222,7 @@ deren URL.
 Remotely übernimmt ausschließlich Anzeigen aus einem rollierenden
 Sieben-Tage-Fenster. Alte hervorgehobene Anzeigen und bereits vergebene Stellen
 werden verworfen; jeder Lauf liest die Listenansicht bis zur alten
-Trefferfront. Detailseiten werden sieben Tage lokal gecacht. Bei Kandidaten mit
+Trefferfront. Detailseiten werden sieben Tage gecacht. Bei Kandidaten mit
 LinkedIn als Originalquelle wird zusätzlich geprüft, ob dort noch Bewerbungen
 angenommen werden; geschlossene Anzeigen gelangen nicht ins Review.
 
@@ -279,12 +301,14 @@ Docstring-Konventionen. Entwicklungswerkzeuge installieren und prüfen:
 Der Workflow in `.github/workflows/checks.yml` führt Stilprüfungen, Python-
 und Frontend-Tests bei Pull Requests und Pushes auf `main` aus. Er startet
 keinen Finder-Lauf und verschickt keine Discord-Nachrichten. Bei Pull Requests
-zeigt er zusätzlich einen `terraform plan`; nach erfolgreichem Test-Durchlauf
-auf `main` baut er das Docker-Image, pusht es nach ACR, wendet die
-Infrastruktur per `terraform apply` an und rollt danach das neue Image auf
-Worker und Review-App aus. Dieser letzte Job wartet auf manuelle Freigabe im
-GitHub-Environment `production`; ein neuerer Deploy bricht einen älteren, noch
-wartenden automatisch ab. Terraform selbst verwaltet die Image-Version nicht,
+zeigt er zusätzlich einen `terraform plan`, der nur mit dem gespeicherten State
+vergleicht (`-refresh=false`); nach erfolgreichem Test-Durchlauf auf `main`
+baut er das Docker-Image, pusht es nach ACR, wendet die Infrastruktur per
+`terraform apply` an und rollt danach das neue Image auf Worker und Review-App
+aus. Dieser letzte Job wartet auf manuelle Freigabe im GitHub-Environment
+`production`; ein neuerer Deploy bricht einen älteren, noch wartenden
+automatisch ab. Nach der Freigabe rollt er nur aus, wenn sein Commit noch der
+aktuelle `main`-Stand ist. Terraform selbst verwaltet die Image-Version nicht,
 ein lokales `terraform apply` setzt die App also nie zurück (siehe
 [infrastructure/cicd.tf](infrastructure/cicd.tf) und
 [Netzwerkpfade](docs/networking.md)).

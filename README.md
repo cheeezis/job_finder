@@ -217,6 +217,24 @@ Werten weiter, mit denen er gestartet ist.
 Vor dem ersten Einsatz in Azure muss die Tabelle `agent_usage` dort einmal
 angelegt werden ([PostgreSQL betreiben](docs/postgresql.md#azure)).
 
+In Azure wirken drei weitere Schichten, auch wenn der Code einen Fehler hat:
+
+- **Drossel:** Die Modell-Bereitstellung `gpt-5-mini` verarbeitet höchstens
+  30.000 Tokens pro Minute (`infrastructure/openai.tf`). Das reicht für etwa
+  40 Steckbriefe am Tag und begrenzt einen Fehler auf grob 0,40 bis 3 € pro
+  Stunde.
+- **Token-Alarm:** Verarbeitet das Modell in 24 Stunden mehr als 2 Mio.
+  Tokens, kommt nach spätestens einer Stunde eine Mail an die Alarm-Adresse
+  (`infrastructure/monitoring.tf`).
+- **Budget:** 25 € pro Monat für `rg-jobfinder`, also auch für die Produktion,
+  mit Mails bei 50, 80 und 100 % und wenn die Hochrechnung darüber liegt.
+  Kostendaten kommen mit bis zu drei Tagen Verzögerung.
+
+Das Modell-Konto hat keine API-Schlüssel. Aufrufen dürfen es nur der Worker
+über seine Managed Identity und das eigene Konto über `az login`, beide mit der
+Rolle „Cognitive Services OpenAI User“, die weder Bereitstellungen noch die
+Drossel ändern kann.
+
 ## Ablauf
 
 1. Die Quellen liefern Suchtreffer und Detaildaten.

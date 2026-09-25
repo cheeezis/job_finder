@@ -126,6 +126,7 @@ CREATE TABLE IF NOT EXISTS agent_usage (
     reasoning_tokens integer NOT NULL,
     cost_eur numeric NOT NULL
 );
+ALTER TABLE agent_usage ADD COLUMN IF NOT EXISTS web_searches integer NOT NULL DEFAULT 0;
 """
 
 

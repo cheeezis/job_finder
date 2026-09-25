@@ -30,10 +30,12 @@ matching:
 # Sprachmodell auf. Fehlende Grenzen gelten mit den hier gezeigten Werten.
 agent:
   enabled: false
-  # Pro Stelle: Kosten in Euro, Modell- und Werkzeugaufrufe.
-  job_max_cost_eur: 0.05
+  # Pro Stelle: Kosten in Euro, Modell- und Werkzeugaufrufe sowie bezahlte
+  # Websuchen (0 schaltet die Suche ab).
+  job_max_cost_eur: 0.08
   job_max_model_calls: 8
   job_max_tool_calls: 6
+  job_max_web_searches: 3
   # Kosten pro Tag und pro Monat über alle Läufe zusammen: eine Sicherung
   # gegen Fehler, kein Filter.
   daily_max_cost_eur: 1.00

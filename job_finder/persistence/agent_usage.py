@@ -14,8 +14,8 @@ def record_model_call(job_id, model, usage, cost_eur):
             """
             INSERT INTO agent_usage (
                 job_id, model, input_tokens, cached_input_tokens,
-                output_tokens, reasoning_tokens, cost_eur
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                output_tokens, reasoning_tokens, web_searches, cost_eur
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 job_id,
@@ -24,6 +24,7 @@ def record_model_call(job_id, model, usage, cost_eur):
                 usage.cached_input_tokens,
                 usage.output_tokens,
                 usage.reasoning_tokens,
+                usage.web_searches,
                 cost_eur,
             ),
         )

@@ -4,6 +4,11 @@ Two kinds of stops: JobLimitReached ends only the current job, the agent
 continues with the next one. AgentStopped ends the agent for this run: it is
 off, the model has no price, the ledger cannot be read or written, or the
 daily or monthly money is used up. Every doubt counts as a stop.
+
+Paid web searches have their own budget per job. It does not stop the job:
+once it is used up, the agent keeps working without the search tool. One
+model response can send several searches, so the searches of that last
+response may exceed the budget; the money limits still apply.
 """
 
 from decimal import Decimal
@@ -37,6 +42,7 @@ class CostGuard:
         self.job_id = job_id
         self.model_calls = 0
         self.tool_calls = 0
+        self.web_searches = 0
         self.job_cost = Decimal(0)
 
     def check_run(self):
@@ -92,6 +98,11 @@ class CostGuard:
         except Exception as error:
             raise AgentStopped(f"Kostenbuch nicht beschreibbar ({type(error).__name__})") from error
         self.job_cost += cost
+        self.web_searches += usage.web_searches
+
+    def search_allowed(self):
+        """Whether the next model call may still offer the paid web search."""
+        return self.web_searches < self.limits.job_max_web_searches
 
     def before_tool_call(self):
         if self.tool_calls >= self.limits.job_max_tool_calls:

@@ -135,6 +135,36 @@ class RunFinderTests(unittest.TestCase):
         self.assertTrue(result["first_seen_at"])
         self.assertGreater(result["match_percent"], 0)
 
+    def test_pipeline_enriches_only_selected_sources(self):
+        job = make_job("kept:1")
+        called = []
+        sources = [
+            SimpleNamespace(
+                SOURCE_NAME=name,
+                enrich_candidate_jobs=lambda jobs, ids, name=name: called.append(name) or 0,
+            )
+            for name in ("kept", "excluded")
+        ]
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch("run_finder.JOBS_FILE", Path(directory) / "jobs.json"),
+            patch("run_finder.MEMORY_FILE", Path(directory) / "state.sqlite3"),
+            patch("run_finder.create_backup"),
+            patch("run_finder.SOURCES", sources),
+            patch(
+                "run_finder.collect_jobs",
+                return_value=([job], [{"name": "kept", "status": "success", "jobs": 1}]),
+            ),
+            patch("run_finder.write_recommendations"),
+            patch(
+                "run_finder.process_notifications",
+                return_value={"ready": 0, "sent": 0, "failed": 0, "configuration_error": None},
+            ),
+            redirect_stdout(io.StringIO()),
+        ):
+            run_pipeline(exclude_sources={"excluded"})
+        self.assertEqual(called, ["kept"])
+
     def test_invalid_enriched_data_does_not_commit_memory(self):
         job = make_job("source:1")
         with (
@@ -308,7 +338,7 @@ class RunFinderTests(unittest.TestCase):
         all_names = {source.SOURCE_NAME for source in SOURCES}
         cases = {
             "exclude": (
-                SimpleNamespace(exclude_sources="stepstone", only_sources=""),
+                SimpleNamespace(exclude_sources="stepstone", only_sources=None),
                 {"stepstone"},
             ),
             "only": (
@@ -319,6 +349,22 @@ class RunFinderTests(unittest.TestCase):
         for name, (args, expected) in cases.items():
             with self.subTest(name):
                 self.assertEqual(excluded_source_names(args), expected)
+
+    def test_selections_without_any_source_are_refused(self):
+        every_source = ",".join(source.SOURCE_NAME for source in SOURCES)
+        for exclude, only in (("", ""), ("", " , "), (every_source, None)):
+            args = SimpleNamespace(exclude_sources=exclude, only_sources=only)
+            with (
+                self.subTest(exclude=exclude, only=only),
+                self.assertRaisesRegex(SystemExit, "Keine Quelle"),
+            ):
+                excluded_source_names(args)
+
+    def test_empty_source_list_runs_no_source(self):
+        source = SimpleNamespace(SOURCE_NAME="unused", fetch_jobs=self.fail)
+        with patch("run_finder.SOURCES", [source]), redirect_stdout(io.StringIO()):
+            self.assertEqual(collect_jobs([]), ([], []))
+            self.assertEqual(enrich_candidate_jobs([], set(), sources=[]), [])
 
     def test_only_sources_rejects_unknown_names(self):
         args = SimpleNamespace(exclude_sources="", only_sources="stepstone,stepstnoe")

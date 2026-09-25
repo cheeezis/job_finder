@@ -18,8 +18,7 @@ from job_finder.matching.config import (
     STEPSTONE_SEARCH_LOCATIONS,
     STEPSTONE_SEARCH_TERMS,
 )
-from job_finder.matching.remote import classify_remote, detect_remote
-from job_finder.models import Job, JobSource
+from job_finder.models import Job
 from job_finder.paths import cache_file
 from job_finder.persistence.storage import read_versioned, write_versioned
 from job_finder.sources.common import (
@@ -27,17 +26,12 @@ from job_finder.sources.common import (
     detail_is_fresh,
     detail_within_age,
     ensure_partial_failure,
-    extract_annual_salary_eur,
-    extract_schema_locations,
-    normalize_employment_type,
-    parse_published_date,
+    job_from_schema_posting,
+    posting_source_id,
     record_partial_failure,
     record_total_segments,
-    source_job_id,
-    utc_now,
 )
 from job_finder.structured_data import extract_json_ld_job_posting
-from job_finder.text import html_to_text
 
 SOURCE_NAME = "stepstone"
 SEARCH_BASE_URL = "https://www.stepstone.de/jobs"
@@ -226,33 +220,15 @@ def fetch_job(url, client=None):
     posting = extract_json_ld_job_posting(html)
     if not posting:
         raise ValueError("JobPosting JSON-LD nicht gefunden")
-    raw_description = posting.get("description", "")
-    description = html_to_text(raw_description)
-    locations = extract_schema_locations(posting.get("jobLocation"))
-    location_text = ", ".join(locations)
-    title = posting.get("title", "")
-    detected_remote = detect_remote(title, description, location_text)
-    work_mode, remote_percentage = classify_remote(detected_remote)
-    identifier = extract_source_id(url, posting)
-    salary_min_eur, salary_max_eur = extract_annual_salary_eur(posting)
-
-    return Job(
-        id=source_job_id(SOURCE_NAME, identifier, url),
-        title=title,
+    job = job_from_schema_posting(
+        SOURCE_NAME,
+        url,
+        posting,
+        identifier=posting_source_id(urlsplit(url).path, r"--(\d+)-inline\.html$", posting),
         company=clean_company(posting.get("hiringOrganization", {}).get("name", "")),
-        locations=locations,
-        sources=[JobSource(source=SOURCE_NAME, source_id=identifier, url=url)],
-        description_raw=raw_description,
-        description_clean=description,
-        work_mode=work_mode,
-        remote_percentage=remote_percentage,
-        employment_type=normalize_employment_type(posting.get("employmentType")),
-        career_levels=extract_career_levels(html),
-        salary_min_eur=salary_min_eur,
-        salary_max_eur=salary_max_eur,
-        published_at=parse_published_date(posting.get("datePosted")),
-        fetched_at=utc_now(),
     )
+    job.career_levels = extract_career_levels(html)
+    return job
 
 
 def load_cache(path):
@@ -294,15 +270,3 @@ def extract_career_levels(html):
             if label in CAREER_LEVEL_LABELS and label not in labels:
                 labels.append(label)
     return labels
-
-
-def extract_source_id(url, posting):
-    """Extract StepStone's numeric posting ID when available."""
-    match = re.search(r"--(\d+)-inline\.html$", urlsplit(url).path)
-    if match:
-        return match.group(1)
-
-    identifier = posting.get("identifier")
-    if isinstance(identifier, dict):
-        return identifier.get("value")
-    return identifier

@@ -7,8 +7,10 @@ from datetime import UTC, date, datetime, timedelta
 from urllib.parse import parse_qsl, urlencode, urlsplit
 
 from job_finder.console import print_progress, progress_checkpoint
-from job_finder.models import Job
+from job_finder.matching.remote import classify_remote, detect_remote
+from job_finder.models import Job, JobSource
 from job_finder.persistence.storage import read_versioned, write_versioned
+from job_finder.text import html_to_text
 
 DETAIL_CACHE_VERSION = 1
 DETAIL_REFRESH_AGE = timedelta(days=7)
@@ -309,6 +311,45 @@ def extract_schema_locations(job_location):
                 cities.append(city)
 
     return cities or ["unbekannt"]
+
+
+def job_from_schema_posting(
+    source_name, url, posting, *, identifier, company, structured_remote=""
+):
+    """Map a schema.org JobPosting to a Job; sources pass the fields they derive their own way."""
+    raw_description = posting.get("description", "")
+    description = html_to_text(raw_description)
+    locations = extract_schema_locations(posting.get("jobLocation"))
+    title = posting.get("title", "")
+    remote = detect_remote(
+        title, description, ", ".join(locations), structured_remote=structured_remote
+    )
+    work_mode, remote_percentage = classify_remote(remote)
+    salary_min_eur, salary_max_eur = extract_annual_salary_eur(posting)
+    return Job(
+        id=source_job_id(source_name, identifier, url),
+        title=title,
+        company=company,
+        locations=locations,
+        sources=[JobSource(source=source_name, source_id=identifier, url=url)],
+        description_raw=raw_description,
+        description_clean=description,
+        work_mode=work_mode,
+        remote_percentage=remote_percentage,
+        employment_type=normalize_employment_type(posting.get("employmentType")),
+        salary_min_eur=salary_min_eur,
+        salary_max_eur=salary_max_eur,
+        published_at=parse_published_date(posting.get("datePosted")),
+        fetched_at=utc_now(),
+    )
+
+
+def posting_source_id(url_part, pattern, posting):
+    """Prefer the ID matched in the URL, otherwise the posting's own identifier."""
+    if match := re.search(pattern, url_part):
+        return match.group(1)
+    identifier = posting.get("identifier")
+    return identifier.get("value") if isinstance(identifier, dict) else identifier
 
 
 def integer(value, default):

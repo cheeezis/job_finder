@@ -81,6 +81,8 @@ def recommendation_for_job(job):
         "role_group": job.get("role_group"),
         "role_label": format_role_group(job),
         "experience_level": job.get("experience_level"),
+        # 0 marks entry-level jobs; the agent's gate reads it.
+        "experience_rank": job.get("experience_rank"),
         "url": primary_url(job),
         "source_links": source_links(job),
         "international": is_international_listing(job),

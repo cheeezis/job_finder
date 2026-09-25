@@ -31,6 +31,8 @@ def load_review_jobs(recommendations_path=RECOMMENDATIONS_JSON, memory_path=MEMO
         represented_memory_ids.update(candidates)
         memory_id = preferred_memory_id(candidates, memory, job["id"]) if candidates else job["id"]
         entry = memory.get(memory_id, {})
+        # The listing's own id finds its details in the jobs dataset.
+        job["recommendation_id"] = job["id"]
         job["id"] = memory_id
         job["workflow_status"] = entry.get("workflow_status", WorkflowStatus.NEW.value)
         # ``is_new`` describes the collection run, while a persisted workflow

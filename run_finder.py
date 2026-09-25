@@ -5,6 +5,7 @@ import os
 import time
 from collections import Counter
 
+from job_finder.agent.run import agent_phase
 from job_finder.console import configure_utf8_output, log_event, print_phase, print_progress
 from job_finder.matching.deduplication import deduplicate_jobs
 from job_finder.matching.user_settings import SETTINGS_SOURCE
@@ -249,6 +250,8 @@ def run_pipeline(exclude_sources=frozenset(), run_id=None):
 
     print("\nErgebnisübersicht")
     print_review_diagnostics(results, memory_stats)
+    # Last, once every result is saved: the agent can fail without the finder failing.
+    agent_phase(run_id=run_id)
 
 
 def print_availability_progress(current, total):

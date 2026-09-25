@@ -202,6 +202,12 @@ resource "azurerm_container_app_job" "finder" {
         name        = "JOBFINDER_PROFILE"
         secret_name = "jobfinder-profile"
       }
+      # Adresse des Sprachmodells für den KI-Agenten; ohne sie überspringt ein
+      # Lauf den Agenten, so wie der lokale Hybrid-Lauf, der sie nicht setzt.
+      env {
+        name  = "JOBFINDER_OPENAI_ENDPOINT"
+        value = azurerm_cognitive_account.openai.endpoint
+      }
 
       env {
         name        = "DISCORD_WEBHOOK_URL"

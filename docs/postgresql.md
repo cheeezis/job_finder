@@ -184,6 +184,26 @@ lokalen Rolle oben, aber gegen den Azure-Server):
 .\.venv\Scripts\python.exe scripts/create_app_role.py --azure
 ```
 
+Neue Tabellen legt ausschließlich `job_finder.db init` an, die Anwendung selbst
+ändert das Schema nie. Nach einer Schemaerweiterung (zuletzt `agent_usage`, das
+Kostenbuch des KI-Agenten) läuft der Befehl deshalb einmal gegen Azure, mit den
+Verbindungsdaten aus `.env.postgres-azure`, die nur für diesen Aufruf gesetzt
+werden. `init` legt nur fehlende Tabellen an und lässt vorhandene Daten
+unverändert; `check` zählt danach als App-Rolle die Zeilen und zeigt so, dass
+sie die neue Tabelle lesen darf:
+
+```powershell
+$azure = Get-Content .env.postgres-azure -Raw | ConvertFrom-StringData
+try {
+    $env:JOBFINDER_ADMIN_DATABASE_URL = $azure.JOBFINDER_ADMIN_DATABASE_URL
+    $env:JOBFINDER_DATABASE_URL = $azure.JOBFINDER_DATABASE_URL
+    .\.venv\Scripts\python.exe -m job_finder.db init
+    .\.venv\Scripts\python.exe -m job_finder.db check
+} finally {
+    Remove-Item Env:JOBFINDER_ADMIN_DATABASE_URL, Env:JOBFINDER_DATABASE_URL -ErrorAction SilentlyContinue
+}
+```
+
 Laufende Kosten: B1MS-Rechenleistung und Standardspeicher zusammen etwa
 15 EUR/Monat (France Central, Stand der letzten Preisabfrage), vor Steuern und
 weiteren Ressourcen wie Registry oder Logs. Der Server läuft auch außerhalb von

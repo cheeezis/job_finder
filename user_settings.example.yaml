@@ -24,3 +24,17 @@ matching:
   # Optionale Jahresbrutto-Präferenzen in Euro.
   salary_target_eur: null
   salary_minimum_eur: null
+
+# Optionaler KI-Agent für Steckbriefe. Ohne diesen Abschnitt, mit
+# enabled: false oder bei einem ungültigen Wert ruft der Finder kein
+# Sprachmodell auf. Fehlende Grenzen gelten mit den hier gezeigten Werten.
+agent:
+  enabled: false
+  # Pro Stelle: Kosten in Euro, Modell- und Werkzeugaufrufe.
+  job_max_cost_eur: 0.05
+  job_max_model_calls: 8
+  job_max_tool_calls: 6
+  # Kosten pro Tag und pro Monat über alle Läufe zusammen: eine Sicherung
+  # gegen Fehler, kein Filter.
+  daily_max_cost_eur: 1.00
+  monthly_max_cost_eur: 20.00

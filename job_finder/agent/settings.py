@@ -46,7 +46,7 @@ class AgentSettings:
     limits: AgentLimits
     reason: str = ""
     # How long the model thinks before it answers; more costs more output tokens.
-    reasoning_effort: str = "low"
+    reasoning_effort: str = "medium"
 
 
 REASONING_EFFORTS = ("minimal", "low", "medium", "high")
@@ -61,7 +61,7 @@ def agent_settings(values):
         limits = parse_limits(section)
     except ValueError as error:
         return AgentSettings(False, AgentLimits(**DEFAULT_LIMITS), str(error))
-    effort = section.get("reasoning_effort", "low")
+    effort = section.get("reasoning_effort", "medium")
     if effort not in REASONING_EFFORTS:
         reason = f"agent.reasoning_effort muss einer von {', '.join(REASONING_EFFORTS)} sein"
         return AgentSettings(False, limits, reason)

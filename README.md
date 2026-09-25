@@ -216,7 +216,7 @@ az keyvault secret set --vault-name kv-jobfinder-e64bfdce --name JobfinderProfil
 Jeder Lauf nennt im Abschnitt „Steckbriefe (Agent)“ entweder, warum der Agent
 nicht lief, oder wie viele Steckbriefe fertig oder abgebrochen sind, wie viele
 noch warten und was der Tag bisher gekostet hat. `agent.reasoning_effort` stellt
-den Denkaufwand des Modells ein (Standard `low`).
+den Denkaufwand des Modells ein (Standard `medium`).
 
 Damit der Agent das Azure-Guthaben nicht aufbrauchen kann, fragt er vor jedem
 Modell- und Werkzeugaufruf den Kostenwächter (`job_finder/agent/cost_guard.py`).

@@ -61,7 +61,7 @@ class AgentPhaseTests(unittest.TestCase):
             "fertig": 12,
             "abgebrochen": 1,
             "offen": 4,
-            "stopp": "Tagesgrenze erreicht: 1.00 € von 1.00 €",
+            "stopp": "Tagesgrenze erreicht: 1,00 € von 1,00 €",
             "heute_eur": Decimal("1.0012"),
             "monat_eur": Decimal("3.5"),
         }

@@ -58,8 +58,8 @@ class CostGuardTests(unittest.TestCase):
 
     def test_daily_and_monthly_money_stop_the_run(self):
         for spent, message in (
-            ((Decimal("1.00"), Decimal("3")), "Tagesgrenze erreicht: 1.00 €"),
-            ((Decimal("0.20"), Decimal("20")), "Monatsgrenze erreicht: 20.00 €"),
+            ((Decimal("1.00"), Decimal("3")), "Tagesgrenze erreicht: 1,00 € von 1,00 €"),
+            ((Decimal("0.20"), Decimal("20")), "Monatsgrenze erreicht: 20,00 € von 20,00 €"),
         ):
             self.spent.return_value = spent
             with self.subTest(message=message), self.assertRaisesRegex(AgentStopped, message):
@@ -90,7 +90,7 @@ class CostGuardTests(unittest.TestCase):
             guard.after_model_call(ROUND)
 
         # 7 rounds of about 0.77 cent pass the 5 cent limit before the 8 calls are used.
-        with self.assertRaisesRegex(JobLimitReached, "von 0.05 € verbraucht"):
+        with self.assertRaisesRegex(JobLimitReached, "von 0,05 € verbraucht"):
             guard.before_model_call()
         cost = call_cost("gpt-5-mini", ROUND)
         self.assertEqual(self.record.call_args_list, [call("job:1", "gpt-5-mini", ROUND, cost)] * 7)

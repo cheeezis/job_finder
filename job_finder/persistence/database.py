@@ -115,6 +115,17 @@ CREATE TABLE IF NOT EXISTS migration_runs (
     completed_at timestamptz NOT NULL DEFAULT now(),
     summary jsonb NOT NULL
 );
+CREATE TABLE IF NOT EXISTS agent_usage (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    called_at timestamptz NOT NULL DEFAULT now(),
+    job_id text NOT NULL,
+    model text NOT NULL,
+    input_tokens integer NOT NULL,
+    cached_input_tokens integer NOT NULL,
+    output_tokens integer NOT NULL,
+    reasoning_tokens integer NOT NULL,
+    cost_eur numeric NOT NULL
+);
 """
 
 

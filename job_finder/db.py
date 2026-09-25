@@ -45,6 +45,7 @@ def main():
                     "notifications",
                     "manual_sources",
                     "source_cache",
+                    "agent_usage",
                 )
             }
     print(json.dumps(result, indent=2, ensure_ascii=False))

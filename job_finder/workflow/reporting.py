@@ -141,11 +141,6 @@ def source_links(job):
     return links
 
 
-def format_locations(job):
-    """Return serialized job locations as display text."""
-    return ", ".join(job.get("locations", [])) or "unbekannt"
-
-
 def format_role_group(job):
     """Return a readable label for one rule-based role category."""
     value = job.get("role_group")

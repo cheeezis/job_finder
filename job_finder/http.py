@@ -1,7 +1,7 @@
 """Small HTTP helpers used by source adapters."""
 
 import json
-from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 DEFAULT_HEADERS = {"User-Agent": "job-finder/0.1"}
 MAX_RESPONSE_BYTES = 20 * 1024 * 1024
@@ -9,9 +9,7 @@ MAX_RESPONSE_BYTES = 20 * 1024 * 1024
 
 def fetch_text(url, headers=None, timeout=20):
     """Fetch a URL and decode its response as UTF-8 text."""
-    request = Request(url, headers=_build_headers(headers))
-    with urlopen(request, timeout=timeout) as response:
-        return _read_bounded(response, MAX_RESPONSE_BYTES).decode("utf-8")
+    return fetch_text_with_final_url(url, headers, timeout)[1]
 
 
 def fetch_json(url, headers=None):
@@ -25,7 +23,7 @@ def fetch_text_with_final_url(
     """Fetch text while optionally validating every redirect destination."""
     if url_validator is not None:
         url = url_validator(url)
-    request = Request(url, headers=_build_headers(headers))
+    request = Request(url, headers={**DEFAULT_HEADERS, **(headers or {})})
     opener = build_opener(ValidatingRedirectHandler(url_validator))
     with opener.open(request, timeout=timeout) as response:
         final_url = response.url
@@ -57,8 +55,3 @@ def _read_bounded(response, max_bytes):
     if len(content) > max_bytes:
         raise ValueError("HTTP-Antwort überschreitet das Größenlimit")
     return content
-
-
-def _build_headers(headers=None):
-    """Merge optional request headers with the Job Finder defaults."""
-    return {**DEFAULT_HEADERS, **(headers or {})}

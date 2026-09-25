@@ -1,4 +1,4 @@
-# Phase 7: Dauerhafte Ablage für Bewerbungsdokumente, getrennt von der Datenbank.
+# Dauerhafte Ablage für Bewerbungsdokumente, getrennt von der Datenbank.
 # Der Name muss global eindeutig sein; gleiches Hash-Muster wie beim Postgres-Server.
 resource "azurerm_storage_account" "jobfinder" {
   name                = "stjobfinder${substr(sha256(var.subscription_id), 0, 8)}"
@@ -69,7 +69,7 @@ resource "azurerm_management_lock" "storage" {
 }
 
 # Enthält die Bewerbungsdokumente. "private" heißt: kein anonymer Lesezugriff,
-# nur über eine authentifizierte Identität oder einen Kontoschlüssel.
+# nur über eine authentifizierte Entra-ID-Identität (Kontoschlüssel sind aus).
 resource "azurerm_storage_container" "application_documents" {
   name                  = "application-documents"
   storage_account_id    = azurerm_storage_account.jobfinder.id

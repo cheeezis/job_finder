@@ -1,4 +1,4 @@
-# Phase 7: Der verwaltete Server übernimmt Betrieb, Updates und Serverbackups.
+# Der verwaltete Server übernimmt Betrieb, Updates und Serverbackups.
 # Der Suffix macht den DNS-Namen subscriptionspezifisch und reproduzierbar.
 resource "azurerm_postgresql_flexible_server" "jobfinder" {
   name                = "psql-jobfinder-${substr(sha256(var.subscription_id), 0, 8)}"
@@ -49,7 +49,7 @@ resource "azurerm_postgresql_flexible_server_firewall_rule" "local_review" {
 # Der Worker läuft als Container Apps Job ohne feste ausgehende IP; eine echte
 # Netzwerkisolation (VNet-Integration) würde einen verwalteten Load Balancer
 # erzwingen (~20+ EUR/Monat zusätzlich) und ist für diesen Umfang bewusst
-# Phase 11 vorbehalten. Start/End 0.0.0.0 ist Azures Sonderwert für "beliebiger
+# nicht umgesetzt. Start/End 0.0.0.0 ist Azures Sonderwert für "beliebiger
 # Azure-Dienst", nicht nur diese Subscription. TLS (verify-full) und das
 # eingeschränkte jobfinder_app-Passwort bleiben die eigentliche Zugriffsschranke.
 resource "azurerm_postgresql_flexible_server_firewall_rule" "allow_azure_services" {

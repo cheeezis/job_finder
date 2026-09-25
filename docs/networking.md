@@ -22,22 +22,23 @@ nur `var.owner_object_id` (Jannis) ist als Principal zugelassen
 
 **Review-App / Worker → PostgreSQL**
 Öffentlicher Endpunkt des Flexible Servers, Firewallregel
-`allow-azure-services` (Azure-Sondere-Wert `0.0.0.0`, erlaubt jeden
+`allow-azure-services` (Azure-Sonderwert `0.0.0.0`, erlaubt jeden
 Azure-Dienst in jeder Subscription - nicht nur diese). Der eigentliche
 Zugriffsschutz liegt nicht auf Netzwerkebene, sondern bei TLS
 (`sslmode=verify-full`) und dem Passwort der eingeschränkten Rolle
-`jobfinder_app`, das nur als Key-Vault-Secret existiert und per Managed
-Identity gelesen wird.
+`jobfinder_app`. Worker und Review lesen es per Managed Identity aus dem Key
+Vault; für den lokalen Hybrid-Lauf liegt es zusätzlich in der von Git
+ausgeschlossenen `.env.postgres-azure`.
 
 **Review-App / Worker → Blob Storage (Dokumente)**
 Öffentlicher Endpunkt, keine IP-Einschränkung. Zugriffsschutz ausschließlich
-über Azure-AD-RBAC (`Storage Blob Data Contributor`) via Managed Identity -
-kein Kontoschlüssel im Spiel.
+über Azure-AD-RBAC via Managed Identity (`Storage Blob Data Contributor` nur
+auf dem Container `application-documents`); Kontoschlüssel sind abgeschaltet.
 
 **Review-App / Worker → Key Vault**
-Öffentlicher Endpunkt, keine IP-Einschränkung. Zugriffsschutz über RBAC
-(`Key Vault Secrets User` für den Worker, `Key Vault Secrets Officer` nur
-für Jannis selbst) via Managed Identity.
+Öffentlicher Endpunkt, keine IP-Einschränkung. Zugriffsschutz über RBAC:
+`Key Vault Secrets User` für die gemeinsame Managed Identity von Worker und
+Review, `Key Vault Secrets Officer` nur für Jannis selbst.
 
 **Lokaler Rechner (Jannis) → PostgreSQL**
 Für `scripts/check_azure_postgres.py`, die lokale Review gegen die
@@ -49,14 +50,16 @@ manuell nachgezogen werden (siehe `docs/postgresql.md`).
 Läuft auf demselben Rechner, dieselbe öffentliche IP wie oben - nutzt
 also ebenfalls `local-review` für Postgres. Storage-Zugriff über den
 eigens angelegten, eng begrenzten Service Principal
-(`jobfinder-local-docker`, nur `Storage Blob Data Contributor` auf genau
-diesem Storage-Konto).
+(`jobfinder-local-docker`, nur `Storage Blob Data Contributor` auf dem
+Container `application-documents`).
 
 **GitHub Actions (CI/CD) → Azure Resource Manager, ACR, tfstate-Container**
-OIDC-Föderation, kein gespeichertes Secret. Berechtigt über
-`Contributor` + `Role Based Access Control Administrator` auf
-`rg-jobfinder`, plus `Storage Blob Data Contributor` gescoped auf den
-`tfstate`-Blob-Container (`infrastructure/cicd.tf`).
+OIDC-Föderation ohne gespeichertes Azure-Anmeldegeheimnis, mit drei
+getrennten Identitäten (`infrastructure/cicd.tf`). Apply: `Contributor` +
+`Role Based Access Control Administrator` auf `rg-jobfinder`, plus
+`Storage Blob Data Contributor` auf dem `tfstate`-Container. Build: nur
+`AcrPush` und `Reader` auf der Registry. Plan für Pull Requests: nur `Reader`
+auf `rg-jobfinder` und `Storage Blob Data Reader` auf `tfstate`.
 
 ## Was ist öffentlich erreichbar, und warum
 
@@ -64,7 +67,7 @@ OIDC-Föderation, kein gespeichertes Secret. Berechtigt über
 |---|---|---|
 | Review-Container-App | Ja, absichtlich | Easy Auth (Entra ID), nur Jannis |
 | PostgreSQL Flexible Server | Ja | TLS + Passwort der eingeschränkten `jobfinder_app`-Rolle |
-| Storage Account | Ja | RBAC (Azure AD), kein Kontoschlüssel verteilt |
+| Storage Account | Ja | RBAC (Azure AD), Kontoschlüssel abgeschaltet |
 | Key Vault | Ja | RBAC (Azure AD) |
 | Container Registry (ACR) | Ja | RBAC (Azure AD), `admin_enabled = false` |
 | Worker (Container Apps Job) | Nein - hat keine Ingress, läuft nur aus- gehend | - |

@@ -48,7 +48,7 @@ def score_for_pipeline(job):
 
 
 def load_jobs(path):
-    """Load imported jobs from a UTF-8 JSON file."""
+    """Load jobs from the stored jobs dataset or an explicit JSON import file."""
     values = read_json(path, [])
     try:
         return [Job.from_dict(job) for job in values]

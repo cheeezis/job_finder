@@ -2,8 +2,8 @@
 
 PostgreSQL ist der einzige Laufzeitspeicher für den Stellenbestand, Entscheidungen,
 Bewerbungsverläufe, Empfehlungen, Discord-Versandstatus und Quellencaches.
-SQLite wird nur noch beim ausdrücklichen Altimport gelesen. Dokumentinhalte bleiben
-separate Dateien, ihre Metadaten und Zuordnung stehen in PostgreSQL.
+SQLite liest die Anwendung nicht mehr. Dokumentinhalte bleiben separate Dateien
+(lokal oder im Blob Storage), ihre Metadaten und Zuordnung stehen in PostgreSQL.
 
 ## Einrichtung
 
@@ -66,10 +66,12 @@ Die Befehle laufen in getrennten Terminals. Die Review ist unter
 versendet, sofern `DISCORD_WEBHOOK_URL` gesetzt ist. Ein PostgreSQL-Lock
 verhindert zwei gleichzeitig laufende Finder.
 
-Dokumente liegen standardmäßig weiterhin unter `data/internal/application_documents`.
+Dokumente liegen standardmäßig unter `data/internal/application_documents`.
 `JOBFINDER_DOCUMENTS_DIR` kann vor dem Start auf eine andere dauerhafte Ablage
-zeigen. In Containern muss diese Ablage gemountet werden. Ein lokaler Dateipfad
-allein macht die Dokumente noch nicht in Azure verfügbar.
+zeigen. Mit `JOBFINDER_DOCUMENTS_BACKEND=blob` liegen sie stattdessen in dem
+Blob-Container, den `JOBFINDER_STORAGE_ACCOUNT` und
+`JOBFINDER_STORAGE_CONTAINER` benennen; so arbeiten Worker, Review und der
+lokale Hybrid-Lauf.
 
 ## Datenmodell und gleichzeitige Zugriffe
 
@@ -141,10 +143,11 @@ Ersatz für spätere Azure-Serverbackups, Rollen- oder Infrastruktur-Sicherungen
 `infrastructure/postgresql.tf` verwaltet den produktiven Server: einen PostgreSQL-
 Flexible-Server (`B_Standard_B1ms`, 32 GiB, France Central), die leere Datenbank
 `jobfinder`, eine Firewallregel für genau eine öffentliche IPv4 und
-`require_secure_transport`. Worker und Review verbinden sich dort nicht mit
-Passwort, sondern über ihre Managed Identity und ein Key-Vault-Secret
-(`infrastructure/keyvault.tf`, `main.tf`, `review.tf`); die folgenden Schritte
-betreffen nur den administrativen Zugriff von einem lokalen Rechner aus.
+`require_secure_transport`. Worker und Review melden sich dort mit Passwort
+als Rolle `jobfinder_app` an. Die Verbindungs-URL samt Passwort liegt im
+Key-Vault-Secret `JobfinderDatabaseUrl`, das beide über ihre Managed Identity
+lesen (`infrastructure/keyvault.tf`, `main.tf`, `review.tf`); die folgenden
+Schritte betreffen nur den administrativen Zugriff von einem lokalen Rechner aus.
 
 Admin-Passwort und die freizugebende IP liegen lokal in
 `infrastructure/postgres.auto.tfvars.json` (von Git ausgeschlossen). Planen und
@@ -205,8 +208,8 @@ Owner-Rechten entfernt wurde. Stoppen und Starten sind davon nicht betroffen.
 
 StepStone und Remotely liefern aus Azure heraus keine Treffer; sie laufen
 stattdessen einmal täglich über den lokalen Windows-Task gegen dieselbe
-Azure-Datenbank (`scripts/run_local_hybrid.py`, siehe README für den
-Zeitplan). Der Task startet genau das Image, das der Azure-Worker gerade
+Azure-Datenbank (`scripts/run_local_hybrid.py`, Überblick in der README unter
+„Betrieb“). Der Task startet genau das Image, das der Azure-Worker gerade
 nutzt: Er fragt es bei jedem Start über die lokale `az`-Anmeldung ab, meldet
 sich an der Registry an und holt es per `docker pull`. Beide Hälften laufen
 so immer mit derselben Code-Version; Voraussetzung sind eine gültige
@@ -219,7 +222,8 @@ der Container-Betrieb umgeht das Problem nur, er erklärt es nicht.
 
 Ohne Managed Identity oder interaktive `az`-Anmeldung im Container braucht
 das einen eigenen, eng begrenzten Service Principal für den Blob-Zugriff
-(nur `Storage Blob Data Contributor` auf genau diesem Storage-Konto, siehe
+(nur `Storage Blob Data Contributor` auf dem Dokument-Container
+`application-documents`, nicht auf dem `tfstate`-Container daneben, siehe
 `infrastructure/storage.tf`,
 `storage_blob_data_contributor_local_docker`). Einmalig einrichten:
 

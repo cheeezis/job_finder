@@ -202,6 +202,10 @@ Stellen ohne Steckbrief, die Einstiegsstellen sind oder einen Vorfilter-Score
 über 50 haben und im Standard-Review sichtbar sind, die besten zuerst. Er darf
 im Web suchen und frühere Entscheidungen samt Notizen nachschlagen, aber nichts
 ändern; Anzeigen und Webseiten behandelt er als Material, nicht als Anweisungen.
+Als Quellen bleiben im Steckbrief nur Links, die er tatsächlich gesehen hat: aus
+der Anzeige oder aus seinen Suchergebnissen. Seine Maßstäbe, etwa ab wie vielen
+geforderten Berufsjahren der Einstieg rot wird, stehen in
+`job_finder/agent/instructions.py`.
 
 Er läuft nur, wenn in den Einstellungen `agent.enabled: true` steht, der Worker
 die Modell-Adresse kennt (setzt Terraform; der lokale Hybrid-Lauf hat keine und

@@ -48,6 +48,22 @@ APP_SCRIPT = Path(__file__).with_name("app.js")
 LANDING_SCRIPT = Path(__file__).with_name("landing.js")
 REVIEW_SCRIPT = Path(__file__).with_name("review.js")
 APPLICATIONS_SCRIPT = Path(__file__).with_name("applications.js")
+HTML = "text/html; charset=utf-8"
+JAVASCRIPT = "text/javascript; charset=utf-8"
+# Browser paths only select one of these packaged files; they never become file paths.
+STATIC_FILES = {
+    "/": (LANDING_PAGE, HTML),
+    "/index.html": (LANDING_PAGE, HTML),
+    "/review": (REVIEW_PAGE, HTML),
+    "/review.html": (REVIEW_PAGE, HTML),
+    "/applications": (APPLICATIONS_PAGE, HTML),
+    "/applications.html": (APPLICATIONS_PAGE, HTML),
+    "/app.css": (APP_STYLES, "text/css; charset=utf-8"),
+    "/app.js": (APP_SCRIPT, JAVASCRIPT),
+    "/landing.js": (LANDING_SCRIPT, JAVASCRIPT),
+    "/review.js": (REVIEW_SCRIPT, JAVASCRIPT),
+    "/applications.js": (APPLICATIONS_SCRIPT, JAVASCRIPT),
+}
 ROUTE_ORIGIN = f"{LOCAL_SEARCH_POSTAL_CODE} {LOCAL_SEARCH_LOCATION}".strip()
 MAX_REQUEST_BYTES = 45 * 1024 * 1024
 LOCAL_HOST_PATTERN = re.compile(r"^(?:127\.0\.0\.1|localhost)(?::\d{1,5})?$")
@@ -78,14 +94,6 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
     manual_cache_path = MANUAL_CACHE_FILE
     application_documents_dir = APPLICATION_DOCUMENTS_DIR
     manual_importer = staticmethod(import_manual_url)
-    landing_page_path = LANDING_PAGE
-    page_path = REVIEW_PAGE
-    applications_page_path = APPLICATIONS_PAGE
-    styles_path = APP_STYLES
-    script_path = APP_SCRIPT
-    landing_script_path = LANDING_SCRIPT
-    review_script_path = REVIEW_SCRIPT
-    applications_script_path = APPLICATIONS_SCRIPT
 
     def do_GET(self):
         """Handle database outages without exposing connection details."""
@@ -99,26 +107,8 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
         if not self.accept_local_request():
             return
         request_path = urlsplit(self.path).path
-        if request_path in {"/", "/index.html"}:
-            self.send_file(self.landing_page_path, "text/html; charset=utf-8")
-            return
-        if request_path in {"/review", "/review.html"}:
-            self.send_file(self.page_path, "text/html; charset=utf-8")
-            return
-        if request_path in {"/applications", "/applications.html"}:
-            self.send_file(self.applications_page_path, "text/html; charset=utf-8")
-            return
-        if request_path == "/app.css":
-            self.send_file(self.styles_path, "text/css; charset=utf-8")
-            return
-        scripts = {
-            "/app.js": self.script_path,
-            "/landing.js": self.landing_script_path,
-            "/review.js": self.review_script_path,
-            "/applications.js": self.applications_script_path,
-        }
-        if request_path in scripts:
-            self.send_file(scripts[request_path], "text/javascript; charset=utf-8")
+        if request_path in STATIC_FILES:
+            self.send_file(*STATIC_FILES[request_path])
             return
         if request_path == "/api/recommendations":
             self.send_json(

@@ -1,26 +1,11 @@
-"""Compatibility decoding for supported persisted state formats.
+"""Decoding helpers for persisted workflow and notification state.
 
-These helpers do not perform I/O or change database schemas. Keep support
-for old documents separate from normal workflow updates.
+These helpers do not perform I/O or change database schemas.
 """
 
-import re
 from datetime import datetime
 
 NOTIFICATION_STATE_VERSION = 3
-
-
-def restore_initial_discovery_date(entry):
-    """Fill only a missing initial discovery date in a loaded mutable entry."""
-    history = entry.get("workflow_history")
-    if isinstance(history, list) and history:
-        first = history[0]
-        if (
-            isinstance(first, dict)
-            and first.get("status") == "new"
-            and first.get("occurred_on") is None
-        ):
-            first["occurred_on"] = first_seen_date(entry)
 
 
 def first_seen_date(entry):
@@ -32,29 +17,14 @@ def first_seen_date(entry):
     return timestamp.astimezone().date().isoformat()
 
 
-def legacy_salary_expectation(legacy):
-    """Read one formerly formatted salary string without guessing missing values."""
-    if not isinstance(legacy, str):
-        return None
-    match = re.search(r"\b(\d{2,3}(?:[.\s]\d{3})+|\d{4,7})\b", legacy)
-    if not match:
-        return None
-    return int(re.sub(r"\D", "", match.group(1)))
-
-
 def decode_notification_state(document):
-    """Decode versions 1–3 into stable sent and pending job-ID mappings."""
-    version = document.get("version")
-    if version not in {1, 2, NOTIFICATION_STATE_VERSION}:
+    """Decode the current version into stable sent and pending job-ID mappings."""
+    if document.get("version") != NOTIFICATION_STATE_VERSION:
         raise ValueError("Benachrichtigungsstatus verwendet eine unbekannte Version")
     sent = {entry.get("job_id", key): entry for key, entry in document.get("sent", {}).items()}
-    pending = (
-        {}
-        if version == 1
-        else {
-            entry["job_id"]: entry
-            for entry in document.get("pending", {}).values()
-            if entry.get("job_id") and entry["job_id"] not in sent
-        }
-    )
+    pending = {
+        entry["job_id"]: entry
+        for entry in document.get("pending", {}).values()
+        if entry.get("job_id") and entry["job_id"] not in sent
+    }
     return {"sent": sent, "pending": pending}

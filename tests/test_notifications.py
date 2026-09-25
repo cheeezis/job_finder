@@ -55,20 +55,6 @@ def discord_limited_characters(payload):
 
 
 class NotificationTests(unittest.TestCase):
-    def test_legacy_pending_ai_backlog_is_discarded(self):
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "state.json"
-            path.write_text(
-                json.dumps({"version": 1, "sent": {}, "pending": {"legacy": {}}}), encoding="utf-8"
-            )
-            stats = process_notifications(
-                {"included": [make_job(is_new=False)], "excluded": []}, state_path=path
-            )
-            state = json.loads(path.read_text(encoding="utf-8"))
-        self.assertEqual(stats["ready"], 0)
-        self.assertEqual(state["version"], 3)
-        self.assertEqual(state["pending"], {})
-
     def test_only_new_prefiltered_jobs_are_queued(self):
         with tempfile.TemporaryDirectory() as directory:
             stats = process_notifications(
@@ -93,9 +79,9 @@ class NotificationTests(unittest.TestCase):
             path.write_text(
                 json.dumps(
                     {
-                        "version": 2,
-                        "sent": {"old-content-hash": {"job_id": "job:1", "sent_at": "2026-09-01"}},
-                        "pending": {"changed-content-hash": {"job_id": "job:1"}},
+                        "version": 3,
+                        "sent": {"job:1": {"job_id": "job:1", "sent_at": "2026-09-01"}},
+                        "pending": {"job:1": {"job_id": "job:1"}},
                     }
                 ),
                 encoding="utf-8",

@@ -108,11 +108,10 @@ def is_international_listing(job):
         return True
     if any(country in normalized for country in FOREIGN_COUNTRY_TERMS):
         return True
-    if exclusively_from_international_feeds and text_is_mainly_english(
-        f"{job.get('title', '')} {job.get('description_clean', '')}"
-    ):
-        return True
-    return False
+    return bool(
+        exclusively_from_international_feeds
+        and text_is_mainly_english(f"{job.get('title', '')} {job.get('description_clean', '')}")
+    )
 
 
 def primary_url(job):

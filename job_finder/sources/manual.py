@@ -91,7 +91,6 @@ def fetch_jobs(cache_path=MANUAL_CACHE_FILE, now=None):
             refreshed[saved_url] = cached_job
             if detail_within_age(cached_job, now):
                 cached_job.cache_stale = True
-                refreshed[saved_url] = cached_job
                 jobs.append(cached_job)
 
     if refreshed != cache:
@@ -319,10 +318,3 @@ class VisibleJobParser(HTMLParser):
         if text:
             self.lines.append(text)
         self._parts = []
-
-
-def main_fragment(html):
-    """Keep only the main visible document section for fallback imports."""
-    parser = VisibleJobParser()
-    parser.feed(html)
-    return parser.main_fragment(html)

@@ -2,7 +2,7 @@
 
 import tempfile
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -31,7 +31,7 @@ FEED = """<?xml version="1.0" encoding="UTF-8"?>
 
 class GermanTechJobsTests(unittest.TestCase):
     def test_feed_maps_structured_salary_remote_and_application_url(self):
-        fetched_at = datetime(2026, 8, 17, tzinfo=timezone.utc)
+        fetched_at = datetime(2026, 8, 17, tzinfo=UTC)
 
         jobs, invalid = german_tech_jobs.parse_feed(FEED, fetched_at)
 
@@ -66,7 +66,7 @@ class GermanTechJobsTests(unittest.TestCase):
         )
 
     def test_recent_cache_is_used_and_marked_after_feed_failure(self):
-        now = datetime(2026, 8, 17, tzinfo=timezone.utc)
+        now = datetime(2026, 8, 17, tzinfo=UTC)
         with tempfile.TemporaryDirectory() as directory:
             cache = Path(directory) / "feed.json"
             jobs, _invalid = german_tech_jobs.parse_feed(FEED, now)
@@ -80,15 +80,13 @@ class GermanTechJobsTests(unittest.TestCase):
         self.assertTrue(result["jobs"][0].cache_stale)
 
     def test_cache_older_than_three_days_is_not_used(self):
-        now = datetime(2026, 8, 17, tzinfo=timezone.utc)
+        now = datetime(2026, 8, 17, tzinfo=UTC)
         with tempfile.TemporaryDirectory() as directory:
             cache = Path(directory) / "feed.json"
             jobs, _invalid = german_tech_jobs.parse_feed(FEED, now)
             german_tech_jobs.save_feed_cache(cache, jobs, now - timedelta(days=4))
-            with patch.object(german_tech_jobs, "fetch_text", side_effect=OSError("offline")):
-                with self.assertRaises(OSError):
-                    german_tech_jobs.fetch_jobs_with_report(cache, now=now)
-
-
-if __name__ == "__main__":
-    unittest.main()
+            with (
+                patch.object(german_tech_jobs, "fetch_text", side_effect=OSError("offline")),
+                self.assertRaises(OSError),
+            ):
+                german_tech_jobs.fetch_jobs_with_report(cache, now=now)

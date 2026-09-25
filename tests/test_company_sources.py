@@ -2,7 +2,7 @@
 
 import tempfile
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 from urllib.parse import parse_qsl
@@ -88,9 +88,11 @@ class JumoSessionTests(unittest.TestCase):
                 self.assertEqual(headers["Content-type"], "application/x-www-form-urlencoded")
 
     def test_collect_links_needs_the_csrf_token(self):
-        with patch.object(jumo, "build_opener", return_value=FakeJumoSession(["<form></form>"])):
-            with self.assertRaisesRegex(ValueError, "CSRF"):
-                jumo.collect_links()
+        with (
+            patch.object(jumo, "build_opener", return_value=FakeJumoSession(["<form></form>"])),
+            self.assertRaisesRegex(ValueError, "CSRF"),
+        ):
+            jumo.collect_links()
 
 
 EDAG_LIST = "https://www.edag.com/de/karriere/stellenanzeigen"
@@ -290,7 +292,7 @@ class RhoenenergieSourceTests(unittest.TestCase):
 
 class CompanyCareerTests(unittest.TestCase):
     def test_cached_company_jobs_keep_unique_url_identity_and_age_limits(self):
-        now = datetime(2026, 9, 9, tzinfo=timezone.utc)
+        now = datetime(2026, 9, 9, tzinfo=UTC)
         url = "https://example.test/job/developer-12345"
         for age, expected_count in [(1, 1), (8, 1), (15, 0)]:
             with self.subTest(age=age), tempfile.TemporaryDirectory() as directory:
@@ -358,7 +360,3 @@ class CompanyCareerTests(unittest.TestCase):
 
         self.assertNotEqual(first, second)
         self.assertEqual(first, first.split("&")[0])
-
-
-if __name__ == "__main__":
-    unittest.main()

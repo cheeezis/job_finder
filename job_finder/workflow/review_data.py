@@ -101,12 +101,3 @@ def memory_ids_for_job(job, memory):
         for memory_id, entry in memory.items()
         if memory_id == job_id or urls.intersection(entry.get("source_urls", []))
     ]
-
-
-def memory_entry_for_job(job, memory):
-    """Resolve stale recommendation IDs through an exact known source URL."""
-    candidates = memory_ids_for_job(job, memory)
-    if not candidates:
-        return job["id"], {}
-    memory_id = preferred_memory_id(candidates, memory, job["id"])
-    return memory_id, memory[memory_id]

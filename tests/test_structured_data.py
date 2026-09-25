@@ -51,7 +51,3 @@ class StructuredDataTests(unittest.TestCase):
         html = '<script type="application/ld+json">{"@type": "WebPage"}</script>'
 
         self.assertIsNone(extract_json_ld_job_posting(html))
-
-
-if __name__ == "__main__":
-    unittest.main()

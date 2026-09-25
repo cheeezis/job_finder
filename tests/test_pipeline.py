@@ -44,7 +44,3 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(review["recommendations"][0]["title"], "Junior Python Developer")
         self.assertEqual(review["recommendations"][0]["url"], "https://example.test/jobs/123")
         self.assertIn("match_percent", review["recommendations"][0])
-
-
-if __name__ == "__main__":
-    unittest.main()

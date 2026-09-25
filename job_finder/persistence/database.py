@@ -9,7 +9,7 @@ from pathlib import Path
 import psycopg
 from dotenv import load_dotenv
 
-from job_finder.paths import PROJECT_DIR
+from job_finder.paths import MEMORY_FILE, PROJECT_DIR
 
 SCHEMA_VERSION = 2
 _connection = ContextVar("jobfinder_connection", default=None)
@@ -190,8 +190,6 @@ def initialize():
 
 def memory_scope(path):
     """Use one runtime scope and isolate explicit test namespaces."""
-    from job_finder.paths import MEMORY_FILE
-
     if path is None or Path(path).resolve() == MEMORY_FILE.resolve():
         return "default"
     if os.environ.get("JOBFINDER_TEST_MODE") != "1":

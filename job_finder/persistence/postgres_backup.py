@@ -3,7 +3,7 @@
 import hashlib
 import json
 import zipfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 
 from job_finder.paths import APPLICATION_DOCUMENTS_DIR, BACKUP_DIR
@@ -22,7 +22,7 @@ def create_postgres_backup(backup_dir=BACKUP_DIR, documents_dir=APPLICATION_DOCU
     """Back up a consistent database snapshot and verify referenced file bytes."""
     directory = Path(backup_dir)
     directory.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
     target = directory / f"postgres-{stamp}.zip"
     temporary = target.with_suffix(".zip.tmp")
     hashes = {}

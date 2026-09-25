@@ -4,7 +4,7 @@ import io
 import tempfile
 import unittest
 from contextlib import redirect_stdout
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -153,7 +153,7 @@ class ManualSourceTests(unittest.TestCase):
         self.assertEqual(job.primary_source.source, "manual")
 
     def test_fetch_jobs_refreshes_stale_pages_and_keeps_manual_input(self):
-        now = datetime(2026, 9, 24, 12, tzinfo=timezone.utc)
+        now = datetime(2026, 9, 24, 12, tzinfo=UTC)
         ages = {"fresh": 1, "stale-ok": 10, "stale-error": 10, "too-old": 20}
         cache = {}
         for name, days in ages.items():
@@ -198,14 +198,12 @@ class ManualSourceTests(unittest.TestCase):
                 manual.validate_public_url(url)
 
     def test_hostname_resolving_to_private_network_is_rejected(self):
-        with patch.object(
-            manual.socket,
-            "getaddrinfo",
-            return_value=[(None, None, None, None, ("192.168.1.10", 443))],
+        with (
+            patch.object(
+                manual.socket,
+                "getaddrinfo",
+                return_value=[(None, None, None, None, ("192.168.1.10", 443))],
+            ),
+            self.assertRaisesRegex(ValueError, "Private Netzwerk"),
         ):
-            with self.assertRaisesRegex(ValueError, "Private Netzwerk"):
-                manual.validate_public_url("https://public-name.example/job")
-
-
-if __name__ == "__main__":
-    unittest.main()
+            manual.validate_public_url("https://public-name.example/job")

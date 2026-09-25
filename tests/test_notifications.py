@@ -259,7 +259,3 @@ class NotificationTests(unittest.TestCase):
         )
         self.assertIn("1 erfolgreich", embed["description"])
         self.assertEqual(embed["color"], 0xD99A2B)
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -111,7 +111,3 @@ class ReportingTests(unittest.TestCase):
                 {"locations": ["Canada", "Germany", "India"], "sources": [{"source": "himalayas"}]}
             )
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

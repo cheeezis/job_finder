@@ -3,7 +3,7 @@
 import json
 import tempfile
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import ANY, Mock, patch
 from urllib.error import HTTPError
@@ -216,7 +216,7 @@ class StepStoneCacheTests(unittest.TestCase):
     def test_stale_cached_detail_is_refreshed(self):
         url = "https://www.stepstone.de/stellenangebote--cached.html"
         cached_job = self.make_job("Cached", url)
-        cached_job.fetched_at = datetime.now(timezone.utc) - timedelta(days=8)
+        cached_job.fetched_at = datetime.now(UTC) - timedelta(days=8)
         refreshed_job = self.make_job("Changed", url)
 
         with tempfile.TemporaryDirectory() as directory:
@@ -252,13 +252,13 @@ class StepStoneCacheTests(unittest.TestCase):
             description_clean="Python",
             work_mode=WorkMode.REMOTE,
             remote_percentage=100,
-            fetched_at=datetime.now(timezone.utc),
+            fetched_at=datetime.now(UTC),
         )
 
 
 class SharedDetailCacheTests(unittest.TestCase):
     def test_saved_cache_contains_only_reusable_source_fields(self):
-        now = datetime(2026, 7, 17, 12, tzinfo=timezone.utc)
+        now = datetime(2026, 7, 17, 12, tzinfo=UTC)
         url = "https://www.get-in-it.de/jobsuche/p1"
         job = self.make_job(get_in_it.SOURCE_NAME, url, now)
 
@@ -272,7 +272,7 @@ class SharedDetailCacheTests(unittest.TestCase):
         self.assertNotIn("first_seen_at", saved_job)
 
     def test_fresh_details_are_reused_by_arbeitsagentur(self):
-        now = datetime(2026, 7, 17, 12, tzinfo=timezone.utc)
+        now = datetime(2026, 7, 17, 12, tzinfo=UTC)
         sources = [(arbeitsagentur, "https://example.test/arbeitsagentur/1")]
 
         for source, url in sources:
@@ -291,7 +291,7 @@ class SharedDetailCacheTests(unittest.TestCase):
                 fetch_job.assert_not_called()
 
     def test_stale_detail_is_downloaded(self):
-        now = datetime(2026, 7, 17, 12, tzinfo=timezone.utc)
+        now = datetime(2026, 7, 17, 12, tzinfo=UTC)
         url = "https://www.get-in-it.de/jobsuche/p1"
         cached_job = self.make_job(get_in_it.SOURCE_NAME, url, now - timedelta(days=8))
         refreshed_job = self.make_job(get_in_it.SOURCE_NAME, url, now)
@@ -327,7 +327,7 @@ class SharedDetailCacheTests(unittest.TestCase):
         fetch_job.assert_called_once_with("https://www.get-in-it.de/jobsuche/p1")
 
     def test_failed_refresh_falls_back_to_stale_detail(self):
-        now = datetime(2026, 7, 17, 12, tzinfo=timezone.utc)
+        now = datetime(2026, 7, 17, 12, tzinfo=UTC)
         url = "https://example.test/arbeitsagentur/1"
         cached_job = self.make_job(arbeitsagentur.SOURCE_NAME, url, now - timedelta(days=8))
 
@@ -381,7 +381,3 @@ class StepStoneHttpClientTests(unittest.TestCase):
             self.assertRaises(stepstone.StepStoneBlockedError),
         ):
             client.get("https://example.test")
-
-
-if __name__ == "__main__":
-    unittest.main()

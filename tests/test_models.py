@@ -2,7 +2,7 @@
 
 import json
 import unittest
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 from job_finder.models import Job, JobSource, WorkflowStatus, WorkMode
 
@@ -56,9 +56,9 @@ class JobModelTests(unittest.TestCase):
             salary_min_eur=73_000,
             salary_max_eur=91_000,
             published_at=date(2026, 7, 10),
-            first_seen_at=datetime(2026, 7, 14, 9, 30, tzinfo=timezone.utc),
-            last_seen_at=datetime(2026, 7, 14, 10, 30, tzinfo=timezone.utc),
-            fetched_at=datetime(2026, 7, 14, 10, 31, tzinfo=timezone.utc),
+            first_seen_at=datetime(2026, 7, 14, 9, 30, tzinfo=UTC),
+            last_seen_at=datetime(2026, 7, 14, 10, 30, tzinfo=UTC),
+            fetched_at=datetime(2026, 7, 14, 10, 31, tzinfo=UTC),
             workflow_status=WorkflowStatus.REVIEW,
         )
 
@@ -66,7 +66,3 @@ class JobModelTests(unittest.TestCase):
         restored = Job.from_dict(serialized)
 
         self.assertEqual(restored, job)
-
-
-if __name__ == "__main__":
-    unittest.main()

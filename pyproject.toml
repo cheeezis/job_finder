@@ -33,7 +33,10 @@ extend-exclude = ["data", "tmp", "llm_evaluation"]
 skip-magic-trailing-comma = true
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F", "I", "D"]
+# Besides the defaults: simplifications, return style, comprehensions,
+# small pitfalls and datetime.UTC. UP042 (StrEnum) stays off because it
+# changes format() and the psycopg enum adaptation.
+select = ["E4", "E7", "E9", "F", "I", "D", "SIM", "RET", "C4", "PIE", "UP017"]
 # Class docstrings describe construction; standard protocol methods need
 # no repeated documentation unless their behavior differs from the protocol.
 ignore = ["D105", "D107"]

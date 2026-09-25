@@ -2,7 +2,7 @@
 
 import tempfile
 import unittest
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -64,7 +64,7 @@ class RemotelySourceTests(unittest.TestCase):
         """
 
         self.assertEqual(
-            remotely.extract_detail_links(html),
+            [entry["url"] for entry in remotely.extract_list_entries(html)],
             ["https://www.remotely.de/job/example-one", "https://www.remotely.de/job/example-two"],
         )
 
@@ -157,7 +157,7 @@ class RemotelySourceTests(unittest.TestCase):
         self.assertEqual(job.id, "remotely:active")
 
     def test_fetch_jobs_reuses_fresh_detail_cache(self):
-        now = datetime(2026, 8, 28, 12, tzinfo=timezone.utc)
+        now = datetime(2026, 8, 28, 12, tzinfo=UTC)
         url = "https://www.remotely.de/job/cached"
         cached = Job(
             id="remotely:cached",
@@ -184,7 +184,7 @@ class RemotelySourceTests(unittest.TestCase):
         fetch_job.assert_not_called()
 
     def test_detail_cache_refreshes_at_seven_day_boundary(self):
-        now = datetime(2026, 8, 28, 12, tzinfo=timezone.utc)
+        now = datetime(2026, 8, 28, 12, tzinfo=UTC)
         url = "https://www.remotely.de/job/cached"
         for age, refresh in [(timedelta(days=7, seconds=-1), False), (timedelta(days=7), True)]:
             cached = Job(
@@ -208,7 +208,7 @@ class RemotelySourceTests(unittest.TestCase):
                 self.assertEqual(fetch.called, refresh)
 
     def test_fetch_jobs_removes_closed_listing_from_stale_cache(self):
-        now = datetime(2026, 8, 29, 12, tzinfo=timezone.utc)
+        now = datetime(2026, 8, 29, 12, tzinfo=UTC)
         url = "https://www.remotely.de/job/now-closed"
         cached = Job(
             id="remotely:now-closed",
@@ -261,7 +261,7 @@ class RemotelySourceTests(unittest.TestCase):
                 {"remotely:active", "remotely:closed", "remotely:redirected"},
                 status_cache_path=Path(directory) / "linkedin.json",
                 fetcher=fetcher,
-                now=datetime(2026, 8, 29, 12, tzinfo=timezone.utc),
+                now=datetime(2026, 8, 29, 12, tzinfo=UTC),
                 sleeper=lambda _seconds: None,
             )
 
@@ -270,7 +270,7 @@ class RemotelySourceTests(unittest.TestCase):
 
     def test_linkedin_status_is_reused_for_one_day(self):
         url = "https://de.linkedin.com/jobs/view/closed-at-example-105"
-        now = datetime(2026, 8, 29, 12, tzinfo=timezone.utc)
+        now = datetime(2026, 8, 29, 12, tzinfo=UTC)
         with tempfile.TemporaryDirectory() as directory:
             status_path = Path(directory) / "linkedin.json"
             first_jobs = [self.remotely_job("first", url)]
@@ -295,7 +295,3 @@ class RemotelySourceTests(unittest.TestCase):
 
         self.assertEqual(removed, 1)
         fetcher.assert_not_called()
-
-
-if __name__ == "__main__":
-    unittest.main()

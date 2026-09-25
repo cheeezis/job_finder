@@ -15,15 +15,18 @@ from unittest.mock import patch
 from job_finder import db
 from job_finder.matching.scoring import LOCAL_PLACES
 from job_finder.models import Job, JobSource
+from job_finder.paths import JOBS_FILE, RECOMMENDATIONS_JSON
 from job_finder.persistence.application_documents import store_documents
 from job_finder.persistence.database import transaction
 from job_finder.persistence.postgres_backup import create_postgres_backup, restore_backup
 from job_finder.persistence.postgres_store import prune_cache, read_dataset, write_dataset
+from job_finder.persistence.storage import publish_results, write_json_atomic
 from job_finder.sources import manual
 from job_finder.workflow.manual_import import import_manual_url
 from job_finder.workflow.memory import edit_job, edit_memory, load_memory, save_memory
 from job_finder.workflow.review_actions import update_review_decision
 from job_finder.workflow.review_data import load_review_jobs
+from run_finder import run_pipeline
 
 
 class PostgresTests(unittest.TestCase):
@@ -153,11 +156,10 @@ class PostgresTests(unittest.TestCase):
             self.assertEqual(read_dataset(name), value)
 
     def test_related_writes_roll_back_together(self):
-        with self.assertRaisesRegex(RuntimeError, "abort"):
-            with transaction():
-                save_memory({"job:1": {"workflow_status": "new"}})
-                write_dataset("internal/jobs.json", [{"id": "job:1"}])
-                raise RuntimeError("abort")
+        with self.assertRaisesRegex(RuntimeError, "abort"), transaction():
+            save_memory({"job:1": {"workflow_status": "new"}})
+            write_dataset("internal/jobs.json", [{"id": "job:1"}])
+            raise RuntimeError("abort")
         self.assertEqual(load_memory(), {})
         self.assertIsNone(read_dataset("internal/jobs.json"))
 
@@ -236,8 +238,6 @@ class PostgresTests(unittest.TestCase):
         self.assertIn("manual", read_dataset("internal/manual_jobs_cache.json")["jobs"])
 
     def test_two_worker_runs_and_review_share_persistent_state(self):
-        from run_finder import run_pipeline
-
         job = Job(
             id="test:1",
             title="Junior Python Developer",
@@ -271,9 +271,6 @@ class PostgresTests(unittest.TestCase):
         self.assertEqual(len(read_dataset("internal/jobs.json")), 1)
 
     def test_worker_publication_preserves_manual_import_not_in_snapshot(self):
-        from job_finder.paths import JOBS_FILE, RECOMMENDATIONS_JSON
-        from job_finder.persistence.storage import publish_results, write_json_atomic
-
         manual_job = {
             "id": "manual:1",
             "sources": [{"source": "manual", "url": "https://example.test/manual"}],
@@ -296,9 +293,6 @@ class PostgresTests(unittest.TestCase):
 
     def test_worker_publication_preserves_entries_from_excluded_sources(self):
         """A split schedule must not drop jobs a run deliberately skipped."""
-        from job_finder.paths import JOBS_FILE, RECOMMENDATIONS_JSON
-        from job_finder.persistence.storage import publish_results, write_json_atomic
-
         skipped_job = {
             "id": "arbeitsagentur:1",
             "sources": [{"source": "arbeitsagentur", "url": "https://example.test/1"}],

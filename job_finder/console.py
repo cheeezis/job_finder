@@ -4,9 +4,8 @@ import json
 import sys
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-PROGRESS_WIDTH = 24
 _PROGRESS_STARTED = {}
 _PROGRESS_REPORTED = {}
 LOG_PROGRESS_INTERVAL = 30
@@ -25,7 +24,7 @@ def log_event(event, *, run_id, level="info", **fields):
     query it with e.g. `Log_s | extend e = parse_json(Log_s)`.
     """
     entry = {
-        "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "timestamp": datetime.now(UTC).isoformat(timespec="seconds"),
         "run_id": run_id,
         "event": event,
         "level": level,
@@ -39,14 +38,6 @@ def configure_utf8_output():
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")
-
-
-def progress_bar(current, total, width=PROGRESS_WIDTH):
-    """Return one stable text bar suitable for consoles and log files."""
-    total = max(int(total), 1)
-    current = min(max(int(current), 0), total)
-    filled = round(width * current / total)
-    return f"[{'#' * filled}{'-' * (width - filled)}]"
 
 
 def print_progress(label, current, total, detail=""):
@@ -112,6 +103,6 @@ def print_phase(current, total, label):
     print(f"\n[{current}/{total}] {label}", flush=True)
 
 
-def progress_checkpoint(current, total, interval=10):
+def progress_checkpoint(current, total):
     """Limit long detail loops to useful, readable progress snapshots."""
-    return current == 1 or current == total or current % interval == 0
+    return current == 1 or current == total or current % 10 == 0

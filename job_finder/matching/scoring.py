@@ -6,24 +6,11 @@ from datetime import date, timedelta
 from job_finder.matching import location_rules
 from job_finder.matching.config import LOCAL_SEARCH_RADIUS_KM
 from job_finder.matching.experience import (
-    EXPERIENCE_TERM as EXPERIENCE_TERM,
-    MORE_THAN_QUALIFIERS as MORE_THAN_QUALIFIERS,
-    REQUIRED_EXPERIENCE_PATTERNS as REQUIRED_EXPERIENCE_PATTERNS,
-    YEAR_UNIT as YEAR_UNIT,
-    analyze_experience as analyze_experience,
-    experience_is_optional as experience_is_optional,
-    extract_required_years as extract_required_years,
-    has_required_experience as has_required_experience,
-    match_context as match_context,
-    match_is_optional as match_is_optional,
-    strong_experience_is_required as strong_experience_is_required,
+    analyze_experience,
+    extract_required_years,
+    strong_experience_is_required,
 )
-from job_finder.matching.location_rules import (
-    is_full_remote as is_full_remote,
-    is_hybrid as is_hybrid,
-    remote_percent as remote_percent,
-    remote_possible_from_germany as remote_possible_from_germany,
-)
+from job_finder.matching.location_rules import is_hybrid, remote_possible_from_germany
 from job_finder.matching.matching_rules import (
     BLOCKED_TITLE_WORDS,
     ENTRY_LEVEL_TITLE_EXCEPTIONS,
@@ -34,19 +21,14 @@ from job_finder.matching.matching_rules import (
     ROLE_GROUPS,
 )
 from job_finder.matching.matching_text import (
-    contains_any as contains_any,
-    contains_keyword as contains_keyword,
-    is_entry_level as is_entry_level,
-    keyword_pattern as keyword_pattern,
-    matches_pattern as matches_pattern,
+    contains_any,
+    contains_keyword,
+    is_entry_level,
+    matches_pattern,
 )
 from job_finder.matching.ranking_weights import ROLE_POINTS, SCORE_LIMITS, SKILL_GROUPS
 from job_finder.matching.remote import detect_remote
-from job_finder.matching.salary import (
-    extract_annual_salary as extract_annual_salary,
-    salary_number as salary_number,
-    valid_salary as valid_salary,
-)
+from job_finder.matching.salary import extract_annual_salary
 from job_finder.matching.user_settings import USER_SETTINGS
 from job_finder.models import FilterStatus, Job
 from job_finder.text import normalize_text, text_is_mainly_english
@@ -245,9 +227,12 @@ def find_role(title, description):
             if not contains_any(full_text, testing_context):
                 continue
 
-        if role["id"] == "testing" and contains_keyword(title, "verification"):
-            if not contains_any(full_text, ["software", "test", "automation"]):
-                continue
+        if (
+            role["id"] == "testing"
+            and contains_keyword(title, "verification")
+            and not contains_any(full_text, ["software", "test", "automation"])
+        ):
+            continue
 
         return role
 
@@ -374,25 +359,6 @@ def score_preferences(full_text):
     return penalties
 
 
-def passes_hard_filters(title, description, location, remote, full_text, role, career_levels):
-    """Return (allowed, reason) for normalized job text and role data.
-
-    Inputs use normalize_text; role is a matching profile dictionary
-    or None. Return the first blocking reason, or (True, "") when title,
-    experience, degree, travel and location requirements pass. The age
-    check is performed separately by score_job.
-    """
-    reason = hard_filter_reason(title, description, full_text, role, career_levels)
-    if reason:
-        return False, reason
-
-    location_score = analyze_location_for_role(title, location, remote, description)
-    if not location_score["allowed"]:
-        return False, location_score["label"]
-
-    return True, ""
-
-
 def analyze_location(location, remote, description):
     """Analyze location using the currently configured local and commuter rules."""
     return location_rules.analyze_location(
@@ -403,13 +369,3 @@ def analyze_location(location, remote, description):
         commuter_locations=COMMUTER_LOCATIONS,
         radius=LOCAL_SEARCH_RADIUS_KM,
     )
-
-
-def is_local_area(location):
-    """Match a location against the configured local aliases."""
-    return location_rules.is_local_area(location, LOCAL_PLACES)
-
-
-def find_commuter_location(location):
-    """Return the first matching configured commuter location, or None."""
-    return location_rules.find_commuter_location(location, COMMUTER_LOCATIONS)

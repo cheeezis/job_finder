@@ -347,11 +347,10 @@ class MemoryTests(unittest.TestCase):
             path = Path(directory) / "state.sqlite3"
             original = {"job:1": {"workflow_status": "interesting"}}
             save_memory(original, path)
-            with self.assertRaises(RuntimeError):
-                with edit_memory(path) as memory:
-                    memory["job:1"]["workflow_status"] = "applied"
-                    memory["job:2"] = {"workflow_status": "ignored"}
-                    raise RuntimeError("abort")
+            with self.assertRaises(RuntimeError), edit_memory(path) as memory:
+                memory["job:1"]["workflow_status"] = "applied"
+                memory["job:2"] = {"workflow_status": "ignored"}
+                raise RuntimeError("abort")
             self.assertEqual(load_memory(path), original)
 
     def test_concurrent_postgres_edits_preserve_both_decisions(self):
@@ -384,7 +383,3 @@ class MemoryTests(unittest.TestCase):
             restored = load_memory(path)
             self.assertEqual(restored["job:1"]["workflow_status"], "applied")
             self.assertEqual(restored["job:2"]["workflow_status"], "ignored")
-
-
-if __name__ == "__main__":
-    unittest.main()

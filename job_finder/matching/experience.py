@@ -184,9 +184,9 @@ def is_addressed_to_applicant(text, match):
     )
 
 
-def match_is_optional(text, match, context_size=55):
+def match_is_optional(text, match):
     """Check whether optional wording belongs to a nearby requirement."""
-    start, end = match_context(text, match, context_size)
+    start, end = match_context(text, match, context_size=55)
     return contains_any(text[start:end], OPTIONAL_EXPERIENCE_PHRASES)
 
 

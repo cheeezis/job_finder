@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from job_finder.matching.deduplication import deduplicate_jobs, unique_sources
 from job_finder.matching.remote import classify_remote, detect_remote
-from job_finder.matching.scoring import LOCAL_PLACES, score_job
+from job_finder.matching.scoring import LOCAL_PLACES, analyze_experience, score_job
 from job_finder.models import Job, JobSource
 from job_finder.workflow.main import score_jobs
 
@@ -47,6 +47,12 @@ def make_job(**overrides):
 
 
 class ScoringTests(unittest.TestCase):
+    def test_experience_analysis_accepts_title_and_text_only(self):
+        self.assertEqual(
+            analyze_experience("developer", "2 jahre erfahrung"),
+            {"rank": 3, "points": 8, "label": "2 Jahr(e) gefordert"},
+        )
+
     def test_offered_training_does_not_reduce_a_regular_job_score(self):
         base = score_job(make_job(description="Python APIs. Erste Erfahrung reicht."))
         benefits = score_job(
@@ -1001,7 +1007,3 @@ class DeduplicationTests(unittest.TestCase):
         )
 
         self.assertEqual(len(deduplicate_jobs([remote, onsite])), 2)
-
-
-if __name__ == "__main__":
-    unittest.main()

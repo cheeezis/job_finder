@@ -2,7 +2,7 @@
 
 import tempfile
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -375,7 +375,7 @@ class AvailabilityTests(unittest.TestCase):
     def test_inconclusive_result_is_retried_after_24_hours(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "state.sqlite3"
-            start = datetime(2026, 9, 10, tzinfo=timezone.utc)
+            start = datetime(2026, 9, 10, tzinfo=UTC)
             save_memory(
                 {
                     "feed:1": {

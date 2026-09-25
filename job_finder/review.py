@@ -30,22 +30,15 @@ from job_finder.workflow.applications import load_application_overview
 from job_finder.workflow.manual_import import import_manual_url
 from job_finder.workflow.memory import load_memory
 from job_finder.workflow.review_actions import (
-    delete_workflow_history as delete_workflow_history,
-    start_application as start_application,
-    undo_ignored_decision as undo_ignored_decision,
-    update_application_salary as update_application_salary,
-    update_review_decision as update_review_decision,
-    update_workflow_history as update_workflow_history,
-    update_workflow_status as update_workflow_status,
-    validated_salary_expectation_eur as validated_salary_expectation_eur,
+    delete_workflow_history,
+    start_application,
+    undo_ignored_decision,
+    update_application_salary,
+    update_review_decision,
+    update_workflow_history,
+    update_workflow_status,
 )
-from job_finder.workflow.review_data import (
-    PERSISTED_REVIEW_STATUSES as PERSISTED_REVIEW_STATUSES,
-    load_review_jobs as load_review_jobs,
-    memory_entry_for_job as memory_entry_for_job,
-    memory_ids_for_job as memory_ids_for_job,
-    remembered_review_job as remembered_review_job,
-)
+from job_finder.workflow.review_data import load_review_jobs
 
 LANDING_PAGE = Path(__file__).with_name("landing.html")
 REVIEW_PAGE = Path(__file__).with_name("review.html")

@@ -1,7 +1,7 @@
 """Arbeitnow source adapter using its free public job-board API."""
 
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.error import HTTPError
@@ -221,6 +221,6 @@ def job_from_record(record):
 def parse_created_at(value):
     """Parse Arbeitnow's Unix timestamp into a UTC calendar date."""
     try:
-        return datetime.fromtimestamp(float(value), tz=timezone.utc).date()
+        return datetime.fromtimestamp(float(value), tz=UTC).date()
     except (TypeError, ValueError, OSError):
         return None

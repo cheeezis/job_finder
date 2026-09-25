@@ -3,7 +3,7 @@
 import json
 import re
 import time
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
@@ -211,10 +211,10 @@ def fresh_linkedin_status(entry, now):
     except (KeyError, TypeError, ValueError):
         return None
     if checked_at.tzinfo is None:
-        checked_at = checked_at.replace(tzinfo=timezone.utc)
+        checked_at = checked_at.replace(tzinfo=UTC)
     current = now
     if current.tzinfo is None:
-        current = current.replace(tzinfo=timezone.utc)
+        current = current.replace(tzinfo=UTC)
     if current - checked_at >= LINKEDIN_STATUS_MAX_AGE:
         return None
     return entry["closed"]
@@ -250,11 +250,6 @@ def collect_links(client=None, today=None, max_pages=None):
         if consecutive_old_pages >= OLD_PAGE_STOP_COUNT:
             break
     return links
-
-
-def extract_detail_links(html):
-    """Extract canonical public job URLs without relying on CSS classes."""
-    return [entry["url"] for entry in extract_list_entries(html)]
 
 
 def extract_list_entries(html):
@@ -498,8 +493,6 @@ class _RemotelyDetailParser(HTMLParser):
             return
         if self.active_section == "arbeitsmodell" and not self.work_model:
             self.work_model = data
-        elif self.active_section == "eckdaten" and not self.location:
-            self.location = data
         elif self.active_section == "eckdaten" and not self.location:
             self.location = data
 

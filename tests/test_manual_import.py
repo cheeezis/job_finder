@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from job_finder.models import Job, JobSource, WorkMode
+from job_finder.workflow.main import score_jobs
 from job_finder.workflow.manual_import import import_manual_url
 from job_finder.workflow.memory import load_memory
 
@@ -51,8 +52,6 @@ class ManualImportTests(unittest.TestCase):
         self.assertIn("manual:python", memory)
 
     def test_manual_source_remains_reviewable_in_later_pipeline_runs(self):
-        from job_finder.workflow.main import score_jobs
-
         job = Job(
             id="manual:remote-conflict",
             title="Junior Python Entwickler",
@@ -68,8 +67,6 @@ class ManualImportTests(unittest.TestCase):
         self.assertEqual(results["included"][0]["prefilter_warning"], "Ort/Remote passt nicht")
 
     def test_old_manual_job_remains_reviewable_with_warning(self):
-        from job_finder.workflow.main import score_jobs
-
         job = Job(
             id="manual:old",
             title="Junior Python Entwickler",
@@ -85,7 +82,3 @@ class ManualImportTests(unittest.TestCase):
 
         self.assertEqual(len(results["included"]), 1)
         self.assertIn("älter als 60 Tage", results["included"][0]["prefilter_warning"])
-
-
-if __name__ == "__main__":
-    unittest.main()

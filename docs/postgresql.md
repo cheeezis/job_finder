@@ -213,7 +213,10 @@ Azure-Datenbank (`scripts/run_local_hybrid.py`, Überblick in der README unter
 nutzt: Er fragt es bei jedem Start über die lokale `az`-Anmeldung ab, meldet
 sich an der Registry an und holt es per `docker pull`. Beide Hälften laufen
 so immer mit derselben Code-Version; Voraussetzung sind eine gültige
-`az`-Anmeldung und ein laufendes Docker Desktop.
+`az`-Anmeldung und ein laufendes Docker Desktop. Die persönlichen
+Sucheinstellungen gibt das Skript aus `user_settings.local.yaml` als
+`JOBFINDER_USER_SETTINGS` an den Container weiter; im Image stehen nur die
+Beispielwerte.
 
 Eine native Windows-Verbindung (`.venv`) lieferte zeitweise veraltete
 Lesezustände gegenüber Azure, ein Snapshot von Stunden zuvor. Im Container

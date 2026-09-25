@@ -68,6 +68,10 @@ def container_environment():
     webhook = os.environ.get("DISCORD_WEBHOOK_URL")
     if webhook:
         values["DISCORD_WEBHOOK_URL"] = webhook
+    # The image only carries the example settings; the personal file stays on this disk.
+    settings = PROJECT_DIR / "user_settings.local.yaml"
+    if settings.exists():
+        values["JOBFINDER_USER_SETTINGS"] = settings.read_text(encoding="utf-8")
     return values
 
 

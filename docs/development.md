@@ -187,7 +187,9 @@ Funktionsparameter oder gezielte Patches ein.
   Dokumente samt Prüfsummen.
 
 `user_settings.local.yaml` wird beim Import der Konfigurationsmodule gelesen.
-Ohne diese Datei wird die anonymisierte Beispielkonfiguration verwendet.
+Ohne diese Datei wird die anonymisierte Beispielkonfiguration verwendet. Ist
+`JOBFINDER_USER_SETTINGS` gesetzt (in Azure aus dem Key Vault), hat deren
+YAML-Inhalt Vorrang; `SETTINGS_SOURCE` nennt die tatsächliche Quelle.
 Nach Änderungen laufende Prozesse neu starten. Persönliche Konfiguration,
 Dokumente, Datenbanken und Zugangsdaten bleiben außerhalb von Git.
 

@@ -1,11 +1,18 @@
-"""Load local search settings without publishing personal values."""
+"""Load search settings without publishing personal values.
 
+Containers receive the YAML text in JOBFINDER_USER_SETTINGS (in Azure from a
+Key Vault secret), because the ignored local file is not part of the image.
+Without that variable the local file is used, and without it the example.
+"""
+
+import os
 from pathlib import Path
 
 import yaml
 
 from job_finder.paths import PROJECT_DIR
 
+SETTINGS_ENV = "JOBFINDER_USER_SETTINGS"
 LOCAL_SETTINGS_PATH = PROJECT_DIR / "user_settings.local.yaml"
 EXAMPLE_SETTINGS_PATH = PROJECT_DIR / "user_settings.example.yaml"
 SETTINGS_PATH = LOCAL_SETTINGS_PATH if LOCAL_SETTINGS_PATH.exists() else EXAMPLE_SETTINGS_PATH
@@ -25,11 +32,18 @@ def load_user_settings(path=SETTINGS_PATH):
     """
     settings_path = Path(path)
     try:
-        values = yaml.safe_load(settings_path.read_text(encoding="utf-8"))
+        text = settings_path.read_text(encoding="utf-8")
     except OSError as error:
         raise ValueError(f"Einstellungen konnten nicht gelesen werden: {settings_path}") from error
+    return parse_user_settings(text, settings_path)
+
+
+def parse_user_settings(text, source):
+    """Validate settings YAML; source only names its origin in error messages."""
+    try:
+        values = yaml.safe_load(text)
     except yaml.YAMLError as error:
-        raise ValueError(f"Einstellungen enthalten ungueltiges YAML: {settings_path}") from error
+        raise ValueError(f"Einstellungen enthalten ungueltiges YAML: {source}") from error
 
     if not isinstance(values, dict):
         raise ValueError("Einstellungen muessen ein Objekt sein")
@@ -110,4 +124,11 @@ def require_commuter_locations(value, name):
     return value
 
 
-USER_SETTINGS = load_user_settings()
+def configured_user_settings(environ=os.environ):
+    """Return the active settings and the name of their source."""
+    if environ.get(SETTINGS_ENV):
+        return parse_user_settings(environ[SETTINGS_ENV], SETTINGS_ENV), SETTINGS_ENV
+    return load_user_settings(), SETTINGS_PATH.name
+
+
+USER_SETTINGS, SETTINGS_SOURCE = configured_user_settings()

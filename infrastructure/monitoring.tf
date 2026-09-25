@@ -80,3 +80,48 @@ resource "azurerm_monitor_metric_alert" "model_tokens_high" {
 
   tags = azurerm_resource_group.jobfinder.tags
 }
+
+# Langsamer Rauchmelder für das ganze Projekt, also auch für die Produktion.
+# Kostendaten kommen mit bis zu 72 Stunden Verzögerung; die Hochrechnung warnt
+# oft früher, weil sie den Trend des Monats sieht. 25 € (Rechnungswährung des
+# Abos) sind das geplante Maximum: Registry etwa 4,35 € plus höchstens 20 € für
+# den Agenten. Ein Budget für das ganze Abo könnte die Pipeline mangels Rechten
+# auf Abo-Ebene nicht verwalten; alle Projektressourcen liegen in dieser Gruppe.
+resource "azurerm_consumption_budget_resource_group" "jobfinder" {
+  name              = "budget-jobfinder"
+  resource_group_id = azurerm_resource_group.jobfinder.id
+  amount            = 25
+  time_grain        = "Monthly"
+
+  time_period {
+    start_date = "2026-09-01T00:00:00Z"
+  }
+
+  notification {
+    threshold      = 50
+    operator       = "GreaterThanOrEqualTo"
+    threshold_type = "Actual"
+    contact_groups = [azurerm_monitor_action_group.jobfinder_alerts.id]
+  }
+
+  notification {
+    threshold      = 80
+    operator       = "GreaterThanOrEqualTo"
+    threshold_type = "Actual"
+    contact_groups = [azurerm_monitor_action_group.jobfinder_alerts.id]
+  }
+
+  notification {
+    threshold      = 100
+    operator       = "GreaterThanOrEqualTo"
+    threshold_type = "Actual"
+    contact_groups = [azurerm_monitor_action_group.jobfinder_alerts.id]
+  }
+
+  notification {
+    threshold      = 100
+    operator       = "GreaterThan"
+    threshold_type = "Forecasted"
+    contact_groups = [azurerm_monitor_action_group.jobfinder_alerts.id]
+  }
+}

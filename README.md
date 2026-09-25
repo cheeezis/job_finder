@@ -183,6 +183,40 @@ Junior-Hybrid-Sonderfälle sind eigene, standardmäßig deaktivierte Filter.
 Einrichtung und Zugriffswege beschreiben [PostgreSQL betreiben](docs/postgresql.md)
 und [Netzwerkpfade](docs/networking.md).
 
+## Kostenschutz für den KI-Agenten
+
+Eine agentische Stufe, die vorgefilterte Stellen als Steckbrief zusammenfasst,
+ist in Arbeit. Damit sie das Azure-Guthaben nicht aufbrauchen kann, fragt sie
+vor jedem Modell- und Werkzeugaufruf den Kostenwächter
+(`job_finder/agent/cost_guard.py`). Ein Modellaufruf ist nur erlaubt, wenn
+
+- in den Einstellungen `agent.enabled: true` steht,
+- für das Modell ein Preis hinterlegt ist (`job_finder/agent/pricing.py`),
+- das Kostenbuch lesbar ist und die Kosten von heute und diesem Monat unter
+  den Grenzen liegen (deutsche Zeit, alle Läufe zusammen) und
+- die aktuelle Stelle ihre Grenzen für Kosten und Modellaufrufe noch nicht
+  erreicht hat.
+
+Werkzeugaufrufe haben eine eigene Grenze pro Stelle. Jeder Modellaufruf wird
+mit Tokens und Eurobetrag in der Tabelle `agent_usage` gebucht. Erreicht eine
+Stelle ihre Grenze, endet nur diese Stelle. Tages- oder Monatsgrenze beenden
+den Agenten für den Lauf, die übrigen Stellen kommen im nächsten Lauf an die
+Reihe: Die Tagesgrenze ist eine Sicherung gegen Fehler, kein Filter. Weil vor
+jedem Aufruf geprüft wird, kann eine Grenze um höchstens einen Aufruf
+überschritten werden.
+
+Die Grenzen stehen im Abschnitt `agent` der persönlichen Einstellungen;
+Standardwerte und Bedeutung zeigt `user_settings.example.yaml`. Fehlt der
+Abschnitt oder ist ein Wert ungültig, bleibt der Agent aus und der Finder läuft
+normal weiter. Feste Obergrenzen im Code (5 € pro Tag, 50 € pro Monat) fangen
+Tippfehler ab. Zum Ändern oder Abschalten (`enabled: false`) die lokale Datei
+anpassen und das Secret wie unter [Einrichtung](#einrichtung) neu setzen. Das
+gilt ab dem nächsten Lauf; ein bereits laufender Finder-Lauf arbeitet mit den
+Werten weiter, mit denen er gestartet ist.
+
+Vor dem ersten Einsatz in Azure muss die Tabelle `agent_usage` dort einmal
+angelegt werden ([PostgreSQL betreiben](docs/postgresql.md#azure)).
+
 ## Ablauf
 
 1. Die Quellen liefern Suchtreffer und Detaildaten.
@@ -327,6 +361,7 @@ ein lokales `terraform apply` setzt die App also nie zurück (siehe
 ```text
 job_finder/             Kernlogik, Quellen, Review und Bewerbungsverwaltung
 job_finder/sources/     einzelne Quellenadapter
+job_finder/agent/       Kostenschutz der geplanten agentischen Stufe
 tests/                  automatisierte Tests
 docs/development.md     Architektur, Quellenvertrag und Entwicklungsablauf
 requirements-dev.txt    zusätzliche Werkzeuge für die Entwicklung

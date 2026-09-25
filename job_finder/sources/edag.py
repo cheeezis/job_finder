@@ -36,8 +36,7 @@ def collect_links():
     first_html = fetch_text(LIST_URL)
     pages = [int(value) for value in re.findall(r"currentPage(?:%5D|\])=(\d+)", first_html)]
     last_page = max(pages, default=1)
-    links = []
-    seen = set()
+    links = {}
 
     for page in range(1, last_page + 1):
         html = (
@@ -45,11 +44,8 @@ def collect_links():
             if page == 1
             else fetch_text(f"{LIST_URL}?tx_successfactors_view%5BcurrentPage%5D={page}")
         )
-        for url in extract_local_links(html):
-            if url not in seen:
-                seen.add(url)
-                links.append(url)
-    return links
+        links.update(dict.fromkeys(extract_local_links(html)))
+    return list(links)
 
 
 def extract_local_links(html):

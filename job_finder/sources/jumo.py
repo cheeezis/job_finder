@@ -35,17 +35,13 @@ def collect_links():
     csrf = unescape(csrf_match.group(1))
 
     _session_text(opener, f"{LIST_URL}?search=true", {"j": "jobexchange", "_csrf": csrf})
-    identifiers = []
-    seen = set()
+    identifiers = {}
 
     for _batch in range(MAX_RESULT_BATCHES):
         html = _session_text(
             opener, LIST_URL, {"showNextJobOffers": "true", "j": "jobexchange", "_csrf": csrf}
         )
-        for identifier in extract_job_ids(html):
-            if identifier not in seen:
-                seen.add(identifier)
-                identifiers.append(identifier)
+        identifiers.update(dict.fromkeys(extract_job_ids(html)))
 
         has_next = _session_text(opener, LIST_URL, {"hasNextJobOffers": "true", "_csrf": csrf})
         if not json.loads(has_next.lower()):

@@ -149,8 +149,7 @@ def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE, now=None):
 
 def build_api_searches():
     """Map our shared search terms to get-in-IT's available category filters."""
-    seen = set()
-
+    searches = {}
     search_plans = [
         (SEARCH_TERMS, SEARCH_LOCATIONS),
         (COMMUTER_SEARCH_TERMS, COMMUTER_SEARCH_LOCATIONS),
@@ -159,11 +158,8 @@ def build_api_searches():
         for term, location in product(terms, locations):
             for priority_id in priority_ids_for_term(term):
                 key = (priority_id, location.lower() == "remote")
-                if key in seen:
-                    continue
-
-                seen.add(key)
-                yield {"priority_id": priority_id, "location": location}
+                searches.setdefault(key, {"priority_id": priority_id, "location": location})
+    yield from searches.values()
 
 
 def priority_ids_for_term(term):

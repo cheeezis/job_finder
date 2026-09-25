@@ -212,8 +212,7 @@ def collect_links(client=None, today=None, max_pages=None):
     page_limit = max_pages or MAX_LIST_PAGES
     reference_date = today or date.today()
     cutoff = reference_date - timedelta(days=LOOKBACK_DAYS)
-    links = []
-    seen = set()
+    links = {}
     consecutive_old_pages = 0
     for page in range(1, page_limit + 1):
         url = LIST_URL if page == 1 else f"{LIST_URL}/seite/{page}"
@@ -223,19 +222,16 @@ def collect_links(client=None, today=None, max_pages=None):
             for entry in entries
             if entry_is_recent(entry, cutoff=cutoff, today=reference_date)
         ]
-        new_links = [link for link in page_links if link not in seen]
         if not entries:
             break
-        for link in new_links:
-            seen.add(link)
-            links.append(link)
+        links.update(dict.fromkeys(page_links))
         if page_is_before_cutoff(entries, cutoff, reference_date):
             consecutive_old_pages += 1
         else:
             consecutive_old_pages = 0
         if consecutive_old_pages >= OLD_PAGE_STOP_COUNT:
             break
-    return links
+    return list(links)
 
 
 def extract_list_entries(html):

@@ -311,7 +311,6 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
         self.send_content(content, content_type)
 
     def send_json(self, value, status=200):
-        """Return one JSON response."""
         content = json.dumps(value, ensure_ascii=False).encode("utf-8")
         self.send_content(content, "application/json; charset=utf-8", status)
 

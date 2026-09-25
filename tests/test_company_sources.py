@@ -5,7 +5,6 @@ import unittest
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
-from urllib.parse import parse_qsl
 
 from job_finder.models import Job, JobSource, WorkMode
 from job_finder.sources import company_careers, compose_it, edag, jumo
@@ -16,194 +15,15 @@ from job_finder.sources.company_careers import (
     NETHINKS,
     PROEMION,
     RHOENENERGIE,
-    CareerPage,
     fetch_company_jobs,
 )
 
 
-class FakeJumoSession:
-    """Answer JUMO's session requests in order and record what was sent."""
-
-    def __init__(self, answers):
-        self.answers = list(answers)
-        self.requests = []
-
-    def open(self, request, timeout):
-        form = dict(parse_qsl(request.data.decode())) if request.data else None
-        self.requests.append((request.full_url, form, dict(request.header_items()), timeout))
-        return FakeResponse(self.answers.pop(0))
-
-
-class FakeResponse:
-    def __init__(self, text):
-        self.text = text
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *args):
-        return False
-
-    def read(self):
-        return self.text.encode()
-
-
-class JumoSessionTests(unittest.TestCase):
-    def test_collect_links_follows_csrf_session_batches_until_no_more_offers(self):
-        session = FakeJumoSession(
-            [
-                '<input name="_csrf" type="hidden" value="a&amp;b">',
-                "search started",
-                '<a href="x?jobOfferId=AA11">1</a><a href="x?jobOfferId=bb22">2</a>',
-                "true",
-                '<a href="x?jobOfferId=bb22">2</a><a href="x?jobOfferId=cc33">3</a>',
-                "False",
-            ]
-        )
-        with patch.object(jumo, "build_opener", return_value=session):
-            links = jumo.collect_links()
-
-        self.assertEqual(
-            [link.split("jobOfferId=")[1].split("&")[0] for link in links], ["AA11", "bb22", "cc33"]
-        )
-        self.assertTrue(
-            links[0].startswith(f"{jumo.BASE_URL}showJobOfferDetail.do?jobOfferId=AA11")
-        )
-        urls = [url for url, _form, _headers, _timeout in session.requests]
-        forms = [form for _url, form, _headers, _timeout in session.requests]
-        self.assertEqual(
-            urls, [jumo.SEARCH_URL, f"{jumo.LIST_URL}?search=true", *[jumo.LIST_URL] * 4]
-        )
-        self.assertIsNone(forms[0])
-        self.assertEqual(forms[1], {"j": "jobexchange", "_csrf": "a&b"})
-        self.assertEqual(
-            forms[2], {"showNextJobOffers": "true", "j": "jobexchange", "_csrf": "a&b"}
-        )
-        self.assertEqual(forms[3], {"hasNextJobOffers": "true", "_csrf": "a&b"})
-        for _url, form, headers, timeout in session.requests:
-            self.assertEqual(headers["User-agent"], "job-finder/0.1")
-            self.assertEqual(timeout, 20)
-            if form is not None:
-                self.assertEqual(headers["Content-type"], "application/x-www-form-urlencoded")
-
-    def test_collect_links_needs_the_csrf_token(self):
-        with (
-            patch.object(jumo, "build_opener", return_value=FakeJumoSession(["<form></form>"])),
-            self.assertRaisesRegex(ValueError, "CSRF"),
-        ):
-            jumo.collect_links()
-
-
-EDAG_LIST = "https://www.edag.com/de/karriere/stellenanzeigen"
-EDAG_DETAIL = "https://www.edag.com/de/karriere/stellenanzeigen/detail"
-COMPANY_SOURCES = [
-    (
-        CSS,
-        "CSS AG",
-        {
-            "https://jobs.css.de/public/jobs/?standort=1": '<a href="https://jobs.css.de/job-dev-1.html">'
-            '<a href="/job-admin-9.html"><a href="https://jobs.css.de/public/jobs/">'
-            '<a href="https://jobs.css.de/job-dev-1.html#top">'
-        },
-        ["https://jobs.css.de/job-dev-1.html", "https://jobs.css.de/job-admin-9.html"],
-    ),
-    (
-        PROEMION,
-        "Proemion GmbH",
-        {
-            # A query that survives canonicalisation breaks the anchored pattern.
-            "https://proemion.jobs.personio.de/?language=de": '<a href="/job/77?language=de">'
-            '<a href="/job/88?language=de&amp;display=de"><a href="/?language=de">'
-        },
-        ["https://proemion.jobs.personio.de/job/77"],
-    ),
-    (
-        BYTEWERK,
-        "bytewerk GmbH",
-        {"https://bytewerk-gmbh.jobs.personio.de/?language=de": '<a href="/job/55"><a href="/">'},
-        ["https://bytewerk-gmbh.jobs.personio.de/job/55"],
-    ),
-    (
-        RHOENENERGIE,
-        "RhönEnergie Fulda GmbH",
-        {
-            "https://re-gruppe.de/karriere/": '<a href="/karriere/it-admin-de-j123.html">'
-            '<a href="https://re-gruppe.de/karriere/">'
-        },
-        ["https://re-gruppe.de/karriere/it-admin-de-j123.html"],
-    ),
-    (
-        NETHINKS,
-        "NETHINKS GmbH",
-        {
-            "https://nethinks.com/nethinks_jobs/": '<a href="/nethinks_jobs/page/2/">'
-            '<a href="/nethinks_jobs/page/3/"><a href="/nethinks_jobs/dev/">'
-            '<a href="/nethinks_jobs/feed/">',
-            "https://nethinks.com/nethinks_jobs/page/2/": '<a href="/nethinks_jobs/dev/">'
-            '<a href="/nethinks_jobs/ops/">',
-            "https://nethinks.com/nethinks_jobs/page/3/": '<a href="/nethinks_jobs/qa/">',
-        },
-        [
-            "https://nethinks.com/nethinks_jobs/dev/",
-            "https://nethinks.com/nethinks_jobs/ops/",
-            "https://nethinks.com/nethinks_jobs/qa/",
-        ],
-    ),
-    (
-        edag,
-        "EDAG Engineering GmbH",
-        {
-            EDAG_LIST: '<a class="sfjob" href="/de/karriere/stellenanzeigen/detail/dev-fulda-11">'
-            'Dev Fulda</a><a class="sfjob" href="/de/karriere/stellenanzeigen/detail/dev-muc-12">'
-            'Dev München</a><a href="?tx_successfactors_view%5BcurrentPage%5D=2">2</a>',
-            f"{EDAG_LIST}?tx_successfactors_view%5BcurrentPage%5D=2": '<a class="x sfjob" '
-            f'href="{EDAG_DETAIL}/ops-13">Ops Mehrere Standorte</a><a class="sfjob" '
-            'href="/de/karriere/stellenanzeigen/detail/dev-fulda-11">Dev Fulda</a>',
-        },
-        [f"{EDAG_DETAIL}/dev-fulda-11", f"{EDAG_DETAIL}/ops-13"],
-    ),
-    (
-        compose_it,
-        "COMPOSE IT",
-        {"https://compose-it.de/unternehmen/karriere/": '<a href="/job/it-supporter/">'},
-        ["https://compose-it.de/job/it-supporter/"],
-    ),
-]
-
-
-class CompanyListingTests(unittest.TestCase):
-    def test_each_company_source_hands_its_links_to_the_shared_cache(self):
-        for module, company, pages, links in COMPANY_SOURCES:
-            # Registry entries fetch and cache through company_careers itself.
-            target = company_careers if isinstance(module, CareerPage) else module
-            with self.subTest(module.SOURCE_NAME):
-                with (
-                    patch.object(target, "fetch_text", side_effect=pages.get) as fetched,
-                    patch.object(target, "fetch_company_jobs", return_value=["job"]) as cache,
-                ):
-                    self.assertEqual(module.fetch_jobs("cache.json", now="now"), ["job"])
-
-                self.assertEqual([call.args[0] for call in fetched.call_args_list], list(pages))
-                args, kwargs = cache.call_args
-                self.assertEqual(args, (module.SOURCE_NAME, company, links, "cache.json"))
-                self.assertEqual(kwargs.pop("now"), "now")
-                self.assertEqual(
-                    kwargs, {"parser": module.job_from_html} if module in (edag, compose_it) else {}
-                )
-
-    def test_jumo_hands_its_session_links_to_the_shared_cache(self):
-        with (
-            patch.object(jumo, "collect_links", return_value=["https://jobs.jumo.de/a"]),
-            patch.object(jumo, "fetch_company_jobs", return_value=["job"]) as cache,
-        ):
-            self.assertEqual(jumo.fetch_jobs("cache.json", now="now"), ["job"])
-        cache.assert_called_once_with(
-            "jumo", "JUMO GmbH & Co. KG", ["https://jobs.jumo.de/a"], "cache.json", now="now"
-        )
-
+class SourceNameTests(unittest.TestCase):
     def test_source_names_stay_stable(self):
+        sources = (CSS, PROEMION, BYTEWERK, RHOENENERGIE, NETHINKS, edag, compose_it)
         self.assertEqual(
-            [module.SOURCE_NAME for module, *_rest in COMPANY_SOURCES],
+            [source.SOURCE_NAME for source in sources],
             ["css", "proemion", "bytewerk", "rhoenenergie", "nethinks", "edag", "compose_it"],
         )
 

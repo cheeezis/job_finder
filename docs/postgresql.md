@@ -40,30 +40,19 @@ Der Befehl legt die Rolle an beziehungsweise aktualisiert ihre Rechte, setzt
 `JOBFINDER_DATABASE_URL` in `.env.postgres` auf die neue Rolle und ist beliebig
 oft wiederholbar. Passwörter werden dabei nie ausgegeben.
 
-## Vorhandene Daten übernehmen
+## Frühere Datenübernahme
 
-Finder und Review vorher beenden, damit niemand mehr die alten Dateien ändert:
+Die einmalige Übernahme der alten SQLite- und JSON-Daten nach PostgreSQL ist
+abgeschlossen; der Befehl `db migrate` wurde danach entfernt. Die Quellsicherung
+liegt weiter unter `data/backups/pre-postgres-…`, die alten Dateien bleiben
+unverändert erhalten. Der frühere Code ist im Git-Verlauf abrufbar:
 
 ```powershell
-.\.venv\Scripts\python.exe -m job_finder.db migrate
-.\.venv\Scripts\python.exe -m job_finder.db check
+git show d8a829c:job_finder/persistence/migration.py
 ```
 
-Die Migration erstellt unter `data/backups/pre-postgres-…` eine Kopie der
-JSON-Dateien und Dokumente sowie eine konsistente SQLite-Sicherung. Sie übernimmt
-den SQLite-Zustand und die JSON-Dateien direkt unter `data/internal` und
-`data/output`. Die durch SQLite ersetzte `seen_jobs.json` bleibt nur als Altdaten-
-sicherung erhalten. Vorhandene zusätzliche JSON-Daten, etwa ein alter LLM-Cache,
-werden ohne Reaktivierung der früheren Funktion mit gesichert und übernommen.
-
-Das Ziel muss leer sein. Vor dem Commit werden alle übernommenen Inhalte
-verglichen und alle referenzierten Dokumente anhand ihrer Prüfsummen geprüft.
-Ein Fehler rollt die Datenübernahme zurück. Derselbe erfolgreich migrierte
-Quellstand wird beim erneuten Aufruf nicht noch einmal über laufende Daten
-geschrieben. Der Bericht liegt in der jeweiligen Quellsicherung.
-Alte Dateien bleiben unverändert erhalten; der laufende Finder liest seine
-Standarddaten anschließend aus PostgreSQL. JSON-Dateien an ausdrücklich anderen
-Pfaden bleiben als Import-/Exportformat und für Offline-Testfixtures nutzbar.
+JSON-Dateien an ausdrücklich anderen Pfaden bleiben als Import-/Exportformat
+und für Offline-Testfixtures nutzbar.
 
 ## Finder und Review starten
 
@@ -107,7 +96,7 @@ Die Veröffentlichung der beiden Ergebnisansichten ist ebenfalls atomar.
 ## Caches
 
 Aktualisierungs- und Fehlerersatzfristen bleiben wie bisher nach Datenart
-unterschiedlich. Die Migration löscht keine Cache-Inhalte. Optional lassen sich
+unterschiedlich. Optional lassen sich
 automatische Cache-Einträge aufräumen, die seit mindestens 30 Tagen nicht mehr
 neu gespeichert oder geändert wurden:
 

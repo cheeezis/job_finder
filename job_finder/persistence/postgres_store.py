@@ -34,7 +34,7 @@ def prune_cache(days=30):
 
 
 def parts(record, fields):
-    """Retain missing-vs-null distinctions and unknown fields during migration."""
+    """Retain missing-vs-null distinctions and unknown fields in stored records."""
     return (
         *[record.get(field) for field in fields],
         list(record),

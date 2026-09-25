@@ -1,11 +1,10 @@
-"""Initialize, migrate, check, back up and restore the PostgreSQL data store."""
+"""Initialize, check, back up and restore the PostgreSQL data store."""
 
 import argparse
 import json
 
-from job_finder.paths import APPLICATION_DOCUMENTS_DIR, DATA_DIR
+from job_finder.paths import APPLICATION_DOCUMENTS_DIR
 from job_finder.persistence.database import initialize, transaction
-from job_finder.persistence.migration import migrate
 from job_finder.persistence.postgres_backup import create_postgres_backup, restore_backup
 from job_finder.persistence.postgres_store import prune_cache
 
@@ -15,8 +14,6 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("init")
-    migration = commands.add_parser("migrate")
-    migration.add_argument("--source", default=str(DATA_DIR))
     commands.add_parser("check")
     cleanup = commands.add_parser("prune-cache")
     cleanup.add_argument("--days", type=int, default=30)
@@ -29,8 +26,6 @@ def main():
     if args.command == "init":
         initialize()
         result = {"initialized": True}
-    elif args.command == "migrate":
-        result = migrate(args.source)
     elif args.command == "backup":
         result = {"backup": str(create_postgres_backup(documents_dir=args.documents_dir))}
     elif args.command == "restore":

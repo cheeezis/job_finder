@@ -11,7 +11,6 @@ from job_finder.paths import MEMORY_FILE
 from job_finder.persistence.database import lock, memory_scope, snapshot, transaction
 from job_finder.persistence.postgres_store import read_memory, write_memory
 from job_finder.persistence.state_compat import (
-    MEMORY_VERSION as MEMORY_VERSION,
     first_seen_date as first_seen_date,
     restore_initial_discovery_date,
 )

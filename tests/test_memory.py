@@ -1,6 +1,5 @@
 """Tests for lifecycle metadata in the job memory."""
 
-import json
 import tempfile
 import threading
 import unittest
@@ -8,7 +7,6 @@ from pathlib import Path
 
 from job_finder.models import Job, JobSource, WorkflowStatus
 from job_finder.persistence.database import transaction
-from job_finder.persistence.migration import read_legacy_memory as load_json_memory
 from job_finder.workflow.memory import edit_memory, load_memory, save_memory, update_memory
 
 
@@ -332,14 +330,6 @@ class MemoryTests(unittest.TestCase):
                 version = connection.execute("SELECT version FROM schema_version").fetchone()[0]
             self.assertEqual(version, 2)
             self.assertIn("test:123", load_memory(path))
-
-    def test_old_memory_format_is_rejected(self):
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "seen_jobs.json"
-            path.write_text(json.dumps({"old-url": {}}), encoding="utf-8")
-
-            with self.assertRaisesRegex(ValueError, "alte Format"):
-                load_json_memory(path)
 
     def test_postgres_state_round_trip_and_transactional_edit(self):
         with tempfile.TemporaryDirectory() as directory:

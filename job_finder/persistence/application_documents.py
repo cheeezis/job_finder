@@ -110,8 +110,8 @@ def resolve_document_key(job_id, metadata):
 def live_document_manifest(memory, root=APPLICATION_DOCUMENTS_DIR):
     """Hash every referenced document as currently stored, local or blob backend.
 
-    Unlike document_manifest() in migration.py, this always reads through the
-    active JOBFINDER_DOCUMENTS_BACKEND rather than a fixed local snapshot root.
+    It always reads through the active JOBFINDER_DOCUMENTS_BACKEND rather than
+    a fixed local snapshot root.
     """
     manifest = {}
     for job_id, entry in memory.items():

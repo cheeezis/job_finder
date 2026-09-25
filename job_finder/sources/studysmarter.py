@@ -8,13 +8,14 @@ from job_finder.matching.config import LOCAL_SEARCH_RADIUS_KM, STUDYSMARTER_LOCA
 from job_finder.models import Job, JobSource, WorkMode
 from job_finder.paths import cache_file
 from job_finder.sources.common import (
-    build_fetch_report,
     canonical_detail_url,
     enrich_cached_candidates,
     integer,
     load_detail_cache,
     normalize_employment_type,
     parse_published_date,
+    record_partial_failure,
+    record_total_segments,
     source_job_id,
     with_current_summary as refresh_summary,
 )
@@ -44,13 +45,6 @@ REMOTE_MODES = {
 def fetch_jobs(cache_path=CACHE_FILE, now=None):
     """Return cached details or lightweight records for the first prefilter."""
     return jobs_from_records(collect_records(), cache_path)
-
-
-def fetch_jobs_with_report(cache_path=CACHE_FILE, now=None):
-    """Return lightweight jobs and explicit search coverage metadata."""
-    records, failed, total = collect_records(return_report=True)
-    jobs = jobs_from_records(records, cache_path)
-    return build_fetch_report(jobs, failed, total)
 
 
 def jobs_from_records(records, cache_path):
@@ -96,8 +90,8 @@ def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE, now=None):
     )
 
 
-def collect_records(searches=None, *, return_report=False):
-    """Collect bounded local and remote searches without duplicate listings."""
+def collect_records(searches=None):
+    """Collect bounded searches without duplicate listings and record their coverage."""
     records = {}
     search_errors = 0
     first_request = True
@@ -120,11 +114,11 @@ def collect_records(searches=None, *, return_report=False):
         except Exception:
             search_errors += 1
 
+    record_total_segments(len(selected_searches))
+    record_partial_failure(search_errors)
     if search_errors:
         print(f"WARNUNG StudySmarter: {search_errors} Suche(n) fehlgeschlagen")
-    records = list(records.values())
-    result = (records, search_errors, len(selected_searches))
-    return result if return_report else records
+    return list(records.values())
 
 
 def build_searches():

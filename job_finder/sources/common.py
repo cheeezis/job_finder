@@ -7,8 +7,10 @@ from datetime import UTC, date, datetime, timedelta
 from urllib.parse import parse_qsl, urlencode, urlsplit
 
 from job_finder.console import print_progress, progress_checkpoint
-from job_finder.models import Job
+from job_finder.matching.remote import classify_remote, detect_remote
+from job_finder.models import Job, JobSource
 from job_finder.persistence.storage import read_versioned, write_versioned
+from job_finder.text import html_to_text
 
 DETAIL_CACHE_VERSION = 1
 DETAIL_REFRESH_AGE = timedelta(days=7)
@@ -29,18 +31,28 @@ GERMANY_REMOTE_REGION_LABELS = {
 # Detail caches keep source data only, never memory or workflow state.
 MEMORY_FIELDS = {"first_seen_at", "last_seen_at", "workflow_status", "is_new", "cache_stale"}
 DETAIL_CACHE_FIELDS = tuple(field.name for field in fields(Job) if field.name not in MEMORY_FIELDS)
-_FETCH_DIAGNOSTICS = {"failed_segments": 0, "failed_candidates": 0}
+# total_segments stays None unless a source reports its search coverage.
+_FETCH_DIAGNOSTICS = {"failed_segments": 0, "failed_candidates": 0, "total_segments": None}
 
 
 def reset_fetch_diagnostics():
     """Reset sequential per-source diagnostics before one adapter runs."""
-    for key in _FETCH_DIAGNOSTICS:
-        _FETCH_DIAGNOSTICS[key] = 0
+    _FETCH_DIAGNOSTICS.update(failed_segments=0, failed_candidates=0, total_segments=None)
+
+
+def record_total_segments(count):
+    """Record how many search segments the source covered, including failed ones."""
+    _FETCH_DIAGNOSTICS["total_segments"] = count
 
 
 def record_partial_failure(count=1):
     """Record internally handled failures that make a source result partial."""
     _FETCH_DIAGNOSTICS["failed_segments"] += max(0, int(count))
+
+
+def ensure_partial_failure():
+    """Mark the result partial without adding to failures already counted."""
+    _FETCH_DIAGNOSTICS["failed_segments"] = max(1, _FETCH_DIAGNOSTICS["failed_segments"])
 
 
 def record_candidate_failure(count=1):
@@ -53,17 +65,8 @@ def record_candidate_failure(count=1):
 
 
 def fetch_diagnostics():
-    """Return a copy of diagnostics for the just-completed adapter run."""
-    return dict(_FETCH_DIAGNOSTICS)
-
-
-def build_fetch_report(jobs, failed_segments, total_segments):
-    """Describe complete, empty or partial source coverage for the runner."""
-    return {
-        "jobs": jobs,
-        "status": "partial" if failed_segments else ("success" if jobs else "empty"),
-        "details": {"failed_segments": failed_segments, "total_segments": total_segments},
-    }
+    """Return a copy of diagnostics for the just-completed adapter run; totals only if recorded."""
+    return {key: value for key, value in _FETCH_DIAGNOSTICS.items() if value is not None}
 
 
 class ListingUnavailableError(ValueError):
@@ -308,6 +311,45 @@ def extract_schema_locations(job_location):
                 cities.append(city)
 
     return cities or ["unbekannt"]
+
+
+def job_from_schema_posting(
+    source_name, url, posting, *, identifier, company, structured_remote=""
+):
+    """Map a schema.org JobPosting to a Job; sources pass the fields they derive their own way."""
+    raw_description = posting.get("description", "")
+    description = html_to_text(raw_description)
+    locations = extract_schema_locations(posting.get("jobLocation"))
+    title = posting.get("title", "")
+    remote = detect_remote(
+        title, description, ", ".join(locations), structured_remote=structured_remote
+    )
+    work_mode, remote_percentage = classify_remote(remote)
+    salary_min_eur, salary_max_eur = extract_annual_salary_eur(posting)
+    return Job(
+        id=source_job_id(source_name, identifier, url),
+        title=title,
+        company=company,
+        locations=locations,
+        sources=[JobSource(source=source_name, source_id=identifier, url=url)],
+        description_raw=raw_description,
+        description_clean=description,
+        work_mode=work_mode,
+        remote_percentage=remote_percentage,
+        employment_type=normalize_employment_type(posting.get("employmentType")),
+        salary_min_eur=salary_min_eur,
+        salary_max_eur=salary_max_eur,
+        published_at=parse_published_date(posting.get("datePosted")),
+        fetched_at=utc_now(),
+    )
+
+
+def posting_source_id(url_part, pattern, posting):
+    """Prefer the ID matched in the URL, otherwise the posting's own identifier."""
+    if match := re.search(pattern, url_part):
+        return match.group(1)
+    identifier = posting.get("identifier")
+    return identifier.get("value") if isinstance(identifier, dict) else identifier
 
 
 def integer(value, default):

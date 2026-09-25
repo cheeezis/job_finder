@@ -41,9 +41,7 @@ def fetch_jobs(cache_path=CACHE_FILE, now=None):
 
 def collect_links():
     """Collect unique detail URLs from all configured Arbeitsagentur searches."""
-    seen = set()
-    links = []
-
+    links = {}
     searches = [(term, LOCAL_SEARCH_LOCATION, LOCAL_SEARCH_RADIUS_KM) for term in SEARCH_TERMS]
     searches.extend(
         (term, location, COMMUTER_SEARCH_RADIUS_KM)
@@ -52,21 +50,11 @@ def collect_links():
     )
 
     for term, location, radius in searches:
-        results = search(term, location=location, radius=radius)
-
-        for result in results:
+        for result in search(term, location=location, radius=radius):
             reference = result.get("referenznummer")
-            if not reference or "/" in reference:
-                continue
-
-            url = f"{DETAIL_BASE_URL}/{reference}"
-            if url in seen:
-                continue
-
-            seen.add(url)
-            links.append(url)
-
-    return links
+            if reference and "/" not in reference:
+                links[f"{DETAIL_BASE_URL}/{reference}"] = None
+    return list(links)
 
 
 def search(term, location=LOCAL_SEARCH_LOCATION, radius=LOCAL_SEARCH_RADIUS_KM):

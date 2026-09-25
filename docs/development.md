@@ -104,19 +104,20 @@ Der vom Runner erwartete Vertrag:
 | --- | --- |
 | `SOURCE_NAME` | Stabiler Quellenname für IDs, Cache und Laufdiagnose |
 | `fetch_jobs()` | Liefert eine Liste von `Job`; bei einem vollständigen Quellenfehler darf eine Exception propagieren |
-| `fetch_jobs_with_report()` (optional) | Wird anstelle von `fetch_jobs()` verwendet und liefert `jobs`, `status`, optional `details` |
 | `enrich_candidate_jobs(jobs, candidate_ids)` (optional) | Verändert die übergebene Liste beziehungsweise ihre Jobs und liefert die Anzahl betroffener Anzeigen; nicht ladbare Kandidatendetails meldet sie über `record_candidate_failure()` |
 
-Ein Abdeckungsbericht sieht beispielsweise so aus:
+Eine Quelle mit mehreren Suchen meldet ihre Abdeckung während `fetch_jobs()`;
+der Runner bildet daraus Status und Details:
 
 ```python
-from job_finder.sources.common import build_fetch_report
+from job_finder.sources.common import record_partial_failure, record_total_segments
 
-return build_fetch_report(jobs, failed_segments, total_segments)
+record_total_segments(len(searches))
+record_partial_failure(failed_searches)
 ```
 
-Bei einem abgefangenen Teilfehler muss die Quelle diesen melden, etwa über
-`record_partial_failure()` oder einen passenden Bericht. Ein stilles `[]`
+Bei einem abgefangenen Teilfehler muss die Quelle diesen über
+`record_partial_failure()` melden. Ein stilles `[]`
 könnte sonst als vollständig erfolgreiche Suche ohne Treffer interpretiert
 werden. Der Runner verwendet die Zustände `success`, `empty`, `partial` und
 `failed`, um fehlende Treffer richtig zu behandeln.

@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from job_finder.models import WorkMode
 from job_finder.sources import german_tech_jobs
+from job_finder.sources.common import fetch_diagnostics, reset_fetch_diagnostics
 
 FEED = """<?xml version="1.0" encoding="UTF-8"?>
 <jobs>
@@ -71,13 +72,14 @@ class GermanTechJobsTests(unittest.TestCase):
             cache = Path(directory) / "feed.json"
             jobs, _invalid = german_tech_jobs.parse_feed(FEED, now)
             german_tech_jobs.save_feed_cache(cache, jobs, now)
+            reset_fetch_diagnostics()
             with patch.object(german_tech_jobs, "fetch_text", side_effect=OSError("offline")):
-                result = german_tech_jobs.fetch_jobs_with_report(cache, now=now)
+                jobs = german_tech_jobs.fetch_jobs(cache, now=now)
 
-        self.assertEqual(result["status"], "partial")
-        self.assertEqual(result["details"]["failed_segments"], 1)
-        self.assertEqual(len(result["jobs"]), 1)
-        self.assertTrue(result["jobs"][0].cache_stale)
+        self.assertEqual(fetch_diagnostics()["failed_segments"], 1)
+        self.assertEqual(fetch_diagnostics()["total_segments"], 1)
+        self.assertEqual(len(jobs), 1)
+        self.assertTrue(jobs[0].cache_stale)
 
     def test_cache_older_than_three_days_is_not_used(self):
         now = datetime(2026, 8, 17, tzinfo=UTC)
@@ -89,4 +91,4 @@ class GermanTechJobsTests(unittest.TestCase):
                 patch.object(german_tech_jobs, "fetch_text", side_effect=OSError("offline")),
                 self.assertRaises(OSError),
             ):
-                german_tech_jobs.fetch_jobs_with_report(cache, now=now)
+                german_tech_jobs.fetch_jobs(cache, now=now)

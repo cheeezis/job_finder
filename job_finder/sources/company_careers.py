@@ -55,12 +55,11 @@ class PaginatedCareerPage(CareerPage):
         first_html = fetch_text(self.list_url)
         page_pattern = re.escape(urlsplit(self.list_url).path) + r"page/(\d+)/"
         last_page = max((int(value) for value in re.findall(page_pattern, first_html)), default=1)
-        links = extract_links(first_html, self.list_url, self.link_pattern)
+        links = dict.fromkeys(extract_links(first_html, self.list_url, self.link_pattern))
         for page in range(2, last_page + 1):
             html = fetch_text(f"{self.list_url}page/{page}/")
-            new = extract_links(html, self.list_url, self.link_pattern)
-            links += [url for url in new if url not in links]
-        return links
+            links.update(dict.fromkeys(extract_links(html, self.list_url, self.link_pattern)))
+        return list(links)
 
 
 def fetch_company_jobs(source_name, company, links, cache_path, now=None, parser=None):
@@ -128,16 +127,10 @@ def job_from_posting(source_name, fallback_company, url, posting):
 
 
 def extract_links(html, base_url, pattern):
-    """Return canonical links whose absolute URLs match a regex."""
-    links = []
-    seen = set()
-    for match in re.findall(r'href=["\']([^"\']+)', html, re.IGNORECASE):
-        url = canonical_detail_url(urljoin(base_url, unescape(match)))
-        if not re.search(pattern, url, re.IGNORECASE) or url in seen:
-            continue
-        seen.add(url)
-        links.append(url)
-    return links
+    """Return canonical links whose absolute URLs match a regex, once each."""
+    hrefs = re.findall(r'href=["\']([^"\']+)', html, re.IGNORECASE)
+    urls = (canonical_detail_url(urljoin(base_url, unescape(href))) for href in hrefs)
+    return list(dict.fromkeys(url for url in urls if re.search(pattern, url, re.IGNORECASE)))
 
 
 def ensure_url_identity(job, source_name, url):

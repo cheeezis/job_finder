@@ -18,24 +18,20 @@ from job_finder.matching.config import (
     STEPSTONE_SEARCH_LOCATIONS,
     STEPSTONE_SEARCH_TERMS,
 )
-from job_finder.matching.remote import classify_remote, detect_remote
-from job_finder.models import Job, JobSource
+from job_finder.models import Job
 from job_finder.paths import cache_file
 from job_finder.persistence.storage import read_versioned, write_versioned
 from job_finder.sources.common import (
-    build_fetch_report,
     detail_cache_job_dict,
     detail_is_fresh,
     detail_within_age,
-    extract_annual_salary_eur,
-    extract_schema_locations,
-    normalize_employment_type,
-    parse_published_date,
-    source_job_id,
-    utc_now,
+    ensure_partial_failure,
+    job_from_schema_posting,
+    posting_source_id,
+    record_partial_failure,
+    record_total_segments,
 )
 from job_finder.structured_data import extract_json_ld_job_posting
-from job_finder.text import html_to_text
 
 SOURCE_NAME = "stepstone"
 SEARCH_BASE_URL = "https://www.stepstone.de/jobs"
@@ -82,16 +78,15 @@ class StepStoneHttpClient:
             raise
 
 
-def fetch_jobs(cache_path=CACHE_FILE, client=None, now=None, _coverage=None):
+def fetch_jobs(cache_path=CACHE_FILE, client=None, now=None):
     """Search StepStone and return imported job details."""
     cache = load_cache(cache_path)
     client = client or StepStoneHttpClient()
 
     try:
-        links = search_links(client, coverage=_coverage)
+        links = search_links(client)
     except StepStoneBlockedError as error:
-        if _coverage is not None:
-            _coverage["failed_segments"] = max(1, _coverage.get("failed_segments", 0))
+        ensure_partial_failure()
         print(f"WARNUNG StepStone: HTTP {error.status_code}; nutze letzten Cache-Stand")
         return cached_jobs(cache.get("last_links", []), cache, now)
 
@@ -118,8 +113,7 @@ def fetch_jobs(cache_path=CACHE_FILE, client=None, now=None, _coverage=None):
                 cache["jobs"][cache_key] = job
                 save_cache(cache_path, cache)
             except StepStoneBlockedError as error:
-                if _coverage is not None:
-                    _coverage["failed_segments"] = max(1, _coverage.get("failed_segments", 0))
+                ensure_partial_failure()
                 print(f"WARNUNG StepStone: HTTP {error.status_code}; keine weiteren Detailanfragen")
                 if cached_job and detail_within_age(cached_job, now):
                     cached_job.cache_stale = True
@@ -128,8 +122,7 @@ def fetch_jobs(cache_path=CACHE_FILE, client=None, now=None, _coverage=None):
                 break
             except Exception:
                 detail_errors += 1
-                if _coverage is not None:
-                    _coverage["failed_segments"] = _coverage.get("failed_segments", 0) + 1
+                record_partial_failure()
                 if cached_job and detail_within_age(cached_job, now):
                     cached_job.cache_stale = True
                     jobs.append(cached_job)
@@ -144,22 +137,14 @@ def fetch_jobs(cache_path=CACHE_FILE, client=None, now=None, _coverage=None):
     return jobs
 
 
-def fetch_jobs_with_report(cache_path=CACHE_FILE, client=None, now=None):
-    """Return jobs and coverage metadata for safe inactivity tracking."""
-    coverage = {"failed_segments": 0, "total_segments": 0}
-    jobs = fetch_jobs(cache_path, client, now, _coverage=coverage)
-    return build_fetch_report(jobs, **coverage)
-
-
-def search_links(client=None, *, coverage=None):
+def search_links(client=None):
     """Collect unique detail links from all configured search pages."""
     client = client or StepStoneHttpClient()
     links = {}
     search_errors = 0
     requested_pages = 0
     planned_queries = len(STEPSTONE_SEARCH_TERMS) * len(STEPSTONE_SEARCH_LOCATIONS)
-    if coverage is not None:
-        coverage["total_segments"] = planned_queries
+    record_total_segments(planned_queries)
 
     queries = product(STEPSTONE_SEARCH_TERMS, STEPSTONE_SEARCH_LOCATIONS)
     for processed_queries, (term, location) in enumerate(queries, start=1):
@@ -196,8 +181,7 @@ def search_links(client=None, *, coverage=None):
 
     if search_errors:
         print(f"WARNUNG StepStone: {search_errors} Suchseite(n) nicht erreichbar")
-    if coverage is not None:
-        coverage["failed_segments"] += search_errors
+    record_partial_failure(search_errors)
     return list(links)
 
 
@@ -236,33 +220,15 @@ def fetch_job(url, client=None):
     posting = extract_json_ld_job_posting(html)
     if not posting:
         raise ValueError("JobPosting JSON-LD nicht gefunden")
-    raw_description = posting.get("description", "")
-    description = html_to_text(raw_description)
-    locations = extract_schema_locations(posting.get("jobLocation"))
-    location_text = ", ".join(locations)
-    title = posting.get("title", "")
-    detected_remote = detect_remote(title, description, location_text)
-    work_mode, remote_percentage = classify_remote(detected_remote)
-    identifier = extract_source_id(url, posting)
-    salary_min_eur, salary_max_eur = extract_annual_salary_eur(posting)
-
-    return Job(
-        id=source_job_id(SOURCE_NAME, identifier, url),
-        title=title,
+    job = job_from_schema_posting(
+        SOURCE_NAME,
+        url,
+        posting,
+        identifier=posting_source_id(urlsplit(url).path, r"--(\d+)-inline\.html$", posting),
         company=clean_company(posting.get("hiringOrganization", {}).get("name", "")),
-        locations=locations,
-        sources=[JobSource(source=SOURCE_NAME, source_id=identifier, url=url)],
-        description_raw=raw_description,
-        description_clean=description,
-        work_mode=work_mode,
-        remote_percentage=remote_percentage,
-        employment_type=normalize_employment_type(posting.get("employmentType")),
-        career_levels=extract_career_levels(html),
-        salary_min_eur=salary_min_eur,
-        salary_max_eur=salary_max_eur,
-        published_at=parse_published_date(posting.get("datePosted")),
-        fetched_at=utc_now(),
     )
+    job.career_levels = extract_career_levels(html)
+    return job
 
 
 def load_cache(path):
@@ -304,15 +270,3 @@ def extract_career_levels(html):
             if label in CAREER_LEVEL_LABELS and label not in labels:
                 labels.append(label)
     return labels
-
-
-def extract_source_id(url, posting):
-    """Extract StepStone's numeric posting ID when available."""
-    match = re.search(r"--(\d+)-inline\.html$", urlsplit(url).path)
-    if match:
-        return match.group(1)
-
-    identifier = posting.get("identifier")
-    if isinstance(identifier, dict):
-        return identifier.get("value")
-    return identifier

@@ -292,15 +292,9 @@
   for (const status of ["interesting", "inquiry", "ignored"]) {
     element(`mark-${status}`).addEventListener("click", () => changeStatus(status).catch(showError));
   }
-  element("undo-ignored").addEventListener("click", () =>
-    undoIgnored().catch(showError)
-  );
-  element("mark-applied").addEventListener("click", () =>
-    element("application-dialog").showModal()
-  );
-  element("application-cancel").addEventListener("click", () =>
-    element("application-dialog").close()
-  );
+  element("undo-ignored").addEventListener("click", () => undoIgnored().catch(showError));
+  element("mark-applied").addEventListener("click", () => element("application-dialog").showModal());
+  element("application-cancel").addEventListener("click", () => element("application-dialog").close());
   element("application-form").addEventListener("submit", async event => {
     event.preventDefault();
     const button = element("application-save");

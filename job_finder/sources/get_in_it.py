@@ -17,25 +17,21 @@ from job_finder.matching.config import (
     SEARCH_LOCATIONS,
     SEARCH_TERMS,
 )
-from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource, WorkMode
 from job_finder.paths import cache_file
 from job_finder.sources.common import (
-    build_fetch_report,
     canonical_detail_url,
     detail_is_fresh,
     enrich_cached_candidates,
-    extract_annual_salary_eur,
-    extract_schema_locations,
+    job_from_schema_posting,
     load_detail_cache,
-    normalize_employment_type,
-    parse_published_date,
+    posting_source_id,
+    record_partial_failure,
+    record_total_segments,
     source_job_id,
-    utc_now,
     with_current_summary,
 )
 from job_finder.structured_data import extract_json_ld_job_posting, extract_script_json
-from job_finder.text import html_to_text
 
 SOURCE_NAME = "get_in_it"
 API_SEARCH_URL = "https://www.get-in-it.de/api/v2/open/job/search"
@@ -55,15 +51,7 @@ TERM_PRIORITY_RULES = [
 
 def fetch_jobs(cache_path=CACHE_FILE, now=None):
     """Return fresh cached details or lightweight API search records."""
-    records = collect_records()
-    return jobs_from_records(records, cache_path, now=now)
-
-
-def fetch_jobs_with_report(cache_path=CACHE_FILE, now=None):
-    """Return jobs plus coverage so partial searches never age out old jobs."""
-    records, failed, total = collect_records(return_report=True)
-    jobs = jobs_from_records(records, cache_path, now=now)
-    return build_fetch_report(jobs, failed, total)
+    return jobs_from_records(collect_records(), cache_path, now=now)
 
 
 def jobs_from_records(records, cache_path=CACHE_FILE, now=None):
@@ -80,8 +68,8 @@ def jobs_from_records(records, cache_path=CACHE_FILE, now=None):
     return jobs
 
 
-def collect_records(*, return_report=False):
-    """Collect unique lightweight records from all generated API searches."""
+def collect_records():
+    """Collect unique records from all API searches and record their coverage."""
     records = {}
     search_errors = 0
 
@@ -98,11 +86,11 @@ def collect_records(*, return_report=False):
             if identifier:
                 records.setdefault(identifier, record)
 
+    record_total_segments(len(searches))
+    record_partial_failure(search_errors)
     if search_errors:
         print(f"WARNUNG get-in-IT: {search_errors} Suche(n) fehlgeschlagen")
-    records = list(records.values())
-    result = (records, search_errors, len(searches))
-    return result if return_report else records
+    return list(records.values())
 
 
 def summary_job_from_record(record):
@@ -149,8 +137,7 @@ def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE, now=None):
 
 def build_api_searches():
     """Map our shared search terms to get-in-IT's available category filters."""
-    seen = set()
-
+    searches = {}
     search_plans = [
         (SEARCH_TERMS, SEARCH_LOCATIONS),
         (COMMUTER_SEARCH_TERMS, COMMUTER_SEARCH_LOCATIONS),
@@ -159,11 +146,8 @@ def build_api_searches():
         for term, location in product(terms, locations):
             for priority_id in priority_ids_for_term(term):
                 key = (priority_id, location.lower() == "remote")
-                if key in seen:
-                    continue
-
-                seen.add(key)
-                yield {"priority_id": priority_id, "location": location}
+                searches.setdefault(key, {"priority_id": priority_id, "location": location})
+    yield from searches.values()
 
 
 def priority_ids_for_term(term):
@@ -220,37 +204,17 @@ def search_api(priority_id, location):
 
 def fetch_job(url):
     """Import one get-in-IT detail page from its embedded job data."""
-    html = fetch_text(url)
-    posting = extract_job_posting(html)
-    raw_description = posting.get("description", "")
-    description = html_to_text(raw_description)
-    locations = extract_schema_locations(posting.get("jobLocation"))
-    location_text = ", ".join(locations)
-    title = posting.get("title", "")
-    detected_remote = detect_remote(
-        title, description, location_text, structured_remote=format_schema_remote(posting)
-    )
-    work_mode, remote_percentage = classify_remote(detected_remote)
-    identifier = extract_source_id(url, posting)
-    salary_min_eur, salary_max_eur = extract_annual_salary_eur(posting)
-
-    return Job(
-        id=source_job_id(SOURCE_NAME, identifier, url),
-        title=title,
+    posting = extract_job_posting(fetch_text(url))
+    job = job_from_schema_posting(
+        SOURCE_NAME,
+        url,
+        posting,
+        identifier=posting_source_id(url, r"/p(\d+)", posting),
         company=clean_company(posting.get("hiringOrganization", {}).get("name", "")),
-        locations=locations,
-        sources=[JobSource(source=SOURCE_NAME, source_id=identifier, url=url)],
-        description_raw=raw_description,
-        description_clean=description,
-        work_mode=work_mode,
-        remote_percentage=remote_percentage,
-        employment_type=normalize_employment_type(posting.get("employmentType")),
-        career_levels=extract_career_levels(description),
-        salary_min_eur=salary_min_eur,
-        salary_max_eur=salary_max_eur,
-        published_at=parse_published_date(posting.get("datePosted")),
-        fetched_at=utc_now(),
+        structured_remote=format_schema_remote(posting),
     )
+    job.career_levels = extract_career_levels(job.description_clean)
+    return job
 
 
 def extract_job_posting(html):
@@ -310,18 +274,6 @@ def build_locations(locations):
 def clean_company(company):
     """Collapse whitespace in an employer name for consistent display."""
     return re.sub(r"\s+", " ", company).strip()
-
-
-def extract_source_id(url, posting):
-    """Extract get-in-IT's numeric posting ID when available."""
-    match = re.search(r"/p(\d+)", url)
-    if match:
-        return match.group(1)
-
-    identifier = posting.get("identifier")
-    if isinstance(identifier, dict):
-        return identifier.get("value")
-    return identifier
 
 
 def format_schema_remote(posting):

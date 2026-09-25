@@ -11,7 +11,11 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from job_finder.models import Job, JobSource
-from job_finder.sources.common import record_candidate_failure
+from job_finder.sources.common import (
+    record_candidate_failure,
+    record_partial_failure,
+    record_total_segments,
+)
 from run_finder import (
     SOURCES,
     IncompleteSourceSnapshotError,
@@ -254,20 +258,19 @@ class RunFinderTests(unittest.TestCase):
         self.assertEqual(reports, [{"name": "empty", "status": "empty", "jobs": 0}])
 
     def test_adapter_can_report_partial_search_coverage(self):
-        source = SimpleNamespace(
-            SOURCE_NAME="partial",
-            fetch_jobs_with_report=lambda: {
-                "jobs": [make_job("partial:1")],
-                "status": "partial",
-                "details": {"failed_segments": 2, "total_segments": 10},
-            },
-        )
+        def fetch_jobs():
+            record_total_segments(10)
+            record_partial_failure(2)
+            return [make_job("partial:1")]
 
-        jobs, reports = collect_jobs([source])
+        jobs, reports = collect_jobs(
+            [SimpleNamespace(SOURCE_NAME="partial", fetch_jobs=fetch_jobs)]
+        )
 
         self.assertEqual([job.id for job in jobs], ["partial:1"])
         self.assertEqual(reports[0]["status"], "partial")
         self.assertEqual(reports[0]["failed_segments"], 2)
+        self.assertEqual(reports[0]["total_segments"], 10)
 
     def test_run_summary_tracks_source_counts_and_review_new(self):
         job = make_job("working:1")

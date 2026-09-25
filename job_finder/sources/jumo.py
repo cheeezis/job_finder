@@ -28,26 +28,22 @@ def fetch_jobs(cache_path=CACHE_FILE, now=None):
 def collect_links():
     """Use JUMO's public search session to collect every current detail ID."""
     opener = build_opener(HTTPCookieProcessor(http.cookiejar.CookieJar()))
-    page = open_text(opener, SEARCH_URL)
+    page = _session_text(opener, SEARCH_URL)
     csrf_match = re.search(r'name="_csrf"[^>]*value="([^"]+)"', page)
     if not csrf_match:
         raise ValueError("JUMO-CSRF-Kennung nicht gefunden")
     csrf = unescape(csrf_match.group(1))
 
-    post_text(opener, f"{LIST_URL}?search=true", {"j": "jobexchange", "_csrf": csrf})
-    identifiers = []
-    seen = set()
+    _session_text(opener, f"{LIST_URL}?search=true", {"j": "jobexchange", "_csrf": csrf})
+    identifiers = {}
 
     for _batch in range(MAX_RESULT_BATCHES):
-        html = post_text(
+        html = _session_text(
             opener, LIST_URL, {"showNextJobOffers": "true", "j": "jobexchange", "_csrf": csrf}
         )
-        for identifier in extract_job_ids(html):
-            if identifier not in seen:
-                seen.add(identifier)
-                identifiers.append(identifier)
+        identifiers.update(dict.fromkeys(extract_job_ids(html)))
 
-        has_next = post_text(opener, LIST_URL, {"hasNextJobOffers": "true", "_csrf": csrf})
+        has_next = _session_text(opener, LIST_URL, {"hasNextJobOffers": "true", "_csrf": csrf})
         if not json.loads(has_next.lower()):
             break
 
@@ -63,22 +59,12 @@ def extract_job_ids(html):
     return list(dict.fromkeys(re.findall(r"jobOfferId=([a-f0-9]+)", html, re.IGNORECASE)))
 
 
-def open_text(opener, url):
-    """GET a UTF-8 page with the supplied session opener and a timeout."""
-    request = Request(url, headers={"User-Agent": "job-finder/0.1"})
-    with opener.open(request, timeout=20) as response:
-        return response.read().decode("utf-8")
-
-
-def post_text(opener, url, values):
-    """POST form fields with the session opener and return UTF-8 text."""
-    request = Request(
-        url,
-        data=urlencode(values).encode("utf-8"),
-        headers={
-            "User-Agent": "job-finder/0.1",
-            "Content-Type": "application/x-www-form-urlencoded",
-        },
-    )
-    with opener.open(request, timeout=20) as response:
+def _session_text(opener, url, form=None):
+    """GET, or POST form fields, through the JUMO session and return UTF-8 text."""
+    headers = {"User-Agent": "job-finder/0.1"}
+    data = None
+    if form is not None:
+        headers["Content-Type"] = "application/x-www-form-urlencoded"
+        data = urlencode(form).encode("utf-8")
+    with opener.open(Request(url, data=data, headers=headers), timeout=20) as response:
         return response.read().decode("utf-8")

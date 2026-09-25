@@ -5,7 +5,7 @@ import json
 import os
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -13,12 +13,15 @@ from unittest.mock import patch
 from job_finder.models import Job, JobSource
 from job_finder.sources.common import record_candidate_failure
 from run_finder import (
+    SOURCES,
     IncompleteSourceSnapshotError,
     build_run_summary,
     canonical_url,
     collect_jobs,
     enrich_candidate_jobs,
+    excluded_source_names,
     format_duration,
+    parse_args,
     parse_source_names,
     print_source_summary,
     run_pipeline,
@@ -307,6 +310,32 @@ class RunFinderTests(unittest.TestCase):
     def test_parse_source_names_splits_and_ignores_blanks(self):
         self.assertEqual(parse_source_names("stepstone, remotely,, "), {"stepstone", "remotely"})
         self.assertEqual(parse_source_names(""), set())
+
+    def test_only_sources_skip_every_other_source(self):
+        all_names = {source.SOURCE_NAME for source in SOURCES}
+        cases = {
+            "exclude": (
+                SimpleNamespace(exclude_sources="stepstone", only_sources=""),
+                {"stepstone"},
+            ),
+            "only": (
+                SimpleNamespace(exclude_sources="", only_sources="stepstone, remotely"),
+                all_names - {"stepstone", "remotely"},
+            ),
+        }
+        for name, (args, expected) in cases.items():
+            with self.subTest(name):
+                self.assertEqual(excluded_source_names(args), expected)
+
+    def test_only_sources_rejects_unknown_names(self):
+        args = SimpleNamespace(exclude_sources="", only_sources="stepstone,stepstnoe")
+        with self.assertRaisesRegex(SystemExit, "stepstnoe"):
+            excluded_source_names(args)
+
+    def test_only_and_exclude_sources_cannot_be_combined(self):
+        argv = ["run_finder.py", "--only-sources", "stepstone", "--exclude-sources", "css"]
+        with patch("sys.argv", argv), redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            parse_args()
 
     def test_excluded_sources_are_skipped_before_collection(self):
         kept = SimpleNamespace(SOURCE_NAME="arbeitnow")

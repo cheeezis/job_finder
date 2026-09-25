@@ -202,6 +202,10 @@ Stellen ohne Steckbrief, die Einstiegsstellen sind oder einen Vorfilter-Score
 über 50 haben und im Standard-Review sichtbar sind, die besten zuerst. Er darf
 im Web suchen und frühere Entscheidungen samt Notizen nachschlagen, aber nichts
 ändern; Anzeigen und Webseiten behandelt er als Material, nicht als Anweisungen.
+Als Quellen bleiben im Steckbrief nur Links, die er tatsächlich gesehen hat: aus
+der Anzeige oder aus seinen Suchergebnissen. Seine Maßstäbe, etwa ab wie vielen
+geforderten Berufsjahren der Einstieg rot wird, stehen in
+`job_finder/agent/instructions.py`.
 
 Er läuft nur, wenn in den Einstellungen `agent.enabled: true` steht, der Worker
 die Modell-Adresse kennt (setzt Terraform; der lokale Hybrid-Lauf hat keine und
@@ -216,7 +220,7 @@ az keyvault secret set --vault-name kv-jobfinder-e64bfdce --name JobfinderProfil
 Jeder Lauf nennt im Abschnitt „Steckbriefe (Agent)“ entweder, warum der Agent
 nicht lief, oder wie viele Steckbriefe fertig oder abgebrochen sind, wie viele
 noch warten und was der Tag bisher gekostet hat. `agent.reasoning_effort` stellt
-den Denkaufwand des Modells ein (Standard `low`).
+den Denkaufwand des Modells ein (Standard `medium`).
 
 Damit der Agent das Azure-Guthaben nicht aufbrauchen kann, fragt er vor jedem
 Modell- und Werkzeugaufruf den Kostenwächter (`job_finder/agent/cost_guard.py`).
@@ -255,9 +259,10 @@ Bis dahin zeigt die Review einfach keine Steckbriefe.
 In Azure wirken drei weitere Schichten, auch wenn der Code einen Fehler hat:
 
 - **Drossel:** Die Modell-Bereitstellung `gpt-5-mini` verarbeitet höchstens
-  30.000 Tokens pro Minute (`infrastructure/openai.tf`). Das reicht für etwa
-  40 Steckbriefe am Tag und begrenzt einen Fehler auf grob 0,40 bis 3 € pro
-  Stunde.
+  60.000 Tokens pro Minute (`infrastructure/openai.tf`), gemessen an Azures
+  Vorab-Schätzung, die zwei- bis dreimal über dem echten Verbrauch liegt. Das
+  lässt etwa zwei Anfragen pro Minute zu und begrenzt einen Fehler auf grob
+  0,40 bis 3 € pro Stunde.
 - **Token-Alarm:** Verarbeitet das Modell in 24 Stunden mehr als 2 Mio.
   Tokens, kommt nach spätestens einer Stunde eine Mail an die Alarm-Adresse
   (`infrastructure/monitoring.tf`).

@@ -149,6 +149,44 @@ class AgentRunnerTests(unittest.TestCase):
         self.saved.assert_called_once_with("job:1", runner.MODEL, example_sheet(), cost)
         self.assertEqual(model.deleted, ["resp_1", "resp_2"])
 
+    def test_only_links_the_agent_saw_stay_as_sources(self):
+        sheet = example_sheet()
+        sheet["quellen"] = [
+            "https://example.com/jobs/1",  # the listing of the ad
+            "https://firma.example/karriere/",  # a link in the ad text
+            "https://news.example/remote",  # cited by the search
+            "https://erfunden.example/handbuch",  # never seen: invented
+            "Nutzerprofil (intern)",  # not a link at all
+        ]
+        job = {
+            **JOB,
+            "description_clean": 'Mehr: <a href="https://firma.example/karriere">Karriere',
+        }
+        answer = message(json.dumps(sheet))
+        answer["content"][0]["annotations"] = [
+            {"type": "url_citation", "url": "https://news.example/remote"}
+        ]
+        model = FakeModel(reply("resp_1", answer, searches=1))
+
+        runner.write_fact_sheet(
+            job,
+            "version: 5\n",
+            CostGuard(SETTINGS, runner.MODEL),
+            model,
+            SETTINGS,
+            date(2026, 9, 25),
+        )
+
+        self.assertEqual(
+            self.saved.call_args.args[2]["quellen"],
+            [
+                "https://example.com/jobs/1",
+                "https://firma.example/karriere/",
+                "https://news.example/remote",
+            ],
+        )
+        self.assertEqual(model.requests[0]["include"], ["web_search_call.action.sources"])
+
     def test_the_search_is_withdrawn_once_the_budget_is_used(self):
         model = FakeModel(
             reply("resp_1", decisions_call(), searches=3),

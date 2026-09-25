@@ -34,10 +34,10 @@ class AgentSettingsTests(unittest.TestCase):
         self.assertEqual(settings.limits.daily_max_cost_eur, Decimal("0.3"))
         self.assertEqual(settings.limits.monthly_max_cost_eur, Decimal("20.00"))
 
-    def test_reasoning_effort_defaults_to_low_and_must_be_known(self):
-        self.assertEqual(agent_settings({"agent": {"enabled": True}}).reasoning_effort, "low")
-        chosen = agent_settings({"agent": {"enabled": True, "reasoning_effort": "medium"}})
-        self.assertEqual((chosen.enabled, chosen.reasoning_effort), (True, "medium"))
+    def test_reasoning_effort_defaults_to_medium_and_must_be_known(self):
+        self.assertEqual(agent_settings({"agent": {"enabled": True}}).reasoning_effort, "medium")
+        chosen = agent_settings({"agent": {"enabled": True, "reasoning_effort": "low"}})
+        self.assertEqual((chosen.enabled, chosen.reasoning_effort), (True, "low"))
 
         wrong = agent_settings({"agent": {"enabled": True, "reasoning_effort": "maximal"}})
 

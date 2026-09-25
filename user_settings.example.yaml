@@ -32,7 +32,7 @@ agent:
   enabled: false
   # Denkaufwand des Modells: minimal, low, medium oder high. Mehr Denken
   # kostet mehr Ausgabe-Tokens.
-  reasoning_effort: low
+  reasoning_effort: medium
   # Pro Stelle: Kosten in Euro, Modell- und Werkzeugaufrufe sowie bezahlte
   # Websuchen (0 schaltet die Suche ab).
   job_max_cost_eur: 0.08

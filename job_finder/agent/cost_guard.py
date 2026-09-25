@@ -17,6 +17,11 @@ from job_finder.agent.pricing import PRICES, Usage, call_cost
 from job_finder.persistence.agent_usage import record_model_call, spent_today_and_this_month
 
 
+def euro(value, digits=2):
+    """Write an amount the German way, as the log and the review show these messages."""
+    return f"{value:.{digits}f} €".replace(".", ",")
+
+
 class LimitReached(Exception):
     pass
 
@@ -56,11 +61,11 @@ class CostGuard:
             raise AgentStopped(f"Kostenbuch nicht lesbar ({type(error).__name__})") from error
         if today >= self.limits.daily_max_cost_eur:
             raise AgentStopped(
-                f"Tagesgrenze erreicht: {today:.2f} € von {self.limits.daily_max_cost_eur} €"
+                f"Tagesgrenze erreicht: {euro(today)} von {euro(self.limits.daily_max_cost_eur)}"
             )
         if month >= self.limits.monthly_max_cost_eur:
             raise AgentStopped(
-                f"Monatsgrenze erreicht: {month:.2f} € von {self.limits.monthly_max_cost_eur} €"
+                f"Monatsgrenze erreicht: {euro(month)} von {euro(self.limits.monthly_max_cost_eur)}"
             )
 
     def before_model_call(self):
@@ -74,8 +79,8 @@ class CostGuard:
             )
         if self.job_cost >= self.limits.job_max_cost_eur:
             raise JobLimitReached(
-                f"Stelle abgebrochen: {self.job_cost:.3f} € von "
-                f"{self.limits.job_max_cost_eur} € verbraucht"
+                f"Stelle abgebrochen: {euro(self.job_cost, 3)} von "
+                f"{euro(self.limits.job_max_cost_eur)} verbraucht"
             )
         self.model_calls += 1
 
@@ -88,7 +93,7 @@ class CostGuard:
             self.book(Usage(0, 0, 0), cost)
             raise JobLimitReached(
                 "Stelle abgebrochen: Token-Angaben fehlen oder sind ungültig, "
-                f"vorsichtshalber {cost} € gebucht"
+                f"vorsichtshalber {euro(cost)} gebucht"
             ) from error
         self.book(usage, cost)
 

@@ -12,7 +12,7 @@ from datetime import date
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 from openai import OpenAI
 
-from job_finder.agent.cost_guard import AgentStopped, CostGuard
+from job_finder.agent.cost_guard import AgentStopped, CostGuard, euro
 from job_finder.agent.profile import configured_profile
 from job_finder.agent.runner import MODEL, write_fact_sheet
 from job_finder.agent.settings import agent_settings
@@ -141,7 +141,3 @@ def model_client(endpoint, environ=os.environ):
     return OpenAI(
         base_url=f"{endpoint.rstrip('/')}/openai/v1/", api_key=token, timeout=120, max_retries=2
     )
-
-
-def euro(value):
-    return f"{value:.2f} €".replace(".", ",")

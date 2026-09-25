@@ -50,6 +50,21 @@ class FactSheetTests(unittest.TestCase):
             self.assertEqual(node["required"], list(node["properties"]))
             self.assertIs(node["additionalProperties"], False)
 
+    def test_light_words_and_link_markup_are_removed_from_the_texts(self):
+        # As in the trial of 26.09.2026: light word up front, search citation at the end.
+        cited = "gruen – offen und aktuell. ([arbeitnow.co.uk](https://www.arbeitnow.co.uk/jobs/1))"
+        sheet = example_sheet(
+            status={"ampel": "gruen", "text": cited},
+            kurzgrund="Laut [Karriereseite](https://firma.example/karriere) remote möglich.",
+        )
+
+        parsed = parse_fact_sheet(json.dumps(sheet))
+
+        self.assertEqual(parsed["status"]["text"], "offen und aktuell.")
+        self.assertEqual(parsed["kurzgrund"], "Laut Karriereseite remote möglich.")
+        with self.assertRaisesRegex(ValueError, "Status: Text fehlt"):
+            parse_fact_sheet(json.dumps(example_sheet(status={"ampel": "rot", "text": "rot –"})))
+
     def test_a_valid_sheet_passes_and_extra_lines_are_capped(self):
         extra = {"thema": "Positiv", "ampel": "gruen", "text": "Docker gewünscht."}
         sheet = example_sheet(zusatz=[extra] * 3)

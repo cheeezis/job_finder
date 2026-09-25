@@ -158,6 +158,21 @@
     return {label, input};
   }
 
+  // Status, date and interview appointment shared by the new-event and edit forms.
+  function eventFields(title, statuses, event = {}) {
+    const statusLabel = make("label", title);
+    const select = statusSelect(statuses, event.status);
+    statusLabel.append(select);
+    const dateLabel = make("label", "Status geändert am");
+    const date = document.createElement("input");
+    date.type = "date";
+    date.value = event.occurred_on || "";
+    dateLabel.append(date);
+    const appointment = appointmentField(select, event.scheduled_for);
+    const scheduledFor = () => select.value === "interview" ? appointment.input.value || null : null;
+    return {select, date, scheduledFor, labels: [statusLabel, dateLabel, appointment.label]};
+  }
+
   async function saveChange(buttons, path, payload, failureMessage) {
     buttons.forEach(button => { button.disabled = true; });
     try {
@@ -172,32 +187,18 @@
 
   function eventForm(jobId) {
     const form = make("form", null, "event-form");
-    const statusLabel = make("label", "Ereignis");
-    const select = statusSelect(window.applicationStatuses);
+    const {select, date, scheduledFor, labels} = eventFields("Ereignis", window.applicationStatuses);
     select.name = "workflow_status";
-    statusLabel.append(select);
-    const dateLabel = make("label", "Status geändert am");
-    const dateInput = document.createElement("input");
-    dateInput.name = "occurred_on";
-    dateInput.type = "date";
-    dateInput.required = true;
-    dateInput.value = localIsoDate();
-    dateLabel.append(dateInput);
-    const appointment = appointmentField(select);
+    date.name = "occurred_on";
+    date.required = true;
+    date.value = localIsoDate();
     const button = make("button", "Speichern");
     button.type = "submit";
-    form.append(statusLabel, dateLabel, appointment.label, button);
+    form.append(...labels, button);
     form.addEventListener("submit", async event => {
       event.preventDefault();
       await saveChange([button], "/api/status",
-        {
-          job_id: jobId,
-          workflow_status: select.value,
-          occurred_on: dateInput.value,
-          scheduled_for: select.value === "interview"
-            ? appointment.input.value || null
-            : null
-        },
+        {job_id: jobId, workflow_status: select.value, occurred_on: date.value, scheduled_for: scheduledFor()},
         "Ereignis konnte nicht gespeichert werden");
     });
     return form;
@@ -206,22 +207,14 @@
   function historyEventForm(jobId, historyEvent) {
     const item = make("li", null, "timeline-item");
     const form = make("form", null, "history-form");
-    const statusLabel = make("label", "Status");
-    const select = statusSelect(window.workflowStatuses, historyEvent.status);
-    statusLabel.append(select);
-    const dateLabel = make("label", "Status geändert am");
-    const dateInput = document.createElement("input");
-    dateInput.type = "date";
-    dateInput.value = historyEvent.occurred_on || "";
-    dateLabel.append(dateInput);
-    const appointment = appointmentField(select, historyEvent.scheduled_for);
+    const {select, date, scheduledFor, labels} = eventFields("Status", window.workflowStatuses, historyEvent);
     const actions = make("div", null, "form-actions");
     const saveButton = make("button", "Ändern");
     saveButton.type = "submit";
     const deleteButton = make("button", "Löschen", "danger");
     deleteButton.type = "button";
     actions.append(saveButton, deleteButton);
-    form.append(statusLabel, dateLabel, appointment.label, actions);
+    form.append(...labels, actions);
 
     const previousEvent = {
       job_id: jobId,
@@ -234,14 +227,7 @@
     form.addEventListener("submit", async event => {
       event.preventDefault();
       await saveChange([saveButton, deleteButton], "/api/history",
-        {
-          ...previousEvent,
-          workflow_status: select.value,
-          occurred_on: dateInput.value || null,
-          scheduled_for: select.value === "interview"
-            ? appointment.input.value || null
-            : null
-        },
+        {...previousEvent, workflow_status: select.value, occurred_on: date.value || null, scheduled_for: scheduledFor()},
         "Verlaufsereignis konnte nicht geändert werden");
     });
 
@@ -340,18 +326,16 @@
       archive.hidden = true;
       return;
     }
-    toggle.textContent = archive.hidden
-      ? `Abgeschlossene bearbeiten (${completedApplications.length})`
-      : "Abgeschlossene ausblenden";
+    toggle.textContent = archiveLabel(completedApplications.length);
+  }
+
+  function archiveLabel(count) {
+    return element("archive").hidden ? `Abgeschlossene bearbeiten (${count})` : "Abgeschlossene ausblenden";
   }
 
   element("archive-toggle").addEventListener("click", () => {
-    const archive = element("archive");
-    archive.hidden = !archive.hidden;
-    const count = element("completed-applications").children.length;
-    element("archive-toggle").textContent = archive.hidden
-      ? `Abgeschlossene bearbeiten (${count})`
-      : "Abgeschlossene ausblenden";
+    element("archive").hidden = !element("archive").hidden;
+    element("archive-toggle").textContent = archiveLabel(element("completed-applications").children.length);
   });
 
   async function load() {

@@ -32,22 +32,23 @@ def store(scope, job_id, model, complete, note, sheet, cost_eur):
 
 
 def fact_sheets(job_ids=None, scope="default"):
-    """Return {job_id: {complete, note, fact_sheet, cost_eur, created_at}}, all jobs without ids."""
+    """Return {job_id: {model, complete, note, fact_sheet, cost_eur, created_at}}, all without ids."""
     where = "scope=%s" + ("" if job_ids is None else " AND job_id = ANY(%s)")
     params = (scope,) if job_ids is None else (scope, list(job_ids))
     with transaction() as connection:
         rows = connection.execute(
-            "SELECT job_id, complete, note, fact_sheet, cost_eur, created_at "
+            "SELECT job_id, model, complete, note, fact_sheet, cost_eur, created_at "
             f"FROM agent_fact_sheets WHERE {where}",
             params,
         ).fetchall()
     return {
         job_id: {
+            "model": model,
             "complete": complete,
             "note": note,
             "fact_sheet": sheet,
             "cost_eur": cost_eur,
             "created_at": created_at,
         }
-        for job_id, complete, note, sheet, cost_eur, created_at in rows
+        for job_id, model, complete, note, sheet, cost_eur, created_at in rows
     }

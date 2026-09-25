@@ -10,10 +10,53 @@
   let routeOrigin = "";
   let undoDecision = null;
 
-  const {element, addOptions, appendSourceLinks, postJson, showError} = JobFinder;
+  const {element, make, addOptions, appendSourceLinks, postJson, safeUrl, showError} = JobFinder;
+  // Traffic lights of the agent's fact sheet (job_finder/agent/fact_sheet.py).
+  const factSheetLights = {
+    gruen: "🟢", gelb: "🟡", orange: "🟠", rot: "🔴", unbekannt: "⚪", hinweis: "⚠️"
+  };
+  const factSheetLines = [
+    ["status", "Status"], ["berufseinstieg", "Berufseinstieg"],
+    ["fachlicher_fit", "Fachlicher Fit"], ["luecken", "Lücken"],
+    ["homeoffice_standort", "Homeoffice / Standort"], ["reiseanteil", "Reiseanteil"],
+    ["gehalt", "Gehalt"]
+  ];
 
   function setText(id, value) {
     element(id).textContent = value || "";
+  }
+
+  function renderFactSheet(job) {
+    const entry = job.fact_sheet;
+    const sheet = entry?.complete ? entry.sheet : null;
+    element("fact-sheet").hidden = !entry;
+    const aborted = element("fact-sheet-aborted");
+    aborted.hidden = !entry || entry.complete;
+    // Stored reasons explain themselves, e.g. "Stelle abgebrochen: 8 Modellaufrufe erreicht".
+    aborted.textContent = entry && !entry.complete
+      ? `⚠️ ${entry.note || "Steckbrief abgebrochen"}` : "";
+    const rows = sheet ? [
+      ...factSheetLines.map(([key, label]) => [label, sheet[key]]),
+      ...(sheet.zusatz || []).map(line => [line.thema, line])
+    ] : [];
+    element("fact-sheet-lines").replaceChildren(...rows.filter(([, line]) => line).map(
+      ([label, line]) => make("li", `${factSheetLights[line.ampel] || "⚪"} ${label}: ${line.text}`)
+    ));
+    const verdict = element("fact-sheet-verdict");
+    verdict.className = sheet ? `fact-sheet-verdict verdict-${sheet.fazit.stufe}` : "fact-sheet-verdict";
+    verdict.textContent = sheet ? `Fazit: ${sheet.fazit.text}` : "";
+    setText("fact-sheet-reason", sheet ? `Kurzgrund: ${sheet.kurzgrund}` : "");
+    const links = (sheet?.quellen || []).map(safeUrl).filter(Boolean).map(url => {
+      const link = make("a", new URL(url).hostname);
+      link.href = url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      return link;
+    });
+    element("fact-sheet-sources").replaceChildren(...(links.length ? [make("span", "Quellen: "), ...links] : []));
+    setText("fact-sheet-meta", entry
+      ? `${entry.model} · ${(entry.cost_eur * 100).toFixed(1).replace(".", ",")} Cent · ${displayDate(entry.created_at)}`
+      : "");
   }
 
   function routeDestination(job) {
@@ -126,6 +169,7 @@
     setText("location-precheck", job.current_snapshot_missing
       ? "Quelle hat die Stelle im aktuellen Lauf nicht geliefert"
       : job.location_precheck || "passt zur Standortregel");
+    renderFactSheet(job);
     const applicationTracked = Boolean(job.application_tracked);
     for (const id of ["mark-interesting", "mark-inquiry", "mark-ignored", "mark-applied"]) {
       element(id).hidden = applicationTracked;

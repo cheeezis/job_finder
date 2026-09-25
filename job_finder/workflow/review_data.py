@@ -3,9 +3,12 @@
 from contextlib import nullcontext
 from pathlib import Path
 
+from psycopg import errors
+
 from job_finder.models import WorkflowStatus
 from job_finder.paths import MEMORY_FILE, RECOMMENDATIONS_JSON
 from job_finder.persistence.database import snapshot
+from job_finder.persistence.fact_sheets import fact_sheets
 from job_finder.persistence.storage import dataset_name, read_json
 from job_finder.workflow.applications import is_application
 from job_finder.workflow.memory import load_memory, memory_source_links, preferred_memory_id
@@ -54,6 +57,28 @@ def load_review_jobs(recommendations_path=RECOMMENDATIONS_JSON, memory_path=MEMO
             continue
         review_jobs.append(remembered_review_job(job_id, entry))
     return review_jobs
+
+
+def attach_fact_sheets(jobs):
+    """Add the agent's fact sheet, or the reason it stopped, to each job it worked on."""
+    try:
+        sheets = fact_sheets([job["id"] for job in jobs])
+    except errors.UndefinedTable:
+        # The database lacks the agent's tables until `job_finder.db init`;
+        # the review must keep working in between.
+        return jobs
+    for job in jobs:
+        entry = sheets.get(job["id"])
+        if entry:
+            job["fact_sheet"] = {
+                "model": entry["model"],
+                "complete": entry["complete"],
+                "note": entry["note"],
+                "sheet": entry["fact_sheet"],
+                "cost_eur": float(entry["cost_eur"]),
+                "created_at": entry["created_at"].isoformat(),
+            }
+    return jobs
 
 
 def remembered_review_job(job_id, entry):

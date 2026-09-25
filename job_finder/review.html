@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Stellen prüfen</title>
-  <link rel="stylesheet" href="/app.css?v=2">
+  <link rel="stylesheet" href="/app.css?v=3">
 </head>
 <body class="review-page">
 <main>
@@ -71,6 +71,15 @@
       <div class="rule-fact"><span class="rule-label">Bereich:</span> <span id="role-group"></span></div>
       <div class="rule-fact"><span class="rule-label">Einstieg:</span> <span id="experience-level"></span></div>
       <div class="rule-fact"><span class="rule-label">Standortprüfung:</span> <span id="location-precheck"></span></div>
+    </section>
+    <section id="fact-sheet" class="fact-sheet" aria-label="Steckbrief des Agenten" hidden>
+      <h3>Steckbrief</h3>
+      <p id="fact-sheet-aborted" class="prefilter-warning" hidden></p>
+      <ul id="fact-sheet-lines" class="fact-sheet-lines"></ul>
+      <p id="fact-sheet-verdict" class="fact-sheet-verdict"></p>
+      <p id="fact-sheet-reason"></p>
+      <p id="fact-sheet-sources" class="fact-sheet-sources"></p>
+      <p id="fact-sheet-meta" class="fact-sheet-meta"></p>
     </section>
     <div class="actions">
       <div class="decision-actions">

@@ -4,10 +4,14 @@ import json
 import os
 import unittest
 from decimal import Decimal
+from unittest.mock import patch
+
+from psycopg import errors
 
 from job_finder.agent.fact_sheet import FIXED_LINES, SCHEMA, parse_fact_sheet
 from job_finder.persistence.database import transaction
 from job_finder.persistence.fact_sheets import fact_sheets, save_aborted, save_fact_sheet
+from job_finder.workflow import review_data
 
 
 def example_sheet(**changes):
@@ -103,6 +107,29 @@ class FactSheetStorageTests(unittest.TestCase):
         self.assertEqual(list(stored), ["job:1"])
         self.assertTrue(stored["job:1"]["complete"])
         self.assertEqual(stored["job:1"]["cost_eur"], Decimal("0.05"))
+
+    def test_the_review_gets_sheets_as_json_ready_data(self):
+        save_fact_sheet("job:1", "gpt-5-mini", example_sheet(), Decimal("0.051"))
+        save_aborted("job:2", "gpt-5-mini", "Stelle abgebrochen: 8 Modellaufrufe", Decimal("0.08"))
+        jobs = [{"id": "job:1"}, {"id": "job:2"}, {"id": "job:3"}]
+
+        review_data.attach_fact_sheets(jobs)
+
+        json.dumps(jobs)
+        self.assertEqual(jobs[0]["fact_sheet"]["sheet"], example_sheet())
+        self.assertEqual(jobs[0]["fact_sheet"]["cost_eur"], 0.051)
+        self.assertEqual(jobs[0]["fact_sheet"]["model"], "gpt-5-mini")
+        self.assertFalse(jobs[1]["fact_sheet"]["complete"])
+        self.assertNotIn("fact_sheet", jobs[2])
+
+
+class ReviewWithoutAgentTablesTests(unittest.TestCase):
+    def test_the_review_keeps_working_before_the_tables_exist(self):
+        missing = errors.UndefinedTable('relation "agent_fact_sheets" does not exist')
+        jobs = [{"id": "job:1"}]
+
+        with patch.object(review_data, "fact_sheets", side_effect=missing):
+            self.assertEqual(review_data.attach_fact_sheets(jobs), [{"id": "job:1"}])
 
 
 if __name__ == "__main__":

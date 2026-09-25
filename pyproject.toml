@@ -36,9 +36,9 @@ skip-magic-trailing-comma = true
 # small pitfalls and datetime.UTC. UP042 (StrEnum) stays off because it
 # changes format() and the psycopg enum adaptation.
 select = ["E4", "E7", "E9", "F", "I", "D", "SIM", "RET", "C4", "PIE", "UP017"]
-# Class docstrings describe construction; standard protocol methods need
-# no repeated documentation unless their behavior differs from the protocol.
-ignore = ["D105", "D107"]
+# Docstrings are optional (D1xx off): write one where it says more than the
+# name. Existing docstrings still follow the pep257 format rules.
+ignore = ["D1"]
 
 [tool.ruff.lint.isort]
 # Keep all names imported from one module in one statement.

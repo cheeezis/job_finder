@@ -256,9 +256,11 @@ Konfiguration steht in [pyproject.toml](../pyproject.toml).
 - Imports nach Standardbibliothek, Fremdpaketen und Projektcode gruppieren.
   Änderungen an Importreihenfolgen bei Modulen mit Initialisierungseffekten
   zusätzlich inhaltlich prüfen.
-- Module, öffentliche Klassen, Funktionen und Methoden erhalten einen
-  aussagekräftigen Docstring. Er beginnt mit einer kurzen Handlungsbeschreibung
-  und einem Punkt. Weitere Absätze folgen nach einer Leerzeile.
+- Ein Docstring steht dort, wo er mehr sagt als der Name: Zweck, Grund,
+  Randfälle oder Zustandsänderungen. Einer, der nur den Namen wiederholt,
+  entfällt; Ruff verlangt deshalb keine Docstrings (`D1xx` ist aus). Er beginnt
+  mit einer kurzen Handlungsbeschreibung und einem Punkt; weitere Absätze folgen
+  nach einer Leerzeile.
 - Bei komplexen Funktionen Eingaben, Rückgaben, Zustandsänderungen und relevante
   Fehler beschreiben. Insbesondere `None`, leere Werte und das Verändern
   übergebener Objekte erklären. Selbstverständliche Parameter nicht nur unter
@@ -267,9 +269,9 @@ Konfiguration steht in [pyproject.toml](../pyproject.toml).
 - Kommentare begründen Sonderfälle oder Voraussetzungen. Sie sollen nicht
   jede Schleife und Zuweisung nacherzählen. Veraltete Kommentare beim Ändern
   des Verhaltens gleichzeitig aktualisieren.
-- Testfälle erhalten sprechende Namen. Ruff verlangt dort keine zusätzlichen
-  Docstrings. Konstruktoren und Standard-Protokollmethoden brauchen keine
-  bloße Wiederholung; abweichendes Verhalten gehört trotzdem dokumentiert.
+- Testfälle erhalten sprechende Namen. Konstruktoren und
+  Standard-Protokollmethoden brauchen keine bloße Wiederholung; abweichendes
+  Verhalten gehört trotzdem dokumentiert.
 - Typannotationen sind bei Datenmodellen und neuen klaren Schnittstellen
   hilfreich. Eine flächendeckende Typmigration ist keine Voraussetzung für
   eine Dokumentationsänderung.

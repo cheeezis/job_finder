@@ -22,3 +22,8 @@ output "documents_container_name" {
   description = "Blob-Container innerhalb des Storage-Accounts, der die Dokumente enthält."
   value       = azurerm_storage_container.application_documents.name
 }
+
+output "openai_endpoint" {
+  description = "Adresse des Sprachmodells für den KI-Agenten; Aufrufe nur mit Entra-ID-Token."
+  value       = azurerm_cognitive_account.openai.endpoint
+}

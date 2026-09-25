@@ -29,18 +29,28 @@ GERMANY_REMOTE_REGION_LABELS = {
 # Detail caches keep source data only, never memory or workflow state.
 MEMORY_FIELDS = {"first_seen_at", "last_seen_at", "workflow_status", "is_new", "cache_stale"}
 DETAIL_CACHE_FIELDS = tuple(field.name for field in fields(Job) if field.name not in MEMORY_FIELDS)
-_FETCH_DIAGNOSTICS = {"failed_segments": 0, "failed_candidates": 0}
+# total_segments stays None unless a source reports its search coverage.
+_FETCH_DIAGNOSTICS = {"failed_segments": 0, "failed_candidates": 0, "total_segments": None}
 
 
 def reset_fetch_diagnostics():
     """Reset sequential per-source diagnostics before one adapter runs."""
-    for key in _FETCH_DIAGNOSTICS:
-        _FETCH_DIAGNOSTICS[key] = 0
+    _FETCH_DIAGNOSTICS.update(failed_segments=0, failed_candidates=0, total_segments=None)
+
+
+def record_total_segments(count):
+    """Record how many search segments the source covered, including failed ones."""
+    _FETCH_DIAGNOSTICS["total_segments"] = count
 
 
 def record_partial_failure(count=1):
     """Record internally handled failures that make a source result partial."""
     _FETCH_DIAGNOSTICS["failed_segments"] += max(0, int(count))
+
+
+def ensure_partial_failure():
+    """Mark the result partial without adding to failures already counted."""
+    _FETCH_DIAGNOSTICS["failed_segments"] = max(1, _FETCH_DIAGNOSTICS["failed_segments"])
 
 
 def record_candidate_failure(count=1):
@@ -53,17 +63,8 @@ def record_candidate_failure(count=1):
 
 
 def fetch_diagnostics():
-    """Return a copy of diagnostics for the just-completed adapter run."""
-    return dict(_FETCH_DIAGNOSTICS)
-
-
-def build_fetch_report(jobs, failed_segments, total_segments):
-    """Describe complete, empty or partial source coverage for the runner."""
-    return {
-        "jobs": jobs,
-        "status": "partial" if failed_segments else ("success" if jobs else "empty"),
-        "details": {"failed_segments": failed_segments, "total_segments": total_segments},
-    }
+    """Return a copy of diagnostics for the just-completed adapter run; totals only if recorded."""
+    return {key: value for key, value in _FETCH_DIAGNOSTICS.items() if value is not None}
 
 
 class ListingUnavailableError(ValueError):

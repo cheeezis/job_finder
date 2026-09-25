@@ -21,7 +21,6 @@ from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource, WorkMode
 from job_finder.paths import cache_file
 from job_finder.sources.common import (
-    build_fetch_report,
     canonical_detail_url,
     detail_is_fresh,
     enrich_cached_candidates,
@@ -30,6 +29,8 @@ from job_finder.sources.common import (
     load_detail_cache,
     normalize_employment_type,
     parse_published_date,
+    record_partial_failure,
+    record_total_segments,
     source_job_id,
     utc_now,
     with_current_summary,
@@ -55,15 +56,7 @@ TERM_PRIORITY_RULES = [
 
 def fetch_jobs(cache_path=CACHE_FILE, now=None):
     """Return fresh cached details or lightweight API search records."""
-    records = collect_records()
-    return jobs_from_records(records, cache_path, now=now)
-
-
-def fetch_jobs_with_report(cache_path=CACHE_FILE, now=None):
-    """Return jobs plus coverage so partial searches never age out old jobs."""
-    records, failed, total = collect_records(return_report=True)
-    jobs = jobs_from_records(records, cache_path, now=now)
-    return build_fetch_report(jobs, failed, total)
+    return jobs_from_records(collect_records(), cache_path, now=now)
 
 
 def jobs_from_records(records, cache_path=CACHE_FILE, now=None):
@@ -80,8 +73,8 @@ def jobs_from_records(records, cache_path=CACHE_FILE, now=None):
     return jobs
 
 
-def collect_records(*, return_report=False):
-    """Collect unique lightweight records from all generated API searches."""
+def collect_records():
+    """Collect unique records from all API searches and record their coverage."""
     records = {}
     search_errors = 0
 
@@ -98,11 +91,11 @@ def collect_records(*, return_report=False):
             if identifier:
                 records.setdefault(identifier, record)
 
+    record_total_segments(len(searches))
+    record_partial_failure(search_errors)
     if search_errors:
         print(f"WARNUNG get-in-IT: {search_errors} Suche(n) fehlgeschlagen")
-    records = list(records.values())
-    result = (records, search_errors, len(searches))
-    return result if return_report else records
+    return list(records.values())
 
 
 def summary_job_from_record(record):

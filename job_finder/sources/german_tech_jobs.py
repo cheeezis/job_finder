@@ -11,9 +11,10 @@ from job_finder.paths import cache_file
 from job_finder.persistence.storage import read_json, write_versioned
 from job_finder.sources.common import (
     as_utc,
-    build_fetch_report,
     normalize_employment_type,
     parse_published_date,
+    record_partial_failure,
+    record_total_segments,
     source_job_id,
     utc_now,
 )
@@ -27,12 +28,7 @@ MAX_STALE_FEED_AGE = timedelta(days=3)
 
 
 def fetch_jobs(cache_path=CACHE_FILE, now=None):
-    """Return current jobs, using a recent cache only after a feed failure."""
-    return fetch_jobs_with_report(cache_path=cache_path, now=now)["jobs"]
-
-
-def fetch_jobs_with_report(cache_path=CACHE_FILE, now=None):
-    """Fetch and parse the complete feed with explicit fallback diagnostics."""
+    """Return the complete feed, or a recent cache as a partial result after a feed failure."""
     fetched_at = now or utc_now()
     try:
         jobs, invalid_records = parse_feed(fetch_text(FEED_URL), fetched_at)
@@ -40,10 +36,14 @@ def fetch_jobs_with_report(cache_path=CACHE_FILE, now=None):
         cached = load_feed_cache(cache_path, fetched_at)
         if not cached:
             raise
-        return build_fetch_report(cached, failed_segments=1, total_segments=1)
+        record_total_segments(1)
+        record_partial_failure(1)
+        return cached
 
     save_feed_cache(cache_path, jobs, fetched_at)
-    return build_fetch_report(jobs, invalid_records, len(jobs) + invalid_records)
+    record_total_segments(len(jobs) + invalid_records)
+    record_partial_failure(invalid_records)
+    return jobs
 
 
 def parse_feed(xml_text, fetched_at=None):

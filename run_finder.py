@@ -271,11 +271,10 @@ def print_review_diagnostics(results, memory_stats):
 def collect_jobs(sources=None, run_id=None):
     """Return deduplicated jobs and coverage reports from selected sources.
 
-    Each adapter provides SOURCE_NAME and fetch_jobs(). Prefer the
-    optional fetch_jobs_with_report() when available; its result has
-    jobs, status and optional details. Catch source errors so other
-    sources can complete, and include handled partial failures in each
-    report. Reports expose name, status, job count and error details.
+    Each adapter provides SOURCE_NAME and fetch_jobs() and records its
+    coverage through the fetch diagnostics (record_total_segments,
+    record_partial_failure). Catch source errors so other sources can
+    complete. Reports expose name, status, job count and error details.
     """
     jobs = []
     seen_urls = set()
@@ -320,22 +319,14 @@ def collect_jobs(sources=None, run_id=None):
 
 
 def fetch_source_jobs(source):
-    """Apply the optional coverage report and include internally handled failures."""
-    report_fetcher = getattr(source, "fetch_jobs_with_report", None)
-    if report_fetcher is None:
-        source_jobs = source.fetch_jobs()
-        source_status = "success" if source_jobs else "empty"
-        report_details = {}
-    else:
-        source_result = report_fetcher()
-        source_jobs = source_result["jobs"]
-        source_status = source_result["status"]
-        report_details = source_result.get("details", {})
-    handled_failures = fetch_diagnostics()["failed_segments"]
-    if handled_failures and source_status != "partial":
-        source_status = "partial"
-        report_details = {**report_details, "failed_segments": handled_failures}
-    return source_jobs, source_status, report_details
+    """Fetch one source and derive its status and details from the recorded diagnostics."""
+    source_jobs = source.fetch_jobs()
+    diagnostics = fetch_diagnostics()
+    failed, total = diagnostics["failed_segments"], diagnostics.get("total_segments")
+    status = "partial" if failed else ("success" if source_jobs else "empty")
+    if total is not None:
+        return source_jobs, status, {"failed_segments": failed, "total_segments": total}
+    return source_jobs, status, ({"failed_segments": failed} if failed else {})
 
 
 def enrich_candidate_jobs(jobs, candidate_ids, sources=None, run_id=None):

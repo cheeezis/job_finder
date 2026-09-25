@@ -217,11 +217,13 @@ test("landing submits only the entered URL and navigates to the imported job", a
 });
 
 test("complete review loading renders a card and applies a decision", async () => {
-  const job = {id: "job:1", title: "Developer", company: "Example", workflow_status: "new", role_group: "general_it"};
+  const job = {id: "job:1", title: "Developer", company: "Example", workflow_status: "new",
+    role_group: "ai_business_analysis", role_label: "Business Analyst (KI)"};
   const view = page("review", {async postJson() { return {workflow_status: "interesting"}; }},
     async () => ({ok: true, json: async () => ({recommendations: [job], workflow_statuses: ["new", "interesting"]})}));
   await new Promise(setImmediate);
   assert.equal(view.elements.get("title").textContent, "Developer");
+  assert.equal(view.elements.get("role-badge").textContent, "Business Analyst (KI)");
   assert.equal(view.elements.get("card").hidden, false);
   await view.elements.get("mark-interesting").emit("click");
   assert.equal(job.workflow_status, "interesting");

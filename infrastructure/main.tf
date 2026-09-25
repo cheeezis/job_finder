@@ -131,6 +131,14 @@ resource "azurerm_container_app_job" "finder" {
     key_vault_secret_id = "${azurerm_key_vault.jobfinder.vault_uri}secrets/JobfinderUserSettings"
     identity            = azurerm_user_assigned_identity.jobfinder.id
   }
+  # Persönliches Profil für den KI-Agenten (Inhalt von profile.local.yaml).
+  # Nur der Worker schreibt Steckbriefe; die Review braucht es nicht. Das
+  # Secret muss vor dem ersten Apply mit diesem Verweis existieren.
+  secret {
+    name                = "jobfinder-profile"
+    key_vault_secret_id = "${azurerm_key_vault.jobfinder.vault_uri}secrets/JobfinderProfile"
+    identity            = azurerm_user_assigned_identity.jobfinder.id
+  }
 
   # Hybrid-Aufteilung: StepStone und Remotely liefern aus Azure heraus keine
   # Treffer (Bot-Abwehr blockiert bekannte Cloud-IP-Bereiche); diese beiden
@@ -189,6 +197,10 @@ resource "azurerm_container_app_job" "finder" {
       env {
         name        = "JOBFINDER_USER_SETTINGS"
         secret_name = "jobfinder-user-settings"
+      }
+      env {
+        name        = "JOBFINDER_PROFILE"
+        secret_name = "jobfinder-profile"
       }
 
       env {

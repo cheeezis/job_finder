@@ -1,13 +1,3 @@
-  const roleLabels = {
-    general_it: "Allgemeine IT", software_development: "Softwareentwicklung",
-    python_ai_data: "Python / KI / Daten", technical_consulting: "Technisches Consulting",
-    infrastructure: "Infrastruktur", junior_sap: "SAP-Einstieg",
-    testing: "Testing / QA", junior_administration: "IT-Administration",
-    rpa_automation: "RPA / Automatisierung", trainee: "Trainee",
-    junior_modern_workplace: "Modern Workplace",
-    infrastructure_automation: "Infrastruktur-Automatisierung",
-    manual_review: "Manuell hinzugefügt"
-  };
   const statusLabels = JobFinder.statusLabels;
   const sourceLabels = {
     ...JobFinder.sourceLabels, original: "Originalanzeige",
@@ -108,7 +98,7 @@
       : `Vorfilter: ${job.match_percent ?? 0}/100`);
     setText("role-badge", job.current_snapshot_missing
       ? "Vorgemerkt"
-      : roleLabels[job.role_group] || "Allgemeine IT");
+      : job.role_label || "Allgemeine IT");
     const newBadge = element("new-badge");
     newBadge.hidden = job.workflow_status !== "new";
     newBadge.className = "badge";
@@ -129,7 +119,7 @@
     setText("current-status", `Status: ${statusLabels[job.workflow_status] || job.workflow_status}`);
     setText("role-group", job.current_snapshot_missing
       ? "aktuell nicht verfügbar"
-      : roleLabels[job.role_group] || "Allgemeine IT");
+      : job.role_label || "Allgemeine IT");
     setText("experience-level", job.current_snapshot_missing
       ? "aktuell nicht verfügbar"
       : job.experience_level || "keine Jahresanforderung erkannt");
@@ -262,6 +252,9 @@
         result.workflow_statuses.filter(status => reviewStatuses.has(status)),
         statusLabels
       );
+      // The server names each role; the filter reuses those names.
+      const roleLabels = Object.fromEntries(
+        jobs.filter(job => job.role_label).map(job => [job.role_group, job.role_label]));
       addOptions(
         element("role-filter"),
         [...new Set(jobs.map(job => job.role_group).filter(Boolean))].sort(),

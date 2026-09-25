@@ -5,7 +5,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from job_finder.workflow.reporting import is_international_listing, write_recommendations
+from job_finder.matching.matching_rules import ROLE_GROUPS
+from job_finder.workflow.reporting import (
+    ROLE_LABELS,
+    is_international_listing,
+    write_recommendations,
+)
 
 
 def included_job(job_id="test:1"):
@@ -59,6 +64,10 @@ class ReportingTests(unittest.TestCase):
         self.assertNotIn("description_clean", recommendation)
         self.assertNotIn("reasons", recommendation)
         self.assertNotIn("llm_score", recommendation)
+
+    def test_every_role_group_has_a_review_label(self):
+        missing = [group["id"] for group in ROLE_GROUPS if group["id"] not in ROLE_LABELS]
+        self.assertEqual(missing, [])
 
     def test_international_listing_uses_scope_language_and_source(self):
         for locations in (["weltweit"], ["Europe"]):

@@ -33,10 +33,7 @@ def record_status_change(entry, workflow_status, occurred_on=None, scheduled_for
     """Set the current status and append one dated manual transition."""
     status = WorkflowStatus(workflow_status).value
     explicit_event = occurred_on is not None or scheduled_for is not None
-    event = {"status": status, "occurred_on": validated_date(occurred_on)}
-    appointment = validated_scheduled_for(status, scheduled_for)
-    if appointment is not None:
-        event["scheduled_for"] = appointment
+    event = history_event(status, validated_date(occurred_on), scheduled_for)
     previous_status = entry.get("workflow_status", WorkflowStatus.NEW.value)
     history = entry.get("workflow_history")
     if not isinstance(history, list):
@@ -121,14 +118,8 @@ def update_history_event(
         entry, event_index, previous_status, previous_occurred_on, previous_scheduled_for
     )
     updated_event = history_event(workflow_status, occurred_on, scheduled_for)
-    for other_index, other_event in enumerate(history):
-        if other_index == index:
-            continue
-        normalized = normalized_history_event(other_event)
-        if normalized is None:
-            continue
-        if normalized == updated_event:
-            raise ValueError("Dieses Verlaufsereignis existiert bereits")
+    if updated_event in map(normalized_history_event, history[:index] + history[index + 1 :]):
+        raise ValueError("Dieses Verlaufsereignis existiert bereits")
     history[index] = updated_event
     current_status = synchronize_current_status(entry)
     return {
@@ -184,7 +175,7 @@ def application_row(job_id, entry, as_of=None):
     """Build one compact row with its complete manual timeline."""
     history = valid_history(entry.get("workflow_history", []))
     applied_on = first_event_date(history, {WorkflowStatus.APPLIED.value})
-    response_on = first_response_date(history, applied_on)
+    response_on = first_event_date(history, RESPONSE_STATUSES, not_before=applied_on)
     current_status = entry.get("workflow_status", WorkflowStatus.NEW.value)
     statuses = {event["status"] for event in history}
     if current_status in APPLICATION_STATUSES:
@@ -258,14 +249,11 @@ def valid_history(history):
     """Keep only well-formed status events from local memory."""
     if not isinstance(history, list):
         return []
-    valid = []
-    for event_index, event in enumerate(history):
-        normalized = normalized_history_event(event, event_index)
-        if normalized is None:
-            continue
-        valid.append(normalized)
-    valid.sort(key=lambda event: (event["occurred_on"] is not None, event["occurred_on"] or ""))
-    return valid
+    events = (normalized_history_event(event, index) for index, event in enumerate(history))
+    return sorted(
+        (event for event in events if event is not None),
+        key=lambda event: (event["occurred_on"] is not None, event["occurred_on"] or ""),
+    )
 
 
 def normalized_history_event(event, event_index=None):
@@ -329,24 +317,14 @@ def first_upcoming_interview(history):
     return min(appointments, default=None)
 
 
-def first_event_date(history, statuses):
-    """Return the earliest date for any selected status."""
+def first_event_date(history, statuses, not_before=None):
+    """Return the earliest date for any selected status, optionally on or after a bound."""
     dates = [
         event["occurred_on"]
         for event in history
-        if event["status"] in statuses and event["occurred_on"] is not None
-    ]
-    return min(dates, default=None)
-
-
-def first_response_date(history, applied_on):
-    """Return the first dated response on or after the application."""
-    dates = [
-        event["occurred_on"]
-        for event in history
-        if event["status"] in RESPONSE_STATUSES
+        if event["status"] in statuses
         and event["occurred_on"] is not None
-        and (applied_on is None or event["occurred_on"] >= applied_on)
+        and (not_before is None or event["occurred_on"] >= not_before)
     ]
     return min(dates, default=None)
 

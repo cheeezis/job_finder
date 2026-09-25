@@ -19,13 +19,20 @@ EXPERIENCE_TERM = (
     r"professional experience|practical experience|hands-on experience|"
     r"erfahrung(?:en)?|experience)"
 )
-
-
 YEAR_UNIT = r"(?:jahre?n?|years?|yrs?)"
-
-
+YEAR_QUALIFIER = r"(?:(mehr als|ueber|more than|over|mindestens|mind\.?|at least|minimum of)\s*)?"
 MORE_THAN_QUALIFIERS = {"mehr als", "ueber", "more than", "over"}
-
+YEAR_RANGE_PATTERNS = [
+    rf"(\d+)\s*(?:-|bis|to)\s*(\d+)\s*{YEAR_UNIT}[\s\S]{{0,80}}?{EXPERIENCE_TERM}",
+    rf"{EXPERIENCE_TERM}[\s\S]{{0,80}}?(\d+)\s*(?:-|bis|to)\s*(\d+)\s*{YEAR_UNIT}",
+]
+SINGLE_YEAR_PATTERNS = [
+    rf"{YEAR_QUALIFIER}(\d+)\s*\+?\s*{YEAR_UNIT}[\s\S]{{0,80}}?{EXPERIENCE_TERM}",
+    rf"{EXPERIENCE_TERM}[\s\S]{{0,80}}?{YEAR_QUALIFIER}(\d+)\s*\+?\s*{YEAR_UNIT}",
+]
+# "5+ years in sales" is a requirement even without the word experience;
+# company facts such as "seit 20 Jahren am Markt" carry no plus sign.
+PLUS_YEARS_PATTERN = rf"(\d+)\s*\+\s*{YEAR_UNIT}"
 
 REQUIRED_EXPERIENCE_PATTERNS = [
     r"\b(?:du|sie)\s+(?:hast|haben|bringst|bringen|verfuegst|verfuegen)"
@@ -97,44 +104,18 @@ def description_is_missing(description):
 
 def extract_required_years(text):
     """Return the highest explicit experience requirement up to ten years."""
-    range_patterns = [
-        rf"(\d+)\s*(?:-|bis|to)\s*(\d+)\s*{YEAR_UNIT}"
-        rf"[\s\S]{{0,80}}?{EXPERIENCE_TERM}",
-        rf"{EXPERIENCE_TERM}[\s\S]{{0,80}}?"
-        rf"(\d+)\s*(?:-|bis|to)\s*(\d+)\s*{YEAR_UNIT}",
-    ]
     years = []
-    for pattern in range_patterns:
-        for match in re.finditer(pattern, text):
-            if match_is_optional(text, match):
-                continue
-            lower, upper = match.groups()[-2:]
-            years.extend([int(lower), int(upper)])
-
-    single_patterns = [
-        rf"(?:(mehr als|ueber|more than|over|mindestens|mind\.?|at least|"
-        rf"minimum of)\s*)?(\d+)\s*\+?\s*{YEAR_UNIT}"
-        rf"[\s\S]{{0,80}}?{EXPERIENCE_TERM}",
-        rf"{EXPERIENCE_TERM}[\s\S]{{0,80}}?"
-        rf"(?:(mehr als|ueber|more than|over|mindestens|mind\.?|at least|"
-        rf"minimum of)\s*)?(\d+)\s*\+?\s*{YEAR_UNIT}",
-    ]
-    for pattern in single_patterns:
-        for match in re.finditer(pattern, text):
-            if match_is_optional(text, match):
-                continue
-            qualifier, value = match.groups()[-2:]
-            year = int(value)
-            if qualifier and qualifier.strip() in MORE_THAN_QUALIFIERS:
-                year += 1
-            years.append(year)
-
-    # "5+ years in sales" is a requirement even without the word experience;
-    # company facts such as "seit 20 Jahren am Markt" carry no plus sign.
-    for match in re.finditer(rf"(\d+)\s*\+\s*{YEAR_UNIT}", text):
-        if not match_is_optional(text, match):
-            years.append(int(match.group(1)))
-
+    for match in required_matches(text, YEAR_RANGE_PATTERNS):
+        lower, upper = match.groups()[-2:]
+        years.extend([int(lower), int(upper)])
+    for match in required_matches(text, SINGLE_YEAR_PATTERNS):
+        qualifier, value = match.groups()[-2:]
+        year = int(value)
+        if qualifier and qualifier.strip() in MORE_THAN_QUALIFIERS:
+            year += 1
+        years.append(year)
+    for match in required_matches(text, [PLUS_YEARS_PATTERN]):
+        years.append(int(match.group(1)))
     plausible = [year for year in years if 0 < year <= 10]
     return max(plausible, default=0)
 
@@ -146,11 +127,15 @@ def experience_is_optional(text):
 
 def has_required_experience(text):
     """Return whether applicant experience is stated as a requirement."""
-    return any(
-        not match_is_optional(text, match)
-        for pattern in REQUIRED_EXPERIENCE_PATTERNS
-        for match in re.finditer(pattern, text)
-    )
+    return any(required_matches(text, REQUIRED_EXPERIENCE_PATTERNS))
+
+
+def required_matches(text, patterns):
+    """Yield pattern matches whose nearby clause does not make them optional."""
+    for pattern in patterns:
+        for match in re.finditer(pattern, text):
+            if not match_is_optional(text, match):
+                yield match
 
 
 def strong_experience_is_required(title, description):

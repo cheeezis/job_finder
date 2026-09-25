@@ -6,6 +6,21 @@ Points and local preferences are applied by scoring.py. This module does
 not load user settings or the personal facts in profile.local.yaml.
 """
 
+# Both automation groups share their title patterns; the RPA context keywords
+# decide between process automation and infrastructure work.
+AUTOMATION_TITLE_PATTERNS = [
+    ["automation", "engineer"],
+    ["automationsentwickler"],
+    ["automatisierungsentwickler"],
+]
+RPA_CONTEXT_KEYWORDS = [
+    "rpa",
+    "uipath",
+    "power automate",
+    "prozessautomatisierung",
+    "robotic process automation",
+]
+
 ROLE_GROUPS = [
     {
         "id": "python_ai_data",
@@ -129,33 +144,15 @@ ROLE_GROUPS = [
             "devops",
             "cloud infrastructure",
         ],
-        "excluded_context_keywords": [
-            "rpa",
-            "uipath",
-            "power automate",
-            "prozessautomatisierung",
-            "robotic process automation",
-        ],
-        "patterns": [
-            ["automation", "engineer"],
-            ["automationsentwickler"],
-            ["automatisierungsentwickler"],
-        ],
+        "excluded_context_keywords": RPA_CONTEXT_KEYWORDS,
+        "patterns": AUTOMATION_TITLE_PATTERNS,
     },
     {
         "id": "rpa_automation",
         "label": "RPA/Prozessautomatisierung",
-        "context_keywords": [
-            "rpa",
-            "uipath",
-            "power automate",
-            "prozessautomatisierung",
-            "robotic process automation",
-        ],
+        "context_keywords": RPA_CONTEXT_KEYWORDS,
         "patterns": [
-            ["automation", "engineer"],
-            ["automationsentwickler"],
-            ["automatisierungsentwickler"],
+            *AUTOMATION_TITLE_PATTERNS,
             ["rpa", "developer"],
             ["rpa", "entwickler"],
             ["rpa", "consultant"],
@@ -322,24 +319,17 @@ BLOCKED_TITLE_WORDS = [
     "professor",
 ]
 
-# Explicit junior titles may include these otherwise blocked experience labels.
-ENTRY_LEVEL_TITLE_EXCEPTIONS = {
-    "senior",
-    "sr",
-    "experte",
-    "expert",
-    "lead",
-    "principal",
-    "head",
-    "leitung",
-    "leiter",
-    "projektleiter",
-    "projektmanager",
-    "teamleiter",
-    "abteilungsleiter",
-    "manager",
-    "testmanager",
-    "test manager",
+# Explicit junior titles may include every blocked word except these.
+ENTRY_LEVEL_TITLE_EXCEPTIONS = set(BLOCKED_TITLE_WORDS) - {
+    "staff",
+    "founding",
+    "director",
+    "do not apply",
+    "architect",
+    "architekt",
+    "weiterbildung",
+    "professur",
+    "professor",
 }
 
 
@@ -437,11 +427,9 @@ BODY_ENTRY_LEVEL_PHRASES = [
 
 FIRST_EXPERIENCE_PHRASES = [
     "erste erfahrung",
-    "erste erfahrungen",
     "erste berufserfahrung",
     "erste berufliche erfahrungen",
     "erste praktische erfahrung",
-    "erste praktische erfahrungen",
     "erste projekterfahrung",
 ]
 

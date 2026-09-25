@@ -6,8 +6,6 @@ __pycache__/
 
 # Persönliche Konfiguration; die gemeinsame .env.example bleibt versioniert.
 profile.yaml
-profile.local.yaml
-user_settings.local.yaml
 *.local.yaml
 *.local.yml
 .env
@@ -17,7 +15,6 @@ user_settings.local.yaml
 # Laufzeitdaten, lokale Datenbanken, Logs und temporäre Auswertungen
 data/
 tmp/
-llm_evaluation/
 *.log
 *.sqlite
 *.sqlite3

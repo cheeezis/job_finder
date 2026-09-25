@@ -6,7 +6,6 @@ import time
 from datetime import date, datetime, timedelta
 from html import unescape
 from html.parser import HTMLParser
-from pathlib import Path
 from urllib.parse import urljoin, urlsplit
 
 from job_finder.console import print_progress, progress_checkpoint
@@ -68,12 +67,11 @@ class RemotelyHttpClient:
 def fetch_jobs(cache_path=CACHE_FILE, client=None, now=None):
     """Fetch only listings published within the rolling lookback window."""
     client = client or RemotelyHttpClient()
-    cache_file = Path(cache_path)
     reference_date = (now.date() if hasattr(now, "date") else now) or date.today()
     links = collect_links(client, today=reference_date)
     return fetch_cached_details(
         links,
-        cache_file,
+        cache_path,
         lambda url: fetch_job(url, client),
         "Remotely",
         now=now,
@@ -99,8 +97,7 @@ def enrich_candidate_jobs(
         return 0
 
     checked_at = now or utc_now()
-    status_path = Path(status_cache_path)
-    checks = load_linkedin_status_cache(status_path)
+    checks = load_linkedin_status_cache(status_cache_path)
     cache_changed = False
     closed_indices = set()
     errors = 0
@@ -130,7 +127,7 @@ def enrich_candidate_jobs(
             )
 
     if cache_changed:
-        save_linkedin_status_cache(status_path, checks)
+        save_linkedin_status_cache(status_cache_path, checks)
     if closed_indices:
         jobs[:] = [job for index, job in enumerate(jobs) if index not in closed_indices]
         print(
@@ -373,17 +370,9 @@ def parse_relative_date(value, today=None):
     match = re.fullmatch(r"vor (\d+) (tag(?:en)?|woche(?:n)?|monat(?:en)?|jahr(?:en)?)", label)
     if not match:
         return None
-    amount = int(match.group(1))
-    unit = match.group(2)
-    if unit.startswith("tag"):
-        days = amount
-    elif unit.startswith("woche"):
-        days = amount * 7
-    elif unit.startswith("monat"):
-        days = amount * 30
-    else:
-        days = amount * 365
-    return current - timedelta(days=days)
+    days_per_unit = {"tag": 1, "woche": 7, "monat": 30, "jahr": 365}
+    unit = next(stem for stem in days_per_unit if match.group(2).startswith(stem))
+    return current - timedelta(days=int(match.group(1)) * days_per_unit[unit])
 
 
 def clean_text(value):

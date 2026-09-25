@@ -255,8 +255,8 @@ Danach:
 
 ```powershell
 .\.venv\Scripts\python.exe scripts/test_postgres.py
-.\.venv\Scripts\python.exe -m ruff check job_finder scripts tests run_finder.py
-.\.venv\Scripts\python.exe -m ruff format --check job_finder scripts tests run_finder.py
+.\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe -m ruff format --check .
 node --test tests/frontend.test.cjs
 ```
 

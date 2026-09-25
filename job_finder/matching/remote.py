@@ -46,13 +46,13 @@ def detect_remote(*text_parts, structured_remote=""):
     if structured in ["100%", "100", "full", "fully remote", "remote"]:
         return "100%"
 
-    if contains_any(text, FULL_REMOTE_PHRASES):
+    if contains_any_substring(text, FULL_REMOTE_PHRASES):
         return "100%"
 
-    if contains_any(text, NO_REMOTE_PHRASES):
+    if contains_any_substring(text, NO_REMOTE_PHRASES):
         return "0%"
 
-    if structured == "homeoffice" or contains_any(text, REMOTE_WORDS):
+    if structured == "homeoffice" or contains_any_substring(text, REMOTE_WORDS):
         return "homeoffice"
 
     return "0%"
@@ -60,17 +60,10 @@ def detect_remote(*text_parts, structured_remote=""):
 
 def extract_remote_percent(text):
     """Find the highest percentage that is clearly connected to remote work."""
-    day_text = text
-    for word, number in {
-        "ein": "1",
-        "eine": "1",
-        "einen": "1",
-        "zwei": "2",
-        "drei": "3",
-        "vier": "4",
-        "fuenf": "5",
-    }.items():
-        day_text = re.sub(rf"\b{word}\b", number, day_text)
+    # Day counts may be spelled out: ein/eine/einen = 1, zwei to fuenf = 2 to 5.
+    day_text = re.sub(r"\bein(?:e|en)?\b", "1", text)
+    for number, word in enumerate(("zwei", "drei", "vier", "fuenf"), start=2):
+        day_text = re.sub(rf"\b{word}\b", str(number), day_text)
     patterns = [
         (
             r"(?:bis zu|up to)?\s*(100|[1-9]\d)\s*%\s*"
@@ -120,6 +113,9 @@ def classify_remote(remote):
     return WorkMode.UNKNOWN, None
 
 
-def contains_any(text, words):
-    """Return whether text contains any configured phrase."""
+def contains_any_substring(text, words):
+    """Return whether text contains any phrase, also inside longer words.
+
+    Unlike matching_text.contains_any, plain words need no word boundaries.
+    """
     return any(word in text for word in words)

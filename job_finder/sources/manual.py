@@ -4,7 +4,6 @@ import ipaddress
 import re
 import socket
 from html.parser import HTMLParser
-from pathlib import Path
 from urllib.parse import urlsplit
 
 from job_finder.http import fetch_text_with_final_url
@@ -52,20 +51,18 @@ def add_url(url, cache_path=MANUAL_CACHE_FILE):
     """Fetch and persist one explicitly supplied public job URL."""
     requested_url = validate_public_url(url)
     final_url, html = fetch_text_with_final_url(requested_url, url_validator=validate_public_url)
-    cache_file = Path(cache_path)
-    cache = load_detail_cache(cache_file)
+    cache = load_detail_cache(cache_path)
     cache_key = canonical_detail_url(final_url)
     job = job_from_page(final_url, html)
     cache.pop(canonical_detail_url(requested_url), None)
     cache[cache_key] = job
-    save_detail_cache(cache_file, cache)
+    save_detail_cache(cache_path, cache)
     return job
 
 
 def fetch_jobs(cache_path=MANUAL_CACHE_FILE, now=None):
     """Return saved manual jobs and refresh details at the shared weekly cadence."""
-    cache_file = Path(cache_path)
-    cache = load_detail_cache(cache_file)
+    cache = load_detail_cache(cache_path)
     jobs = []
     refreshed = {}
     errors = 0
@@ -94,7 +91,7 @@ def fetch_jobs(cache_path=MANUAL_CACHE_FILE, now=None):
                 jobs.append(cached_job)
 
     if refreshed != cache:
-        save_detail_cache(cache_file, refreshed)
+        save_detail_cache(cache_path, refreshed)
     if errors:
         record_partial_failure(errors)
         print(
@@ -138,7 +135,8 @@ def job_from_visible_page(url, html):
     company = parser.metadata.get("og:site_name", "") or urlsplit(url).hostname
     description_html = parser.main_fragment(html)
     description = " ".join(parser.lines)
-    locations = extract_labeled_values(parser.lines, {"standort", "arbeitsort", "location"})
+    location = first_labeled_value(parser.lines, {"standort", "arbeitsort", "location"})
+    locations = [location] if location else []
     employment = first_labeled_value(
         parser.lines, {"beschaeftigungsart", "anstellungsart", "employment type"}
     )
@@ -165,12 +163,6 @@ def job_from_visible_page(url, html):
         published_at=parse_published_date(parser.metadata.get("article:published_time")),
         fetched_at=utc_now(),
     )
-
-
-def extract_labeled_values(lines, labels):
-    """Return the first labelled value as a list, or [] when absent."""
-    value = first_labeled_value(lines, labels)
-    return [value] if value else []
 
 
 def first_labeled_value(lines, labels):

@@ -1,7 +1,7 @@
 """StudySmarter source adapter using its public read-only jobs API."""
 
 import time
-from urllib.parse import urlencode, urlsplit, urlunsplit
+from urllib.parse import urlencode, urlsplit
 
 from job_finder.http import fetch_json, fetch_text
 from job_finder.matching.config import LOCAL_SEARCH_RADIUS_KM, STUDYSMARTER_LOCAL_SEARCH_LOCATION
@@ -34,6 +34,11 @@ IT_CATEGORIES = (
 REMOTE_ENTRY_TERMS = ("Junior", "Graduate", "Berufseinsteiger", "Einstieg")
 MAX_PAGES_PER_SEARCH = 20
 REQUEST_PAUSE_SECONDS = 0.2
+REMOTE_MODES = {
+    "completely": (WorkMode.REMOTE, 100),
+    "partly": (WorkMode.HYBRID, None),
+    "no": (WorkMode.ONSITE, 0),
+}
 
 
 def fetch_jobs(cache_path=CACHE_FILE, now=None):
@@ -162,7 +167,7 @@ def detail_url(link):
         return url
     del segments[2]
     path = "/" + "/".join(segments) + ("/" if parts.path.endswith("/") else "")
-    return urlunsplit(parts._replace(path=path))
+    return parts._replace(path=path).geturl()
 
 
 def summary_job_from_record(record):
@@ -170,14 +175,7 @@ def summary_job_from_record(record):
     url = detail_url(record.get("link", ""))
     identifier = record_identifier(record)
     remote = str(record.get("is_remote_positions") or "").casefold()
-    if remote == "completely":
-        work_mode, remote_percentage = WorkMode.REMOTE, 100
-    elif remote == "partly":
-        work_mode, remote_percentage = WorkMode.HYBRID, None
-    elif remote == "no":
-        work_mode, remote_percentage = WorkMode.ONSITE, 0
-    else:
-        work_mode, remote_percentage = WorkMode.UNKNOWN, None
+    work_mode, remote_percentage = REMOTE_MODES.get(remote, (WorkMode.UNKNOWN, None))
 
     job_types = [
         item.get("name")

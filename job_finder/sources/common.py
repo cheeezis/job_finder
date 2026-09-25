@@ -3,10 +3,9 @@
 import hashlib
 import json
 import re
-from dataclasses import replace
+from dataclasses import fields, replace
 from datetime import UTC, date, datetime, timedelta
-from pathlib import Path
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit
 
 from job_finder.console import print_progress, progress_checkpoint
 from job_finder.models import Job
@@ -28,23 +27,9 @@ GERMANY_REMOTE_REGION_LABELS = {
     "weltweit",
     "worldwide",
 }
-DETAIL_CACHE_FIELDS = (
-    "id",
-    "title",
-    "company",
-    "locations",
-    "sources",
-    "description_raw",
-    "description_clean",
-    "work_mode",
-    "remote_percentage",
-    "employment_type",
-    "career_levels",
-    "salary_min_eur",
-    "salary_max_eur",
-    "published_at",
-    "fetched_at",
-)
+# Detail caches keep source data only, never memory or workflow state.
+MEMORY_FIELDS = {"first_seen_at", "last_seen_at", "workflow_status", "is_new", "cache_stale"}
+DETAIL_CACHE_FIELDS = tuple(field.name for field in fields(Job) if field.name not in MEMORY_FIELDS)
 _FETCH_DIAGNOSTICS = {"failed_segments": 0, "failed_candidates": 0}
 
 
@@ -100,14 +85,13 @@ def canonical_detail_url(url):
         if not name.casefold().startswith("utm_")
         and name.casefold() not in {"fbclid", "gclid", "msclkid", "language", "j"}
     ]
-    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(stable_parameters), ""))
+    return parts._replace(query=urlencode(stable_parameters), fragment="").geturl()
 
 
 def load_detail_cache(path):
     """Load one source's current URL-to-job detail cache."""
-    cache_path = Path(path)
     try:
-        document = read_json(cache_path, {})
+        document = read_json(path, {})
     except (json.JSONDecodeError, OSError):
         return {}
     if document.get("version") != DETAIL_CACHE_VERSION:
@@ -149,8 +133,7 @@ def fetch_cached_details(
     normalize_cached(job, url), when provided, mutates cached jobs and
     returns whether persistence is needed.
     """
-    cache_file = Path(cache_path)
-    cache = load_detail_cache(cache_file)
+    cache = load_detail_cache(cache_path)
     jobs = []
     unsaved = 0
     errors = 0
@@ -177,7 +160,7 @@ def fetch_cached_details(
             unsaved += 1
             cache_changed = True
             if unsaved >= DETAIL_CACHE_SAVE_INTERVAL:
-                save_detail_cache(cache_file, cache)
+                save_detail_cache(cache_path, cache)
                 unsaved = 0
                 cache_changed = False
         except ListingUnavailableError:
@@ -198,7 +181,7 @@ def fetch_cached_details(
             )
 
     if cache_changed:
-        save_detail_cache(cache_file, cache)
+        save_detail_cache(cache_path, cache)
     if errors:
         record_partial_failure(errors)
         print(

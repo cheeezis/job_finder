@@ -9,7 +9,7 @@ from pathlib import Path, PurePosixPath
 from job_finder.paths import APPLICATION_DOCUMENTS_DIR, BACKUP_DIR
 from job_finder.persistence import document_store
 from job_finder.persistence.application_documents import live_document_manifest
-from job_finder.persistence.database import initialize, lock, transaction
+from job_finder.persistence.database import initialize, lock, snapshot, transaction
 from job_finder.persistence.postgres_store import (
     read_dataset,
     read_memory,
@@ -28,10 +28,9 @@ def create_postgres_backup(backup_dir=BACKUP_DIR, documents_dir=APPLICATION_DOCU
     hashes = {}
     try:
         with (
-            transaction() as connection,
+            snapshot() as connection,
             zipfile.ZipFile(temporary, "w", zipfile.ZIP_DEFLATED) as archive,
         ):
-            connection.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
             memory = read_memory(connection, "default")
             documents = live_document_manifest(memory, documents_dir)
 

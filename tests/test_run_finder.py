@@ -23,9 +23,9 @@ from run_finder import (
     parse_args,
     parse_source_names,
     print_source_summary,
+    require_usable_source_snapshot,
     run_pipeline,
     source_error_label,
-    source_snapshot_is_usable,
 )
 
 
@@ -196,7 +196,7 @@ class RunFinderTests(unittest.TestCase):
             {"status": "partial", "jobs": 0},
         ]
 
-        self.assertTrue(source_snapshot_is_usable(reports))
+        require_usable_source_snapshot(reports)
 
     def test_source_summary_distinguishes_all_coverage_states(self):
         reports = [

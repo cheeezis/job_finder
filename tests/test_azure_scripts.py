@@ -24,7 +24,9 @@ PASSWORD = "p@ss w/rd"
 def load_script(name):
     spec = importlib.util.spec_from_file_location(f"script_{name}", SCRIPTS / f"{name}.py")
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    # A direct start puts scripts/ on sys.path, where the shared Azure helper lives.
+    with patch.object(sys, "path", [*sys.path, str(SCRIPTS)]):
+        spec.loader.exec_module(module)
     return module
 
 
@@ -54,9 +56,10 @@ class AzureScriptTests(unittest.TestCase):
         self.bundle = self.project / "tmp/azure-postgres-trusted-roots.pem"
 
     def prepared(self, module, *, certificates=(b"certificate",), terraform=None):
-        """Patch the script's project root, Terraform call and OS trust store."""
+        """Patch project root, Terraform call and OS trust store of the shared helper."""
+        shared = module.azure_postgres
         run = patch.object(
-            module.subprocess,
+            shared.subprocess,
             "run",
             side_effect=terraform
             or (
@@ -65,15 +68,15 @@ class AzureScriptTests(unittest.TestCase):
         )
         context = SimpleNamespace(get_ca_certs=lambda binary_form: list(certificates))
         return (
-            patch.object(module, "PROJECT", self.project),
+            patch.object(shared, "PROJECT", self.project),
             run,
-            patch.object(module.ssl, "create_default_context", return_value=context),
+            patch.object(shared.ssl, "create_default_context", return_value=context),
         )
 
     def test_role_script_builds_verified_admin_and_app_targets(self):
         module = load_script("create_app_role")
         project, run, ssl_context = self.prepared(module)
-        with project, run as terraform, ssl_context:
+        with project, run as terraform, ssl_context, patch.object(module, "PROJECT", self.project):
             target = module._azure_target()
 
         terraform.assert_called_once_with(
@@ -183,6 +186,7 @@ class AzureScriptTests(unittest.TestCase):
 
     def test_scripts_import_without_side_effects_and_role_script_starts_directly(self):
         with patch("subprocess.run") as run:
+            load_script("azure_postgres")
             for name in ("check_azure_postgres", "create_app_role"):
                 self.assertTrue(callable(load_script(name).main))
         run.assert_not_called()

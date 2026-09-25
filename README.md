@@ -272,8 +272,8 @@ Docstring-Konventionen. Entwicklungswerkzeuge installieren und prüfen:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-.\.venv\Scripts\python.exe -m ruff check job_finder tests run_finder.py
-.\.venv\Scripts\python.exe -m ruff format --check job_finder tests run_finder.py
+.\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe -m ruff format --check .
 ```
 
 Der Workflow in `.github/workflows/checks.yml` führt Stilprüfungen, Python-

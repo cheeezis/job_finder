@@ -24,7 +24,7 @@ def analyze_location(location, remote, description, *, local_places, commuter_lo
             "label": "Remote-Stelle ist nicht aus Deutschland ausuebbar",
         }
 
-    if is_local_area(location, local_places):
+    if contains_any(location, local_places):
         radius_label = f"{radius}-km-Radius"
         if full_remote:
             return {"allowed": True, "points": 15, "label": "lokal und 100% Remote"}
@@ -49,11 +49,6 @@ def analyze_location(location, remote, description, *, local_places, commuter_lo
             }
 
     return {"allowed": False, "points": 0, "label": "Ort/Remote passt nicht"}
-
-
-def is_local_area(location, local_places):
-    """Match normalized location text against configured local aliases."""
-    return contains_any(location, local_places)
 
 
 def find_commuter_location(location, commuter_locations):

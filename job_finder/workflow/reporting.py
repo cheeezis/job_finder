@@ -146,16 +146,6 @@ def format_role_group(job):
     return ROLE_LABELS.get(value, str(value or "Allgemeine IT").replace("_", " "))
 
 
-def format_remote(job):
-    """Return structured remote fields as display text."""
-    percentage = job.get("remote_percentage")
-    if percentage is not None:
-        return f"{percentage}%"
-    if job.get("work_mode") == "hybrid":
-        return "homeoffice"
-    return "0%"
-
-
 def is_visible_in_default_review(job):
     """Return whether a job passes the default review visibility filters."""
     return not is_international_listing(job) and not str(

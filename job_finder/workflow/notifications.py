@@ -3,11 +3,11 @@
 import json
 from collections import Counter
 from datetime import UTC, datetime
-from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit
 from urllib.request import Request, urlopen
 
+from job_finder.models import format_remote
 from job_finder.paths import NOTIFICATION_STATE_FILE
 from job_finder.persistence.state_compat import (
     NOTIFICATION_STATE_VERSION as STATE_VERSION,
@@ -15,7 +15,6 @@ from job_finder.persistence.state_compat import (
 )
 from job_finder.persistence.storage import read_json, write_json_atomic
 from job_finder.workflow.reporting import (
-    format_remote,
     format_role_group,
     is_visible_in_default_review,
     primary_url,
@@ -24,6 +23,7 @@ from job_finder.workflow.reporting import (
 NOTIFIABLE_STATUSES = {"new", "review", "interesting", "inquiry"}
 MAX_EMBEDS = 10
 MAX_EMBED_CHARACTERS = 6000
+HEALTH_LABELS = {"partial": "teilweise", "empty": "ohne Treffer", "failed": "fehlgeschlagen"}
 
 
 class NotificationError(RuntimeError):
@@ -288,23 +288,13 @@ def discord_embed(job, *, review_host=None):
     """Render a quiet, compact card with the facts needed for a first look."""
     locations = ", ".join(job.get("locations", [])) or "unbekannt"
     role = format_role_group(job)
-    remote = format_remote(job)
+    remote = format_remote(job.get("remote_percentage"), job.get("work_mode"))
     fields = [
-        {
-            "name": "Kurzcheck",
-            "value": truncate(f"Neu · {role} · Vorfilter {job.get('match_percent', 0)}/100", 1024),
-            "inline": False,
-        },
-        {
-            "name": "Einstieg",
-            "value": truncate(job.get("experience_level") or "nicht erkannt", 1024),
-            "inline": True,
-        },
-        {
-            "name": "Standortprüfung",
-            "value": truncate(job.get("location_precheck") or "keine Auffälligkeit erkannt", 1024),
-            "inline": False,
-        },
+        embed_field("Kurzcheck", f"Neu · {role} · Vorfilter {job.get('match_percent', 0)}/100"),
+        embed_field("Einstieg", job.get("experience_level") or "nicht erkannt", inline=True),
+        embed_field(
+            "Standortprüfung", job.get("location_precheck") or "keine Auffälligkeit erkannt"
+        ),
     ]
     link = review_url(job, review_host)
     if link:
@@ -319,6 +309,11 @@ def discord_embed(job, *, review_host=None):
         "fields": fields,
         "footer": {"text": "Titel anklicken, um die Originalanzeige zu öffnen."},
     }
+
+
+def embed_field(name, value, *, inline=False):
+    """Build one embed field within Discord's 1024-character value limit."""
+    return {"name": name, "value": truncate(value, 1024), "inline": inline}
 
 
 def review_url(job, review_host):
@@ -337,12 +332,7 @@ def source_health_text(sources):
     """Summarize source coverage while keeping failures visible."""
     counts = Counter(source["status"] for source in sources)
     parts = [f"{len(sources)} geprüft", f"{counts['success']} erfolgreich"]
-    if counts["partial"]:
-        parts.append(f"{counts['partial']} teilweise")
-    if counts["empty"]:
-        parts.append(f"{counts['empty']} ohne Treffer")
-    if counts["failed"]:
-        parts.append(f"{counts['failed']} fehlgeschlagen")
+    parts += [f"{counts[key]} {label}" for key, label in HEALTH_LABELS.items() if counts[key]]
     return " · ".join(parts)
 
 
@@ -404,15 +394,13 @@ def truncate(value, limit):
 def webhook_url_with_confirmation(webhook_url):
     """Request a response only after Discord has stored the message."""
     parts = urlsplit(webhook_url)
-    query = dict(parse_qsl(parts.query, keep_blank_values=True))
-    query["wait"] = "true"
-    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
+    query = dict(parse_qsl(parts.query, keep_blank_values=True)) | {"wait": "true"}
+    return parts._replace(query=urlencode(query)).geturl()
 
 
 def load_notification_state(path=NOTIFICATION_STATE_FILE):
     """Load the delivery state keyed by stable job IDs."""
-    state_path = Path(path)
-    document = read_json(state_path, {"version": STATE_VERSION, "sent": {}, "pending": {}})
+    document = read_json(path, {"version": STATE_VERSION, "sent": {}, "pending": {}})
     return decode_notification_state(document)
 
 

@@ -3,7 +3,6 @@
 import re
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
-from pathlib import Path
 
 from job_finder.http import fetch_text
 from job_finder.matching.remote import classify_remote, detect_remote
@@ -146,7 +145,7 @@ def annual_salary_eur(value):
 def save_feed_cache(path, jobs, fetched_at):
     """Atomically store the last complete parsed feed for short outages."""
     write_json_atomic(
-        Path(path),
+        path,
         {
             "version": CACHE_VERSION,
             "fetched_at": fetched_at.isoformat(),

@@ -8,15 +8,14 @@ can contain malformed escaping.
 import json
 import re
 from itertools import product
-from pathlib import Path
 from urllib.parse import urlencode, urljoin
 
 from job_finder.http import fetch_json, fetch_text
 from job_finder.matching.config import (
     COMMUTER_SEARCH_LOCATIONS,
     COMMUTER_SEARCH_TERMS,
-    GET_IN_IT_SEARCH_LOCATIONS,
-    GET_IN_IT_SEARCH_TERMS,
+    SEARCH_LOCATIONS,
+    SEARCH_TERMS,
 )
 from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource, WorkMode
@@ -69,7 +68,7 @@ def fetch_jobs_with_report(cache_path=CACHE_FILE, now=None):
 
 def jobs_from_records(records, cache_path=CACHE_FILE, now=None):
     """Reuse fresh details and keep stale or unknown records lightweight."""
-    cache = load_detail_cache(Path(cache_path))
+    cache = load_detail_cache(cache_path)
     jobs = []
     for record in records:
         summary = summary_job_from_record(record)
@@ -111,16 +110,8 @@ def summary_job_from_record(record):
     url = canonical_detail_url(urljoin("https://www.get-in-it.de", str(record.get("url") or "")))
     identifier = str(record.get("id") or "").strip()
     company = record.get("company") or {}
-    locations = [
-        str(location.get("name") or "").strip()
-        for location in record.get("locations") or []
-        if isinstance(location, dict) and str(location.get("name") or "").strip()
-    ]
-    career_labels = [
-        str(career.get("name") or "").strip()
-        for career in record.get("careers") or []
-        if isinstance(career, dict) and str(career.get("name") or "").strip()
-    ]
+    locations = api_names(record.get("locations"))
+    career_labels = api_names(record.get("careers"))
     has_home_office = bool(record.get("homeOffice"))
     return Job(
         id=source_job_id(SOURCE_NAME, identifier, url),
@@ -135,6 +126,12 @@ def summary_job_from_record(record):
         work_mode=WorkMode.REMOTE if has_home_office else WorkMode.ONSITE,
         remote_percentage=100 if has_home_office else 0,
     )
+
+
+def api_names(items):
+    """Return the non-empty names of API objects such as locations or careers."""
+    names = (str(item.get("name") or "").strip() for item in items or [] if isinstance(item, dict))
+    return [name for name in names if name]
 
 
 def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE, now=None):
@@ -155,7 +152,7 @@ def build_api_searches():
     seen = set()
 
     search_plans = [
-        (GET_IN_IT_SEARCH_TERMS, GET_IN_IT_SEARCH_LOCATIONS),
+        (SEARCH_TERMS, SEARCH_LOCATIONS),
         (COMMUTER_SEARCH_TERMS, COMMUTER_SEARCH_LOCATIONS),
     ]
     for terms, locations in search_plans:

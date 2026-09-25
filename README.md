@@ -96,8 +96,6 @@ und fünf für den Bezug zu Projekten oder Weiterbildungen. Abzüge für
 Arbeitsbedingungen werden danach angewendet. Die Rollen- und Technologiegewichte
 stehen getrennt von den Erkennungsregeln in `job_finder/matching/ranking_weights.py`.
 `matching.profile_domain_keywords` steuert den einmaligen Stichwortbonus.
-`matching.preferred_role_groups` wird aus Kompatibilitätsgründen weiterhin
-akzeptiert, hat in dieser wiederhergestellten Sortierung aber keinen Einfluss.
 Suchradius, Ortsliste und Pendlergrenzen kommen unverändert aus den aktuellen
 persönlichen Einstellungen. Der Score ist eine regelbasierte Sortierhilfe,
 kein Nachweis persönlicher Eignung.

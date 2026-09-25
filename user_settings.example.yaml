@@ -6,9 +6,6 @@ search:
   local_radius_km: 25
 
 matching:
-  # Kompatibilitätsfeld: Die wiederhergestellte Sortierung verwendet feste
-  # Rollengewichte aus job_finder/ranking_weights.py; dieses Feld ist inaktiv.
-  preferred_role_groups: []
   # Lesbare Ortsbezeichnung für Review und StudySmarter-Suche.
   preferred_location_label: Musterstadt
   # Kleingeschriebene Ortsnamen, die im Anzeigentext als lokal gelten.

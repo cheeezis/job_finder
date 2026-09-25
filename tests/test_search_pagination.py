@@ -98,8 +98,11 @@ class ArbeitsagenturSearchTests(unittest.TestCase):
         self.assertEqual(searches, [("python", "Fulda", 25), ("java", "Kassel", 10)])
 
     def test_missing_angular_state_names_the_script(self):
-        with self.assertRaisesRegex(ValueError, "^ng-state JSON nicht gefunden$"):
-            arbeitsagentur.extract_ng_state("<html></html>")
+        with (
+            patch.object(arbeitsagentur, "fetch_text", return_value="<html></html>"),
+            self.assertRaisesRegex(ValueError, "^ng-state JSON nicht gefunden$"),
+        ):
+            arbeitsagentur.fetch_job("https://www.arbeitsagentur.de/jobsuche/jobdetail/1-S")
 
 
 class GetInItSearchTests(unittest.TestCase):

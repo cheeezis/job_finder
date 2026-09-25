@@ -16,22 +16,12 @@ APPLICATION_DOCUMENTS_DIR = Path(
 
 JOBS_FILE = INTERNAL_DIR / "jobs.json"
 MEMORY_FILE = INTERNAL_DIR / "job_finder.sqlite3"
-ARBEITSAGENTUR_CACHE_FILE = INTERNAL_DIR / "arbeitsagentur_cache.json"
-STEPSTONE_CACHE_FILE = INTERNAL_DIR / "stepstone_cache.json"
-GET_IN_IT_CACHE_FILE = INTERNAL_DIR / "get_in_it_cache.json"
-ARBEITNOW_CACHE_FILE = INTERNAL_DIR / "arbeitnow_cache.json"
-REMOTELY_CACHE_FILE = INTERNAL_DIR / "remotely_cache.json"
 REMOTELY_LINKEDIN_STATUS_FILE = INTERNAL_DIR / "remotely_linkedin_status.json"
-JUMO_CACHE_FILE = INTERNAL_DIR / "jumo_cache.json"
-EDAG_CACHE_FILE = INTERNAL_DIR / "edag_cache.json"
-CSS_CACHE_FILE = INTERNAL_DIR / "css_cache.json"
-PROEMION_CACHE_FILE = INTERNAL_DIR / "proemion_cache.json"
-NETHINKS_CACHE_FILE = INTERNAL_DIR / "nethinks_cache.json"
-COMPOSE_IT_CACHE_FILE = INTERNAL_DIR / "compose_it_cache.json"
-BYTEWERK_CACHE_FILE = INTERNAL_DIR / "bytewerk_cache.json"
-RHOENENERGIE_CACHE_FILE = INTERNAL_DIR / "rhoenenergie_cache.json"
 MANUAL_CACHE_FILE = INTERNAL_DIR / "manual_jobs_cache.json"
-STUDYSMARTER_CACHE_FILE = INTERNAL_DIR / "studysmarter_cache.json"
-GERMAN_TECH_JOBS_CACHE_FILE = INTERNAL_DIR / "german_tech_jobs_cache.json"
 NOTIFICATION_STATE_FILE = INTERNAL_DIR / "notifications.json"
 RECOMMENDATIONS_JSON = OUTPUT_DIR / "recommendations.json"
+
+
+def cache_file(source):
+    """Return the runtime cache location of one source."""
+    return INTERNAL_DIR / f"{source}_cache.json"

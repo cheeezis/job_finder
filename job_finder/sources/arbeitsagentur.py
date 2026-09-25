@@ -4,9 +4,6 @@ The site renders search and detail data into Angular's server-side ng-state
 JSON, so we can read structured data without browser automation.
 """
 
-import json
-import re
-from html import unescape
 from urllib.parse import urlencode
 
 from job_finder.http import fetch_text
@@ -20,7 +17,7 @@ from job_finder.matching.config import (
 )
 from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource
-from job_finder.paths import ARBEITSAGENTUR_CACHE_FILE
+from job_finder.paths import cache_file
 from job_finder.sources.common import (
     fetch_cached_details,
     normalize_employment_type,
@@ -28,12 +25,13 @@ from job_finder.sources.common import (
     source_job_id,
     utc_now,
 )
+from job_finder.structured_data import extract_script_json
 from job_finder.text import html_to_text
 
 SOURCE_NAME = "arbeitsagentur"
 SEARCH_BASE_URL = "https://www.arbeitsagentur.de/jobsuche/suche"
 DETAIL_BASE_URL = "https://www.arbeitsagentur.de/jobsuche/jobdetail"
-CACHE_FILE = ARBEITSAGENTUR_CACHE_FILE
+CACHE_FILE = cache_file("arbeitsagentur")
 
 
 def fetch_jobs(cache_path=CACHE_FILE, now=None):
@@ -79,7 +77,7 @@ def search(term, location=LOCAL_SEARCH_LOCATION, radius=LOCAL_SEARCH_RADIUS_KM):
 
     while True:
         html = fetch_text(build_search_url(term, page, location, radius))
-        search_result = extract_ng_state(html).get("suchergebnis", {})
+        search_result = extract_script_json(html, "ng-state").get("suchergebnis", {})
         page_results = (
             search_result.get("ergebnisliste") or search_result.get("stellenangebote") or []
         )
@@ -154,19 +152,9 @@ def fetch_job(url):
     )
 
 
-def extract_ng_state(html):
-    """Extract Arbeitsagentur's Angular server-side rendering state."""
-    match = re.search(
-        r'<script id="ng-state" type="application/json">(.*?)</script>', html, re.DOTALL
-    )
-    if not match:
-        raise ValueError("ng-state JSON nicht gefunden")
-    return json.loads(unescape(match.group(1)))
-
-
 def extract_jobdetail(html):
     """Read Angular jobdetail data or raise ValueError when it is absent."""
-    detail = extract_ng_state(html).get("jobdetail")
+    detail = extract_script_json(html, "ng-state").get("jobdetail")
     if not detail:
         raise ValueError("jobdetail im ng-state JSON nicht gefunden")
     return detail

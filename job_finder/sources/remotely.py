@@ -3,7 +3,7 @@
 import json
 import re
 import time
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta
 from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
@@ -13,10 +13,11 @@ from job_finder.console import print_progress, progress_checkpoint
 from job_finder.http import fetch_text, fetch_text_with_final_url
 from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource
-from job_finder.paths import REMOTELY_CACHE_FILE, REMOTELY_LINKEDIN_STATUS_FILE
+from job_finder.paths import REMOTELY_LINKEDIN_STATUS_FILE, cache_file
 from job_finder.persistence.storage import read_json, write_json_atomic
 from job_finder.sources.common import (
     ListingUnavailableError,
+    as_utc,
     fetch_cached_details,
     source_job_id,
     utc_now,
@@ -26,7 +27,7 @@ from job_finder.text import html_to_text
 SOURCE_NAME = "remotely"
 BASE_URL = "https://www.remotely.de"
 LIST_URL = f"{BASE_URL}/alle-jobs"
-CACHE_FILE = REMOTELY_CACHE_FILE
+CACHE_FILE = cache_file("remotely")
 LINKEDIN_STATUS_FILE = REMOTELY_LINKEDIN_STATUS_FILE
 MAX_LIST_PAGES = 100
 OLD_PAGE_STOP_COUNT = 2
@@ -207,15 +208,10 @@ def fresh_linkedin_status(entry, now):
     if not isinstance(entry, dict) or not isinstance(entry.get("closed"), bool):
         return None
     try:
-        checked_at = datetime.fromisoformat(entry["checked_at"])
+        checked_at = as_utc(datetime.fromisoformat(entry["checked_at"]))
     except (KeyError, TypeError, ValueError):
         return None
-    if checked_at.tzinfo is None:
-        checked_at = checked_at.replace(tzinfo=UTC)
-    current = now
-    if current.tzinfo is None:
-        current = current.replace(tzinfo=UTC)
-    if current - checked_at >= LINKEDIN_STATUS_MAX_AGE:
+    if as_utc(now) - checked_at >= LINKEDIN_STATUS_MAX_AGE:
         return None
     return entry["closed"]
 

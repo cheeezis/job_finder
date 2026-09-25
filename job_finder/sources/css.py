@@ -1,13 +1,13 @@
 """Direct CSS/eGECKO career-page source for Künzell."""
 
 from job_finder.http import fetch_text
-from job_finder.paths import CSS_CACHE_FILE
+from job_finder.paths import cache_file
 from job_finder.sources.company_careers import extract_links, fetch_company_jobs
 
 SOURCE_NAME = "css"
 COMPANY = "CSS AG"
 LIST_URL = "https://jobs.css.de/public/jobs/?standort=1"
-CACHE_FILE = CSS_CACHE_FILE
+CACHE_FILE = cache_file("css")
 
 
 def fetch_jobs(cache_path=CACHE_FILE, now=None):

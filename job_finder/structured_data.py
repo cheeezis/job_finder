@@ -10,6 +10,18 @@ _JSON_LD_PATTERN = re.compile(
 )
 
 
+def extract_script_json(html, script_id):
+    """Parse the JSON state a page embeds in <script id=... type="application/json">."""
+    match = re.search(
+        rf'<script id="{re.escape(script_id)}" type="application/json">(.*?)</script>',
+        html,
+        re.DOTALL,
+    )
+    if not match:
+        raise ValueError(f"{script_id} JSON nicht gefunden")
+    return json.loads(unescape(match.group(1)))
+
+
 def extract_json_ld_job_posting(html):
     """Return the first valid JobPosting from JSON-LD scripts, if present."""
     for script in _JSON_LD_PATTERN.findall(html):

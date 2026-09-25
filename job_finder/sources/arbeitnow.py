@@ -9,7 +9,7 @@ from urllib.parse import parse_qs, urlencode, urlsplit
 
 from job_finder.http import fetch_json, fetch_text_with_final_url
 from job_finder.models import Job, JobSource, WorkMode
-from job_finder.paths import ARBEITNOW_CACHE_FILE
+from job_finder.paths import cache_file
 from job_finder.sources.common import (
     canonical_detail_url,
     detail_is_fresh,
@@ -26,7 +26,7 @@ from job_finder.text import html_to_text
 
 SOURCE_NAME = "arbeitnow"
 API_URL = "https://www.arbeitnow.com/api/job-board-api"
-CACHE_FILE = ARBEITNOW_CACHE_FILE
+CACHE_FILE = cache_file("arbeitnow")
 MAX_PAGES = 50
 REQUEST_PAUSE_SECONDS = 6
 PLACEHOLDER_DESCRIPTION = "find jobs in germany on arbeitnow"

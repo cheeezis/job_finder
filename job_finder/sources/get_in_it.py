@@ -7,7 +7,7 @@ can contain malformed escaping.
 
 import json
 import re
-from html import unescape
+from itertools import product
 from pathlib import Path
 from urllib.parse import urlencode, urljoin
 
@@ -20,8 +20,7 @@ from job_finder.matching.config import (
 )
 from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource, WorkMode
-from job_finder.paths import GET_IN_IT_CACHE_FILE
-from job_finder.search_plan import iter_search_queries, unique_in_order
+from job_finder.paths import cache_file
 from job_finder.sources.common import (
     build_fetch_report,
     canonical_detail_url,
@@ -36,14 +35,14 @@ from job_finder.sources.common import (
     utc_now,
     with_current_summary,
 )
-from job_finder.structured_data import extract_json_ld_job_posting
+from job_finder.structured_data import extract_json_ld_job_posting, extract_script_json
 from job_finder.text import html_to_text
 
 SOURCE_NAME = "get_in_it"
 API_SEARCH_URL = "https://www.get-in-it.de/api/v2/open/job/search"
 API_PAGE_SIZE = 39
 HESSEN_STATE_ID = 5
-CACHE_FILE = GET_IN_IT_CACHE_FILE
+CACHE_FILE = cache_file("get_in_it")
 
 TERM_PRIORITY_RULES = [
     (["data", "analytics", "analyst", "bi"], [38, 39]),
@@ -160,14 +159,14 @@ def build_api_searches():
         (COMMUTER_SEARCH_TERMS, COMMUTER_SEARCH_LOCATIONS),
     ]
     for terms, locations in search_plans:
-        for query in iter_search_queries(terms, locations):
-            for priority_id in priority_ids_for_term(query.term):
-                key = (priority_id, query.location.lower() == "remote")
+        for term, location in product(terms, locations):
+            for priority_id in priority_ids_for_term(term):
+                key = (priority_id, location.lower() == "remote")
                 if key in seen:
                     continue
 
                 seen.add(key)
-                yield {"priority_id": priority_id, "location": query.location}
+                yield {"priority_id": priority_id, "location": location}
 
 
 def priority_ids_for_term(term):
@@ -179,7 +178,7 @@ def priority_ids_for_term(term):
         if any(keyword in normalized for keyword in keywords):
             priority_ids.extend(ids)
 
-    return unique_in_order(priority_ids)
+    return list(dict.fromkeys(priority_ids))
 
 
 def search_api(priority_id, location):
@@ -257,16 +256,6 @@ def fetch_job(url):
     )
 
 
-def extract_next_data(html):
-    """Parse embedded Next.js JSON or raise ValueError when it is absent."""
-    match = re.search(
-        r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', html, re.DOTALL
-    )
-    if not match:
-        raise ValueError("__NEXT_DATA__ JSON nicht gefunden")
-    return json.loads(unescape(match.group(1)))
-
-
 def extract_job_posting(html):
     """Prefer JSON-LD, then fall back to get-in-IT's embedded state."""
     posting = extract_json_ld_job_posting(html)
@@ -282,7 +271,7 @@ def extract_job_posting(html):
 
 def extract_job_posting_from_next_data(html):
     """Build a JobPosting-like dict from Next.js state when JSON-LD fails."""
-    next_data = extract_next_data(html)
+    next_data = extract_script_json(html, "__NEXT_DATA__")
     job = next_data.get("props", {}).get("initialState", {}).get("jobJob", {}).get("job")
     if not job:
         return None

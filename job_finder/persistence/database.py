@@ -120,23 +120,20 @@ CREATE TABLE IF NOT EXISTS migration_runs (
 
 def database_url():
     """Environment wins over ignored local configuration; never log credentials."""
-    load_dotenv(PROJECT_DIR / ".env.postgres", override=False)
-    value = os.getenv("JOBFINDER_DATABASE_URL")
-    if not value:
-        raise RuntimeError(
-            "JOBFINDER_DATABASE_URL fehlt. PostgreSQL einrichten; siehe docs/postgresql.md."
-        )
-    return value
+    return _required_env("JOBFINDER_DATABASE_URL")
 
 
 def admin_database_url():
     """DDL-capable connection; only initialize() may use this, never runtime reads/writes."""
+    return _required_env("JOBFINDER_ADMIN_DATABASE_URL")
+
+
+def _required_env(name):
+    """Read one connection URL from the environment or the ignored .env.postgres."""
     load_dotenv(PROJECT_DIR / ".env.postgres", override=False)
-    value = os.getenv("JOBFINDER_ADMIN_DATABASE_URL")
+    value = os.getenv(name)
     if not value:
-        raise RuntimeError(
-            "JOBFINDER_ADMIN_DATABASE_URL fehlt. PostgreSQL einrichten; siehe docs/postgresql.md."
-        )
+        raise RuntimeError(f"{name} fehlt. PostgreSQL einrichten; siehe docs/postgresql.md.")
     return value
 
 

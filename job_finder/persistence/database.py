@@ -126,6 +126,18 @@ CREATE TABLE IF NOT EXISTS agent_usage (
     reasoning_tokens integer NOT NULL,
     cost_eur numeric NOT NULL
 );
+ALTER TABLE agent_usage ADD COLUMN IF NOT EXISTS web_searches integer NOT NULL DEFAULT 0;
+CREATE TABLE IF NOT EXISTS agent_fact_sheets (
+    scope text NOT NULL,
+    job_id text NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    model text NOT NULL,
+    complete boolean NOT NULL,
+    note text,
+    fact_sheet jsonb,
+    cost_eur numeric NOT NULL,
+    PRIMARY KEY (scope, job_id)
+);
 """
 
 

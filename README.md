@@ -7,7 +7,10 @@ Bewerbungsnachverfolgung. Er läuft lokal oder in Azure (siehe
 [Betrieb](#betrieb)); Stellenbestand, Bewerbungs- und Dokumentdaten liegen
 entsprechend auf dem eigenen Rechner oder in der eigenen Azure-Subscription.
 Bei aktiviertem Discord-Versand werden ausschließlich die dafür vorgesehenen
-kompakten Stellenkarten und Laufstatistiken an Discord übertragen.
+kompakten Stellenkarten und Laufstatistiken an Discord übertragen. Ist der
+optionale KI-Agent eingeschaltet, gehen außerdem Anzeige, persönliches Profil
+und frühere Entscheidungen an das Sprachmodell in der eigenen Azure-Subscription
+und die Suchanfragen des Modells an die Bing-Suche.
 
 ## Funktionen
 
@@ -21,6 +24,9 @@ kompakten Stellenkarten und Laufstatistiken an Discord übertragen.
 - manueller Import einer einzelnen Stellenanzeige per URL
 - Review-Oberfläche mit Interessant-, Rückfrage-, Ignorieren- und
   Bewerben-Workflow
+- optionaler KI-Agent (Azure OpenAI), der vorgefilterten Stellen einen
+  Steckbrief mit Ampeln, Fazit und Kurzgrund gibt, begrenzt durch einen
+  mehrstufigen Kostenschutz
 - Bewerbungsübersicht mit Verlauf, Gesprächsterminen, optional gespeicherter
   Gehaltsvorstellung (Eingabe pro Monat oder Jahr, gespeichert als Jahresbrutto) und Statistik; die Antwortquote
   bezieht sich nur auf abgeschlossene Bewerbungen
@@ -118,9 +124,10 @@ abschneiden. Ausbildungsstellen und Weiterbildungstitel werden weiterhin erkannt
 
 `job_finder/matching/matching_rules.py` enthält die Erkennungs- und Ausschlussregeln,
 `job_finder/matching/scoring.py` setzt daraus die Bewertung zusammen. Ein optionales
-`profile.local.yaml` dient als persönliche Faktenbasis für eine spätere
-agentische Stufe und wird vom aktuellen Finder nicht geladen. Die frühere
-Python-Datei `job_finder/profile.py` wurde durch diese Trennung abgelöst.
+`profile.local.yaml` ist die persönliche Faktenbasis des KI-Agenten (siehe
+[KI-Agent und Kostenschutz](#ki-agent-und-kostenschutz)); der Vorfilter liest es
+nicht. Die frühere Python-Datei `job_finder/profile.py` wurde durch diese
+Trennung abgelöst.
 Neue Bewertungen erscheinen beim nächsten Finder-Lauf; bereits gespeicherte
 Review-Ergebnisse werden durch einen Neustart allein nicht neu bewertet.
 
@@ -183,12 +190,37 @@ Junior-Hybrid-Sonderfälle sind eigene, standardmäßig deaktivierte Filter.
 Einrichtung und Zugriffswege beschreiben [PostgreSQL betreiben](docs/postgresql.md)
 und [Netzwerkpfade](docs/networking.md).
 
-## Kostenschutz für den KI-Agenten
+## KI-Agent und Kostenschutz
 
-Eine agentische Stufe, die vorgefilterte Stellen als Steckbrief zusammenfasst,
-ist in Arbeit. Damit sie das Azure-Guthaben nicht aufbrauchen kann, fragt sie
-vor jedem Modell- und Werkzeugaufruf den Kostenwächter
-(`job_finder/agent/cost_guard.py`). Ein Modellaufruf ist nur erlaubt, wenn
+Nach jedem Finder-Lauf in Azure schreibt ein KI-Agent (`job_finder/agent/`)
+für die besten wartenden Stellen einen Steckbrief: sieben Zeilen mit Ampel
+(Status, Berufseinstieg, Fachlicher Fit, Lücken, Homeoffice / Standort,
+Reiseanteil, Gehalt), bis zu zwei Zusatzzeilen, ein Fazit und einen Kurzgrund,
+belegt mit Anzeige, Profil und Quellen. Die Review zeigt ihn bei der Stelle an;
+die Entscheidung bleibt beim Nutzer. Der Agent nimmt noch nicht entschiedene
+Stellen ohne Steckbrief, die Einstiegsstellen sind oder einen Vorfilter-Score
+über 50 haben und im Standard-Review sichtbar sind, die besten zuerst. Er darf
+im Web suchen und frühere Entscheidungen samt Notizen nachschlagen, aber nichts
+ändern; Anzeigen und Webseiten behandelt er als Material, nicht als Anweisungen.
+
+Er läuft nur, wenn in den Einstellungen `agent.enabled: true` steht, der Worker
+die Modell-Adresse kennt (setzt Terraform; der lokale Hybrid-Lauf hat keine und
+überspringt den Agenten) und ein Profil vorhanden ist. Das Profil kommt wie die
+Einstellungen aus einem Key-Vault-Secret und muss nach Änderungen neu gesetzt
+werden:
+
+```powershell
+az keyvault secret set --vault-name kv-jobfinder-e64bfdce --name JobfinderProfile --file profile.local.yaml --output none
+```
+
+Jeder Lauf nennt im Abschnitt „Steckbriefe (Agent)“ entweder, warum der Agent
+nicht lief, oder wie viele Steckbriefe fertig oder abgebrochen sind, wie viele
+noch warten und was der Tag bisher gekostet hat. `agent.reasoning_effort` stellt
+den Denkaufwand des Modells ein (Standard `low`).
+
+Damit der Agent das Azure-Guthaben nicht aufbrauchen kann, fragt er vor jedem
+Modell- und Werkzeugaufruf den Kostenwächter (`job_finder/agent/cost_guard.py`).
+Ein Modellaufruf ist nur erlaubt, wenn
 
 - in den Einstellungen `agent.enabled: true` steht,
 - für das Modell ein Preis hinterlegt ist (`job_finder/agent/pricing.py`),
@@ -197,8 +229,10 @@ vor jedem Modell- und Werkzeugaufruf den Kostenwächter
 - die aktuelle Stelle ihre Grenzen für Kosten und Modellaufrufe noch nicht
   erreicht hat.
 
-Werkzeugaufrufe haben eine eigene Grenze pro Stelle. Jeder Modellaufruf wird
-mit Tokens und Eurobetrag in der Tabelle `agent_usage` gebucht. Erreicht eine
+Werkzeugaufrufe haben eine eigene Grenze pro Stelle, bezahlte Websuchen ein
+eigenes Budget (`job_max_web_searches`, Standard 3, 0 schaltet die Suche ab);
+ist es verbraucht, arbeitet der Agent ohne Suche weiter. Jeder Modellaufruf wird
+mit Tokens, Suchen und Eurobetrag in der Tabelle `agent_usage` gebucht. Erreicht eine
 Stelle ihre Grenze, endet nur diese Stelle. Tages- oder Monatsgrenze beenden
 den Agenten für den Lauf, die übrigen Stellen kommen im nächsten Lauf an die
 Reihe: Die Tagesgrenze ist eine Sicherung gegen Fehler, kein Filter. Weil vor
@@ -214,8 +248,9 @@ anpassen und das Secret wie unter [Einrichtung](#einrichtung) neu setzen. Das
 gilt ab dem nächsten Lauf; ein bereits laufender Finder-Lauf arbeitet mit den
 Werten weiter, mit denen er gestartet ist.
 
-Vor dem ersten Einsatz in Azure muss die Tabelle `agent_usage` dort einmal
-angelegt werden ([PostgreSQL betreiben](docs/postgresql.md#azure)).
+Vor dem ersten Einsatz in Azure müssen die Tabellen des Agenten (`agent_usage`,
+`agent_fact_sheets`) dort angelegt werden ([PostgreSQL betreiben](docs/postgresql.md#azure)).
+Bis dahin zeigt die Review einfach keine Steckbriefe.
 
 In Azure wirken drei weitere Schichten, auch wenn der Code einen Fehler hat:
 
@@ -379,7 +414,7 @@ ein lokales `terraform apply` setzt die App also nie zurück (siehe
 ```text
 job_finder/             Kernlogik, Quellen, Review und Bewerbungsverwaltung
 job_finder/sources/     einzelne Quellenadapter
-job_finder/agent/       Kostenschutz der geplanten agentischen Stufe
+job_finder/agent/       KI-Agent: Steckbriefe mit Kostenschutz
 tests/                  automatisierte Tests
 docs/development.md     Architektur, Quellenvertrag und Entwicklungsablauf
 requirements-dev.txt    zusätzliche Werkzeuge für die Entwicklung

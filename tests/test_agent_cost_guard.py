@@ -82,7 +82,8 @@ class CostGuardTests(unittest.TestCase):
         guard.before_tool_call()
 
     def test_calls_are_booked_until_the_job_money_is_used_up(self):
-        guard = CostGuard(ENABLED, "gpt-5-mini")
+        settings = agent_settings({"agent": {"enabled": True, "job_max_cost_eur": 0.05}})
+        guard = CostGuard(settings, "gpt-5-mini")
         guard.start_job("job:1")
         for _ in range(7):
             guard.before_model_call()
@@ -101,7 +102,31 @@ class CostGuardTests(unittest.TestCase):
 
         with self.assertRaisesRegex(JobLimitReached, "Token-Angaben"):
             guard.after_model_call(None)
-        self.record.assert_called_once_with("job:1", "gpt-5-mini", Usage(0, 0, 0), Decimal("0.05"))
+        self.record.assert_called_once_with("job:1", "gpt-5-mini", Usage(0, 0, 0), Decimal("0.08"))
+
+    def test_search_budget_closes_the_search_but_not_the_job(self):
+        # Enough money per job that only the search budget matters here.
+        settings = agent_settings({"agent": {"enabled": True, "job_max_cost_eur": 0.25}})
+        guard = CostGuard(settings, "gpt-5-mini")
+        guard.start_job("job:1")
+        searching = Usage(
+            input_tokens=8540, cached_input_tokens=0, output_tokens=210, web_searches=2
+        )
+
+        self.assertTrue(guard.search_allowed())
+        guard.before_model_call()
+        guard.after_model_call(searching)
+        self.assertTrue(guard.search_allowed())  # 2 of 3 searches used
+        guard.before_model_call()
+        guard.after_model_call(searching)
+
+        # 4 searches: the last response overshot the budget of 3; no more search,
+        # but the job goes on, and the searches were booked with their price.
+        self.assertFalse(guard.search_allowed())
+        guard.before_model_call()
+        self.assertEqual(self.record.call_args.args[3], call_cost("gpt-5-mini", searching))
+        guard.start_job("job:2")
+        self.assertTrue(guard.search_allowed())
 
     def test_a_ledger_that_cannot_be_written_stops_the_run(self):
         self.record.side_effect = OSError("database down")

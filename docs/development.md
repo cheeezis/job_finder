@@ -58,7 +58,7 @@ beschreibt Titel und Beschreibung.
 | `job_finder/app.js`, `landing.js`, `review.js`, `applications.js` und zugehörige HTML-Dateien | Gemeinsame Browser-Helfer, Seitenskripte und Arbeitsansichten |
 | `job_finder/workflow/reporting.py`, `notifications.py` | Review-Ausgabe und Discord-Warteschlange |
 | `job_finder/matching/user_settings.py`, `config.py`; `job_finder/paths.py` | Konfiguration, Suche und lokale Dateipfade |
-| `job_finder/agent/`, `job_finder/persistence/agent_usage.py` | Kostenschutz der agentischen Stufe: Schalter und Grenzen, Preise, Kostenwächter und Kostenbuch |
+| `job_finder/agent/`; `job_finder/persistence/agent_usage.py`, `fact_sheets.py`, `decisions.py` | KI-Agent: Schalter und Grenzen, Profil, Preise und Kostenwächter, Anweisungen, Werkzeuge, Steckbrief-Struktur, Schleife je Stelle und Einbindung in den Lauf; Kostenbuch, Steckbriefe und frühere Entscheidungen in PostgreSQL |
 
 ### Datenfluss eines Finder-Laufs
 

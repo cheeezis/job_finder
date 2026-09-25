@@ -46,6 +46,7 @@ def main():
                     "manual_sources",
                     "source_cache",
                     "agent_usage",
+                    "agent_fact_sheets",
                 )
             }
     print(json.dumps(result, indent=2, ensure_ascii=False))

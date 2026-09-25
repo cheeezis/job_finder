@@ -324,3 +324,67 @@ test("appointments are offered and sent only for interviews", async () => {
   }
   assert.deepEqual(posts.map(([, payload]) => payload.scheduled_for), ["2026-10-02T09:30", null, "2026-10-02T09:30", null]);
 });
+
+function reviewWith(job) {
+  return page("review", {}, async () => ({
+    ok: true, json: async () => ({recommendations: [job], workflow_statuses: ["new"]})
+  }));
+}
+
+const factSheetJob = {
+  id: "job:1", title: "Developer", company: "Example", workflow_status: "new",
+  fact_sheet: {
+    model: "gpt-5-mini", complete: true, note: null, cost_eur: 0.0512,
+    created_at: "2026-09-25T18:00:00+00:00",
+    sheet: {
+      status: {ampel: "gruen", text: "offen und aktuell"},
+      berufseinstieg: {ampel: "orange", text: "Stretch, aber bewerbbar"},
+      fachlicher_fit: {ampel: "gruen", text: "passt"},
+      luecken: {ampel: "rot", text: "Java fehlt"},
+      homeoffice_standort: {ampel: "orange", text: "vorher klären"},
+      reiseanteil: {ampel: "gelb", text: "gelegentlich"},
+      gehalt: {ampel: "unbekannt", text: "keine Angabe"},
+      zusatz: [{thema: "Bewerbung", ampel: "hinweis", text: "Portfolio verlangt"}],
+      fazit: {stufe: "erst_klaeren", text: "Erst Homeoffice klären"},
+      kurzgrund: "Fachlich solide, Remote offen.",
+      quellen: ["https://example.com/jobs/1", "javascript:alert(1)"]
+    }
+  }
+};
+
+test("the agent's fact sheet renders as plain text lines with lights and safe links", async () => {
+  const view = reviewWith(structuredClone(factSheetJob));
+  await new Promise(setImmediate);
+
+  assert.equal(view.elements.get("fact-sheet").hidden, false);
+  assert.equal(view.elements.get("fact-sheet-aborted").hidden, true);
+  const lines = view.elements.get("fact-sheet-lines").children.map(line => line.textContent);
+  assert.equal(lines.length, 8);
+  assert.equal(lines[0], "🟢 Status: offen und aktuell");
+  assert.equal(lines[3], "🔴 Lücken: Java fehlt");
+  assert.equal(lines[7], "⚠️ Bewerbung: Portfolio verlangt");
+  const verdict = view.elements.get("fact-sheet-verdict");
+  assert.equal(verdict.textContent, "Fazit: Erst Homeoffice klären");
+  assert.equal(verdict.className, "fact-sheet-verdict verdict-erst_klaeren");
+  const links = view.elements.get("fact-sheet-sources").children.filter(child => child.tagName === "a");
+  assert.deepEqual(links.map(link => [link.textContent, link.href]),
+    [["example.com", "https://example.com/jobs/1"]]);
+  assert.match(view.elements.get("fact-sheet-meta").textContent, /^gpt-5-mini · 5,1 Cent · /);
+});
+
+test("an aborted fact sheet names its reason and a missing one stays hidden", async () => {
+  const aborted = {...factSheetJob, fact_sheet: {
+    ...factSheetJob.fact_sheet, complete: false, sheet: null,
+    note: "Stelle abgebrochen: 8 Modellaufrufe erreicht"
+  }};
+  let view = reviewWith(aborted);
+  await new Promise(setImmediate);
+  assert.equal(view.elements.get("fact-sheet").hidden, false);
+  assert.equal(view.elements.get("fact-sheet-aborted").textContent,
+    "⚠️ Stelle abgebrochen: 8 Modellaufrufe erreicht");
+  assert.equal(view.elements.get("fact-sheet-lines").children.length, 0);
+
+  view = reviewWith({...factSheetJob, fact_sheet: undefined});
+  await new Promise(setImmediate);
+  assert.equal(view.elements.get("fact-sheet").hidden, true);
+});

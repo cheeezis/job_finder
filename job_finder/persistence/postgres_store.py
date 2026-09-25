@@ -134,6 +134,18 @@ def write_memory(connection, scope, before, after):
         upsert_records(connection, table, ("scope", "job_id", "position"), fields, children[table])
 
 
+def read_jobs(name, job_ids):
+    """Return {id: job} for a few jobs of a jobs dataset, without loading all of it."""
+    fields = SNAPSHOT_FIELDS["jobs"]
+    with snapshot() as connection:
+        rows = connection.execute(
+            f"SELECT job_id,{','.join(fields)},present,extra FROM jobs "
+            "WHERE dataset=%s AND job_id = ANY(%s)",
+            (name, list(job_ids)),
+        )
+        return {row[0]: {"id": row[0], **unpack(row[1:], fields)} for row in rows}
+
+
 def read_dataset(name, default=None):
     """Read metadata and rows from the same nonblocking database snapshot."""
     with snapshot() as connection:

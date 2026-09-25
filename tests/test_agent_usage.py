@@ -23,6 +23,19 @@ class PricingTests(unittest.TestCase):
         # the reasoning tokens are part of the output, not billed twice.
         self.assertEqual(call_cost("gpt-5-mini", usage), Decimal("0.28983"))
 
+    def test_web_searches_are_billed_per_search_on_top_of_the_tokens(self):
+        # The real probe of 25.09.2026: one search step, two billed searches.
+        usage = Usage(
+            input_tokens=8540,
+            cached_input_tokens=0,
+            output_tokens=210,
+            reasoning_tokens=64,
+            web_searches=2,
+        )
+
+        # (8540 x 0.2147 + 210 x 1.7173) / 1M for the tokens + 2 x 0.0120213.
+        self.assertEqual(call_cost("gpt-5-mini", usage), Decimal("0.026236771"))
+
     def test_unknown_models_and_odd_counts_are_refused(self):
         with self.assertRaisesRegex(ValueError, "Kein Preis"):
             call_cost("gpt-unbekannt", Usage(10, 0, 10))
@@ -31,6 +44,7 @@ class PricingTests(unittest.TestCase):
             Usage(10, 0, 10, 11),
             Usage(-1, 0, 10),
             Usage(10, 0, None),
+            Usage(10, 0, 10, 0, -1),
         ):
             with self.subTest(usage=usage), self.assertRaisesRegex(ValueError, "Token"):
                 call_cost("gpt-5-mini", usage)
@@ -60,9 +74,12 @@ class LedgerTests(unittest.TestCase):
         self.assertEqual(spent_today_and_this_month(), (0, 0))
 
         record_model_call("job:1", "gpt-5-mini", Usage(1000, 0, 100), Decimal("0.0004"))
-        record_model_call("job:2", "gpt-5-mini", Usage(2000, 500, 200, 50), Decimal("0.0006"))
+        record_model_call("job:2", "gpt-5-mini", Usage(2000, 500, 200, 50, 2), Decimal("0.0006"))
 
         self.assertEqual(spent_today_and_this_month(), (Decimal("0.0010"), Decimal("0.0010")))
+        with transaction() as connection:
+            searches = connection.execute("SELECT sum(web_searches) FROM agent_usage").fetchone()
+        self.assertEqual(searches, (2,))
 
     def test_day_and_month_start_at_midnight_german_time(self):
         # 15.09. 12:00 in Berlin (summer time, UTC+2).

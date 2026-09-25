@@ -34,6 +34,22 @@ class AgentSettingsTests(unittest.TestCase):
         self.assertEqual(settings.limits.daily_max_cost_eur, Decimal("0.3"))
         self.assertEqual(settings.limits.monthly_max_cost_eur, Decimal("20.00"))
 
+    def test_reasoning_effort_defaults_to_low_and_must_be_known(self):
+        self.assertEqual(agent_settings({"agent": {"enabled": True}}).reasoning_effort, "low")
+        chosen = agent_settings({"agent": {"enabled": True, "reasoning_effort": "medium"}})
+        self.assertEqual((chosen.enabled, chosen.reasoning_effort), (True, "medium"))
+
+        wrong = agent_settings({"agent": {"enabled": True, "reasoning_effort": "maximal"}})
+
+        self.assertFalse(wrong.enabled)
+        self.assertIn("agent.reasoning_effort", wrong.reason)
+
+    def test_zero_web_searches_switch_only_the_search_off(self):
+        settings = agent_settings({"agent": {"enabled": True, "job_max_web_searches": 0}})
+
+        self.assertTrue(settings.enabled)
+        self.assertEqual(settings.limits.job_max_web_searches, 0)
+
     def test_invalid_limits_switch_the_agent_off_and_name_the_setting(self):
         cases = {
             "daily_max_cost_eur": 100,
@@ -41,6 +57,7 @@ class AgentSettingsTests(unittest.TestCase):
             "job_max_model_calls": 8.5,
             "job_max_tool_calls": True,
             "job_max_cost_eur": "0.05",
+            "job_max_web_searches": 11,
         }
         for name, value in cases.items():
             with self.subTest(name=name):

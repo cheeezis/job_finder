@@ -38,7 +38,7 @@ from job_finder.workflow.review_actions import (
     update_workflow_history,
     update_workflow_status,
 )
-from job_finder.workflow.review_data import load_review_jobs
+from job_finder.workflow.review_data import attach_fact_sheets, load_review_jobs
 
 LANDING_PAGE = Path(__file__).with_name("landing.html")
 REVIEW_PAGE = Path(__file__).with_name("review.html")
@@ -113,8 +113,8 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
         if request_path == "/api/recommendations":
             self.send_json(
                 {
-                    "recommendations": load_review_jobs(
-                        self.recommendations_path, self.memory_path
+                    "recommendations": attach_fact_sheets(
+                        load_review_jobs(self.recommendations_path, self.memory_path)
                     ),
                     "workflow_statuses": [status.value for status in WorkflowStatus],
                     "route_origin": ROUTE_ORIGIN,

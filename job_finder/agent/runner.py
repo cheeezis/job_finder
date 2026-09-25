@@ -1,6 +1,7 @@
 """The agent for one job: model calls and tool calls in a loop, every step under the cost guard."""
 
 import json
+import re
 
 import openai
 
@@ -16,6 +17,8 @@ MODEL = "gpt-5-mini"
 MAX_OUTPUT_TOKENS = 6000
 # The jobs are in Germany, so the search should look there first.
 WEB_SEARCH_TOOL = {"type": "web_search", "user_location": {"type": "approximate", "country": "DE"}}
+# Stops at quotes and angle brackets, which some ad texts leave after a link.
+URL_PATTERN = re.compile(r"https?://[^\s\"'<>]+")
 
 
 def write_fact_sheet(job, profile_text, guard, client, settings, today):
@@ -30,18 +33,21 @@ def write_fact_sheet(job, profile_text, guard, client, settings, today):
     rules = instructions(profile_text)
     prompt = job_prompt(job, today, settings.limits.job_max_web_searches)
     items, previous, response_ids = [{"role": "user", "content": prompt}], None, []
+    seen = urls_in_ad(job)
     try:
         while True:
             guard.before_model_call()
             data = ask_model(client, rules, items, previous, guard, settings)
             response_ids.append(data["id"])
             guard.after_model_call(usage_of(data))
+            seen |= urls_found(data)
             if data.get("status") != "completed":
                 reason = (data.get("incomplete_details") or {}).get("reason") or data.get("status")
                 raise JobLimitReached(f"Stelle abgebrochen: Antwort unvollständig ({reason})")
             calls = [item for item in data.get("output", []) if item.get("type") == "function_call"]
             if not calls:
                 sheet = parse_fact_sheet(output_text(data))
+                sheet["quellen"] = verified_sources(sheet["quellen"], seen)
                 save_fact_sheet(job_id, MODEL, sheet, guard.job_cost)
                 return "fertig"
             items = [tool_result(call, job_id, guard) for call in calls]
@@ -72,6 +78,8 @@ def ask_model(client, rules, items, previous, guard, settings):
     if guard.search_allowed():
         request["tools"] = [PAST_DECISIONS_TOOL, WEB_SEARCH_TOOL]
         request["max_tool_calls"] = guard.limits.job_max_web_searches - guard.web_searches
+        # Without this, the response names only cited pages, not every page the search used.
+        request["include"] = ["web_search_call.action.sources"]
     try:
         return client.responses.create(**request).model_dump()
     except openai.BadRequestError as error:
@@ -102,6 +110,46 @@ def usage_of(data):
         reasoning_tokens=(usage.get("output_tokens_details") or {}).get("reasoning_tokens") or 0,
         web_searches=searches,
     )
+
+
+def urls_in_ad(job):
+    """Links the agent was shown with the job: its listings and the links in the ad text."""
+    urls = {source.get("url") or "" for source in job.get("sources") or []}
+    urls.update(URL_PATTERN.findall(job.get("description_clean") or ""))
+    return {comparable(url) for url in urls if url}
+
+
+def urls_found(data):
+    """Links from real search results of one response: cited, used or opened pages."""
+    urls = set()
+    for item in data.get("output", []):
+        if item.get("type") == "message":
+            urls.update(
+                note.get("url") or ""
+                for part in item.get("content") or []
+                for note in part.get("annotations") or []
+                if note.get("type") == "url_citation"
+            )
+        elif item.get("type") == "web_search_call":
+            action = item.get("action") or {}
+            urls.update(source.get("url") or "" for source in action.get("sources") or [])
+            urls.add(action.get("url") or "")
+    return {comparable(url) for url in urls if url}
+
+
+def verified_sources(sources, seen):
+    """Keep only links the agent actually saw; drop invented links and plain text."""
+    kept = []
+    for source in sources:
+        url = source.strip()
+        if URL_PATTERN.fullmatch(url) and comparable(url) in seen and url not in kept:
+            kept.append(url)
+    return kept
+
+
+def comparable(url):
+    """Ignore a trailing slash or punctuation, as ad texts end links in different ways."""
+    return url.rstrip("/.,;:)")
 
 
 def output_text(data):

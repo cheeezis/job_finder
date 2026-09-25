@@ -34,12 +34,16 @@ resource "azurerm_cognitive_deployment" "gpt_5_mini" {
   }
 
   # Global Standard: Bezahlung pro Token, gerechnet in einem beliebigen
-  # Azure-Rechenzentrum. capacity ist die Drossel in tausend Tokens pro Minute:
-  # 30 reicht für etwa 40 Steckbriefe am Tag und begrenzt einen Fehler auf grob
-  # 0,40 bis 3 € pro Stunde. Das Kontingent des Abos erlaubte bis zu 1.000.
+  # Azure-Rechenzentrum. capacity ist die Drossel in tausend Tokens pro Minute.
+  # Azure prüft sie vorab mit einer Schätzung aus Zeichenzahl und maximaler
+  # Antwortlänge, die zwei- bis dreimal über dem echten Verbrauch liegt: Eine
+  # Anfrage mit langer Anzeige schätzt es auf über 30.000, bei 30 kam sie nie
+  # durch. 60 lässt etwa zwei Anfragen pro Minute zu und begrenzt einen Fehler
+  # im echten Verbrauch auf grob 0,40 bis 3 € pro Stunde. Das Kontingent des
+  # Abos erlaubte bis zu 1.000.
   sku {
     name     = "GlobalStandard"
-    capacity = 30
+    capacity = 60
   }
 }
 

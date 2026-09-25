@@ -259,9 +259,10 @@ Bis dahin zeigt die Review einfach keine Steckbriefe.
 In Azure wirken drei weitere Schichten, auch wenn der Code einen Fehler hat:
 
 - **Drossel:** Die Modell-Bereitstellung `gpt-5-mini` verarbeitet höchstens
-  30.000 Tokens pro Minute (`infrastructure/openai.tf`). Das reicht für etwa
-  40 Steckbriefe am Tag und begrenzt einen Fehler auf grob 0,40 bis 3 € pro
-  Stunde.
+  60.000 Tokens pro Minute (`infrastructure/openai.tf`), gemessen an Azures
+  Vorab-Schätzung, die zwei- bis dreimal über dem echten Verbrauch liegt. Das
+  lässt etwa zwei Anfragen pro Minute zu und begrenzt einen Fehler auf grob
+  0,40 bis 3 € pro Stunde.
 - **Token-Alarm:** Verarbeitet das Modell in 24 Stunden mehr als 2 Mio.
   Tokens, kommt nach spätestens einer Stunde eine Mail an die Alarm-Adresse
   (`infrastructure/monitoring.tf`).

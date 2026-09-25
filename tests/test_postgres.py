@@ -103,6 +103,7 @@ class PostgresTests(unittest.TestCase):
                 "manual_sources",
                 "source_cache",
                 "agent_usage",
+                "agent_fact_sheets",
             ],
         )
         self.assertTrue(all(isinstance(count, int) for count in counts.values()))

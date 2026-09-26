@@ -63,7 +63,7 @@ def edit_job(job_id, path=MEMORY_FILE):
         write_memory(connection, scope, original, memory)
 
 
-def update_memory(jobs, memory, successful_sources=None):
+def update_memory(jobs, memory, successful_sources=None, run_sources=None):
     """Update job identity and discovery state in the supplied objects.
 
     Mutate both memory and the Job objects in jobs: resolve canonical
@@ -77,8 +77,9 @@ def update_memory(jobs, memory, successful_sources=None):
 
     successful_sources=None disables missed-run accounting, as needed
     for a single manual import. Otherwise, count an absent job only if
-    every known source completed successfully. Mark it inactive after
-    INACTIVE_AFTER_MISSED_RUNS missed runs; do not change its workflow decision.
+    every known source this run collected completed successfully (see
+    sources_succeeded). Mark it inactive after INACTIVE_AFTER_MISSED_RUNS
+    missed runs; do not change its workflow decision.
     """
     now = datetime.now(UTC)
     counts = dict.fromkeys(("new", "known", "inactive", "reactivated"), 0)
@@ -138,7 +139,7 @@ def update_memory(jobs, memory, successful_sources=None):
         for job_id, entry in memory.items():
             if job_id in current_ids:
                 continue
-            if not sources_succeeded(job_id, entry, successful):
+            if not sources_succeeded(job_id, entry, successful, run_sources):
                 continue
             entry["missed_runs"] = entry.get("missed_runs", 0) + 1
             if entry["missed_runs"] >= INACTIVE_AFTER_MISSED_RUNS and entry.get("active", True):
@@ -331,9 +332,17 @@ def inferred_sources(job_id):
     return [source] if separator and source else []
 
 
-def sources_succeeded(job_id, entry, successful_sources):
-    """Require complete coverage of every known source before treating a job as missing."""
+def sources_succeeded(job_id, entry, successful_sources, run_sources=None):
+    """Require complete coverage by every known source before treating a job as missing.
+
+    With run_sources, only the known sources this run collected count: in a
+    split schedule each run answers for its own sources, also for a job that
+    the other run's sources list too. Without them every known source must
+    have succeeded.
+    """
     known = set(entry.get("source_names") or inferred_sources(job_id))
+    if run_sources is not None:
+        known &= set(run_sources)
     return bool(known) and known.issubset(successful_sources)
 
 

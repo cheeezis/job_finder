@@ -185,8 +185,12 @@ def run_pipeline(exclude_sources=frozenset(), run_id=None):
     complete_sources = {
         report["name"] for report in source_reports if report["status"] in {"success", "empty"}
     }
+    # A split schedule's run answers for missing jobs only through its own sources.
+    run_sources = {report["name"] for report in source_reports}
     with timed_step("Gedächtnis speichern"), edit_memory(MEMORY_FILE) as memory:
-        memory_stats = update_memory(jobs, memory, successful_sources=complete_sources)
+        memory_stats = update_memory(
+            jobs, memory, successful_sources=complete_sources, run_sources=run_sources
+        )
     # Memory gave every listing of one job the same ID; from here on they are one card.
     evaluated_jobs = combine_listings(evaluated_jobs)
     jobs = [job for job, _result in evaluated_jobs]
@@ -196,6 +200,7 @@ def run_pipeline(exclude_sources=frozenset(), run_id=None):
             jobs,
             MEMORY_FILE,
             successful_sources=complete_sources,
+            run_sources=run_sources,
             progress=print_availability_progress,
         )
 

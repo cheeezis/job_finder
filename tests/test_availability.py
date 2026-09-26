@@ -242,6 +242,27 @@ class AvailabilityTests(unittest.TestCase):
                         check.assert_not_called()
                         self.assertEqual(load_memory(path), original)
 
+    def test_a_job_of_both_runs_is_checked_when_the_runs_own_sources_all_worked(self):
+        # Arbeitnow belongs to the Azure run, Remotely to the local one.
+        cases = [
+            ({"arbeitnow", "himalayas"}, {"arbeitnow", "himalayas"}, {"job:1"}),
+            ({"stepstone", "remotely"}, {"stepstone"}, set()),
+        ]
+        for run_sources, complete, expected in cases:
+            with self.subTest(run_sources=run_sources), tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "state.sqlite3"
+                entry = {
+                    "workflow_status": "interesting",
+                    "source_names": ["arbeitnow", "remotely"],
+                    "source_urls": ["https://example.test/a"],
+                }
+                save_memory({"job:1": entry}, path)
+                with patch("job_finder.workflow.availability.listing_is_closed", return_value=True):
+                    result = ignore_closed_listings(
+                        [], path, successful_sources=complete, run_sources=run_sources
+                    )
+                self.assertEqual(result, expected)
+
     def test_unknown_source_without_legacy_id_is_not_checked(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "state.sqlite3"

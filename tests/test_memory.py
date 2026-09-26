@@ -432,6 +432,20 @@ class MemoryTests(unittest.TestCase):
         self.assertEqual(stuttgart.workflow_status, WorkflowStatus.NEW)
         self.assertIn("stepstone:1", memory)
 
+    def test_each_run_counts_a_job_of_both_runs_as_missed_by_its_own_sources(self):
+        # One job with listings from the Azure run (Arbeitnow) and the local run (Remotely).
+        memory = {
+            "arbeitnow:1": {**remembered("new", "Fulda"), "source_names": ["arbeitnow", "remotely"]}
+        }
+        local_run = {"stepstone", "remotely"}
+
+        update_memory([], memory, successful_sources={"stepstone"}, run_sources=local_run)
+        self.assertEqual(memory["arbeitnow:1"]["missed_runs"], 0)
+
+        for _ in range(3):
+            update_memory([], memory, successful_sources=local_run, run_sources=local_run)
+        self.assertFalse(memory["arbeitnow:1"]["active"])
+
     def test_memory_database_has_an_explicit_version(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "state.sqlite3"

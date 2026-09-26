@@ -201,7 +201,8 @@ ausgeschrieben, kommt sie als eigene Karte.
   Azure-Workers und gegen dieselbe Azure-Datenbank
   (`scripts/run_local_hybrid.py`). Jeder Lauf ersetzt beim Speichern nur die
   Anzeigen seiner eigenen Portale; eine Stelle, die beide finden, behält die
-  Links beider.
+  Links beider. Das Skript startet Docker Desktop bei Bedarf selbst, schreibt
+  ein lokales Log und meldet Fehlschläge in Discord.
 
 Einrichtung und Zugriffswege beschreiben [PostgreSQL betreiben](docs/postgresql.md)
 und [Netzwerkpfade](docs/networking.md).

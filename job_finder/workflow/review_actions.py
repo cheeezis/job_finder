@@ -12,6 +12,8 @@ from job_finder.workflow.applications import (
 )
 from job_finder.workflow.memory import edit_job
 
+MAX_REVIEW_NOTE_CHARS = 2000
+
 
 def update_workflow_status(
     job_id, workflow_status, memory_path=MEMORY_FILE, occurred_on=None, scheduled_for=None
@@ -31,6 +33,21 @@ def update_review_decision(job_id, workflow_status, memory_path=MEMORY_FILE):
         if is_application(entry):
             return status_result(entry.get("workflow_status", WorkflowStatus.APPLIED.value), True)
         return status_result(record_status_change(entry, status), False)
+
+
+def update_review_note(job_id, review_note, memory_path=MEMORY_FILE):
+    """Store the user's own note on a job without touching its decision; empty removes it."""
+    if not isinstance(review_note, str):
+        raise ValueError("Notiz muss Text sein")
+    note = review_note.strip()
+    if len(note) > MAX_REVIEW_NOTE_CHARS:
+        raise ValueError(f"Notiz darf höchstens {MAX_REVIEW_NOTE_CHARS} Zeichen lang sein")
+    with edit_job(job_id, memory_path) as entry:
+        if note:
+            entry["review_note"] = note
+        else:
+            entry.pop("review_note", None)
+    return {"review_note": note}
 
 
 def undo_ignored_decision(job_id, expected_status, memory_path=MEMORY_FILE):

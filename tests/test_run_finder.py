@@ -135,6 +135,42 @@ class RunFinderTests(unittest.TestCase):
         self.assertTrue(result["first_seen_at"])
         self.assertGreater(result["match_percent"], 0)
 
+    def test_listings_of_one_job_reach_the_review_as_one_card(self):
+        fulda = make_job("arbeitnow:1")
+        berlin = make_job("stepstone:1")
+        berlin.locations = ["Berlin"]
+        reports = [
+            {"name": "arbeitnow", "status": "success", "jobs": 1},
+            {"name": "stepstone", "status": "success", "jobs": 1},
+        ]
+
+        with tempfile.TemporaryDirectory() as directory:
+            jobs_file = Path(directory) / "jobs.json"
+            with (
+                patch("run_finder.JOBS_FILE", jobs_file),
+                patch("run_finder.MEMORY_FILE", Path(directory) / "state.sqlite3"),
+                patch("run_finder.create_backup"),
+                patch("run_finder.SOURCES", []),
+                patch("run_finder.collect_jobs", return_value=([fulda, berlin], reports)),
+                patch("run_finder.write_recommendations") as recommendations,
+                patch(
+                    "run_finder.process_notifications",
+                    return_value={"ready": 0, "sent": 0, "failed": 0, "configuration_error": None},
+                ),
+                redirect_stdout(io.StringIO()),
+            ):
+                run_pipeline()
+            persisted = json.loads(jobs_file.read_text(encoding="utf-8"))
+
+        results = recommendations.call_args.args[0]
+        cards = results["included"] + results["excluded"]
+        self.assertEqual([card["id"] for card in cards], ["arbeitnow:1"])
+        self.assertCountEqual(
+            [source["url"] for source in cards[0]["sources"]],
+            ["https://example.test/arbeitnow:1", "https://example.test/stepstone:1"],
+        )
+        self.assertEqual([job["id"] for job in persisted], ["arbeitnow:1"])
+
     def test_pipeline_enriches_only_selected_sources(self):
         job = make_job("kept:1")
         called = []

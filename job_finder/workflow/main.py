@@ -1,5 +1,8 @@
 """Score jobs and assemble the sorted result views."""
 
+from dataclasses import replace
+
+from job_finder.matching.deduplication import unique_sources
 from job_finder.matching.scoring import score_job
 from job_finder.models import FilterStatus, Job
 from job_finder.persistence.storage import read_json
@@ -13,6 +16,44 @@ def score_jobs(jobs):
 def evaluate_jobs(jobs):
     """Keep each pure score attached to its job while memory adds metadata."""
     return [(job, score_for_pipeline(job)) for job in jobs]
+
+
+def combine_listings(evaluated_jobs):
+    """Turn the listings memory gave one ID into one card.
+
+    The best-rated listing leads with its own text and score; the others
+    add their places and links, so every way to the ad stays on the card.
+    """
+    cards = {}
+    for job, result in evaluated_jobs:
+        if job.id not in cards:
+            cards[job.id] = (job, result)
+            continue
+        # sorted() is stable: on a tie the listing seen first keeps the lead.
+        (lead, lead_result), (other, _) = sorted(
+            [cards[job.id], (job, result)], key=lambda card: card_rank(card[1])
+        )
+        cards[job.id] = (join_listings(lead, other), lead_result)
+    return list(cards.values())
+
+
+def card_rank(result):
+    """Order listings of one job: included first, then by score and entry level."""
+    return (
+        result["filter_status"] != FilterStatus.INCLUDED.value,
+        -result["match_percent"],
+        result["experience_rank"],
+    )
+
+
+def join_listings(lead, other):
+    """Add the places and links of another listing to the leading one."""
+    return replace(
+        lead,
+        locations=list(dict.fromkeys(lead.locations + other.locations)),
+        sources=unique_sources(lead.sources + other.sources),
+        is_new=lead.is_new or other.is_new,
+    )
 
 
 def build_score_results(evaluated_jobs):

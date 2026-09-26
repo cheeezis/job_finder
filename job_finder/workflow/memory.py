@@ -5,7 +5,14 @@ from contextlib import contextmanager
 from copy import deepcopy
 from datetime import UTC, datetime
 
-from job_finder.matching.deduplication import normalize_company, normalize_title
+from job_finder.matching.deduplication import (
+    companies_match,
+    fully_remote,
+    locations_match,
+    normalize_company,
+    normalize_location,
+    normalize_title,
+)
 from job_finder.models import APPLICATION_STATUSES, WorkflowStatus
 from job_finder.paths import MEMORY_FILE
 from job_finder.persistence.database import lock, memory_scope, snapshot, transaction
@@ -64,6 +71,10 @@ def update_memory(jobs, memory, successful_sources=None):
     is_new. Return counts keyed by new, known, inactive and reactivated.
     This function does not write the resulting state to disk.
 
+    Every listing of one job gets the same ID, also across portals and
+    runs (see resolve_memory_id), so several jobs may share one; a known
+    entry collects the places and URLs of all of them.
+
     successful_sources=None disables missed-run accounting, as needed
     for a single manual import. Otherwise, count an absent job only if
     every known source completed successfully. Mark it inactive after
@@ -89,13 +100,15 @@ def update_memory(jobs, memory, successful_sources=None):
             entry["last_seen_at"] = now.isoformat()
             entry["title"] = job.title
             entry["company"] = job.company
-            entry["locations"] = list(job.locations)
+            entry["locations"] = unique_values(entry.get("locations") or [], job.locations)
             entry["source_urls"] = unique_values(
                 entry.get("source_urls", []), [source.url for source in job.sources]
             )
             entry["source_names"] = unique_values(entry.get("source_names", []), job.source_names)
             entry["missed_runs"] = 0
             entry["active"] = True
+            if remote_job(job):
+                entry["fully_remote"] = True
             add_memory_index_entry(memory_index, job.id, entry)
             continue
 
@@ -116,6 +129,8 @@ def update_memory(jobs, memory, successful_sources=None):
             "missed_runs": 0,
             "active": True,
         }
+        if remote_job(job):
+            memory[job.id]["fully_remote"] = True
         add_memory_index_entry(memory_index, job.id, memory[job.id])
 
     if successful_sources is not None:
@@ -134,15 +149,27 @@ def update_memory(jobs, memory, successful_sources=None):
 
 
 def resolve_memory_id(job, memory, memory_index=None):
-    """Reuse a known canonical ID for the same URL or a decided repost."""
+    """Reuse a known canonical ID for the same URL or another listing of the same job.
+
+    Entries found by URL are this listing's own; entries found by title
+    (same_job_ids) belong to other listings of the job. Undecided
+    candidates fold into the canonical entry, except title matches whose
+    places the canonical decision was not made for.
+    """
     index = memory_index or build_memory_index(memory)
     current_urls = {source.url for source in job.sources if source.url}
     candidates = unique_values([job.id], *[index["urls"].get(url, []) for url in current_urls])
     candidates = [job_id for job_id in candidates if job_id in memory]
+    by_title = []
     if not any(has_manual_state(memory[job_id]) for job_id in candidates):
-        fingerprint = repost_fingerprint(job.title, job.company, job.locations)
-        candidates = unique_values(candidates, index["reposts"].get(fingerprint, []))
-        candidates = [job_id for job_id in candidates if job_id in memory]
+        # A decision may take this listing only together with its own entries.
+        by_title = [
+            job_id
+            for job_id in same_job_ids(job, memory, index)
+            if job_id not in candidates
+            and all(may_share_decision(memory[own], memory[job_id]) for own in candidates)
+        ]
+        candidates += by_title
     if not candidates:
         return job.id
 
@@ -154,19 +181,80 @@ def resolve_memory_id(job, memory, memory_index=None):
         candidate = memory[candidate_id]
         if has_manual_state(candidate):
             continue
+        if candidate_id in by_title and not may_share_decision(candidate, canonical):
+            continue
         canonical["source_urls"] = unique_values(
             canonical.get("source_urls", []), candidate.get("source_urls", [])
         )
         canonical["source_names"] = unique_values(
             canonical.get("source_names", []), candidate.get("source_names", [])
         )
+        canonical["locations"] = unique_values(
+            canonical.get("locations") or [], candidate.get("locations") or []
+        )
+        if candidate.get("fully_remote"):
+            canonical["fully_remote"] = True
         del memory[candidate_id]
     return canonical_id
 
 
+def same_job_ids(job, memory, index):
+    """Return the entries other listings of this job created: same title, matching company.
+
+    An undecided entry takes listings from any portal and place, so they
+    share one card. A decided entry takes only listings that bring no new
+    place, unless both are fully remote: a job declined in one city must
+    still reach the user when it opens in another. An entry whose ads are
+    gone only takes reposts of a decision that outlasts them (ignoring or
+    applying), as before.
+    """
+    title = normalize_title(job.title)
+    company = normalize_company(job.company)
+    if not title or not company:
+        return []
+    listing = {"locations": job.locations, "fully_remote": remote_job(job)}
+    return [
+        job_id
+        for job_id in index["titles"].get(title, [])
+        if job_id in memory
+        # The index keeps titles an entry has since changed.
+        and normalize_title(memory[job_id].get("title") or "") == title
+        and companies_match(company, normalize_company(memory[job_id].get("company") or ""))
+        and (memory[job_id].get("active", True) or repost_decision_is_reusable(memory[job_id]))
+        and may_share_decision(listing, memory[job_id])
+    ]
+
+
+def may_share_decision(entry, other):
+    """Return whether entry may join other without other's decision covering a new place."""
+    if not has_manual_state(other) or (remote_entry(entry) and remote_entry(other)):
+        return True
+    known = other.get("locations") or []
+    return all(
+        locations_match([place], known)
+        for place in entry.get("locations") or []
+        if normalize_location(place)
+    )
+
+
+def remote_job(job):
+    """Return whether a listing is fully remote or names remote as its place."""
+    return fully_remote(job) or names_remote(job.locations)
+
+
+def remote_entry(entry):
+    """Return whether a remembered job was seen fully remote or names remote as its place."""
+    return bool(entry.get("fully_remote")) or names_remote(entry.get("locations") or [])
+
+
+def names_remote(places):
+    """Return whether one of the places is remote work rather than a city."""
+    return any("remote" in normalize_location(place) for place in places)
+
+
 def build_memory_index(memory):
-    """Index URLs and decided repost fingerprints once per complete update."""
-    index = {"urls": defaultdict(list), "reposts": defaultdict(list)}
+    """Index URLs and normalized titles once per complete update."""
+    index = {"urls": defaultdict(list), "titles": defaultdict(list)}
     for job_id, entry in memory.items():
         add_memory_index_entry(index, job_id, entry)
     return index
@@ -177,29 +265,13 @@ def add_memory_index_entry(index, job_id, entry):
     for url in entry.get("source_urls", []):
         if job_id not in index["urls"][url]:
             index["urls"][url].append(job_id)
-    if not repost_decision_is_reusable(entry):
-        return
-    fingerprint = repost_fingerprint(
-        entry.get("title", ""), entry.get("company", ""), entry.get("locations", [])
-    )
-    if fingerprint and job_id not in index["reposts"][fingerprint]:
-        index["reposts"][fingerprint].append(job_id)
-
-
-def repost_fingerprint(title_value, company_value, locations=None):
-    """Build a conservative title/company/location key for decided ads."""
-    title = normalize_title(title_value)
-    company = normalize_company(company_value)
-    normalized_locations = sorted(
-        {" ".join(normalize_title(value).split()) for value in (locations or []) if value}
-    )
-    if not title or not company or not normalized_locations:
-        return None
-    return title, company, tuple(normalized_locations)
+    title = normalize_title(entry.get("title") or "")
+    if title and job_id not in index["titles"][title]:
+        index["titles"][title].append(job_id)
 
 
 def repost_decision_is_reusable(entry):
-    """Limit fuzzy repost matching to explicit rejection or application state."""
+    """Return whether a decision also applies to a repost once the ads are gone."""
     return entry.get("workflow_status") == WorkflowStatus.IGNORED.value or has_application_state(
         entry
     )

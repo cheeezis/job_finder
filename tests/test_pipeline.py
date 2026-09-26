@@ -7,7 +7,7 @@ from pathlib import Path
 
 from job_finder.matching.scoring import LOCAL_PLACES
 from job_finder.models import Job, JobSource, WorkMode
-from job_finder.workflow.main import load_jobs, score_jobs
+from job_finder.workflow.main import combine_listings, load_jobs, score_jobs
 from job_finder.workflow.memory import update_memory
 from job_finder.workflow.reporting import write_recommendations
 
@@ -44,3 +44,31 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(review["recommendations"][0]["title"], "Junior Python Developer")
         self.assertEqual(review["recommendations"][0]["url"], "https://example.test/jobs/123")
         self.assertIn("match_percent", review["recommendations"][0])
+
+    def test_listings_of_one_job_become_one_card_led_by_the_best_rated(self):
+        def listing(source, place, **changes):
+            return Job(
+                id="arbeitnow:1",
+                title="Junior Python Developer",
+                company="Example GmbH",
+                locations=[place],
+                sources=[JobSource(source=source, url=f"https://{source}.test/1")],
+                description_raw=source,
+                description_clean=source,
+                **changes,
+            )
+
+        berlin = listing("stepstone", "Berlin", is_new=True)
+        fulda = listing("arbeitnow", "Fulda")
+        excluded = {"filter_status": "excluded", "match_percent": 0, "experience_rank": 99}
+        included = {"filter_status": "included", "match_percent": 70, "experience_rank": 0}
+
+        cards = combine_listings([(berlin, excluded), (fulda, included)])
+
+        self.assertEqual(len(cards), 1)
+        job, result = cards[0]
+        self.assertIs(result, included)
+        self.assertEqual(job.description_clean, "arbeitnow")
+        self.assertEqual(job.locations, ["Fulda", "Berlin"])
+        self.assertEqual([source.source for source in job.sources], ["arbeitnow", "stepstone"])
+        self.assertTrue(job.is_new)

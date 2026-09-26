@@ -56,7 +56,33 @@ def load_review_jobs(recommendations_path=RECOMMENDATIONS_JSON, memory_path=MEMO
         ):
             continue
         review_jobs.append(remembered_review_job(job_id, entry))
-    return review_jobs
+    return one_card_per_job(review_jobs)
+
+
+def one_card_per_job(review_jobs):
+    """Show every recommendation that belongs to one remembered job on one card.
+
+    Recommendations come best first, so the first card of a job leads and
+    later ones add their links and places. Such cards remain until both runs
+    have published the job again under the ID memory now gives all of it.
+    """
+    cards = {}
+    for job in review_jobs:
+        card = cards.setdefault(job["id"], job)
+        if card is job:
+            continue
+        known = {link.get("url") for link in card.get("source_links") or []}
+        card["source_links"] = [
+            *(card.get("source_links") or []),
+            *(link for link in job.get("source_links") or [] if link.get("url") not in known),
+        ]
+        card["locations"] = list(
+            dict.fromkeys([*(card.get("locations") or []), *(job.get("locations") or [])])
+        )
+        # Hidden as international only if no listing of the job is a German one.
+        card["international"] = bool(card.get("international") and job.get("international"))
+        card["is_new"] = bool(card.get("is_new") or job.get("is_new"))
+    return list(cards.values())
 
 
 def attach_fact_sheets(jobs):

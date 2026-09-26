@@ -7,6 +7,7 @@ from job_finder.paths import APPLICATION_DOCUMENTS_DIR
 from job_finder.persistence.database import initialize, transaction
 from job_finder.persistence.postgres_backup import create_postgres_backup, restore_backup
 from job_finder.persistence.postgres_store import prune_cache
+from job_finder.workflow.duplicates import merge_duplicate_decisions
 
 
 def main():
@@ -17,6 +18,10 @@ def main():
     commands.add_parser("check")
     cleanup = commands.add_parser("prune-cache")
     cleanup.add_argument("--days", type=int, default=30)
+    duplicates = commands.add_parser(
+        "merge-duplicates", help="join jobs decided more than once; lists only, unless --apply"
+    )
+    duplicates.add_argument("--apply", action="store_true")
     backup = commands.add_parser("backup")
     backup.add_argument("--documents-dir", default=str(APPLICATION_DOCUMENTS_DIR))
     restore = commands.add_parser("restore")
@@ -32,6 +37,8 @@ def main():
         result = restore_backup(args.archive, args.documents_dir)
     elif args.command == "prune-cache":
         result = {"removed_cache_entries": prune_cache(args.days)}
+    elif args.command == "merge-duplicates":
+        result = merge_duplicate_decisions(apply=args.apply)
     else:
         with transaction() as connection:
             result = {

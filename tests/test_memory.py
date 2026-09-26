@@ -22,6 +22,42 @@ def make_job():
     )
 
 
+def listing(job_id, place, *, remote=None):
+    """A listing of one job on the portal the ID names."""
+    source = job_id.split(":")[0]
+    return Job(
+        id=job_id,
+        title="Junior Python Developer (m/w/d)",
+        company="Example GmbH",
+        locations=[place],
+        sources=[JobSource(source=source, url=f"https://{source}.test/{job_id}")],
+        description_raw="Python",
+        description_clean="Python",
+        remote_percentage=remote,
+    )
+
+
+def remembered(status, place, *, active=True, remote=False):
+    """A remembered StepStone listing of the same job; decided unless status is new."""
+    entry = {
+        "title": "Junior Python Developer",
+        "company": "Example GmbH",
+        "locations": [place],
+        "first_seen_at": "2026-09-01T08:00:00+00:00",
+        "last_seen_at": "2026-09-20T08:00:00+00:00",
+        "workflow_status": status,
+        "source_urls": ["https://stepstone.test/stepstone:1"],
+        "source_names": ["stepstone"],
+        "missed_runs": 0 if active else 3,
+        "active": active,
+    }
+    if status != "new":
+        entry["workflow_history"] = [{"status": status, "occurred_on": "2026-09-20"}]
+    if remote:
+        entry["fully_remote"] = True
+    return entry
+
+
 class MemoryTests(unittest.TestCase):
     def test_new_job_receives_first_and_last_seen_timestamps(self):
         memory = {}
@@ -321,6 +357,94 @@ class MemoryTests(unittest.TestCase):
         self.assertEqual(stats["new"], 1)
         self.assertEqual(job.id, "test:123")
         self.assertEqual(job.workflow_status, WorkflowStatus.NEW)
+
+    def test_listings_from_any_portal_and_city_share_one_new_entry(self):
+        memory = {}
+        fulda, berlin = listing("arbeitnow:1", "Fulda"), listing("stepstone:1", "Berlin")
+
+        stats = update_memory([fulda, berlin], memory)
+
+        self.assertEqual((fulda.id, berlin.id), ("arbeitnow:1", "arbeitnow:1"))
+        self.assertEqual(list(memory), ["arbeitnow:1"])
+        self.assertEqual(memory["arbeitnow:1"]["locations"], ["Fulda", "Berlin"])
+        self.assertEqual(memory["arbeitnow:1"]["source_names"], ["arbeitnow", "stepstone"])
+        self.assertEqual((stats["new"], stats["known"]), (1, 1))
+        self.assertTrue(fulda.is_new)
+
+    def test_a_copy_from_the_other_run_keeps_the_decision(self):
+        # As IT Studio Rech on 25.09.2026: interesting on one portal, then found again on Remotely.
+        memory = {"stepstone:1": remembered("interesting", "Würzburg")}
+        copy = listing("remotely:1", "Würzburg")
+
+        stats = update_memory([copy], memory)
+
+        self.assertEqual(copy.id, "stepstone:1")
+        self.assertEqual(copy.workflow_status, WorkflowStatus.INTERESTING)
+        self.assertFalse(copy.is_new)
+        self.assertEqual(stats["new"], 0)
+        self.assertIn("https://remotely.test/remotely:1", memory["stepstone:1"]["source_urls"])
+
+    def test_a_declined_job_in_a_new_city_comes_back_as_its_own_card(self):
+        memory = {"stepstone:1": remembered("ignored", "Stuttgart")}
+        fulda = listing("arbeitnow:1", "Fulda")
+
+        update_memory([fulda], memory)
+
+        self.assertEqual(fulda.id, "arbeitnow:1")
+        self.assertEqual(fulda.workflow_status, WorkflowStatus.NEW)
+        self.assertEqual(memory["stepstone:1"]["locations"], ["Stuttgart"])
+
+    def test_fully_remote_listings_share_a_decision_whatever_place_they_name(self):
+        # As WattFox: "Germany" on one portal, the company's town on the other.
+        memory = {"stepstone:1": remembered("interesting", "Germany", remote=True)}
+        copy = listing("remotely:1", "Freiburg im Breisgau", remote=100)
+
+        update_memory([copy], memory)
+
+        self.assertEqual(copy.id, "stepstone:1")
+
+    def test_a_gone_job_posted_again_is_new_unless_it_was_declined(self):
+        for status, expected_id in (("interesting", "arbeitnow:1"), ("ignored", "stepstone:1")):
+            with self.subTest(status=status):
+                memory = {"stepstone:1": remembered(status, "Fulda", active=False)}
+                repost = listing("arbeitnow:1", "Fulda")
+
+                update_memory([repost], memory)
+
+                self.assertEqual(repost.id, expected_id)
+
+    def test_a_decision_never_takes_over_the_cities_of_an_undecided_card(self):
+        # The undecided card also names Fulda; its declined twin was only in Stuttgart.
+        memory = {
+            "stepstone:1": remembered("ignored", "Stuttgart"),
+            "arbeitnow:1": {
+                **remembered("new", "Fulda"),
+                "locations": ["Fulda", "Stuttgart"],
+                "source_urls": ["https://arbeitnow.test/arbeitnow:1"],
+                "source_names": ["arbeitnow"],
+            },
+        }
+        stuttgart = listing("arbeitnow:1", "Stuttgart")
+
+        update_memory([stuttgart], memory)
+
+        self.assertEqual(stuttgart.id, "arbeitnow:1")
+        self.assertEqual(stuttgart.workflow_status, WorkflowStatus.NEW)
+        self.assertIn("stepstone:1", memory)
+
+    def test_each_run_counts_a_job_of_both_runs_as_missed_by_its_own_sources(self):
+        # One job with listings from the Azure run (Arbeitnow) and the local run (Remotely).
+        memory = {
+            "arbeitnow:1": {**remembered("new", "Fulda"), "source_names": ["arbeitnow", "remotely"]}
+        }
+        local_run = {"stepstone", "remotely"}
+
+        update_memory([], memory, successful_sources={"stepstone"}, run_sources=local_run)
+        self.assertEqual(memory["arbeitnow:1"]["missed_runs"], 0)
+
+        for _ in range(3):
+            update_memory([], memory, successful_sources=local_run, run_sources=local_run)
+        self.assertFalse(memory["arbeitnow:1"]["active"])
 
     def test_memory_database_has_an_explicit_version(self):
         with tempfile.TemporaryDirectory() as directory:

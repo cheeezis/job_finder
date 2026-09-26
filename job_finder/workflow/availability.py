@@ -134,6 +134,7 @@ def ignore_closed_listings(
     memory_path,
     *,
     successful_sources,
+    run_sources=None,
     progress=None,
     max_urls=MAX_CHECK_URLS,
     budget_seconds=CHECK_BUDGET_SECONDS,
@@ -142,7 +143,8 @@ def ignore_closed_listings(
     """Check missing shortlisted jobs and persist confirmed closures.
 
     Consider interesting entries without application history only when
-    every known source is in successful_sources. jobs supplies current
+    every known source this run collected (run_sources; all known sources
+    without it) is in successful_sources. jobs supplies current
     sightings; stale cached sightings count as missing. Reuse recent
     per-URL checks, and apply max_urls and budget_seconds to new work.
 
@@ -154,7 +156,7 @@ def ignore_closed_listings(
     """
     now = now or datetime.now(UTC)
     snapshot = load_memory(memory_path)
-    candidates, due = _plan_checks(jobs, snapshot, successful_sources, now)
+    candidates, due = _plan_checks(jobs, snapshot, successful_sources, run_sources, now)
     selected = sorted(due, key=due.get)[: max(0, max_urls)]
     all_urls = {url for _, urls, _ in candidates.values() for url in urls}
     print(
@@ -180,7 +182,7 @@ def ignore_closed_listings(
     return ignored
 
 
-def _plan_checks(jobs, snapshot, successful_sources, now):
+def _plan_checks(jobs, snapshot, successful_sources, run_sources, now):
     """Select missing shortlisted entries and prioritize their due URLs."""
     successful = set(successful_sources)
     present_ids = {job.id for job in jobs if not job.cache_stale}
@@ -192,7 +194,7 @@ def _plan_checks(jobs, snapshot, successful_sources, now):
             continue
         if job_id in present_ids:
             continue
-        if not sources_succeeded(job_id, entry, successful):
+        if not sources_succeeded(job_id, entry, successful, run_sources):
             continue
         urls = entry.get("source_urls", [])
         if not isinstance(urls, list):

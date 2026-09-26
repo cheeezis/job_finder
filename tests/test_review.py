@@ -251,6 +251,39 @@ class ReviewTests(unittest.TestCase):
 
         self.assertEqual(len(jobs), 1)
 
+    def test_recommendations_of_one_remembered_job_show_as_one_card(self):
+        # As before both runs have published a job again that memory now knows as one.
+        document = json.loads(self.recommendations_path.read_text(encoding="utf-8"))
+        azure = document["recommendations"][0]
+        azure.update(
+            locations=["Würzburg"],
+            source_links=[{"source": "arbeitnow", "url": "https://arbeitnow.test/1"}],
+        )
+        local = {
+            **azure,
+            "id": "remotely:1",
+            "match_percent": 70,
+            "locations": ["Remote"],
+            "international": True,
+            "source_links": [{"source": "remotely", "url": "https://remotely.test/1"}],
+        }
+        document["recommendations"].append(local)
+        self.recommendations_path.write_text(json.dumps(document), encoding="utf-8")
+        memory = load_memory(self.memory_path)
+        memory["job:1"]["source_urls"] = ["https://arbeitnow.test/1", "https://remotely.test/1"]
+        save_memory(memory, self.memory_path)
+
+        jobs = load_review_jobs(self.recommendations_path, self.memory_path)
+
+        self.assertEqual(len(jobs), 1)
+        self.assertEqual(jobs[0]["recommendation_id"], "job:1")
+        self.assertEqual(
+            [link["url"] for link in jobs[0]["source_links"]],
+            ["https://arbeitnow.test/1", "https://remotely.test/1"],
+        )
+        self.assertEqual(jobs[0]["locations"], ["Würzburg", "Remote"])
+        self.assertFalse(jobs[0]["international"])
+
     def test_review_jobs_classify_legacy_international_recommendation(self):
         document = json.loads(self.recommendations_path.read_text(encoding="utf-8"))
         document["recommendations"][0]["locations"] = ["weltweit"]

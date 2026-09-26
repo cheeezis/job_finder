@@ -323,6 +323,70 @@ class PostgresTests(unittest.TestCase):
             read_dataset("output/recommendations.json")["recommendations"], [skipped_result]
         )
 
+    def test_each_run_replaces_only_its_own_listings_of_a_shared_job(self):
+        """Azure and the local run show one job on one card with the links of both."""
+
+        def listing(source, number):
+            return {"source": source, "url": f"https://{source}.test/{number}"}
+
+        # Both runs found both jobs before; now Arbeitnow no longer lists job 2.
+        before = {
+            "arbeitnow:1": (["Würzburg"], [listing("arbeitnow", 1), listing("remotely", 1)]),
+            "arbeitnow:2": (["Fulda"], [listing("arbeitnow", 2), listing("remotely", 2)]),
+        }
+        write_dataset(
+            "internal/jobs.json",
+            [
+                {"id": job_id, "locations": places, "sources": links}
+                for job_id, (places, links) in before.items()
+            ],
+        )
+        write_dataset(
+            "output/recommendations.json",
+            {
+                "recommendations": [
+                    {"id": job_id, "locations": places, "source_links": links}
+                    for job_id, (places, links) in before.items()
+                ]
+            },
+        )
+        found_again = Job(
+            id="arbeitnow:1",
+            title="Python Backend Developer",
+            company="IT Studio Rech GmbH",
+            locations=["Würzburg"],
+            sources=[JobSource(source="arbeitnow", url="https://arbeitnow.test/1")],
+            description_raw="",
+            description_clean="",
+        )
+        card = {
+            "id": "arbeitnow:1",
+            "locations": ["Würzburg"],
+            "source_links": [listing("arbeitnow", 1)],
+        }
+
+        publish_results(
+            [found_again],
+            {},
+            jobs_path=JOBS_FILE,
+            writer=lambda _results: write_json_atomic(
+                RECOMMENDATIONS_JSON, {"recommendations": [card]}
+            ),
+            exclude_sources={"stepstone", "remotely"},
+        )
+
+        jobs = read_dataset("internal/jobs.json")
+        cards = read_dataset("output/recommendations.json")["recommendations"]
+        expected = {
+            "arbeitnow:1": ["https://arbeitnow.test/1", "https://remotely.test/1"],
+            "arbeitnow:2": ["https://remotely.test/2"],
+        }
+        self.assertEqual({job["id"]: [s["url"] for s in job["sources"]] for job in jobs}, expected)
+        self.assertEqual(
+            {shown["id"]: [link["url"] for link in shown["source_links"]] for shown in cards},
+            expected,
+        )
+
     def test_backup_restore_includes_document_bytes_and_refuses_overwrite(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

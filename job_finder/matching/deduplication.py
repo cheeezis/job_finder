@@ -81,9 +81,12 @@ def locations_match(first_locations, second_locations):
 
 def both_fully_remote(first, second):
     """Ignore conflicting display locations for two fully remote postings."""
-    return all(
-        job.remote_percentage == 100 or job.work_mode is WorkMode.REMOTE for job in (first, second)
-    )
+    return fully_remote(first) and fully_remote(second)
+
+
+def fully_remote(job):
+    """Return whether a posting can be done entirely from home."""
+    return job.remote_percentage == 100 or job.work_mode is WorkMode.REMOTE
 
 
 def normalize_location(value):

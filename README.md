@@ -170,6 +170,13 @@ unabhängig vom Fundlauf. Nach einer Entscheidung verschwindet die Stelle aus
 diesem Filter. Internationale Anzeigen und
 Junior-Hybrid-Sonderfälle sind eigene, standardmäßig deaktivierte Filter.
 
+Jede Stelle erscheint einmal: Anzeigen mit gleichem Titel und gleicher Firma
+bilden eine Karte mit allen Orten und Links, über Portale und beide Läufe
+hinweg, und eine Entscheidung gilt für alle. Eine schon entschiedene Stelle
+übernimmt eine neue Anzeige nur, wenn diese keinen neuen Ort mitbringt oder
+beide komplett remote sind: Wird eine abgelehnte Stelle in einer anderen Stadt
+ausgeschrieben, kommt sie als eigene Karte.
+
 ## Betrieb
 
 - **Lokal:** Finder und Review laufen wie oben beschrieben auf dem eigenen
@@ -185,7 +192,9 @@ Junior-Hybrid-Sonderfälle sind eigene, standardmäßig deaktivierte Filter.
 - **Hybrid:** StepStone und Remotely liefern aus Azure keine Treffer. Ein
   lokaler Windows-Task startet sie einmal täglich in Docker, mit dem Image des
   Azure-Workers und gegen dieselbe Azure-Datenbank
-  (`scripts/run_local_hybrid.py`).
+  (`scripts/run_local_hybrid.py`). Jeder Lauf ersetzt beim Speichern nur die
+  Anzeigen seiner eigenen Portale; eine Stelle, die beide finden, behält die
+  Links beider.
 
 Einrichtung und Zugriffswege beschreiben [PostgreSQL betreiben](docs/postgresql.md)
 und [Netzwerkpfade](docs/networking.md).

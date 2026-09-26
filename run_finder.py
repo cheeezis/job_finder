@@ -36,7 +36,12 @@ from job_finder.sources.common import (
 )
 from job_finder.sources.company_careers import BYTEWERK, CSS, NETHINKS, PROEMION, RHOENENERGIE
 from job_finder.workflow.availability import ignore_closed_listings
-from job_finder.workflow.main import build_score_results, evaluate_jobs, score_jobs
+from job_finder.workflow.main import (
+    build_score_results,
+    combine_listings,
+    evaluate_jobs,
+    score_jobs,
+)
 from job_finder.workflow.memory import edit_memory, update_memory
 from job_finder.workflow.notifications import process_notifications, send_run_summary
 from job_finder.workflow.reporting import is_visible_in_default_review, write_recommendations
@@ -180,14 +185,22 @@ def run_pipeline(exclude_sources=frozenset(), run_id=None):
     complete_sources = {
         report["name"] for report in source_reports if report["status"] in {"success", "empty"}
     }
+    # A split schedule's run answers for missing jobs only through its own sources.
+    run_sources = {report["name"] for report in source_reports}
     with timed_step("Gedächtnis speichern"), edit_memory(MEMORY_FILE) as memory:
-        memory_stats = update_memory(jobs, memory, successful_sources=complete_sources)
+        memory_stats = update_memory(
+            jobs, memory, successful_sources=complete_sources, run_sources=run_sources
+        )
+    # Memory gave every listing of one job the same ID; from here on they are one card.
+    evaluated_jobs = combine_listings(evaluated_jobs)
+    jobs = [job for job, _result in evaluated_jobs]
 
     with timed_step("Offline-Prüfung"):
         closed_ids = ignore_closed_listings(
             jobs,
             MEMORY_FILE,
             successful_sources=complete_sources,
+            run_sources=run_sources,
             progress=print_availability_progress,
         )
 

@@ -45,6 +45,7 @@ def load_review_jobs(recommendations_path=RECOMMENDATIONS_JSON, memory_path=MEMO
             job["workflow_status"] == WorkflowStatus.NEW.value
         )
         job["application_tracked"] = is_application(entry)
+        job["review_note"] = entry.get("review_note") or ""
         if not job.get("source_links"):
             job["source_links"] = memory_source_links(entry)
         review_jobs.append(job)
@@ -133,6 +134,7 @@ def remembered_review_job(job_id, entry):
         "workflow_status": entry["workflow_status"],
         "is_new": False,
         "application_tracked": is_application(entry),
+        "review_note": entry.get("review_note") or "",
         "current_snapshot_missing": True,
         "prefilter_warning": availability_warning,
     }

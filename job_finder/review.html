@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Stellen prüfen</title>
-  <link rel="stylesheet" href="/app.css?v=3">
+  <link rel="stylesheet" href="/app.css?v=4">
 </head>
 <body class="review-page">
 <main>
@@ -80,6 +80,15 @@
       <p id="fact-sheet-reason"></p>
       <p id="fact-sheet-sources" class="fact-sheet-sources"></p>
       <p id="fact-sheet-meta" class="fact-sheet-meta"></p>
+    </section>
+    <section class="review-note" aria-label="Meine Notiz">
+      <label><span>Meine Notiz <span class="optional">optional</span></span>
+        <textarea id="review-note" maxlength="2000" rows="3" placeholder="Warum passt die Stelle oder nicht? Das Wichtigste zuerst: Der Agent liest bei ähnlichen Stellen die ersten 300 Zeichen."></textarea>
+      </label>
+      <div class="note-actions">
+        <span id="note-status" class="note-status" role="status" aria-live="polite"></span>
+        <button id="save-note" type="button" hidden>Notiz speichern</button>
+      </div>
     </section>
     <div class="actions">
       <div class="decision-actions">

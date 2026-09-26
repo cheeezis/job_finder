@@ -35,6 +35,7 @@ from job_finder.workflow.review_actions import (
     undo_ignored_decision,
     update_application_salary,
     update_review_decision,
+    update_review_note,
     update_workflow_history,
     update_workflow_status,
 )
@@ -138,6 +139,7 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
             "/api/applications": self._start_application,
             "/api/application-salary": self._update_salary,
             "/api/review-status": self._review_status,
+            "/api/review-note": self._review_note,
             "/api/review-undo": self._undo_review,
             "/api/status": self._update_status,
             "/api/history": self._update_history,
@@ -198,6 +200,9 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
         return update_review_decision(
             payload["job_id"], payload["workflow_status"], self.memory_path
         )
+
+    def _review_note(self, payload):
+        return update_review_note(payload["job_id"], payload.get("review_note"), self.memory_path)
 
     def _undo_review(self, payload):
         return undo_ignored_decision(

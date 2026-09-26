@@ -52,7 +52,7 @@ function page(name, helpers = {}, fetch = () => new Promise(() => {})) {
   }
   const context = vm.createContext({
     URL, URLSearchParams, fetch, injectedHelpers: helpers,
-    window: {location: {search: ""}, confirm: () => true},
+    window: {location: {search: ""}, confirm: () => true, addEventListener() {}},
     document: {
       createElement: node, createTextNode: text => ({textContent: text}),
       getElementById(id) {

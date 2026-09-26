@@ -31,6 +31,7 @@ from job_finder.review import (
     undo_ignored_decision,
     update_application_salary,
     update_review_decision,
+    update_review_note,
     update_workflow_status,
 )
 from job_finder.workflow.memory import load_memory, save_memory
@@ -499,6 +500,25 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(result["workflow_status"], "inquiry")
         self.assertEqual(load_memory(self.memory_path)["job:1"]["workflow_status"], "inquiry")
 
+    def test_review_note_is_saved_trimmed_shown_and_removable(self):
+        result = update_review_note("job:1", "  Java-Pflicht, will ich nicht  ", self.memory_path)
+
+        self.assertEqual(result, {"review_note": "Java-Pflicht, will ich nicht"})
+        self.assertEqual(load_memory(self.memory_path)["job:1"]["workflow_status"], "interesting")
+        jobs = load_review_jobs(self.recommendations_path, self.memory_path)
+        self.assertEqual(jobs[0]["review_note"], "Java-Pflicht, will ich nicht")
+
+        update_review_note("job:1", "   ", self.memory_path)
+
+        self.assertNotIn("review_note", load_memory(self.memory_path)["job:1"])
+
+    def test_invalid_review_note_changes_nothing(self):
+        for note in (None, 42, "x" * 2001):
+            label = f"{len(note)} Zeichen" if isinstance(note, str) else note
+            with self.subTest(note=label), self.assertRaises(ValueError):
+                update_review_note("job:1", note, self.memory_path)
+        self.assertNotIn("review_note", load_memory(self.memory_path)["job:1"])
+
     def test_latest_ignored_decision_can_be_undone(self):
         update_review_decision("job:1", "ignored", self.memory_path)
 
@@ -539,7 +559,7 @@ class ReviewTests(unittest.TestCase):
                 with self.subTest(route=route), urlopen(base_url + route) as response:
                     page = response.read().decode("utf-8")
                     self.assertIn(marker, page)
-                    self.assertIn('href="/app.css?v=3"', page)
+                    self.assertIn('href="/app.css?v=4"', page)
                     self.assertIn('src="/app.js"', page)
                     self.assertNotIn("<style", page)
                     self.assertNotIn("style=", page)
@@ -686,6 +706,19 @@ class ReviewTests(unittest.TestCase):
         self.assertNotIn("personal_ratings", document)
         jobs = load_review_jobs(self.recommendations_path, self.memory_path)
         self.assertEqual(jobs[0]["workflow_status"], "ignored")
+
+    def test_local_api_saves_a_review_note(self):
+        with self.server_context() as base_url:
+            request = json_request(
+                f"{base_url}/api/review-note", {"job_id": "job:1", "review_note": "Gute Firma"}
+            )
+            with urlopen(request) as response:
+                result = json.load(response)
+            with urlopen(f"{base_url}/api/recommendations") as response:
+                document = json.load(response)
+
+        self.assertEqual(result, {"review_note": "Gute Firma"})
+        self.assertEqual(document["recommendations"][0]["review_note"], "Gute Firma")
 
     def test_local_api_rejects_dns_rebinding_host(self):
         with self.server_context() as base_url:

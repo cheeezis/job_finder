@@ -388,3 +388,81 @@ test("an aborted fact sheet names its reason and a missing one stays hidden", as
   await new Promise(setImmediate);
   assert.equal(view.elements.get("fact-sheet").hidden, true);
 });
+
+function reviewWithPosts(rows, posts, {failNote = false} = {}) {
+  return page("review", {
+    async postJson(route, payload) {
+      posts.push([route, {...payload}]);
+      if (route === "/api/review-note") {
+        if (failNote) throw new Error("Notiz konnte nicht gespeichert werden");
+        return {review_note: payload.review_note};
+      }
+      return {workflow_status: payload.workflow_status, application_tracked: false};
+    },
+    showError(error) { posts.push(["error", error.message]); }
+  }, async () => ({ok: true, json: async () => ({
+    recommendations: rows, workflow_statuses: ["new", "interesting", "ignored"]
+  })}));
+}
+
+test("a changed note is saved before the decision and stays with the job", async () => {
+  const posts = [];
+  const job = {id: "job:1", title: "Developer", company: "Example", workflow_status: "new"};
+  const view = reviewWithPosts([job], posts);
+  await new Promise(setImmediate);
+  assert.equal(view.elements.get("save-note").hidden, true);
+
+  view.elements.get("review-note").value = "  Java-Pflicht, will ich nicht ";
+  await view.elements.get("mark-ignored").emit("click");
+
+  assert.deepEqual(posts.map(([route]) => route), ["/api/review-note", "/api/review-status"]);
+  assert.deepEqual(posts[0][1], {job_id: "job:1", review_note: "Java-Pflicht, will ich nicht"});
+  assert.equal(job.review_note, "Java-Pflicht, will ich nicht");
+  assert.equal(job.workflow_status, "ignored");
+});
+
+test("paging saves a changed note and brings it back; an unchanged note sends nothing", async () => {
+  const posts = [];
+  const rows = [
+    {id: "job:1", title: "One", company: "A", workflow_status: "new"},
+    {id: "job:2", title: "Two", company: "B", workflow_status: "new", review_note: "Alt"}
+  ];
+  const view = reviewWithPosts(rows, posts);
+  await new Promise(setImmediate);
+
+  view.elements.get("review-note").value = "Gute Firma";
+  await view.elements.get("next").emit("click");
+  assert.equal(view.elements.get("title").textContent, "Two");
+  assert.equal(view.elements.get("review-note").value, "Alt");
+  await view.elements.get("previous").emit("click");
+
+  assert.equal(view.elements.get("review-note").value, "Gute Firma");
+  assert.deepEqual(posts.map(([route, payload]) => [route, payload.job_id]),
+    [["/api/review-note", "job:1"]]);
+});
+
+test("decided cards save the note by button; a failed save keeps the card", async () => {
+  const posts = [];
+  const decided = {id: "job:1", title: "Developer", company: "Example", workflow_status: "interesting"};
+  let view = reviewWithPosts([decided], posts);
+  await new Promise(setImmediate);
+  view.elements.get("status-filter").value = "";
+  await view.elements.get("status-filter").emit("change");
+  assert.equal(view.elements.get("save-note").hidden, false);
+
+  view.elements.get("review-note").value = "Nachgefragt am 26.09.";
+  await view.elements.get("save-note").emit("click");
+  assert.equal(decided.review_note, "Nachgefragt am 26.09.");
+  assert.equal(view.elements.get("note-status").textContent, "Notiz gespeichert");
+
+  const failing = [];
+  const fresh = {id: "job:2", title: "Tester", company: "Example", workflow_status: "new"};
+  view = reviewWithPosts([fresh], failing, {failNote: true});
+  await new Promise(setImmediate);
+  view.elements.get("review-note").value = "geht verloren?";
+  await view.elements.get("mark-ignored").emit("click");
+
+  assert.deepEqual(failing.map(([route]) => route), ["/api/review-note", "error"]);
+  assert.equal(fresh.workflow_status, "new");
+  assert.equal(view.elements.get("review-note").value, "geht verloren?");
+});

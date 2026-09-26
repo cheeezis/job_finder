@@ -55,43 +55,64 @@ def write_versioned(path, version, **fields):
     write_json_atomic(path, {"version": version, **fields})
 
 
-def _kept_from_previous(value_sources, exclude_sources, *, ignore=frozenset()):
-    """Keep an entry a run didn't recollect: manual, or entirely excluded sources."""
-    names = {source.get("source") for source in value_sources} - ignore
-    return "manual" in names or (bool(names) and names <= set(exclude_sources))
+def _with_skipped_listings(current, previous, key, exclude_sources):
+    """Carry the listings this run did not collect over from the previous entries.
+
+    key names the listing list: "sources" for jobs, "source_links" for review
+    cards. A job found again gains its listings from skipped sources; one not
+    found again keeps just those listings, and its employer links. A manual
+    import stays whole.
+    """
+    entries = {}
+    for value in current:
+        entries.setdefault(value["id"], value)
+    kept = []
+    for old in previous:
+        listings = old.get(key, [])
+        skipped = [listing for listing in listings if listing.get("source") in exclude_sources]
+        entry = entries.get(old["id"])
+        if entry is not None:
+            known = {listing.get("url") for listing in entry.get(key, [])}
+            added = [listing for listing in skipped if listing.get("url") not in known]
+            if added:
+                entry[key] = [*entry.get(key, []), *added]
+                entry["locations"] = list(
+                    dict.fromkeys([*entry.get("locations", []), *old.get("locations", [])])
+                )
+        elif any(listing.get("source") == "manual" for listing in listings):
+            kept.append(old)
+        elif skipped:
+            remaining = [
+                listing
+                for listing in listings
+                if listing in skipped or listing.get("source") == "original"
+            ]
+            kept.append({**old, key: remaining})
+    return [*current, *kept]
 
 
 def publish_results(jobs, results, *, jobs_path, writer, exclude_sources=frozenset()):
-    """Publish both result views, retaining manual imports and excluded sources.
+    """Publish both result views, retaining manual imports and skipped sources' listings.
 
-    A split schedule (--exclude-sources) only recollects some sources per run;
-    entries whose sources were all skipped this run must survive the write
-    instead of being dropped as if they no longer existed.
+    A split schedule (--exclude-sources) only recollects some sources per
+    run. The listings of the skipped sources must survive the write, also
+    when the other run found the same job, instead of being dropped as if
+    they no longer existed.
     """
     values = [job.to_dict() for job in jobs]
     managed = dataset_name(jobs_path) is not None
     with transaction() if managed else nullcontext() as connection:
         if managed:
             lock(connection, "finder-publication")
-            ids = {value["id"] for value in values}
-            values.extend(
-                value
-                for value in read_json(jobs_path, [])
-                if value["id"] not in ids
-                and _kept_from_previous(value.get("sources", []), exclude_sources)
+            values = _with_skipped_listings(
+                values, read_json(jobs_path, []), "sources", exclude_sources
             )
             previous = read_json(RECOMMENDATIONS_JSON, {}).get("recommendations", [])
         write_json_atomic(jobs_path, values)
         writer(results)
         if managed:
             updated = read_json(RECOMMENDATIONS_JSON, {"recommendations": []})
-            ids = {value["id"] for value in updated["recommendations"]}
-            updated["recommendations"].extend(
-                value
-                for value in previous
-                if value["id"] not in ids
-                and _kept_from_previous(
-                    value.get("source_links", []), exclude_sources, ignore={"original"}
-                )
+            updated["recommendations"] = _with_skipped_listings(
+                updated["recommendations"], previous, "source_links", exclude_sources
             )
             write_json_atomic(RECOMMENDATIONS_JSON, updated)

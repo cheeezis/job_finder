@@ -256,11 +256,21 @@ Azure-Datenbank (`scripts/run_local_hybrid.py`, Überblick in der README unter
 „Betrieb“). Der Task startet genau das Image, das der Azure-Worker gerade
 nutzt: Er fragt es bei jedem Start über die lokale `az`-Anmeldung ab, meldet
 sich an der Registry an und holt es per `docker pull`. Beide Hälften laufen
-so immer mit derselben Code-Version; Voraussetzung sind eine gültige
-`az`-Anmeldung und ein laufendes Docker Desktop. Die persönlichen
+so immer mit derselben Code-Version; Voraussetzung ist eine gültige
+`az`-Anmeldung. Antwortet Docker nicht, startet das Skript Docker Desktop
+selbst (`docker desktop start`) und beendet es nach dem Lauf wieder; lief es
+schon, bleibt es an. Die persönlichen
 Sucheinstellungen gibt das Skript aus `user_settings.local.yaml` als
 `JOBFINDER_USER_SETTINGS` an den Container weiter; im Image stehen nur die
 Beispielwerte.
+
+Weil der Task unbeaufsichtigt läuft, landet die Ausgabe jedes Laufs in
+`data/logs/hybrid-<Zeitpunkt>.log` (14 Tage aufbewahrt, ohne die geheimen
+Startparameter des Containers). Scheitert ein Schritt, etwa weil Docker nicht
+startet, die `az`-Anmeldung abgelaufen ist oder der Lauf im Container abbricht,
+meldet das Skript den Grund und den Namen der Logdatei in Discord
+(`DISCORD_WEBHOOK_URL` als Benutzervariable). Erfolgreiche Läufe melden sich
+wie bisher mit ihrer Laufstatistik.
 
 Eine native Windows-Verbindung (`.venv`) lieferte zeitweise veraltete
 Lesezustände gegenüber Azure, ein Snapshot von Stunden zuvor. Im Container

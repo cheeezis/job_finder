@@ -9,6 +9,8 @@
   let currentIndex = 0;
   let routeOrigin = "";
   let undoDecision = null;
+  // The job whose note is on screen; a change is saved before any way off its card.
+  let noteJobId = null;
 
   const {element, make, addOptions, appendSourceLinks, postJson, safeUrl, showError} = JobFinder;
   // Traffic lights of the agent's fact sheet (job_finder/agent/fact_sheet.py).
@@ -100,6 +102,42 @@
       : date.toLocaleDateString("de-DE");
   }
 
+  function renderNote(job) {
+    noteJobId = job.id;
+    element("review-note").value = job.review_note || "";
+    element("note-status").textContent = "";
+    // A new card saves its note with the decision; decided ones need a button of their own.
+    element("save-note").hidden = !job.application_tracked
+      && ["new", "review"].includes(job.workflow_status);
+  }
+
+  function noteJob() {
+    return jobs.find(job => job.id === noteJobId);
+  }
+
+  function noteChanged() {
+    const job = noteJob();
+    return Boolean(job) && element("review-note").value.trim() !== (job.review_note || "");
+  }
+
+  async function saveNote() {
+    if (!noteChanged()) return;
+    const job = noteJob();
+    const result = await postJson("/api/review-note", {
+      job_id: job.id, review_note: element("review-note").value.trim()
+    }, "Notiz konnte nicht gespeichert werden");
+    for (const item of jobs) {
+      if (item.id === job.id) item.review_note = result.review_note;
+    }
+    element("note-status").textContent = "Notiz gespeichert";
+  }
+
+  // Leaving the card by paging or filtering saves a changed note first;
+  // if that fails, the card and the note stay.
+  function leaveCard(action) {
+    return saveNote().then(action).catch(showError);
+  }
+
   function applyFilters(resetPosition = true) {
     const status = element("status-filter").value;
     const role = element("role-filter").value;
@@ -170,6 +208,7 @@
       ? "Quelle hat die Stelle im aktuellen Lauf nicht geliefert"
       : job.location_precheck || "passt zur Standortregel");
     renderFactSheet(job);
+    renderNote(job);
     const applicationTracked = Boolean(job.application_tracked);
     for (const id of ["mark-interesting", "mark-inquiry", "mark-ignored", "mark-applied"]) {
       element(id).hidden = applicationTracked;
@@ -211,6 +250,7 @@
 
   async function changeStatus(workflowStatus) {
     const job = visibleJobs[currentIndex];
+    await saveNote();
     const result = await postJson("/api/review-status", {
       job_id: job.id, workflow_status: workflowStatus
     }, "Status konnte nicht gespeichert werden");
@@ -221,6 +261,7 @@
 
   async function undoIgnored() {
     if (!undoDecision) return;
+    await saveNote();
     const decision = undoDecision;
     const result = await postJson("/api/review-undo", {
       job_id: decision.jobId, expected_status: decision.expectedStatus
@@ -265,6 +306,7 @@
     const salaryValue = element("salary-expectation").value;
     button.disabled = true;
     try {
+      await saveNote();
       const result = await postJson("/api/applications", {
         job_id: job.id, documents,
         salary_expectation_eur: salaryValue ? Number(salaryValue) : null,
@@ -321,11 +363,17 @@
   }
 
   for (const id of ["status-filter", "role-filter", "international-filter", "junior-hybrid-filter"]) {
-    element(id).addEventListener("change", () => applyFilters());
+    element(id).addEventListener("change", () => leaveCard(() => applyFilters()));
   }
-  element("search-filter").addEventListener("input", () => applyFilters());
-  element("previous").addEventListener("click", () => { currentIndex -= 1; render(); });
-  element("next").addEventListener("click", () => { currentIndex += 1; render(); });
+  element("search-filter").addEventListener("input", () => leaveCard(() => applyFilters()));
+  element("previous").addEventListener("click", () => leaveCard(() => { currentIndex -= 1; render(); }));
+  element("next").addEventListener("click", () => leaveCard(() => { currentIndex += 1; render(); }));
+  element("save-note").addEventListener("click", () => saveNote().catch(showError));
+  element("review-note").addEventListener("input", () => { element("note-status").textContent = ""; });
+  // Closing or reloading the page is the one way off a card that cannot wait for a save.
+  window.addEventListener("beforeunload", event => {
+    if (noteChanged()) event.preventDefault();
+  });
   for (const status of ["interesting", "inquiry", "ignored"]) {
     element(`mark-${status}`).addEventListener("click", () => changeStatus(status).catch(showError));
   }

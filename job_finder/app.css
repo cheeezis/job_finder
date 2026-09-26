@@ -258,6 +258,25 @@ label { display: grid; gap: 6px; color: var(--muted); font-size: .79rem; font-we
 .verdict-eher_streichen, .verdict-streichen { color: var(--danger); }
 .fact-sheet-sources a { margin-right: 10px; }
 .fact-sheet-meta { color: var(--muted); font-size: .8rem; }
+.review-note { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line); }
+.review-note textarea {
+  width: 100%;
+  min-height: 84px;
+  padding: 9px 11px;
+  resize: vertical;
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: .95rem;
+  font-weight: 400;
+  letter-spacing: normal;
+  line-height: 1.45;
+}
+.review-note textarea:hover { border-color: var(--ink); }
+.note-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 8px; }
+.note-status { color: var(--muted); font-size: .8rem; }
 .actions { display: grid; gap: 14px; margin-top: 28px; padding-top: 22px; border-top: 1px solid var(--line); }
 .decision-actions, .utility-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .utility-actions { padding-top: 14px; border-top: 1px solid var(--line); }

@@ -466,3 +466,24 @@ test("decided cards save the note by button; a failed save keeps the card", asyn
   assert.equal(fresh.workflow_status, "new");
   assert.equal(view.elements.get("review-note").value, "geht verloren?");
 });
+
+test("the review lists the agent's verdicts first and unjudged cards in the middle", async () => {
+  const judged = stufe => ({complete: true, cost_eur: 0.04, sheet: {fazit: {stufe, text: stufe}}});
+  const rows = [
+    {id: "streichen", match_percent: 90, fact_sheet: judged("streichen")},
+    {id: "ohne", match_percent: 80},
+    {id: "abgebrochen", match_percent: 85, fact_sheet: {complete: false, sheet: null, note: "Limit"}},
+    {id: "eher", match_percent: 70, fact_sheet: judged("eher_streichen")},
+    {id: "klaeren-schwach", match_percent: 40, fact_sheet: judged("erst_klaeren")},
+    {id: "klaeren-stark", match_percent: 60, fact_sheet: judged("erst_klaeren")},
+    {id: "bewerben", match_percent: 30, fact_sheet: judged("bewerben")}
+  ].map(job => ({title: job.id, company: "Example", workflow_status: "new", ...job}));
+  const view = page("review", {}, async () => ({
+    ok: true, json: async () => ({recommendations: rows, workflow_statuses: ["new"]})
+  }));
+  await new Promise(setImmediate);
+
+  assert.deepEqual(Array.from(view.run("visibleJobs.map(job => job.id)")), [
+    "bewerben", "klaeren-stark", "klaeren-schwach", "abgebrochen", "ohne", "eher", "streichen"
+  ]);
+});

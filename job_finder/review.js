@@ -23,6 +23,16 @@
     ["homeoffice_standort", "Homeoffice / Standort"], ["reiseanteil", "Reiseanteil"],
     ["gehalt", "Gehalt"]
   ];
+  // The review goes by the agent's verdict; a card it has not judged, or whose
+  // fact sheet was aborted, sits in the middle so a good one is not buried.
+  const verdictOrder = {bewerben: 0, erst_klaeren: 1, eher_streichen: 3, streichen: 4};
+  const withoutVerdict = 2;
+
+  function verdictRank(job) {
+    const entry = job.fact_sheet;
+    const verdict = entry?.complete ? entry.sheet?.fazit?.stufe : null;
+    return Object.hasOwn(verdictOrder, verdict ?? "") ? verdictOrder[verdict] : withoutVerdict;
+  }
 
   function setText(id, value) {
     element(id).textContent = value || "";
@@ -326,6 +336,8 @@
       const result = await response.json();
       routeOrigin = result.route_origin || "";
       jobs = result.recommendations.sort((a, b) => {
+        const verdict = verdictRank(a) - verdictRank(b);
+        if (verdict) return verdict;
         const score = (b.match_percent ?? -1) - (a.match_percent ?? -1);
         if (score) return score;
         const published = String(b.published_at || "").localeCompare(String(a.published_at || ""));

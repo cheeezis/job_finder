@@ -170,6 +170,13 @@ unabhängig vom Fundlauf. Nach einer Entscheidung verschwindet die Stelle aus
 diesem Filter. Internationale Anzeigen und
 Junior-Hybrid-Sonderfälle sind eigene, standardmäßig deaktivierte Filter.
 
+Unter dem Steckbrief steht „Meine Notiz“ für den eigenen Grund einer
+Entscheidung (bis 2.000 Zeichen). Eine geänderte Notiz wird gespeichert, sobald
+die Karte verlassen wird, ob per Entscheidung, Blättern oder Filter; bei schon
+entschiedenen Stellen und Bewerbungen auch per Knopf. Der Agent liest bei
+ähnlichen Stellen die ersten 300 Zeichen mit, das Wichtigste gehört also nach
+vorn.
+
 Jede Stelle erscheint einmal: Anzeigen mit gleichem Titel und gleicher Firma
 bilden eine Karte mit allen Orten und Links, über Portale und beide Läufe
 hinweg, und eine Entscheidung gilt für alle. Eine schon entschiedene Stelle
@@ -209,7 +216,8 @@ belegt mit Anzeige, Profil und Quellen. Die Review zeigt ihn bei der Stelle an;
 die Entscheidung bleibt beim Nutzer. Der Agent nimmt noch nicht entschiedene
 Stellen ohne Steckbrief, die Einstiegsstellen sind oder einen Vorfilter-Score
 über 50 haben und im Standard-Review sichtbar sind, die besten zuerst. Er darf
-im Web suchen und frühere Entscheidungen samt Notizen nachschlagen, aber nichts
+im Web suchen und frühere Entscheidungen samt Notizen (die ersten 300 Zeichen)
+zur selben Firma oder zu ähnlichen Titeln nachschlagen, aber nichts
 ändern; Anzeigen und Webseiten behandelt er als Material, nicht als Anweisungen.
 Als Quellen bleiben im Steckbrief nur Links, die er tatsächlich gesehen hat: aus
 der Anzeige oder aus seinen Suchergebnissen. Seine Maßstäbe, etwa ab wie vielen

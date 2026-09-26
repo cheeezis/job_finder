@@ -110,6 +110,29 @@ Unverändertes erneutes Schreiben setzt diese Frist nicht zurück. Manuelle Quel
 Stellen, Bewerbungen, Versandstatus und Dokumente sind von diesem Aufräumen
 ausgeschlossen. Aufbewahrung verlängert nicht die Gültigkeit alter Quelldaten.
 
+## Doppelt entschiedene Stellen zusammenlegen
+
+Bis September 2026 konnte dieselbe Stelle mehrfach in die Review gelangen
+(anderes Portal, andere Stadt, anderer Lauf). Meist blieb eine Karte
+interessant und die Kopien wurden abgelehnt. Seitdem bilden Anzeigen mit
+gleichem Titel und gleicher Firma eine Stelle; die alten Doppelten legt ein
+einmaliger Befehl zusammen:
+
+```powershell
+.\.venv\Scripts\python.exe -m job_finder.db merge-duplicates
+```
+
+Ohne Zusatz listet er die Gruppen nur auf. Mit `--apply` wird jede Gruppe
+entschiedener Einträge mit gleichem Titel und passender Firma zu dem Eintrag
+mit der besten Entscheidung (Bewerbung, interessant, Rückfrage, nicht
+interessant; bei Gleichstand der älteste). Dessen Verlauf bleibt; Links, Orte,
+Notizen und ein Steckbrief des Agenten wandern zu ihm, die Entscheidungen der
+Kopien entfallen. Gruppen mit zwei Bewerbungen bleiben unberührt. Alles
+geschieht in einer Transaktion. Gegen Azure läuft der Befehl mit
+`JOBFINDER_DATABASE_URL` aus `.env.postgres-azure`, gesetzt wie beim `init`
+unten; zuerst ohne `--apply`, und die Liste von `--apply` muss danach dieselbe
+sein.
+
 ## Backup und Wiederherstellung
 
 ```powershell

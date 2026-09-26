@@ -45,13 +45,14 @@ beschreibt Titel und Beschreibung.
 | Bereich | Zuständigkeit |
 | --- | --- |
 | `run_finder.py` | CLI, Quellenkoordination und Reihenfolge der Pipeline |
-| `job_finder/workflow/main.py` | Vorhandene Jobs bewerten und Ergebnisse zusammenstellen |
+| `job_finder/workflow/main.py` | Vorhandene Jobs bewerten, Anzeigen einer Stelle zu einer Karte vereinen und Ergebnisse zusammenstellen |
 | `job_finder/sources/` | Quellen abrufen und in `Job`/`JobSource` umwandeln |
 | `job_finder/models.py` | Datenmodell, Statuswerte und Serialisierung |
 | `job_finder/matching/deduplication.py` | Gleiche Anzeigen verschiedener Quellen zusammenführen |
 | `job_finder/matching/scoring.py`, `matching_rules.py`, `remote.py` | Bewertungsablauf, Erkennungsregeln und Remote-Erkennung |
 | `job_finder/matching/experience.py`, `location_rules.py`, `salary.py`, `matching_text.py` | Zusammenhängende Analysen und normalisierte Textvergleiche |
-| `job_finder/workflow/memory.py` | PostgreSQL-Zustand, stabile IDs und frühere Entscheidungen |
+| `job_finder/workflow/memory.py` | PostgreSQL-Zustand, stabile IDs (eine je Stelle, auch über Portale und Läufe) und frühere Entscheidungen |
+| `job_finder/workflow/duplicates.py` | Einmaliges Zusammenlegen alter, mehrfach entschiedener Stellen (`job_finder.db merge-duplicates`) |
 | `job_finder/workflow/availability.py` | Fehlende interessante Stellen auf bestätigte Schließung prüfen |
 | `job_finder/review.py`, `job_finder/workflow/review_data.py`, `review_actions.py` | HTTP-Server, Review-Datenaufbereitung und transaktionale Aktionen |
 | `job_finder/workflow/applications.py`; `job_finder/persistence/application_documents.py`, `document_store.py`, `state_compat.py` | Bewerbungsverlauf, Unterlagen (lokal oder im Blob Storage) und unterstützte Speicherformate |
@@ -73,12 +74,20 @@ beschreibt Titel und Beschreibung.
 3. Die angereicherten Jobs werden endgültig bewertet. Diese Ergebnisse
    bleiben mit den Job-Objekten verbunden, während das Gedächtnis anschließend
    IDs, Erstfund-Merkmale und bestehende Workflow-Entscheidungen zuordnet.
+   Anzeigen mit gleichem Titel und passender Firma erhalten dabei dieselbe ID,
+   auch über Portale und Läufe hinweg; eine schon entschiedene Stelle nur ohne
+   neuen Ort oder wenn beide komplett remote sind. Danach werden sie zu einer
+   Karte, angeführt von der bestbewerteten Anzeige.
 4. Die Offline-Prüfung betrachtet fehlende interessante Stellen ohne
-   Bewerbungsverlauf und nur bei vollständig erfolgreichen bekannten Quellen.
-   Netzwerkabrufe erfolgen außerhalb der PostgreSQL-Schreibtransaktionen;
-   vor einer Statusänderung wird der aktuelle Nutzerentscheid erneut geprüft.
-5. Job-Snapshot und Empfehlungen werden geschrieben. Die Discord-Warteschlange
-   wird aktualisiert und bei jedem Lauf direkt versendet.
+   Bewerbungsverlauf, und nur wenn alle bekannten Quellen der Stelle, die
+   dieser Lauf abfragt, vollständig erfolgreich waren; ebenso zählt das
+   Gedächtnis Fehlläufe. Netzwerkabrufe erfolgen außerhalb der
+   PostgreSQL-Schreibtransaktionen; vor einer Statusänderung wird der aktuelle
+   Nutzerentscheid erneut geprüft.
+5. Job-Snapshot und Empfehlungen werden geschrieben; Anzeigen übersprungener
+   Quellen bleiben erhalten, auch an Stellen, die dieser Lauf erneut gefunden
+   hat. Die Discord-Warteschlange wird aktualisiert und bei jedem Lauf direkt
+   versendet.
 
 `is_new` beschreibt einen Erstfund im Suchlauf. `workflow_status="new"`
 bedeutet dagegen, dass die Stelle noch nicht bearbeitet wurde. Der Review-

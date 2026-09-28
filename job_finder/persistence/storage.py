@@ -94,10 +94,11 @@ def _with_skipped_listings(current, previous, key, exclude_sources):
 def publish_results(jobs, results, *, jobs_path, writer, exclude_sources=frozenset()):
     """Publish both result views, retaining manual imports and skipped sources' listings.
 
-    A split schedule (--exclude-sources) only recollects some sources per
-    run. The listings of the skipped sources must survive the write, also
-    when the other run found the same job, instead of being dropped as if
-    they no longer existed.
+    exclude_sources names the sources this run did not collect completely:
+    those a split schedule (--exclude-sources) leaves to the other run, and
+    those that failed or answered only in part. Their listings must survive
+    the write, also when the run found the same job elsewhere, instead of
+    being dropped as if they no longer existed.
     """
     values = [job.to_dict() for job in jobs]
     managed = dataset_name(jobs_path) is not None

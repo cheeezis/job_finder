@@ -209,12 +209,14 @@ def run_pipeline(exclude_sources=frozenset(), run_id=None):
     results = build_score_results(evaluated_jobs)
     print(f"{memory_stats['inactive']} neu inaktiv · {memory_stats['reactivated']} reaktiviert")
     with timed_step("Ergebnisdateien schreiben"):
+        # A source that failed or answered only in part keeps its published
+        # listings, like a skipped one, until a complete run replaces them.
         publish_results(
             jobs,
             results,
             jobs_path=JOBS_FILE,
             writer=write_recommendations,
-            exclude_sources=exclude_sources,
+            exclude_sources=set(exclude_sources) | (run_sources - complete_sources),
         )
         print(
             f"Vorfilter: {len(results['included'])} weiter · "

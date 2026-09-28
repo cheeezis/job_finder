@@ -171,6 +171,32 @@ class RunFinderTests(unittest.TestCase):
         )
         self.assertEqual([job["id"] for job in persisted], ["arbeitnow:1"])
 
+    def test_failed_or_partial_sources_keep_their_published_listings(self):
+        # As Remotely's HTTP 500 on 27.09.2026, which emptied its cards from the review.
+        reports = [
+            {"name": "stepstone", "status": "success", "jobs": 1},
+            {"name": "remotely", "status": "failed", "jobs": 0},
+            {"name": "manual", "status": "partial", "jobs": 1},
+        ]
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch("run_finder.MEMORY_FILE", Path(directory) / "state.sqlite3"),
+            patch("run_finder.create_backup"),
+            patch("run_finder.SOURCES", []),
+            patch("run_finder.collect_jobs", return_value=([make_job("stepstone:1")], reports)),
+            patch("run_finder.publish_results") as publish,
+            patch(
+                "run_finder.process_notifications",
+                return_value={"ready": 0, "sent": 0, "failed": 0, "configuration_error": None},
+            ),
+            redirect_stdout(io.StringIO()),
+        ):
+            run_pipeline(exclude_sources={"arbeitnow"})
+
+        self.assertEqual(
+            publish.call_args.kwargs["exclude_sources"], {"arbeitnow", "remotely", "manual"}
+        )
+
     def test_pipeline_enriches_only_selected_sources(self):
         job = make_job("kept:1")
         called = []

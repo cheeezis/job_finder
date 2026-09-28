@@ -23,8 +23,10 @@ Ampel; Links gehören nur in quellen, nicht in den Text:
 - status: Ist die Stelle offen und aktuell, wo ist sie gelistet? Stammt die Anzeige von einer
   Jobbörse, prüfe den Status möglichst auf der offiziellen Karriereseite der Firma.
 - berufseinstieg: Passt das geforderte Niveau zu seiner Berufserfahrung (Jahre, Junior/Senior)?
-  Keine Jahre oder bis 2 Jahre gefordert: höchstens orange ("Stretch, aber bewerbbar"). Ab 3 Jahren
-  oder ausdrücklich für Berufserfahrene: rot.
+  Keine Jahre oder bis 2 Jahre gefordert: höchstens orange ("Stretch, aber bewerbbar"). Bei einer
+  Spanne wie "2–3 Jahre" oder "erste Kenntnisse (2–3 Jahre)" zählt die untere Grenze, erst recht bei
+  "Junior" im Titel. Rot erst, wenn mindestens 3 Jahre verlangt werden oder die Stelle ausdrücklich
+  für Berufserfahrene ist.
 - fachlicher_fit: Was passt fachlich zum Profil?
 - luecken: Was fehlt? Trenne Muss-Anforderungen von "idealerweise" oder "von Vorteil".
 - homeoffice_standort: Arbeitsort und Homeoffice- oder Remote-Anteil, gemessen an seinen Orten (am
@@ -44,9 +46,19 @@ Eine Stelle vor Ort in seinem Nahbereich wiegt schwer: Ist sie ein Stretch, laut
 
 Eine fehlende Kernkompetenz wiegt schwer, entscheidet aber nicht allein. Fordert die Stelle keine
 Berufsjahre und ist die Lücke eine Sprache oder Technik, die er in Grundzügen kennt oder zügig lernen
-kann, bleibt "Bewerben – Stretch" möglich. Ist der Kern ein eigenes Fachgebiet (etwa ein bestimmtes
-Produkt wie SAP Concur oder UX-Design mit Portfolio) oder wird Erfahrung darin vorausgesetzt, lautet
-das Fazit eher_streichen oder streichen.
+kann, bleibt "Bewerben – Stretch" möglich; liegt die Stelle in seiner Haupt- oder Nebenrichtung
+(career_preferences.direction), ist das der Normalfall. Module aus dem Studium (coursework) belegen
+Grundlagen: Eine Lücke in ihrem Thema gilt als lernbar, nicht als fehlende Kernkompetenz, aber nie
+als Praxis. Ist der Kern ein eigenes Fachgebiet (etwa ein bestimmtes Produkt wie SAP Concur oder
+UX-Design mit Portfolio) oder wird Erfahrung darin vorausgesetzt, lautet das Fazit eher_streichen
+oder streichen.
+
+Anstellungsart und Arbeitsort laut Profil: Werkstudenten-Stellen und Praktika sind ausgeschlossen,
+auch wenn die Anzeige sie anders nennt, etwa eine Immatrikulation verlangt: Fazit streichen.
+Teilzeit ist möglich, aber nicht bevorzugt: vorher klären. Er arbeitet nur in Deutschland, vor Ort an
+seinen Orten oder remote aus Deutschland; ein Umzug ist nicht möglich. Sitzt der Arbeitgeber im
+Ausland und belegt die Anzeige weder eine Anstellung in Deutschland noch Remote aus Deutschland:
+homeoffice_standort rot, Fazit streichen.
 
 zusatz: höchstens zwei Zeilen, nur wenn sie etwas Neues sagen (etwa "Bewerbung: Portfolio verlangt"
 oder "Positiv: ..."); keine Zeilen wie "keine früheren Entscheidungen gefunden".

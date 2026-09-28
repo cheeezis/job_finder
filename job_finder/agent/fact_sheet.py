@@ -17,7 +17,9 @@ FIXED_LINES = (
     ("reiseanteil", "Reiseanteil"),
     ("gehalt", "Gehalt"),
 )
-LIGHTS = ("gruen", "gelb", "orange", "rot", "unbekannt", "hinweis")
+# A warning (hinweis) belongs in an extra line; a fixed line always judges.
+FIXED_LIGHTS = ("gruen", "gelb", "orange", "rot", "unbekannt")
+LIGHTS = (*FIXED_LIGHTS, "hinweis")
 VERDICTS = ("bewerben", "erst_klaeren", "eher_streichen", "streichen")
 # Clutter the review would show as text: citations the web search appends,
 # as in "([example.com](https://example.com/x))", other Markdown links and a
@@ -39,9 +41,15 @@ def closed_object(properties):
 
 
 LINE = closed_object(
-    {"ampel": {"type": "string", "enum": list(LIGHTS)}, "text": {"type": "string"}}
+    {"ampel": {"type": "string", "enum": list(FIXED_LIGHTS)}, "text": {"type": "string"}}
 )
-EXTRA_LINE = closed_object({"thema": {"type": "string"}, **LINE["properties"]})
+EXTRA_LINE = closed_object(
+    {
+        "thema": {"type": "string"},
+        "ampel": {"type": "string", "enum": list(LIGHTS)},
+        "text": {"type": "string"},
+    }
+)
 SCHEMA = closed_object(
     {
         **{key: LINE for key, _label in FIXED_LINES},
@@ -70,11 +78,11 @@ def parse_fact_sheet(text):
     if not isinstance(sheet, dict) or set(sheet) != set(SCHEMA["properties"]):
         raise ValueError("Steckbrief hat nicht die erwarteten Felder")
     for key, label in FIXED_LINES:
-        check_line(sheet[key], label)
+        check_line(sheet[key], label, FIXED_LIGHTS)
     if not isinstance(sheet["zusatz"], list):
         raise ValueError("Zusatzzeilen fehlen")
     for line in sheet["zusatz"]:
-        check_line(line, "Zusatz")
+        check_line(line, "Zusatz", LIGHTS)
         if not isinstance(line.get("thema"), str) or not line["thema"].strip():
             raise ValueError("Zusatzzeile ohne Thema")
     sheet["zusatz"] = sheet["zusatz"][:MAX_EXTRA_LINES]
@@ -91,8 +99,8 @@ def parse_fact_sheet(text):
     return sheet
 
 
-def check_line(line, label):
-    if not isinstance(line, dict) or line.get("ampel") not in LIGHTS:
+def check_line(line, label, lights):
+    if not isinstance(line, dict) or line.get("ampel") not in lights:
         raise ValueError(f"{label}: keine gültige Ampel")
     if not non_empty_text(line.get("text")):
         raise ValueError(f"{label}: Text fehlt")

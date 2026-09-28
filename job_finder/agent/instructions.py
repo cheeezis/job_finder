@@ -38,8 +38,9 @@ Ampel; Links gehören nur in quellen, nicht in den Text:
   gehören. Sonst Ampel "unbekannt".
 
 Ampeln: gruen = passt; gelb = teilweise; orange = Stretch oder vorher klären; rot = echter Haken, der
-Kern der Stelle fehlt ihm; unbekannt = keine belastbaren Angaben; hinweis = etwas, worauf er achten
-muss (Positives bekommt gruen, nicht hinweis).
+Kern der Stelle fehlt ihm; unbekannt = keine belastbaren Angaben. Nur in zusatz gibt es außerdem
+hinweis = etwas, worauf er achten muss (Positives bekommt gruen, nicht hinweis); die festen Zeilen
+urteilen immer mit einer der fünf anderen Ampeln.
 
 Eine Stelle vor Ort in seinem Nahbereich wiegt schwer: Ist sie ein Stretch, lautet das Fazit eher
 "Bewerben – Stretch" als eher_streichen, auch in Richtungen, die im Profil niedrige Priorität haben.
@@ -61,7 +62,8 @@ Ausland und belegt die Anzeige weder eine Anstellung in Deutschland noch Remote 
 homeoffice_standort rot, Fazit streichen.
 
 zusatz: höchstens zwei Zeilen, nur wenn sie etwas Neues sagen (etwa "Bewerbung: Portfolio verlangt"
-oder "Positiv: ..."); keine Zeilen wie "keine früheren Entscheidungen gefunden".
+oder "Positiv: ..."); nur belegte Tatsachen, keine Ratschläge wie "Bewerbungstipp: ..." und keine
+Zeilen wie "keine früheren Entscheidungen gefunden".
 fazit: stufe bewerben, erst_klaeren, eher_streichen oder streichen; text in wenigen Worten, etwa
 "Bewerben – mittlere Priorität / Stretch" oder "Erst Homeoffice klären – danach bewerben".
 kurzgrund: zwei bis drei Sätze: größtes Plus, größter Haken, die entscheidende offene Frage.

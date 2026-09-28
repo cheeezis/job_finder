@@ -26,7 +26,10 @@ Ampel; Links gehören nur in quellen, nicht in den Text:
   Keine Jahre oder bis 2 Jahre gefordert: höchstens orange ("Stretch, aber bewerbbar"). Bei einer
   Spanne wie "2–3 Jahre" oder "erste Kenntnisse (2–3 Jahre)" zählt die untere Grenze, erst recht bei
   "Junior" im Titel. Rot erst, wenn mindestens 3 Jahre verlangt werden oder die Stelle ausdrücklich
-  für Berufserfahrene ist.
+  für Berufserfahrene ist. Das gilt auch ohne Jahreszahl, wenn die Anzeige Mid-Level oder Senior
+  nennt, "professional experience" oder "strong expertise" verlangt oder nachgewiesene
+  Produktionsverantwortung ("production software you shipped and owned"): dann rot, nicht orange.
+  Praktikum, Abschlussarbeit und eigene Projekte ersetzen diese Berufserfahrung nicht.
 - fachlicher_fit: Was passt fachlich zum Profil?
 - luecken: Was fehlt? Trenne Muss-Anforderungen von "idealerweise" oder "von Vorteil".
 - homeoffice_standort: Arbeitsort und Homeoffice- oder Remote-Anteil, gemessen an seinen Orten (am
@@ -45,9 +48,9 @@ urteilen immer mit einer der fünf anderen Ampeln.
 Eine Stelle vor Ort in seinem Nahbereich wiegt schwer: Ist sie ein Stretch, lautet das Fazit eher
 "Bewerben – Stretch" als eher_streichen, auch in Richtungen, die im Profil niedrige Priorität haben.
 
-Eine fehlende Kernkompetenz wiegt schwer, entscheidet aber nicht allein. Fordert die Stelle keine
-Berufsjahre und ist die Lücke eine Sprache oder Technik, die er in Grundzügen kennt oder zügig lernen
-kann, bleibt "Bewerben – Stretch" möglich; liegt die Stelle in seiner Haupt- oder Nebenrichtung
+Eine fehlende Kernkompetenz wiegt schwer, entscheidet aber nicht allein. Fordert die Stelle weder
+Berufsjahre noch Berufserfahrung (siehe berufseinstieg) und ist die Lücke eine Sprache oder Technik,
+die er in Grundzügen kennt oder zügig lernen kann, bleibt "Bewerben – Stretch" möglich; liegt die Stelle in seiner Haupt- oder Nebenrichtung
 (career_preferences.direction), ist das der Normalfall. Module aus dem Studium (coursework) belegen
 Grundlagen: Eine Lücke in ihrem Thema gilt als lernbar, nicht als fehlende Kernkompetenz, aber nie
 als Praxis. Ist der Kern ein eigenes Fachgebiet (etwa ein bestimmtes Produkt wie SAP Concur oder
@@ -64,7 +67,8 @@ homeoffice_standort rot, Fazit streichen.
 zusatz: höchstens zwei Zeilen, nur wenn sie etwas Neues sagen (etwa "Bewerbung: Portfolio verlangt"
 oder "Positiv: ..."); nur belegte Tatsachen, keine Ratschläge wie "Bewerbungstipp: ..." und keine
 Zeilen wie "keine früheren Entscheidungen gefunden".
-fazit: stufe bewerben, erst_klaeren, eher_streichen oder streichen; text in wenigen Worten, etwa
+fazit: stufe bewerben, erst_klaeren, eher_streichen oder streichen; ist berufseinstieg rot, höchstens
+eher_streichen, auch wenn Richtung, Nähe oder Remote gut passen. text in wenigen Worten, etwa
 "Bewerben – mittlere Priorität / Stretch" oder "Erst Homeoffice klären – danach bewerben".
 kurzgrund: zwei bis drei Sätze: größtes Plus, größter Haken, die entscheidende offene Frage.
 quellen: nur Links aus der Anzeige oder aus deiner Suche, die Anzeige zuerst. Profil und frühere

@@ -23,29 +23,52 @@ Ampel; Links gehören nur in quellen, nicht in den Text:
 - status: Ist die Stelle offen und aktuell, wo ist sie gelistet? Stammt die Anzeige von einer
   Jobbörse, prüfe den Status möglichst auf der offiziellen Karriereseite der Firma.
 - berufseinstieg: Passt das geforderte Niveau zu seiner Berufserfahrung (Jahre, Junior/Senior)?
-  Keine Jahre oder bis 2 Jahre gefordert: höchstens orange ("Stretch, aber bewerbbar"). Ab 3 Jahren
-  oder ausdrücklich für Berufserfahrene: rot.
+  Keine Jahre oder bis 2 Jahre gefordert: höchstens orange ("Stretch, aber bewerbbar"). Bei einer
+  Spanne wie "2–3 Jahre" oder "erste Kenntnisse (2–3 Jahre)" zählt die untere Grenze, erst recht bei
+  "Junior" im Titel. Rot erst, wenn mindestens 3 Jahre verlangt werden oder die Stelle ausdrücklich
+  für Berufserfahrene ist. Das gilt auch ohne Jahreszahl, wenn die Anzeige Mid-Level oder Senior
+  nennt, "professional experience" oder "strong expertise" verlangt oder nachgewiesene
+  Produktionsverantwortung ("production software you shipped and owned"): dann rot, nicht orange.
+  Praktikum, Abschlussarbeit und eigene Projekte ersetzen diese Berufserfahrung nicht.
 - fachlicher_fit: Was passt fachlich zum Profil?
 - luecken: Was fehlt? Trenne Muss-Anforderungen von "idealerweise" oder "von Vorteil".
-- homeoffice_standort: Arbeitsort und Homeoffice- oder Remote-Anteil. Widersprechen sich Quellen,
-  nenne den Widerspruch ausdrücklich.
+- homeoffice_standort: Arbeitsort und Homeoffice- oder Remote-Anteil, gemessen an seinen Orten (am
+  Ende des Profils): im Nahbereich passt vor Ort, ein Pendelort nur mit dem genannten
+  Homeoffice-Anteil, sonst nur remote aus Deutschland. Widersprechen sich Quellen, nenne den
+  Widerspruch ausdrücklich.
 - reiseanteil: Reisetätigkeit laut Anzeige oder Quellen.
 - gehalt: Nur belegte Angaben. Schätzungen wie kununu nur mit dem Hinweis, dass sie nicht zur Stelle
   gehören. Sonst Ampel "unbekannt".
 
 Ampeln: gruen = passt; gelb = teilweise; orange = Stretch oder vorher klären; rot = echter Haken, der
-Kern der Stelle fehlt ihm; unbekannt = keine belastbaren Angaben; hinweis = etwas, worauf er achten
-muss (Positives bekommt gruen, nicht hinweis).
+Kern der Stelle fehlt ihm; unbekannt = keine belastbaren Angaben. Nur in zusatz gibt es außerdem
+hinweis = etwas, worauf er achten muss (Positives bekommt gruen, nicht hinweis); die festen Zeilen
+urteilen immer mit einer der fünf anderen Ampeln.
 
-Eine fehlende Kernkompetenz wiegt schwer, entscheidet aber nicht allein. Fordert die Stelle keine
-Berufsjahre und ist die Lücke eine Sprache oder Technik, die er in Grundzügen kennt oder zügig lernen
-kann, bleibt "Bewerben – Stretch" möglich. Ist der Kern ein eigenes Fachgebiet (etwa ein bestimmtes
-Produkt wie SAP Concur oder UX-Design mit Portfolio) oder wird Erfahrung darin vorausgesetzt, lautet
-das Fazit eher_streichen oder streichen.
+Eine Stelle vor Ort in seinem Nahbereich wiegt schwer: Ist sie ein Stretch, lautet das Fazit eher
+"Bewerben – Stretch" als eher_streichen, auch in Richtungen, die im Profil niedrige Priorität haben.
+
+Eine fehlende Kernkompetenz wiegt schwer, entscheidet aber nicht allein. Fordert die Stelle weder
+Berufsjahre noch Berufserfahrung (siehe berufseinstieg) und ist die Lücke eine Sprache oder Technik,
+die er in Grundzügen kennt oder zügig lernen kann, bleibt "Bewerben – Stretch" möglich; liegt die Stelle in seiner Haupt- oder Nebenrichtung
+(career_preferences.direction), ist das der Normalfall. Module aus dem Studium (coursework) belegen
+Grundlagen: Eine Lücke in ihrem Thema gilt als lernbar, nicht als fehlende Kernkompetenz, aber nie
+als Praxis. Ist der Kern ein eigenes Fachgebiet (etwa ein bestimmtes Produkt wie SAP Concur oder
+UX-Design mit Portfolio) oder wird Erfahrung darin vorausgesetzt, lautet das Fazit eher_streichen
+oder streichen.
+
+Anstellungsart und Arbeitsort laut Profil: Werkstudenten-Stellen und Praktika sind ausgeschlossen,
+auch wenn die Anzeige sie anders nennt, etwa eine Immatrikulation verlangt: Fazit streichen.
+Teilzeit ist möglich, aber nicht bevorzugt: vorher klären. Er arbeitet nur in Deutschland, vor Ort an
+seinen Orten oder remote aus Deutschland; ein Umzug ist nicht möglich. Sitzt der Arbeitgeber im
+Ausland und belegt die Anzeige weder eine Anstellung in Deutschland noch Remote aus Deutschland:
+homeoffice_standort rot, Fazit streichen.
 
 zusatz: höchstens zwei Zeilen, nur wenn sie etwas Neues sagen (etwa "Bewerbung: Portfolio verlangt"
-oder "Positiv: ..."); keine Zeilen wie "keine früheren Entscheidungen gefunden".
-fazit: stufe bewerben, erst_klaeren, eher_streichen oder streichen; text in wenigen Worten, etwa
+oder "Positiv: ..."); nur belegte Tatsachen, keine Ratschläge wie "Bewerbungstipp: ..." und keine
+Zeilen wie "keine früheren Entscheidungen gefunden".
+fazit: stufe bewerben, erst_klaeren, eher_streichen oder streichen; ist berufseinstieg rot, höchstens
+eher_streichen, auch wenn Richtung, Nähe oder Remote gut passen. text in wenigen Worten, etwa
 "Bewerben – mittlere Priorität / Stretch" oder "Erst Homeoffice klären – danach bewerben".
 kurzgrund: zwei bis drei Sätze: größtes Plus, größter Haken, die entscheidende offene Frage.
 quellen: nur Links aus der Anzeige oder aus deiner Suche, die Anzeige zuerst. Profil und frühere
@@ -63,6 +86,28 @@ MAX_AD_CHARS = 12_000
 def instructions(profile_text):
     """Return the fixed part of every request: rules first, then the profile."""
     return f"{RULES}\n# Profil des Nutzers\n\n{profile_text}"
+
+
+def profile_with_places(profile_text, values):
+    """Add the places of the search settings, which the profile only refers to."""
+    search = values.get("search") or {}
+    matching = values.get("matching") or {}
+    lines = []
+    nearby = [str(place).title() for place in matching.get("local_places") or []]
+    if nearby:
+        home, radius = search.get("local_location"), search.get("local_radius_km")
+        around = f" (um {home}, etwa {radius} km)" if home and radius else ""
+        lines.append(f"- Nahbereich, vor Ort gut erreichbar{around}: {', '.join(nearby)}")
+    commuting = [
+        f"{item['search_location']} (mindestens {item['minimum_remote_percentage']} % Homeoffice)"
+        for item in matching.get("commuter_locations") or []
+    ]
+    if commuting:
+        lines.append(f"- Pendelorte, nur mit so viel Homeoffice: {', '.join(commuting)}")
+    if not lines:
+        return profile_text
+    lines.append("- Sonst nur remote aus Deutschland.")
+    return f"{profile_text}\n\n# Orte aus seinen Sucheinstellungen\n\n" + "\n".join(lines)
 
 
 def job_prompt(job, today, web_searches_left):

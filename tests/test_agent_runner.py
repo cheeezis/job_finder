@@ -84,12 +84,15 @@ class FakeModel:
         self.deleted.append(response_id)
 
 
-def api_error(kind):
+def api_error(kind, retry_after="7"):
     request = httpx.Request("POST", "https://example.com/openai/v1/responses")
     if kind == "bad_request":
         return openai.BadRequestError(
             "abgelehnt", response=httpx.Response(400, request=request), body=None
         )
+    if kind == "rate_limit":
+        response = httpx.Response(429, headers={"retry-after": retry_after}, request=request)
+        return openai.RateLimitError("gedrosselt", response=response, body=None)
     return openai.APIConnectionError(request=request)
 
 
@@ -237,6 +240,28 @@ class AgentRunnerTests(unittest.TestCase):
         self.assertEqual(
             self.aborted.call_args.args[3], 2 * call_cost(runner.MODEL, Usage(9000, 0, 800))
         )
+
+    def test_a_throttled_model_is_waited_for_instead_of_ending_the_run(self):
+        # As in the calibration run of 26.09.2026, when a heavy answer used up the minute.
+        model = FakeModel(
+            api_error("rate_limit", retry_after="7"),
+            api_error("rate_limit", retry_after="soon"),
+            reply("resp_1", message(json.dumps(example_sheet()))),
+        )
+
+        with patch.object(runner.time, "sleep") as sleep:
+            outcome, guard = self.run_job(model)
+
+        self.assertEqual(outcome, "fertig")
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [7.0, 60.0])
+        self.assertEqual(guard.model_calls, 1)
+
+    def test_a_model_throttled_again_and_again_stops_the_run(self):
+        model = FakeModel(*[api_error("rate_limit") for _ in range(runner.RATE_LIMIT_RETRIES + 1)])
+
+        with patch.object(runner.time, "sleep"), self.assertRaisesRegex(AgentStopped, "gedrosselt"):
+            self.run_job(model)
+        self.saved.assert_not_called()
 
     def test_an_unreachable_model_stops_the_run_and_still_forgets_the_answers(self):
         model = FakeModel(reply("resp_1", decisions_call()), api_error("connection"))

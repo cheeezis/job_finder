@@ -78,6 +78,45 @@ class AgentPhaseTests(unittest.TestCase):
         self.assertIn("12 fertig · 1 abgebrochen · 4 offen · heute 1,00 € von 1,00 €", text)
         self.assertIn("Stopp: Tagesgrenze erreicht", text)
 
+    def test_the_agent_gets_the_places_the_profile_refers_to(self):
+        values = {
+            **ENABLED,
+            "search": {"local_location": "Fulda", "local_radius_km": 25},
+            "matching": {
+                "local_places": ["fulda", "hünfeld"],
+                "commuter_locations": [
+                    {
+                        "search_location": "Frankfurt am Main",
+                        "aliases": ["frankfurt"],
+                        "excluded_aliases": [],
+                        "minimum_remote_percentage": 60,
+                    }
+                ],
+            },
+        }
+        stats = {"fertig": 0, "abgebrochen": 0, "offen": 0, "stopp": ""}
+        stats.update(heute_eur=Decimal("0"), monat_eur=Decimal("0"))
+        run_agent = Mock(return_value=stats)
+
+        phase(
+            values,
+            ENDPOINT,
+            configured_profile=Mock(return_value=("version: 6", "JOBFINDER_PROFILE")),
+            model_client=Mock(),
+            run_agent=run_agent,
+        )
+
+        profile_text = run_agent.call_args.args[1]
+        self.assertTrue(
+            profile_text.startswith("version: 6\n\n# Orte aus seinen Sucheinstellungen")
+        )
+        self.assertIn(
+            "- Nahbereich, vor Ort gut erreichbar (um Fulda, etwa 25 km): Fulda, Hünfeld",
+            profile_text,
+        )
+        self.assertIn("Frankfurt am Main (mindestens 60 % Homeoffice)", profile_text)
+        self.assertEqual(run.profile_with_places("version: 6", {}), "version: 6")
+
 
 class RunAgentTests(unittest.TestCase):
     def run_agent(self, outcomes, clock=None):

@@ -221,9 +221,14 @@ im Web suchen und frühere Entscheidungen samt Notizen (die ersten 300 Zeichen)
 zur selben Firma oder zu ähnlichen Titeln nachschlagen, aber nichts
 ändern; Anzeigen und Webseiten behandelt er als Material, nicht als Anweisungen.
 Als Quellen bleiben im Steckbrief nur Links, die er tatsächlich gesehen hat: aus
-der Anzeige oder aus seinen Suchergebnissen. Seine Maßstäbe, etwa ab wie vielen
-geforderten Berufsjahren der Einstieg rot wird, stehen in
-`job_finder/agent/instructions.py`.
+der Anzeige oder aus seinen Suchergebnissen. Seine Maßstäbe stehen in
+`job_finder/agent/instructions.py`: etwa ab wie vielen geforderten Berufsjahren
+der Einstieg rot wird (bei einer Spanne zählt die untere Grenze), dass eine
+Stelle im Nahbereich schwer wiegt, dass Werkstudenten-Stellen, Praktika und
+Arbeitgeber im Ausland ohne Remote aus Deutschland gestrichen werden und dass
+Studienmodule Grundlagen, aber keine Praxis belegen. Nahbereich und Pendelorte
+bekommt er aus den Sucheinstellungen, auf die das Profil nur verweist. Die
+Warnampel ⚠️ gibt es nur in Zusatzzeilen; die festen Zeilen urteilen immer.
 
 Er läuft nur, wenn in den Einstellungen `agent.enabled: true` steht, der Worker
 die Modell-Adresse kennt (setzt Terraform; der lokale Hybrid-Lauf hat keine und
@@ -259,7 +264,9 @@ Stelle ihre Grenze, endet nur diese Stelle. Tages- oder Monatsgrenze beenden
 den Agenten für den Lauf, die übrigen Stellen kommen im nächsten Lauf an die
 Reihe: Die Tagesgrenze ist eine Sicherung gegen Fehler, kein Filter. Weil vor
 jedem Aufruf geprüft wird, kann eine Grenze um höchstens einen Aufruf
-überschritten werden.
+überschritten werden. Bremst Azure das Modell (HTTP 429, zu viele Tokens pro
+Minute), wartet der Agent die verlangte Zeit ab, höchstens eine Minute, und
+versucht es bis zu dreimal neu, bevor er den Lauf beendet.
 
 Die Grenzen stehen im Abschnitt `agent` der persönlichen Einstellungen;
 Standardwerte und Bedeutung zeigt `user_settings.example.yaml`. Fehlt der

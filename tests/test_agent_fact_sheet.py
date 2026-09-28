@@ -81,6 +81,10 @@ class FactSheetTests(unittest.TestCase):
             "kein JSON": "{",
             "fehlende Zeile": json.dumps(missing_line),
             "falsche Ampel": json.dumps(example_sheet(status={"ampel": "blau", "text": "x"})),
+            # A warning belongs in an extra line; the example's extra line keeps one.
+            "Warnung in fester Zeile": json.dumps(
+                example_sheet(homeoffice_standort={"ampel": "hinweis", "text": "x"})
+            ),
             "leerer Text": json.dumps(example_sheet(status={"ampel": "gruen", "text": " "})),
             "falsche Stufe": json.dumps(example_sheet(fazit={"stufe": "vielleicht", "text": "x"})),
             "leerer Kurzgrund": json.dumps(example_sheet(kurzgrund="")),

@@ -2,6 +2,7 @@
 
 import json
 import re
+import time
 
 import openai
 
@@ -19,6 +20,10 @@ MAX_OUTPUT_TOKENS = 6000
 WEB_SEARCH_TOOL = {"type": "web_search", "user_location": {"type": "approximate", "country": "DE"}}
 # Stops at quotes and angle brackets, which some ad texts leave after a link.
 URL_PATTERN = re.compile(r"https?://[^\s\"'<>]+")
+# Azure throttles tokens per minute (the deployment's capacity): a heavy
+# search answer can use up a minute, so the agent waits for the next one.
+RATE_LIMIT_RETRIES = 3
+RATE_LIMIT_WAIT_SECONDS = 60
 
 
 def write_fact_sheet(job, profile_text, guard, client, settings, today):
@@ -80,13 +85,28 @@ def ask_model(client, rules, items, previous, guard, settings):
         request["max_tool_calls"] = guard.limits.job_max_web_searches - guard.web_searches
         # Without this, the response names only cited pages, not every page the search used.
         request["include"] = ["web_search_call.action.sources"]
+    for attempt in range(RATE_LIMIT_RETRIES + 1):
+        try:
+            return client.responses.create(**request).model_dump()
+        except openai.RateLimitError as error:
+            throttled = error
+            if attempt < RATE_LIMIT_RETRIES:
+                time.sleep(retry_after(error))
+        except openai.BadRequestError as error:
+            reason = error.code or error.status_code
+            raise JobLimitReached(f"Stelle abgebrochen: Anfrage abgelehnt ({reason})") from error
+        except openai.APIError as error:
+            raise AgentStopped(f"Modell nicht erreichbar ({type(error).__name__})") from error
+    raise AgentStopped("Modell gedrosselt, auch nach Wartezeit") from throttled
+
+
+def retry_after(error):
+    """Seconds to wait as the throttle asks, kept within a minute; a minute if it does not say."""
     try:
-        return client.responses.create(**request).model_dump()
-    except openai.BadRequestError as error:
-        reason = error.code or error.status_code
-        raise JobLimitReached(f"Stelle abgebrochen: Anfrage abgelehnt ({reason})") from error
-    except openai.APIError as error:
-        raise AgentStopped(f"Modell nicht erreichbar ({type(error).__name__})") from error
+        seconds = float(error.response.headers.get("retry-after", RATE_LIMIT_WAIT_SECONDS))
+    except (AttributeError, TypeError, ValueError):
+        seconds = RATE_LIMIT_WAIT_SECONDS
+    return min(max(seconds, 5.0), 65.0)
 
 
 def usage_of(data):

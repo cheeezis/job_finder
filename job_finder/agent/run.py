@@ -13,6 +13,7 @@ from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 from openai import OpenAI
 
 from job_finder.agent.cost_guard import AgentStopped, CostGuard, euro
+from job_finder.agent.instructions import profile_with_places
 from job_finder.agent.profile import configured_profile
 from job_finder.agent.runner import MODEL, write_fact_sheet
 from job_finder.agent.settings import agent_settings
@@ -46,6 +47,8 @@ def agent_phase(run_id=None, values=USER_SETTINGS, environ=os.environ):
     except ValueError as error:
         print(f"  Agent aus: {error}")
         return None
+    # The profile refers to the search settings for the places; the agent needs them itself.
+    profile_text = profile_with_places(profile_text, values)
     print(f"  Profil: {source} · Denkaufwand: {settings.reasoning_effort}")
     try:
         stats = run_agent(settings, profile_text, model_client(endpoint, environ))

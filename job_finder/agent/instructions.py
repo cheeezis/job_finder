@@ -27,8 +27,10 @@ Ampel; Links gehören nur in quellen, nicht in den Text:
   oder ausdrücklich für Berufserfahrene: rot.
 - fachlicher_fit: Was passt fachlich zum Profil?
 - luecken: Was fehlt? Trenne Muss-Anforderungen von "idealerweise" oder "von Vorteil".
-- homeoffice_standort: Arbeitsort und Homeoffice- oder Remote-Anteil. Widersprechen sich Quellen,
-  nenne den Widerspruch ausdrücklich.
+- homeoffice_standort: Arbeitsort und Homeoffice- oder Remote-Anteil, gemessen an seinen Orten (am
+  Ende des Profils): im Nahbereich passt vor Ort, ein Pendelort nur mit dem genannten
+  Homeoffice-Anteil, sonst nur remote aus Deutschland. Widersprechen sich Quellen, nenne den
+  Widerspruch ausdrücklich.
 - reiseanteil: Reisetätigkeit laut Anzeige oder Quellen.
 - gehalt: Nur belegte Angaben. Schätzungen wie kununu nur mit dem Hinweis, dass sie nicht zur Stelle
   gehören. Sonst Ampel "unbekannt".
@@ -36,6 +38,9 @@ Ampel; Links gehören nur in quellen, nicht in den Text:
 Ampeln: gruen = passt; gelb = teilweise; orange = Stretch oder vorher klären; rot = echter Haken, der
 Kern der Stelle fehlt ihm; unbekannt = keine belastbaren Angaben; hinweis = etwas, worauf er achten
 muss (Positives bekommt gruen, nicht hinweis).
+
+Eine Stelle vor Ort in seinem Nahbereich wiegt schwer: Ist sie ein Stretch, lautet das Fazit eher
+"Bewerben – Stretch" als eher_streichen, auch in Richtungen, die im Profil niedrige Priorität haben.
 
 Eine fehlende Kernkompetenz wiegt schwer, entscheidet aber nicht allein. Fordert die Stelle keine
 Berufsjahre und ist die Lücke eine Sprache oder Technik, die er in Grundzügen kennt oder zügig lernen
@@ -63,6 +68,28 @@ MAX_AD_CHARS = 12_000
 def instructions(profile_text):
     """Return the fixed part of every request: rules first, then the profile."""
     return f"{RULES}\n# Profil des Nutzers\n\n{profile_text}"
+
+
+def profile_with_places(profile_text, values):
+    """Add the places of the search settings, which the profile only refers to."""
+    search = values.get("search") or {}
+    matching = values.get("matching") or {}
+    lines = []
+    nearby = [str(place).title() for place in matching.get("local_places") or []]
+    if nearby:
+        home, radius = search.get("local_location"), search.get("local_radius_km")
+        around = f" (um {home}, etwa {radius} km)" if home and radius else ""
+        lines.append(f"- Nahbereich, vor Ort gut erreichbar{around}: {', '.join(nearby)}")
+    commuting = [
+        f"{item['search_location']} (mindestens {item['minimum_remote_percentage']} % Homeoffice)"
+        for item in matching.get("commuter_locations") or []
+    ]
+    if commuting:
+        lines.append(f"- Pendelorte, nur mit so viel Homeoffice: {', '.join(commuting)}")
+    if not lines:
+        return profile_text
+    lines.append("- Sonst nur remote aus Deutschland.")
+    return f"{profile_text}\n\n# Orte aus seinen Sucheinstellungen\n\n" + "\n".join(lines)
 
 
 def job_prompt(job, today, web_searches_left):

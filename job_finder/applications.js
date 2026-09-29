@@ -281,6 +281,7 @@
       if (application.response_on) meta.append(make("span", `Erste Antwort: ${formatDate(application.response_on)}`));
       if (application.days_to_response != null) meta.append(make("span", `${application.days_to_response} Tag(e) bis zur Antwort`));
       if (application.next_interview_at) meta.append(make("span", `Nächstes Gespräch: ${formatDateTime(application.next_interview_at)}`, "appointment"));
+      else if (application.last_interview_at) meta.append(make("span", `Letztes Gespräch: ${formatDateTime(application.last_interview_at)}`, "appointment"));
       appendSourceLinks(meta, application);
       card.append(meta);
       if (application.review_note) card.append(make("p", application.review_note, "note"));

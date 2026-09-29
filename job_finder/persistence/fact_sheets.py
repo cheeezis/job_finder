@@ -4,6 +4,8 @@ from psycopg.types.json import Jsonb
 
 from job_finder.persistence.database import transaction
 
+FIELDS = ("model", "complete", "note", "fact_sheet", "cost_eur", "created_at")
+
 
 def save_fact_sheet(job_id, model, sheet, cost_eur, scope="default"):
     """Store a finished fact sheet; a later one for the same job replaces it."""
@@ -37,18 +39,6 @@ def fact_sheets(job_ids=None, scope="default"):
     params = (scope,) if job_ids is None else (scope, list(job_ids))
     with transaction() as connection:
         rows = connection.execute(
-            "SELECT job_id, model, complete, note, fact_sheet, cost_eur, created_at "
-            f"FROM agent_fact_sheets WHERE {where}",
-            params,
+            f"SELECT job_id, {', '.join(FIELDS)} FROM agent_fact_sheets WHERE {where}", params
         ).fetchall()
-    return {
-        job_id: {
-            "model": model,
-            "complete": complete,
-            "note": note,
-            "fact_sheet": sheet,
-            "cost_eur": cost_eur,
-            "created_at": created_at,
-        }
-        for job_id, model, complete, note, sheet, cost_eur, created_at in rows
-    }
+    return {row[0]: dict(zip(FIELDS, row[1:])) for row in rows}

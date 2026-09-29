@@ -1,7 +1,6 @@
 """Compact recommendation output for review and notifications."""
 
 import re
-from pathlib import Path
 
 from job_finder.paths import RECOMMENDATIONS_JSON
 from job_finder.persistence.storage import write_json_atomic
@@ -58,8 +57,7 @@ ROLE_LABELS = {
 def write_recommendations(results, json_path=RECOMMENDATIONS_JSON):
     """Write every job that passed the rule-based prefilter."""
     recommendations = [recommendation_for_job(job) for job in results["included"]]
-    json_file = Path(json_path)
-    write_json_atomic(json_file, {"recommendations": recommendations})
+    write_json_atomic(json_path, {"recommendations": recommendations})
 
 
 def recommendation_for_job(job):
@@ -129,19 +127,12 @@ def primary_url(job):
 
 def source_links(job):
     """Return every distinct listing URL with its source identifier."""
-    links = []
-    seen_urls = set()
+    links = {}
     for source in job.get("sources", []):
-        candidates = []
         if source.get("application_url"):
-            candidates.append(("original", source["application_url"]))
-        candidates.append((source.get("source", "listing"), source.get("url", "")))
-        for source_name, url in candidates:
-            if not url or url in seen_urls:
-                continue
-            seen_urls.add(url)
-            links.append({"source": source_name, "url": url})
-    return links
+            links.setdefault(source["application_url"], "original")
+        links.setdefault(source.get("url", ""), source.get("source", "listing"))
+    return [{"source": name, "url": url} for url, name in links.items() if url]
 
 
 def format_role_group(job):

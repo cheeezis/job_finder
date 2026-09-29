@@ -318,9 +318,7 @@ def embed_field(name, value, *, inline=False):
 
 def review_url(job, review_host):
     """Build a deep link into the review page for one job, when configured."""
-    if not review_host:
-        return None
-    return f"https://{review_host}/review?job={job['id']}"
+    return f"https://{review_host}/review?job={job['id']}" if review_host else None
 
 
 def format_count(value):
@@ -349,7 +347,8 @@ def new_source_text(sources):
 def exceptional_source_text(sources):
     """Keep partial and failed sources separate from successful new results."""
     warnings = [
-        f"{source['label']} {source_status_label(source['status'])}"
+        f"{source['label']} "
+        + ("nur teilweise geladen" if source["status"] == "partial" else "fehlgeschlagen")
         for source in sources
         if source["status"] in {"partial", "failed"}
     ]
@@ -363,11 +362,6 @@ def detail_failure_text(detail_failures):
         for failure in detail_failures
     ]
     return f"⚠️ Details fehlen: {', '.join(warnings)}" if warnings else ""
-
-
-def source_status_label(status):
-    """Return a compact German label for an exceptional source state."""
-    return "nur teilweise geladen" if status == "partial" else "fehlgeschlagen"
 
 
 def embed_character_count(embed):

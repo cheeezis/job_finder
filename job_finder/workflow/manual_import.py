@@ -62,8 +62,6 @@ def _persist_import(imported, jobs_path, memory_path, recommendations_path):
     save_jobs(jobs, jobs_path)
 
     score = score_for_pipeline(target)
-    warning = score.get("prefilter_warning")
-
     row = {**target.to_dict(), "is_new": target.is_new, **score}
     save_recommendation(row, recommendations_path)
     return {
@@ -71,7 +69,7 @@ def _persist_import(imported, jobs_path, memory_path, recommendations_path):
         "title": row["title"],
         "company": row["company"],
         "match_percent": row.get("match_percent"),
-        "prefilter_warning": warning,
+        "prefilter_warning": score.get("prefilter_warning"),
     }
 
 

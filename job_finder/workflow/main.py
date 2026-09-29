@@ -75,14 +75,15 @@ def score_for_pipeline(job):
         return result
 
     warning = result["reasons"][0]
-    location_conflict = "Ort/Remote" in warning
     return {
         "filter_status": "included",
         "match_percent": 0,
         "experience_rank": 99,
         "experience_level": "manuell zur Prüfung eingereicht",
         "role_group": "manual_review",
-        "location_precheck": (f"Konflikt: {warning}" if location_conflict else "Manuelle Prüfung"),
+        "location_precheck": (
+            f"Konflikt: {warning}" if "Ort/Remote" in warning else "Manuelle Prüfung"
+        ),
         "reasons": [f"Manuell geprüft trotz Vorfilter: {warning}"],
         "prefilter_warning": warning,
     }

@@ -52,7 +52,6 @@ beschreibt Titel und Beschreibung.
 | `job_finder/matching/scoring.py`, `matching_rules.py`, `remote.py` | Bewertungsablauf, Erkennungsregeln und Remote-Erkennung |
 | `job_finder/matching/experience.py`, `location_rules.py`, `salary.py`, `matching_text.py` | Zusammenhängende Analysen und normalisierte Textvergleiche |
 | `job_finder/workflow/memory.py` | PostgreSQL-Zustand, stabile IDs (eine je Stelle, auch über Portale und Läufe) und frühere Entscheidungen |
-| `job_finder/workflow/duplicates.py` | Einmaliges Zusammenlegen alter, mehrfach entschiedener Stellen (`job_finder.db merge-duplicates`) |
 | `job_finder/workflow/availability.py` | Fehlende interessante Stellen auf bestätigte Schließung prüfen |
 | `job_finder/review.py`, `job_finder/workflow/review_data.py`, `review_actions.py` | HTTP-Server, Review-Datenaufbereitung und transaktionale Aktionen |
 | `job_finder/workflow/applications.py`; `job_finder/persistence/application_documents.py`, `document_store.py` | Bewerbungsverlauf und Unterlagen (lokal oder im Blob Storage) |

@@ -25,7 +25,7 @@ variable "review_aad_client_id" {
 variable "review_fqdn" {
   description = "Vorhersehbarer Hostname der Review-Container-App; nicht aus der Ressource selbst ableitbar, da sie sich sonst auf sich selbst bezöge."
   type        = string
-  default     = "jobfinder-review.ashyisland-3b6e9522.francecentral.azurecontainerapps.io"
+  sensitive   = true
 }
 
 variable "local_docker_sp_object_id" {
@@ -37,7 +37,7 @@ variable "local_docker_sp_object_id" {
 variable "alert_email" {
   description = "Empfängeradresse für Azure-Monitor-Alerts (fehlgeschlagene Finder-Läufe, Kostenwarnungen)."
   type        = string
-  default     = "jannis.hauke@t-online.de"
+  sensitive   = true
 }
 
 variable "image_tag" {

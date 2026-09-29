@@ -270,7 +270,7 @@ den Agenten für den Lauf, die übrigen Stellen kommen im nächsten Lauf an die
 Reihe: Die Tagesgrenze ist eine Sicherung gegen Fehler, kein Filter. Weil vor
 jedem Aufruf geprüft wird, kann eine Grenze um höchstens einen Aufruf
 überschritten werden. Bremst Azure das Modell (HTTP 429, zu viele Tokens pro
-Minute), wartet der Agent die verlangte Zeit ab, höchstens eine Minute, und
+Minute), wartet der Agent die verlangte Zeit ab, 5 bis 65 Sekunden, und
 versucht es bis zu dreimal neu, bevor er den Lauf beendet.
 
 Die Grenzen stehen im Abschnitt `agent` der persönlichen Einstellungen;

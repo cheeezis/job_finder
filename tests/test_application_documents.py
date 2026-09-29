@@ -138,7 +138,8 @@ class ApplicationDocumentTests(unittest.TestCase):
             ({"stored_name": "../cv.pdf"}, "Ungültiger Dokumentpfad"),
             ({"stored_name": "a/cv.pdf"}, "Ungültiger Dokumentpfad"),
         ]
-        for folder in ("..", ".", "a/b", "a\b", "bad:name", " padded"):
+        # "a\\b" is a folder path; "a\x08b" contains a control character.
+        for folder in ("..", ".", "a/b", "a\\b", "a\x08b", "bad:name", " padded"):
             cases.append(
                 ({"stored_name": "cv.pdf", "folder_name": folder}, "Ungültiger Dokumentordner")
             )
@@ -154,9 +155,9 @@ class ApplicationDocumentTests(unittest.TestCase):
                     resolve(metadata)
 
     def test_backslash_in_stored_name_follows_the_platform_path_rules(self):
-        metadata = {"stored_name": "a\cv.pdf"}
+        metadata = {"stored_name": "a\\cv.pdf"}
         if os.sep == "\\":
             with self.assertRaisesRegex(ValueError, "Ungültiger Dokumentpfad"):
                 resolve_document_key("job:1", metadata)
         else:
-            self.assertEqual(resolve_document_key("job:1", metadata), f"{LEGACY_FOLDER}/a\cv.pdf")
+            self.assertEqual(resolve_document_key("job:1", metadata), f"{LEGACY_FOLDER}/a\\cv.pdf")

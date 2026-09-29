@@ -134,16 +134,7 @@ class StepStoneCacheTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             cache_path = Path(directory) / "stepstone.json"
-            cache_path.write_text(
-                json.dumps(
-                    {
-                        "version": stepstone.CACHE_VERSION,
-                        "last_links": [cached_url],
-                        "jobs": {cached_url: cached_job.to_dict()},
-                    }
-                ),
-                encoding="utf-8",
-            )
+            self.write_cache(cache_path, [cached_url], {cached_url: cached_job})
 
             with (
                 patch.object(stepstone, "search_links", return_value=[cached_url, new_url]),
@@ -160,16 +151,7 @@ class StepStoneCacheTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             cache_path = Path(directory) / "stepstone.json"
-            cache_path.write_text(
-                json.dumps(
-                    {
-                        "version": stepstone.CACHE_VERSION,
-                        "last_links": [url],
-                        "jobs": {url: job.to_dict()},
-                    }
-                ),
-                encoding="utf-8",
-            )
+            self.write_cache(cache_path, [url], {url: job})
 
             with patch.object(
                 stepstone,
@@ -188,16 +170,7 @@ class StepStoneCacheTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             cache_path = Path(directory) / "stepstone.json"
-            cache_path.write_text(
-                json.dumps(
-                    {
-                        "version": stepstone.CACHE_VERSION,
-                        "last_links": [],
-                        "jobs": {cached_url: cached_job.to_dict()},
-                    }
-                ),
-                encoding="utf-8",
-            )
+            self.write_cache(cache_path, [], {cached_url: cached_job})
 
             links = [blocked_url, cached_url, uncached_url]
             with (
@@ -221,16 +194,7 @@ class StepStoneCacheTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             cache_path = Path(directory) / "stepstone.json"
-            cache_path.write_text(
-                json.dumps(
-                    {
-                        "version": stepstone.CACHE_VERSION,
-                        "last_links": [url],
-                        "jobs": {url: cached_job.to_dict()},
-                    }
-                ),
-                encoding="utf-8",
-            )
+            self.write_cache(cache_path, [url], {url: cached_job})
             with (
                 patch.object(stepstone, "search_links", return_value=[url]),
                 patch.object(stepstone, "fetch_job", return_value=refreshed_job) as fetch_job,
@@ -239,6 +203,13 @@ class StepStoneCacheTests(unittest.TestCase):
 
         self.assertEqual(jobs, [refreshed_job])
         fetch_job.assert_called_once_with(url, ANY)
+
+    @staticmethod
+    def write_cache(path, last_links, jobs):
+        """Write the raw cache file a previous run left, independent of the production writer."""
+        jobs = {url: job.to_dict() for url, job in jobs.items()}
+        document = {"version": stepstone.CACHE_VERSION, "last_links": last_links, "jobs": jobs}
+        path.write_text(json.dumps(document), encoding="utf-8")
 
     @staticmethod
     def make_job(title, url):

@@ -143,19 +143,11 @@ def remembered_review_job(job_id, entry):
 
 
 def memory_id_finder(memory):
-    """Look up the memory rows of each recommendation through one per-request URL index.
-
-    The rows keep the memory's insertion order. If an entry's source_urls cannot
-    be indexed, every lookup falls back to scanning, so such data fails exactly
-    where it failed before instead of already while indexing.
-    """
+    """Find each recommendation's memory rows, in memory order, via one per-request URL index."""
     index = {}
-    try:
-        for memory_id, entry in memory.items():
-            for url in entry.get("source_urls", []):
-                index.setdefault(url, []).append(memory_id)
-    except Exception:
-        return lambda job: memory_ids_for_job(job, memory)
+    for memory_id, entry in memory.items():
+        for url in entry.get("source_urls", []):
+            index.setdefault(url, []).append(memory_id)
     positions = {memory_id: position for position, memory_id in enumerate(memory)}
 
     def find(job):
@@ -165,17 +157,6 @@ def memory_id_finder(memory):
         return sorted(found, key=positions.__getitem__)
 
     return find
-
-
-def memory_ids_for_job(job, memory):
-    """Return every memory row represented by one merged recommendation."""
-    job_id = job["id"]
-    urls = job_urls(job)
-    return [
-        memory_id
-        for memory_id, entry in memory.items()
-        if memory_id == job_id or urls.intersection(entry.get("source_urls", []))
-    ]
 
 
 def job_urls(job):

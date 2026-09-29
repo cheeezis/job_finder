@@ -487,9 +487,6 @@ class ReviewTests(unittest.TestCase):
             start_application("job:unknown", self.memory_path)
 
     def test_inquiry_is_persisted_as_review_decision(self):
-        memory = load_memory(self.memory_path)
-        save_memory(memory, self.memory_path)
-
         result = update_review_decision("job:1", "inquiry", self.memory_path)
 
         self.assertEqual(result["workflow_status"], "inquiry")

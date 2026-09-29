@@ -6,11 +6,17 @@ import zipfile
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 
+from psycopg import sql
+
 from job_finder.paths import APPLICATION_DOCUMENTS_DIR, BACKUP_DIR
 from job_finder.persistence import document_store
 from job_finder.persistence.application_documents import live_document_manifest
 from job_finder.persistence.database import initialize, lock, snapshot, transaction
 from job_finder.persistence.postgres_store import read_dataset, read_memory, write_dataset, write_memory
+
+# The agent's cost ledger and fact sheets with their sort keys. PostgreSQL renders them as JSON and parses them
+# back itself, so amounts and time stamps stay exact.
+AGENT_TABLES = {"agent_usage": "id", "agent_fact_sheets": "scope, job_id"}
 
 
 def create_postgres_backup(backup_dir=BACKUP_DIR, documents_dir=APPLICATION_DOCUMENTS_DIR):
@@ -34,6 +40,10 @@ def create_postgres_backup(backup_dir=BACKUP_DIR, documents_dir=APPLICATION_DOCU
             names = [r[0] for r in connection.execute("SELECT name FROM datasets ORDER BY name")]
             for name in names:
                 add("datasets/" + name, json.dumps(read_dataset(name), ensure_ascii=False).encode())
+            for table, order in AGENT_TABLES.items():
+                query = sql.SQL("SELECT coalesce(json_agg(t ORDER BY {}), '[]')::text FROM {} t")
+                rows = connection.execute(query.format(sql.SQL(order), sql.Identifier(table))).fetchone()[0]
+                add(f"agent/{table}.json", rows.encode())
             for name, expected in documents.items():
                 content = document_store.read(name, documents_dir)
                 if hashlib.sha256(content).hexdigest() != expected:
@@ -70,10 +80,9 @@ def restore_backup(archive_path, documents_dir):
             with transaction() as connection:
                 lock(connection, "finder-publication")
                 lock(connection, "memory:default")
-                if (
-                    connection.execute("SELECT 1 FROM job_state LIMIT 1").fetchone()
-                    or connection.execute("SELECT 1 FROM datasets LIMIT 1").fetchone()
-                ):
+                tables = ("job_state", "datasets", *AGENT_TABLES)
+                query = sql.SQL("SELECT 1 FROM {} LIMIT 1")
+                if any(connection.execute(query.format(sql.Identifier(table))).fetchone() for table in tables):
                     raise ValueError("Wiederherstellung benötigt eine leere Datenbank")
                 write_memory(connection, "default", {}, memory)
                 for name in manifest["hashes"]:
@@ -89,6 +98,8 @@ def restore_backup(archive_path, documents_dir):
                             raise ValueError("Dokument existiert bereits am Zielort")
                         document_store.write(key, archive.read(name), documents_dir)
                         written.append(key)
+                    elif name.startswith("agent/"):
+                        restore_agent_table(connection, name, archive.read(name).decode())
                 if read_memory(connection, "default") != memory:
                     raise RuntimeError("Gedächtnis stimmt nach Wiederherstellung nicht überein")
                 live_document_manifest(memory, documents_dir)
@@ -97,3 +108,18 @@ def restore_backup(archive_path, documents_dir):
                 document_store.delete(key, documents_dir)
             raise
     return {"jobs_remembered": len(memory), "documents": len(written), "verified": True}
+
+
+def restore_agent_table(connection, name, rows):
+    """Insert one backed-up agent table into its empty table and check that every row arrived unchanged."""
+    table = name.removeprefix("agent/").removesuffix(".json")
+    if table not in AGENT_TABLES:
+        raise ValueError("Unbekannte Tabelle im Backup")
+    identifier = sql.Identifier(table)
+    records = sql.SQL("SELECT * FROM json_populate_recordset(NULL::{}, %s::json)").format(identifier)
+    connection.execute(sql.SQL("INSERT INTO {} ").format(identifier) + records, (rows,))
+    check = sql.SQL(
+        "SELECT (SELECT count(*) FROM {0}) = json_array_length(%s::json) AND NOT EXISTS ({1} EXCEPT ALL SELECT * FROM {0})"
+    )
+    if not connection.execute(check.format(identifier, records), (rows, rows)).fetchone()[0]:
+        raise RuntimeError("Datenvergleich nach Wiederherstellung fehlgeschlagen")

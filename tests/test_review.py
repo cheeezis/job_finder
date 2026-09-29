@@ -116,7 +116,7 @@ class ReviewTests(unittest.TestCase):
             (ReviewRequestHandler,),
             {"recommendations_path": self.recommendations_path, "memory_path": self.memory_path, **attributes},
         )
-        server = HTTPServer(("127.0.0.1", 0), handler)
+        server = LocalReviewServer(("127.0.0.1", 0), handler)
         thread = threading.Thread(target=server.serve_forever)
         thread.start()
         try:
@@ -125,6 +125,15 @@ class ReviewTests(unittest.TestCase):
             server.shutdown()
             server.server_close()
             thread.join()
+
+    def test_idle_connection_does_not_block_other_requests(self):
+        with self.server_context() as base_url:
+            idle = socket.create_connection(("127.0.0.1", int(base_url.rsplit(":", 1)[1])))
+            try:
+                with urlopen(base_url + "/", timeout=5) as response:
+                    self.assertEqual(response.status, 200)
+            finally:
+                idle.close()
 
     def test_json_actions_reject_non_object_payloads_without_changing_memory(self):
         original = load_memory(self.memory_path)

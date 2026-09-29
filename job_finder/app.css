@@ -147,7 +147,7 @@ label { display: grid; gap: 6px; color: var(--muted); font-size: .79rem; font-we
 .manual-import h2 { font-size: 1.45rem; }
 .manual-import p:not(.eyebrow) { max-width: 680px; color: var(--muted); }
 .manual-import form { display: flex; gap: 10px; max-width: 760px; }
-.manual-import button { border-color: var(--ink); background: var(--ink); }
+.manual-import button { border-color: var(--ink); background: var(--ink); color: var(--panel); }
 .manual-import input { flex: 1; min-width: 0; }
 .manual-import button:disabled { cursor: wait; opacity: .65; }
 #import-status { min-height: 1.5em; margin-bottom: 0; }

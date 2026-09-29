@@ -101,7 +101,7 @@ def ask_model(client, rules, items, previous, guard, settings):
 
 
 def retry_after(error):
-    """Seconds to wait as the throttle asks, kept within a minute; a minute if it does not say."""
+    """Seconds to wait as the throttle asks, kept between 5 and 65; a minute if it does not say."""
     try:
         seconds = float(error.response.headers.get("retry-after", RATE_LIMIT_WAIT_SECONDS))
     except (AttributeError, TypeError, ValueError):

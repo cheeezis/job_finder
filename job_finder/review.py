@@ -9,7 +9,7 @@ import re
 import socket
 import threading
 import webbrowser
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, urlsplit
 
@@ -61,8 +61,12 @@ LOCAL_HOST_PATTERN = re.compile(r"^(?:127\.0\.0\.1|localhost)(?::\d{1,5})?$")
 DEPLOYED_HOST = os.environ.get("JOBFINDER_REVIEW_HOST", "").casefold()
 
 
-class LocalReviewServer(HTTPServer):
-    """Bind the local review port exclusively, especially on Windows."""
+class LocalReviewServer(ThreadingHTTPServer):
+    """Serve each connection in its own thread and bind the port exclusively, especially on Windows.
+
+    One thread per connection keeps an idle browser connection (e.g. a
+    preconnect) from blocking every other request.
+    """
 
     allow_reuse_address = False
 

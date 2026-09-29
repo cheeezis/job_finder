@@ -5,18 +5,13 @@ import re
 from html import unescape
 
 _JSON_LD_PATTERN = re.compile(
-    r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
-    re.DOTALL | re.IGNORECASE,
+    r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', re.DOTALL | re.IGNORECASE
 )
 
 
 def extract_script_json(html, script_id):
     """Parse the JSON state a page embeds in <script id=... type="application/json">."""
-    match = re.search(
-        rf'<script id="{re.escape(script_id)}" type="application/json">(.*?)</script>',
-        html,
-        re.DOTALL,
-    )
+    match = re.search(rf'<script id="{re.escape(script_id)}" type="application/json">(.*?)</script>', html, re.DOTALL)
     if not match:
         raise ValueError(f"{script_id} JSON nicht gefunden")
     return json.loads(unescape(match.group(1)))

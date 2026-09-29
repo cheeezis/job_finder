@@ -160,9 +160,7 @@ def urls_found(data):
 def verified_sources(sources, seen):
     """Keep only links the agent actually saw; drop invented links and plain text."""
     urls = (source.strip() for source in sources)
-    return list(
-        dict.fromkeys(u for u in urls if URL_PATTERN.fullmatch(u) and comparable(u) in seen)
-    )
+    return list(dict.fromkeys(u for u in urls if URL_PATTERN.fullmatch(u) and comparable(u) in seen))
 
 
 def comparable(url):

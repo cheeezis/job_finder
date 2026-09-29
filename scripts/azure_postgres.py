@@ -18,9 +18,7 @@ def admin_connection():
         text=True,
     )
     outputs = json.loads(result.stdout)
-    settings = json.loads(
-        (PROJECT / "infrastructure/postgres.auto.tfvars.json").read_text(encoding="utf-8")
-    )
+    settings = json.loads((PROJECT / "infrastructure/postgres.auto.tfvars.json").read_text(encoding="utf-8"))
     # libpq needs a PEM bundle. Export the OS trust store through Python's SSL
     # context so Windows can verify the server without disabling certificate checks.
     certificates = ssl.create_default_context().get_ca_certs(binary_form=True)
@@ -28,9 +26,7 @@ def admin_connection():
         raise RuntimeError("Keine vertrauenswürdigen CA-Zertifikate verfügbar.")
     bundle = PROJECT / "tmp/azure-postgres-trusted-roots.pem"
     bundle.parent.mkdir(parents=True, exist_ok=True)
-    bundle.write_text(
-        "".join(ssl.DER_cert_to_PEM_cert(cert) for cert in certificates), encoding="ascii"
-    )
+    bundle.write_text("".join(ssl.DER_cert_to_PEM_cert(cert) for cert in certificates), encoding="ascii")
     return {
         "host": outputs["postgres_host"]["value"],
         "dbname": outputs["postgres_database"]["value"],

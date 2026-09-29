@@ -61,11 +61,7 @@ class NotificationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             stats = process_notifications(
                 {
-                    "included": [
-                        make_job("new"),
-                        make_job("changed", is_new=False),
-                        make_job("known", is_new=False),
-                    ],
+                    "included": [make_job("new"), make_job("changed", is_new=False), make_job("known", is_new=False)],
                     "excluded": [],
                 },
                 state_path=Path(directory) / "state.json",
@@ -99,17 +95,14 @@ class NotificationTests(unittest.TestCase):
     def test_reviewed_job_is_not_queued(self):
         with tempfile.TemporaryDirectory() as directory:
             stats = process_notifications(
-                {"included": [make_job(status="ignored")], "excluded": []},
-                state_path=Path(directory) / "state.json",
+                {"included": [make_job(status="ignored")], "excluded": []}, state_path=Path(directory) / "state.json"
             )
         self.assertEqual(stats["queued"], 0)
 
     def test_hidden_special_cases_are_never_eligible(self):
         """A job hidden behind an extra review filter must never be notified."""
         junior_hybrid = make_job("junior-hybrid")
-        junior_hybrid["location_precheck"] = (
-            "Junior-Hybrid außerhalb des Suchgebiets; Präsenzumfang prüfen"
-        )
+        junior_hybrid["location_precheck"] = "Junior-Hybrid außerhalb des Suchgebiets; Präsenzumfang prüfen"
         international = make_job("international")
         international["locations"] = ["Europe"]
         with tempfile.TemporaryDirectory() as directory:
@@ -183,9 +176,7 @@ class NotificationTests(unittest.TestCase):
     def test_embed_links_to_the_matching_review_job_when_host_is_configured(self):
         embed = discord_embed(make_job("job:42"), review_host="review.example.test")
         fields = {field["name"]: field["value"] for field in embed["fields"]}
-        self.assertEqual(
-            fields["Review"], "[Stelle öffnen](https://review.example.test/review?job=job:42)"
-        )
+        self.assertEqual(fields["Review"], "[Stelle öffnen](https://review.example.test/review?job=job:42)")
 
     def test_sent_messages_stay_within_discord_limit_with_review_links(self):
         """Batching must count the review link and footer that are actually sent."""
@@ -247,17 +238,13 @@ class NotificationTests(unittest.TestCase):
                 "review_new": 2,
                 "notifications": {"eligible_new": 2, "sent": 2, "failed": 0},
                 "sources": [{"label": "StudySmarter", "status": "success", "jobs": 10}],
-                "detail_failures": [
-                    {"label": "Arbeitnow", "failed": 2},
-                    {"label": "StudySmarter", "failed": 12},
-                ],
+                "detail_failures": [{"label": "Arbeitnow", "failed": 2}, {"label": "StudySmarter", "failed": 12}],
             }
         )
         embed = payload["embeds"][0]
 
         self.assertIn(
-            "\u26a0\ufe0f Details fehlen: Arbeitnow 2 Kandidat(en), StudySmarter 12 Kandidat(en)",
-            embed["description"],
+            "\u26a0\ufe0f Details fehlen: Arbeitnow 2 Kandidat(en), StudySmarter 12 Kandidat(en)", embed["description"]
         )
         self.assertIn("1 erfolgreich", embed["description"])
         self.assertEqual(embed["color"], 0xD99A2B)

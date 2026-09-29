@@ -13,13 +13,7 @@ from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource
 from job_finder.paths import REMOTELY_LINKEDIN_STATUS_FILE, cache_file
 from job_finder.persistence.storage import read_versioned, write_versioned
-from job_finder.sources.common import (
-    ListingUnavailableError,
-    as_utc,
-    fetch_cached_details,
-    source_job_id,
-    utc_now,
-)
+from job_finder.sources.common import ListingUnavailableError, as_utc, fetch_cached_details, source_job_id, utc_now
 from job_finder.text import html_to_text
 
 SOURCE_NAME = "remotely"
@@ -36,15 +30,10 @@ REQUEST_DELAY_SECONDS = 1.0
 LINKEDIN_REQUEST_DELAY_SECONDS = 0.4
 LINKEDIN_STATUS_MAX_AGE = timedelta(days=1)
 LINKEDIN_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/128 Safari/537.36"
-    ),
+    "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/128 Safari/537.36"),
     "Accept-Language": "de-DE,de;q=0.9,en;q=0.7",
 }
-LINKEDIN_CLOSED_MARKERS = (
-    "es werden keine bewerbungen mehr angenommen",
-    "no longer accepting applications",
-)
+LINKEDIN_CLOSED_MARKERS = ("es werden keine bewerbungen mehr angenommen", "no longer accepting applications")
 
 
 class RemotelyHttpClient:
@@ -121,22 +110,16 @@ def enrich_candidate_jobs(
         if closed:
             closed_indices.add(job_index)
         if progress_checkpoint(position, len(targets)):
-            print_progress(
-                "Remotely LinkedIn", position, len(targets), f"{len(closed_indices)} geschlossen"
-            )
+            print_progress("Remotely LinkedIn", position, len(targets), f"{len(closed_indices)} geschlossen")
 
     if cache_changed:
         write_versioned(status_cache_path, 1, checks=checks)
     if closed_indices:
         jobs[:] = [job for index, job in enumerate(jobs) if index not in closed_indices]
-        print(
-            f"HINWEIS Remotely: {len(closed_indices)} geschlossene "
-            "LinkedIn-Bewerbung(en) aus dem Review entfernt"
-        )
+        print(f"HINWEIS Remotely: {len(closed_indices)} geschlossene LinkedIn-Bewerbung(en) aus dem Review entfernt")
     if errors:
         print(
-            f"WARNUNG Remotely: {errors} LinkedIn-Statusprüfung(en) "
-            "nicht erreichbar; Stellen vorsichtshalber behalten"
+            f"WARNUNG Remotely: {errors} LinkedIn-Statusprüfung(en) nicht erreichbar; Stellen vorsichtshalber behalten"
         )
     return len(closed_indices)
 
@@ -149,9 +132,7 @@ def linkedin_application_url(job):
         url = str(source.application_url or "").strip()
         parts = urlsplit(url)
         host = (parts.hostname or "").casefold()
-        if (
-            host == "linkedin.com" or host.endswith(".linkedin.com")
-        ) and "/jobs/view/" in parts.path.casefold():
+        if (host == "linkedin.com" or host.endswith(".linkedin.com")) and "/jobs/view/" in parts.path.casefold():
             return url
     return ""
 
@@ -206,11 +187,7 @@ def collect_links(client=None, today=None, max_pages=None):
     for page in range(1, page_limit + 1):
         url = LIST_URL if page == 1 else f"{LIST_URL}/seite/{page}"
         entries = extract_list_entries(client.get(url))
-        page_links = [
-            entry["url"]
-            for entry in entries
-            if entry_is_recent(entry, cutoff=cutoff, today=reference_date)
-        ]
+        page_links = [entry["url"] for entry in entries if entry_is_recent(entry, cutoff=cutoff, today=reference_date)]
         if not entries:
             break
         links.update(dict.fromkeys(page_links))
@@ -239,13 +216,7 @@ def extract_list_entries(html):
             r"\b(heute|gestern|vor \d+ (?:tag(?:en)?|woche(?:n)?|monat(?:en)?|jahr(?:en)?))\b",
             clean_text(text).casefold(),
         )
-        entries.append(
-            {
-                "url": url,
-                "published_label": date_match.group(1) if date_match else "",
-                "promoted": promoted,
-            }
-        )
+        entries.append({"url": url, "published_label": date_match.group(1) if date_match else "", "promoted": promoted})
     return entries
 
 
@@ -258,9 +229,7 @@ def entry_is_recent(entry, cutoff, today):
 def page_is_before_cutoff(entries, cutoff, today):
     """Use old regular cards as a conservative pagination stop signal."""
     regular_entries = [entry for entry in entries if not entry.get("promoted")]
-    dates = [
-        parse_relative_date(entry.get("published_label"), today=today) for entry in regular_entries
-    ]
+    dates = [parse_relative_date(entry.get("published_label"), today=today) for entry in regular_entries]
     if not dates or any(value is None for value in dates):
         return False
     safe_boundary = cutoff - timedelta(days=BOUNDARY_BUFFER_DAYS)
@@ -304,10 +273,7 @@ def job_from_html(url, html, today=None):
     work_mode, remote_percentage = classify_remote(detected_remote)
     identifier = urlsplit(url).path.rsplit("/", 1)[-1]
     source = JobSource(
-        source=SOURCE_NAME,
-        source_id=identifier,
-        url=url,
-        application_url=parser.application_url or None,
+        source=SOURCE_NAME, source_id=identifier, url=url, application_url=parser.application_url or None
     )
     return Job(
         id=source_job_id(SOURCE_NAME, identifier, url),

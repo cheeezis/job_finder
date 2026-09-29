@@ -30,11 +30,7 @@ class LocalHybridRunTests(unittest.TestCase):
         self.sent = []
         for patcher in (
             patch.object(self.script, "LOG_DIR", self.logs),
-            patch.object(
-                self.script,
-                "DiscordWebhookClient",
-                return_value=SimpleNamespace(send=self.sent.append),
-            ),
+            patch.object(self.script, "DiscordWebhookClient", return_value=SimpleNamespace(send=self.sent.append)),
             patch.dict(os.environ, {"DISCORD_WEBHOOK_URL": "https://discord.test/hook"}),
         ):
             self.enterContext(patcher)

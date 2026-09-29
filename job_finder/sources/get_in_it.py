@@ -11,12 +11,7 @@ from itertools import product
 from urllib.parse import urlencode, urljoin
 
 from job_finder.http import fetch_json, fetch_text
-from job_finder.matching.config import (
-    COMMUTER_SEARCH_LOCATIONS,
-    COMMUTER_SEARCH_TERMS,
-    SEARCH_LOCATIONS,
-    SEARCH_TERMS,
-)
+from job_finder.matching.config import COMMUTER_SEARCH_LOCATIONS, COMMUTER_SEARCH_TERMS, SEARCH_LOCATIONS, SEARCH_TERMS
 from job_finder.models import Job, JobSource, WorkMode
 from job_finder.paths import cache_file
 from job_finder.sources.common import (
@@ -123,23 +118,14 @@ def api_names(items):
 def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE, now=None):
     """Fetch details only for prefiltered candidates without a fresh cache."""
     return enrich_cached_candidates(
-        jobs,
-        candidate_ids,
-        cache_path,
-        SOURCE_NAME,
-        "get-in-IT",
-        lambda job, url: fetch_job(url),
-        now=now,
+        jobs, candidate_ids, cache_path, SOURCE_NAME, "get-in-IT", lambda job, url: fetch_job(url), now=now
     )
 
 
 def build_api_searches():
     """Map our shared search terms to get-in-IT's available category filters."""
     searches = {}
-    search_plans = [
-        (SEARCH_TERMS, SEARCH_LOCATIONS),
-        (COMMUTER_SEARCH_TERMS, COMMUTER_SEARCH_LOCATIONS),
-    ]
+    search_plans = [(SEARCH_TERMS, SEARCH_LOCATIONS), (COMMUTER_SEARCH_TERMS, COMMUTER_SEARCH_LOCATIONS)]
     for terms, locations in search_plans:
         for term, location in product(terms, locations):
             for priority_id in priority_ids_for_term(term):
@@ -183,9 +169,7 @@ def search_api(priority_id, location):
             params["filter[state]"] = HESSEN_STATE_ID
 
         url = f"{API_SEARCH_URL}?{urlencode(params)}"
-        data = fetch_json(
-            url, headers={"Accept": "application/json", "X-Requested-With": "XMLHttpRequest"}
-        )
+        data = fetch_json(url, headers={"Accept": "application/json", "X-Requested-With": "XMLHttpRequest"})
         page_results = data.get("items", {}).get("results", [])
         new_results = [job for job in page_results if job.get("id") not in seen_ids]
 
@@ -252,14 +236,7 @@ def extract_job_posting_from_next_data(html):
 def build_locations(locations):
     """Wrap location labels in schema.org Place and PostalAddress objects."""
     return [
-        {
-            "@type": "Place",
-            "address": {
-                "@type": "PostalAddress",
-                "addressLocality": location,
-                "addressCountry": "DE",
-            },
-        }
+        {"@type": "Place", "address": {"@type": "PostalAddress", "addressLocality": location, "addressCountry": "DE"}}
         for location in locations
     ]
 

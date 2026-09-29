@@ -28,20 +28,11 @@ from job_finder.sources import (
     stepstone,
     studysmarter,
 )
-from job_finder.sources.common import (
-    canonical_detail_url as canonical_url,
-    fetch_diagnostics,
-    reset_fetch_diagnostics,
-)
+from job_finder.sources.common import canonical_detail_url as canonical_url, fetch_diagnostics, reset_fetch_diagnostics
 from job_finder.sources.company_careers import BYTEWERK, CSS, NETHINKS, PROEMION, RHOENENERGIE
 from job_finder.sources.compose_it import COMPOSE_IT
 from job_finder.workflow.availability import ignore_closed_listings
-from job_finder.workflow.main import (
-    build_score_results,
-    combine_listings,
-    evaluate_jobs,
-    score_jobs,
-)
+from job_finder.workflow.main import build_score_results, combine_listings, evaluate_jobs, score_jobs
 from job_finder.workflow.memory import edit_memory, update_memory
 from job_finder.workflow.notifications import process_notifications, send_run_summary
 from job_finder.workflow.reporting import is_visible_in_default_review, write_recommendations
@@ -79,8 +70,7 @@ def require_usable_source_snapshot(source_reports):
     Failed sources and partial sources that returned no jobs count as unreachable.
     """
     unavailable = sum(
-        report.get("status") == "failed"
-        or (report.get("status") == "partial" and not report.get("jobs"))
+        report.get("status") == "failed" or (report.get("status") == "partial" and not report.get("jobs"))
         for report in source_reports
     )
     if not source_reports or unavailable * 2 > len(source_reports):
@@ -158,9 +148,7 @@ def run_pipeline(exclude_sources=frozenset(), run_id=None):
     print(f"  Einstellungen: {SETTINGS_SOURCE}")
     print_phase(1, 4, "Quellen")
     with timed_step("Quellen und Deduplizierung"):
-        selected_sources = [
-            source for source in SOURCES if source.SOURCE_NAME not in exclude_sources
-        ]
+        selected_sources = [source for source in SOURCES if source.SOURCE_NAME not in exclude_sources]
         jobs, source_reports = collect_jobs(selected_sources, run_id=run_id)
         print_source_summary(source_reports, len(jobs))
         require_usable_source_snapshot(source_reports)
@@ -171,9 +159,7 @@ def run_pipeline(exclude_sources=frozenset(), run_id=None):
 
     candidate_ids = {job["id"] for job in results["included"]}
     with timed_step("Detailanreicherung"):
-        enrichment_reports = enrich_candidate_jobs(
-            jobs, candidate_ids, sources=selected_sources, run_id=run_id
-        )
+        enrichment_reports = enrich_candidate_jobs(jobs, candidate_ids, sources=selected_sources, run_id=run_id)
 
     # Validate final details before committing any workflow state. The score
     # stays attached to the job as memory resolves its ID and timestamps.
@@ -182,15 +168,11 @@ def run_pipeline(exclude_sources=frozenset(), run_id=None):
 
     # Persist only the final post-enrichment set; enrichers may remove closed ads.
     print_phase(3, 4, "Bestand und Verfügbarkeit")
-    complete_sources = {
-        report["name"] for report in source_reports if report["status"] in {"success", "empty"}
-    }
+    complete_sources = {report["name"] for report in source_reports if report["status"] in {"success", "empty"}}
     # A split schedule's run answers for missing jobs only through its own sources.
     run_sources = {report["name"] for report in source_reports}
     with timed_step("Gedächtnis speichern"), edit_memory(MEMORY_FILE) as memory:
-        memory_stats = update_memory(
-            jobs, memory, successful_sources=complete_sources, run_sources=run_sources
-        )
+        memory_stats = update_memory(jobs, memory, successful_sources=complete_sources, run_sources=run_sources)
     # Memory gave every listing of one job the same ID; from here on they are one card.
     evaluated_jobs = combine_listings(evaluated_jobs)
     jobs = [job for job, _result in evaluated_jobs]
@@ -218,10 +200,7 @@ def run_pipeline(exclude_sources=frozenset(), run_id=None):
             writer=write_recommendations,
             exclude_sources=set(exclude_sources) | (run_sources - complete_sources),
         )
-        print(
-            f"Vorfilter: {len(results['included'])} weiter · "
-            f"{len(results['excluded'])} ausgeschlossen"
-        )
+        print(f"Vorfilter: {len(results['included'])} weiter · {len(results['excluded'])} ausgeschlossen")
         log_event(
             "prefilter_completed",
             run_id=run_id,
@@ -241,10 +220,7 @@ def run_pipeline(exclude_sources=frozenset(), run_id=None):
         if notification_stats["configuration_error"]:
             print(f"Discord: {notification_stats['configuration_error']}")
         else:
-            print(
-                f"Discord: {notification_stats['sent']} gesendet, "
-                f"{notification_stats['failed']} fehlgeschlagen"
-            )
+            print(f"Discord: {notification_stats['sent']} gesendet, {notification_stats['failed']} fehlgeschlagen")
 
         summary_error = send_run_summary(
             build_run_summary(
@@ -283,8 +259,7 @@ def print_review_diagnostics(results, memory_stats):
     new_excluded = sum(bool(job.get("is_new")) for job in results["excluded"])
     pending = sum(job.get("workflow_status") == "new" for job in results["included"])
     standard_new = sum(
-        job.get("workflow_status") == "new" and is_visible_in_default_review(job)
-        for job in results["included"]
+        job.get("workflow_status") == "new" and is_visible_in_default_review(job) for job in results["included"]
     )
     print(
         f"  Erstfunde: {memory_stats['new']} · "
@@ -325,9 +300,7 @@ def collect_jobs(sources, run_id=None):
             if status == "partial":
                 failed = details.get("failed_segments", "?")
                 progress += f" · Teilergebnis ({failed} Segment(e) fehlgeschlagen)"
-        source_reports.append(
-            {"name": source.SOURCE_NAME, "status": status, "jobs": len(source_jobs), **details}
-        )
+        source_reports.append({"name": source.SOURCE_NAME, "status": status, "jobs": len(source_jobs), **details})
         print_progress(label, 1, 1, progress)
         log_event(
             "source_completed",
@@ -401,14 +374,7 @@ def print_source_summary(source_reports, total_jobs):
 
 
 def build_run_summary(
-    *,
-    duration_seconds,
-    jobs,
-    results,
-    memory_stats,
-    source_reports,
-    notification_stats=None,
-    enrichment_reports=(),
+    *, duration_seconds, jobs, results, memory_stats, source_reports, notification_stats=None, enrichment_reports=()
 ):
     """Collect the reliable counts shown in Discord after one complete run."""
     new_by_source = Counter(source.source for job in jobs if job.is_new for source in job.sources)

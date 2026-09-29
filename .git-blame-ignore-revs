@@ -1,2 +1,11 @@
 # Mechanical reformat with Ruff at line length 100 (no behaviour change).
 9990b89e4b71836de6f6899923359d3b85e508e5
+
+# Ruff reformat at line length 120 [v3.1-O1].
+13f786f2c90bbd5fdb01ae65c6626044ba8948fd
+
+# Short CSS rules on one line [v3.1-O4].
+05945b7362802d52922bf9cf35f2520a9ecea44e
+
+# One line per result and case in the scoring fixture [v3.1-O5].
+15b8fb8fc8b49c4c29194da778697466a632f811

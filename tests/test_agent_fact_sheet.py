@@ -16,10 +16,7 @@ from job_finder.workflow import review_data
 
 def example_sheet(**changes):
     """A made-up fact sheet in the agreed format."""
-    sheet = {
-        key: {"ampel": "gruen", "text": f"{label}: Beispielbegründung."}
-        for key, label in FIXED_LINES
-    }
+    sheet = {key: {"ampel": "gruen", "text": f"{label}: Beispielbegründung."} for key, label in FIXED_LINES}
     sheet["homeoffice_standort"] = {
         "ampel": "orange",
         "text": "Vorher klären: Jobbörse nennt Full Remote, die Firmenseite nur zwei Standorte.",
@@ -82,15 +79,11 @@ class FactSheetTests(unittest.TestCase):
             "fehlende Zeile": json.dumps(missing_line),
             "falsche Ampel": json.dumps(example_sheet(status={"ampel": "blau", "text": "x"})),
             # A warning belongs in an extra line; the example's extra line keeps one.
-            "Warnung in fester Zeile": json.dumps(
-                example_sheet(homeoffice_standort={"ampel": "hinweis", "text": "x"})
-            ),
+            "Warnung in fester Zeile": json.dumps(example_sheet(homeoffice_standort={"ampel": "hinweis", "text": "x"})),
             "leerer Text": json.dumps(example_sheet(status={"ampel": "gruen", "text": " "})),
             "falsche Stufe": json.dumps(example_sheet(fazit={"stufe": "vielleicht", "text": "x"})),
             "leerer Kurzgrund": json.dumps(example_sheet(kurzgrund="")),
-            "Zusatz ohne Thema": json.dumps(
-                example_sheet(zusatz=[{"thema": "", "ampel": "gruen", "text": "x"}])
-            ),
+            "Zusatz ohne Thema": json.dumps(example_sheet(zusatz=[{"thema": "", "ampel": "gruen", "text": "x"}])),
         }
         for name, text in cases.items():
             with self.subTest(name=name), self.assertRaises(ValueError):

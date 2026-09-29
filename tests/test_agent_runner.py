@@ -58,12 +58,7 @@ def message(text):
 
 def decisions_call(call_id="call_1"):
     arguments = json.dumps({"company": "Beispiel GmbH", "title_keywords": ["Python"]})
-    return {
-        "type": "function_call",
-        "name": "past_decisions",
-        "arguments": arguments,
-        "call_id": call_id,
-    }
+    return {"type": "function_call", "name": "past_decisions", "arguments": arguments, "call_id": call_id}
 
 
 class FakeModel:
@@ -87,9 +82,7 @@ class FakeModel:
 def api_error(kind, retry_after="7"):
     request = httpx.Request("POST", "https://example.com/openai/v1/responses")
     if kind == "bad_request":
-        return openai.BadRequestError(
-            "abgelehnt", response=httpx.Response(400, request=request), body=None
-        )
+        return openai.BadRequestError("abgelehnt", response=httpx.Response(400, request=request), body=None)
     if kind == "rate_limit":
         response = httpx.Response(429, headers={"retry-after": retry_after}, request=request)
         return openai.RateLimitError("gedrosselt", response=response, body=None)
@@ -109,15 +102,12 @@ class AgentRunnerTests(unittest.TestCase):
 
     def run_job(self, model, settings=SETTINGS):
         guard = CostGuard(settings, runner.MODEL)
-        outcome = runner.write_fact_sheet(
-            JOB, "version: 5\n", guard, model, settings, date(2026, 9, 25)
-        )
+        outcome = runner.write_fact_sheet(JOB, "version: 5\n", guard, model, settings, date(2026, 9, 25))
         return outcome, guard
 
     def test_a_tool_round_ends_in_a_stored_fact_sheet(self):
         model = FakeModel(
-            reply("resp_1", decisions_call(), searches=2),
-            reply("resp_2", message(json.dumps(example_sheet()))),
+            reply("resp_1", decisions_call(), searches=2), reply("resp_2", message(json.dumps(example_sheet())))
         )
 
         outcome, guard = self.run_job(model)
@@ -130,14 +120,7 @@ class AgentRunnerTests(unittest.TestCase):
         self.assertEqual(first["max_tool_calls"], 3)
         self.assertEqual(second["previous_response_id"], "resp_1")
         self.assertEqual(
-            second["input"],
-            [
-                {
-                    "type": "function_call_output",
-                    "call_id": "call_1",
-                    "output": '{"entscheidungen": []}',
-                }
-            ],
+            second["input"], [{"type": "function_call_output", "call_id": "call_1", "output": '{"entscheidungen": []}'}]
         )
         cost = call_cost(runner.MODEL, Usage(9000, 0, 800, web_searches=2)) + call_cost(
             runner.MODEL, Usage(9000, 0, 800)
@@ -154,39 +137,24 @@ class AgentRunnerTests(unittest.TestCase):
             "https://erfunden.example/handbuch",  # never seen: invented
             "Nutzerprofil (intern)",  # not a link at all
         ]
-        job = {
-            **JOB,
-            "description_clean": 'Mehr: <a href="https://firma.example/karriere">Karriere',
-        }
+        job = {**JOB, "description_clean": 'Mehr: <a href="https://firma.example/karriere">Karriere'}
         answer = message(json.dumps(sheet))
-        answer["content"][0]["annotations"] = [
-            {"type": "url_citation", "url": "https://news.example/remote"}
-        ]
+        answer["content"][0]["annotations"] = [{"type": "url_citation", "url": "https://news.example/remote"}]
         model = FakeModel(reply("resp_1", answer, searches=1))
 
         runner.write_fact_sheet(
-            job,
-            "version: 5\n",
-            CostGuard(SETTINGS, runner.MODEL),
-            model,
-            SETTINGS,
-            date(2026, 9, 25),
+            job, "version: 5\n", CostGuard(SETTINGS, runner.MODEL), model, SETTINGS, date(2026, 9, 25)
         )
 
         self.assertEqual(
             self.saved.call_args.args[2]["quellen"],
-            [
-                "https://example.com/jobs/1",
-                "https://firma.example/karriere/",
-                "https://news.example/remote",
-            ],
+            ["https://example.com/jobs/1", "https://firma.example/karriere/", "https://news.example/remote"],
         )
         self.assertEqual(model.requests[0]["include"], ["web_search_call.action.sources"])
 
     def test_the_search_is_withdrawn_once_the_budget_is_used(self):
         model = FakeModel(
-            reply("resp_1", decisions_call(), searches=3),
-            reply("resp_2", message(json.dumps(example_sheet()))),
+            reply("resp_1", decisions_call(), searches=3), reply("resp_2", message(json.dumps(example_sheet())))
         )
 
         self.run_job(model)
@@ -230,9 +198,7 @@ class AgentRunnerTests(unittest.TestCase):
 
         self.assertEqual(outcome, "abgebrochen")
         self.assertIn("2 Modellaufrufe", self.aborted.call_args.args[2])
-        self.assertEqual(
-            self.aborted.call_args.args[3], 2 * call_cost(runner.MODEL, Usage(9000, 0, 800))
-        )
+        self.assertEqual(self.aborted.call_args.args[3], 2 * call_cost(runner.MODEL, Usage(9000, 0, 800)))
 
     def test_a_throttled_model_is_waited_for_instead_of_ending_the_run(self):
         # As in the calibration run of 26.09.2026, when a heavy answer used up the minute.

@@ -7,11 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from job_finder.persistence.application_documents import (
-    public_documents,
-    resolve_document_key,
-    store_documents,
-)
+from job_finder.persistence.application_documents import public_documents, resolve_document_key, store_documents
 
 
 def upload(kind, name, content):
@@ -45,19 +41,13 @@ class ApplicationDocumentTests(unittest.TestCase):
         self.assertEqual(path.read_bytes(), content)
         self.assertEqual(documents[0]["name"], "Anschreiben.pdf")
         self.assertEqual(path.name, "Anschreiben.pdf")
-        self.assertTrue(
-            path.parent.name.startswith("Example GmbH - Junior Python Developer (m_w_d) [")
-        )
+        self.assertTrue(path.parent.name.startswith("Example GmbH - Junior Python Developer (m_w_d) ["))
 
     def test_equal_titles_for_different_jobs_use_distinct_folders(self):
         payload = [upload("resume", "Lebenslauf.pdf", b"first")]
-        first = store_documents(
-            "source:1", payload, self.directory, company="Example", title="Developer"
-        )
+        first = store_documents("source:1", payload, self.directory, company="Example", title="Developer")
         payload[0]["content"] = base64.b64encode(b"second").decode("ascii")
-        second = store_documents(
-            "source:2", payload, self.directory, company="Example", title="Developer"
-        )
+        second = store_documents("source:2", payload, self.directory, company="Example", title="Developer")
 
         first_path = self.directory / resolve_document_key("source:1", first[0])
         second_path = self.directory / resolve_document_key("source:2", second[0])
@@ -66,9 +56,7 @@ class ApplicationDocumentTests(unittest.TestCase):
         self.assertEqual(second_path.read_bytes(), b"second")
 
     def test_public_metadata_does_not_expose_storage_name(self):
-        documents = store_documents(
-            "job:1", [upload("resume", "Lebenslauf.docx", b"docx")], self.directory
-        )
+        documents = store_documents("job:1", [upload("resume", "Lebenslauf.docx", b"docx")], self.directory)
 
         public = public_documents({"application_documents": documents})
 
@@ -78,9 +66,7 @@ class ApplicationDocumentTests(unittest.TestCase):
 
     def test_unsupported_file_type_is_rejected_without_writing_files(self):
         with self.assertRaisesRegex(ValueError, "Erlaubt sind"):
-            store_documents(
-                "job:1", [upload("resume", "Lebenslauf.exe", b"unsafe")], self.directory
-            )
+            store_documents("job:1", [upload("resume", "Lebenslauf.exe", b"unsafe")], self.directory)
 
         self.assertEqual(list(self.directory.rglob("*")), [])
 
@@ -104,9 +90,7 @@ class ApplicationDocumentTests(unittest.TestCase):
         ]
         # "a\\b" is a folder path; "a\x08b" contains a control character.
         for folder in ("..", ".", "a/b", "a\\b", "a\x08b", "bad:name", " padded"):
-            cases.append(
-                ({"stored_name": "cv.pdf", "folder_name": folder}, "Ungültiger Dokumentordner")
-            )
+            cases.append(({"stored_name": "cv.pdf", "folder_name": folder}, "Ungültiger Dokumentordner"))
         for metadata, message in cases:
             with self.subTest(metadata=metadata), self.assertRaisesRegex(ValueError, message):
                 resolve_document_key("job:1", metadata)

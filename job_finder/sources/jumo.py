@@ -38,9 +38,7 @@ def collect_links():
     identifiers = {}
 
     for _batch in range(MAX_RESULT_BATCHES):
-        html = _session_text(
-            opener, LIST_URL, {"showNextJobOffers": "true", "j": "jobexchange", "_csrf": csrf}
-        )
+        html = _session_text(opener, LIST_URL, {"showNextJobOffers": "true", "j": "jobexchange", "_csrf": csrf})
         identifiers.update(dict.fromkeys(extract_job_ids(html)))
 
         has_next = _session_text(opener, LIST_URL, {"hasNextJobOffers": "true", "_csrf": csrf})

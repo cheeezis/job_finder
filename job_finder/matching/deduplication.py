@@ -35,9 +35,7 @@ def deduplicate_jobs(jobs: list[Job]) -> list[Job]:
         job = replace(original, locations=list(original.locations), sources=list(original.sources))
         title_key = normalize_title(job.title)
         company_key = normalize_company(job.company)
-        position = find_duplicate_position(
-            job, company_key, positions_by_title.get(title_key, []), unique_jobs
-        )
+        position = find_duplicate_position(job, company_key, positions_by_title.get(title_key, []), unique_jobs)
 
         if position is None:
             if title_key and company_key:

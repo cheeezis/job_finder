@@ -32,22 +32,15 @@ class ArbeitsagenturSearchTests(unittest.TestCase):
     def test_search_pages_until_the_announced_total_is_reached(self):
         references, requested = self.run_search(
             {
-                1: {
-                    "ergebnisliste": [{"referenznummer": "A"}, {"referenznummer": "B"}],
-                    "maxErgebnisse": 3,
-                },
-                2: {
-                    "ergebnisliste": [{"referenznummer": "B"}, {"referenznummer": "C"}],
-                    "maxErgebnisse": 3,
-                },
+                1: {"ergebnisliste": [{"referenznummer": "A"}, {"referenznummer": "B"}], "maxErgebnisse": 3},
+                2: {"ergebnisliste": [{"referenznummer": "B"}, {"referenznummer": "C"}], "maxErgebnisse": 3},
             }
         )
 
         self.assertEqual(references, ["A", "B", "C"])
         self.assertEqual([request["page"] for request in requested], ["1", "2"])
         self.assertEqual(
-            requested[0],
-            {"angebotsart": "1", "was": "python", "wo": "Fulda", "umkreis": "25", "page": "1"},
+            requested[0], {"angebotsart": "1", "was": "python", "wo": "Fulda", "umkreis": "25", "page": "1"}
         )
 
     def test_search_stops_when_a_page_brings_nothing_new(self):
@@ -85,10 +78,7 @@ class ArbeitsagenturSearchTests(unittest.TestCase):
             "COMMUTER_SEARCH_LOCATIONS": ["Kassel"],
             "COMMUTER_SEARCH_RADIUS_KM": 10,
         }
-        with (
-            patch.multiple(arbeitsagentur, **settings),
-            patch.object(arbeitsagentur, "search", side_effect=search),
-        ):
+        with patch.multiple(arbeitsagentur, **settings), patch.object(arbeitsagentur, "search", side_effect=search):
             links = arbeitsagentur.collect_links()
 
         detail = "https://www.arbeitsagentur.de/jobsuche/jobdetail"
@@ -103,10 +93,7 @@ class GetInItSearchTests(unittest.TestCase):
             2: {"items": {"results": [{"id": 2}, {"id": 3}]}, "total": 5},
             4: {"items": {"results": []}, "total": 5},
         }
-        for location, location_filter in (
-            ("remote", {"filter[homeOffice]": "1"}),
-            ("Fulda", {"filter[state]": "5"}),
-        ):
+        for location, location_filter in (("remote", {"filter[homeOffice]": "1"}), ("Fulda", {"filter[state]": "5"})):
             with self.subTest(location=location):
                 requests = []
 
@@ -118,19 +105,8 @@ class GetInItSearchTests(unittest.TestCase):
                     results = get_in_it.search_api(7, location)
 
                 self.assertEqual([result["id"] for result in results], [1, 2, 3])
+                self.assertEqual([params["start"] for params, _headers in requests], ["0", "2", "4"])
                 self.assertEqual(
-                    [params["start"] for params, _headers in requests], ["0", "2", "4"]
+                    requests[0][0], {"start": "0", "limit": "39", "filter[thematic_priority]": "7", **location_filter}
                 )
-                self.assertEqual(
-                    requests[0][0],
-                    {
-                        "start": "0",
-                        "limit": "39",
-                        "filter[thematic_priority]": "7",
-                        **location_filter,
-                    },
-                )
-                self.assertEqual(
-                    requests[0][1],
-                    {"Accept": "application/json", "X-Requested-With": "XMLHttpRequest"},
-                )
+                self.assertEqual(requests[0][1], {"Accept": "application/json", "X-Requested-With": "XMLHttpRequest"})

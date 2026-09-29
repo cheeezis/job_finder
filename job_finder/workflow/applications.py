@@ -5,11 +5,7 @@ from datetime import date, datetime, timedelta
 from job_finder.models import APPLICATION_STATUSES, WorkflowStatus
 from job_finder.paths import MEMORY_FILE
 from job_finder.persistence.application_documents import public_documents
-from job_finder.workflow.memory import (
-    has_application_state as is_application,
-    load_memory,
-    memory_source_links,
-)
+from job_finder.workflow.memory import has_application_state as is_application, load_memory, memory_source_links
 
 OPEN_APPLICATION_STATUSES = {
     WorkflowStatus.APPLIED.value,
@@ -83,20 +79,12 @@ def load_application_overview(memory_path=MEMORY_FILE, as_of=None):
     memory = load_memory(memory_path)
     reference_date = as_of or date.today()
     all_applications = [
-        application_row(job_id, entry, reference_date)
-        for job_id, entry in memory.items()
-        if is_application(entry)
+        application_row(job_id, entry, reference_date) for job_id, entry in memory.items() if is_application(entry)
     ]
-    all_applications.sort(
-        key=lambda item: item["applied_on"] or item["last_event_on"] or "", reverse=True
-    )
-    applications = [
-        item for item in all_applications if item["workflow_status"] in OPEN_APPLICATION_STATUSES
-    ]
+    all_applications.sort(key=lambda item: item["applied_on"] or item["last_event_on"] or "", reverse=True)
+    applications = [item for item in all_applications if item["workflow_status"] in OPEN_APPLICATION_STATUSES]
     completed_applications = [
-        item
-        for item in all_applications
-        if item["workflow_status"] not in OPEN_APPLICATION_STATUSES
+        item for item in all_applications if item["workflow_status"] not in OPEN_APPLICATION_STATUSES
     ]
     return {
         "applications": applications,
@@ -135,9 +123,7 @@ def update_history_event(
     }
 
 
-def delete_history_event(
-    entry, event_index, previous_status, previous_occurred_on, previous_scheduled_for=None
-):
+def delete_history_event(entry, event_index, previous_status, previous_occurred_on, previous_scheduled_for=None):
     """Delete one stored workflow event and recalculate the current status."""
     history, index = editable_history_event(
         entry, event_index, previous_status, previous_occurred_on, previous_scheduled_for
@@ -146,9 +132,7 @@ def delete_history_event(
     return synchronize_current_status(entry)
 
 
-def editable_history_event(
-    entry, event_index, previous_status, previous_occurred_on, previous_scheduled_for=None
-):
+def editable_history_event(entry, event_index, previous_status, previous_occurred_on, previous_scheduled_for=None):
     """Return a mutable history and one validated raw event index."""
     if isinstance(event_index, bool) or not isinstance(event_index, int):
         raise ValueError("Verlaufsindex muss eine Zahl sein")
@@ -189,8 +173,7 @@ def application_row(job_id, entry, as_of=None):
         current_status == WorkflowStatus.APPLIED.value
         and applied_on is not None
         and not statuses.intersection(RESPONSE_STATUSES)
-        and date.fromisoformat(applied_on) + timedelta(days=NO_RESPONSE_AFTER_DAYS)
-        <= reference_date
+        and date.fromisoformat(applied_on) + timedelta(days=NO_RESPONSE_AFTER_DAYS) <= reference_date
     ):
         current_status = WorkflowStatus.NO_RESPONSE.value
     days_to_response = None
@@ -213,29 +196,22 @@ def application_row(job_id, entry, as_of=None):
         "response_on": response_on,
         "days_to_response": days_to_response,
         "next_interview_at": (
-            first_upcoming_interview(history)
-            if current_status in OPEN_APPLICATION_STATUSES
-            else None
+            first_upcoming_interview(history) if current_status in OPEN_APPLICATION_STATUSES else None
         ),
         "last_event_on": max(
-            (event["occurred_on"] for event in history if event["occurred_on"] is not None),
-            default=None,
+            (event["occurred_on"] for event in history if event["occurred_on"] is not None), default=None
         ),
         "workflow_history": history,
         "documents": public_documents(entry),
         "automatic_no_response": (
-            current_status == WorkflowStatus.NO_RESPONSE.value
-            and WorkflowStatus.NO_RESPONSE.value not in statuses
+            current_status == WorkflowStatus.NO_RESPONSE.value and WorkflowStatus.NO_RESPONSE.value not in statuses
         ),
         "has_response": bool(statuses & RESPONSE_STATUSES),
         "has_interview": WorkflowStatus.INTERVIEW.value in statuses,
         "has_rejection": WorkflowStatus.REJECTED.value in statuses,
         "has_no_response": (
             current_status == WorkflowStatus.NO_RESPONSE.value
-            or (
-                current_status == WorkflowStatus.CLOSED.value
-                and WorkflowStatus.NO_RESPONSE.value in statuses
-            )
+            or (current_status == WorkflowStatus.CLOSED.value and WorkflowStatus.NO_RESPONSE.value in statuses)
         ),
         "has_offer": WorkflowStatus.OFFER.value in statuses,
     }
@@ -265,9 +241,7 @@ def normalized_history_event(event, event_index=None):
     if not isinstance(event, dict):
         return None
     try:
-        normalized = history_event(
-            event.get("status"), event.get("occurred_on"), event.get("scheduled_for")
-        )
+        normalized = history_event(event.get("status"), event.get("occurred_on"), event.get("scheduled_for"))
     except (TypeError, ValueError):
         return None
     if event.get("reason") == "listing_unavailable":
@@ -315,8 +289,7 @@ def first_upcoming_interview(history):
     appointments = [
         event["scheduled_for"]
         for event in history
-        if event["status"] == WorkflowStatus.INTERVIEW.value
-        and event.get("scheduled_for", "") >= current
+        if event["status"] == WorkflowStatus.INTERVIEW.value and event.get("scheduled_for", "") >= current
     ]
     return min(appointments, default=None)
 
@@ -336,14 +309,10 @@ def first_event_date(history, statuses, not_before=None):
 def application_statistics(applications):
     """Derive compact application funnel metrics."""
     total = len(applications)
-    response_days = [
-        item["days_to_response"] for item in applications if item["days_to_response"] is not None
-    ]
+    response_days = [item["days_to_response"] for item in applications if item["days_to_response"] is not None]
     responses = sum(item["has_response"] for item in applications)
     open_count = sum(item["workflow_status"] in OPEN_APPLICATION_STATUSES for item in applications)
-    completed = [
-        item for item in applications if item["workflow_status"] not in OPEN_APPLICATION_STATUSES
-    ]
+    completed = [item for item in applications if item["workflow_status"] not in OPEN_APPLICATION_STATUSES]
     completed_responses = sum(item["has_response"] for item in completed)
     return {
         "total": total,
@@ -354,11 +323,7 @@ def application_statistics(applications):
         "rejections": sum(item["has_rejection"] for item in applications),
         "no_responses": sum(item["has_no_response"] for item in applications),
         "offers": sum(item["has_offer"] for item in applications),
-        "response_rate_percent": (
-            round(completed_responses / len(completed) * 100) if completed else 0
-        ),
-        "average_response_days": (
-            round(sum(response_days) / len(response_days), 1) if response_days else None
-        ),
+        "response_rate_percent": (round(completed_responses / len(completed) * 100) if completed else 0),
+        "average_response_days": (round(sum(response_days) / len(response_days), 1) if response_days else None),
         "response_time_samples": len(response_days),
     }

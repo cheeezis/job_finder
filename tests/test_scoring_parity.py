@@ -13,10 +13,7 @@ from job_finder.models import Job
 class ScoringParityTests(unittest.TestCase):
     def test_complete_results_match_frozen_baseline(self):
         fixture = json.loads(
-            Path(__file__)
-            .with_name("fixtures")
-            .joinpath("scoring_parity.json")
-            .read_text(encoding="utf-8")
+            Path(__file__).with_name("fixtures").joinpath("scoring_parity.json").read_text(encoding="utf-8")
         )
         with patch.multiple(scoring, **fixture["settings"]):
             for index, case in enumerate(fixture["cases"]):

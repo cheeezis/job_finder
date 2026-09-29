@@ -33,13 +33,9 @@ class ManualImportTests(unittest.TestCase):
                 "memory_path": root / "seen.json",
                 "recommendations_path": root / "recommendations.json",
             }
-            with patch(
-                "job_finder.workflow.manual_import.manual.add_url", return_value=job
-            ) as add_url:
+            with patch("job_finder.workflow.manual_import.manual.add_url", return_value=job) as add_url:
                 result = import_manual_url("https://example.com/jobs/python", **paths)
-            recommendations = json.loads(paths["recommendations_path"].read_text(encoding="utf-8"))[
-                "recommendations"
-            ]
+            recommendations = json.loads(paths["recommendations_path"].read_text(encoding="utf-8"))["recommendations"]
             saved_jobs = json.loads(paths["jobs_path"].read_text(encoding="utf-8"))
             memory = load_memory(paths["memory_path"])
 

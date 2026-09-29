@@ -8,18 +8,8 @@ not load user settings or the personal facts in profile.local.yaml.
 
 # Both automation groups share their title patterns; the RPA context keywords
 # decide between process automation and infrastructure work.
-AUTOMATION_TITLE_PATTERNS = [
-    ["automation", "engineer"],
-    ["automationsentwickler"],
-    ["automatisierungsentwickler"],
-]
-RPA_CONTEXT_KEYWORDS = [
-    "rpa",
-    "uipath",
-    "power automate",
-    "prozessautomatisierung",
-    "robotic process automation",
-]
+AUTOMATION_TITLE_PATTERNS = [["automation", "engineer"], ["automationsentwickler"], ["automatisierungsentwickler"]]
+RPA_CONTEXT_KEYWORDS = ["rpa", "uipath", "power automate", "prozessautomatisierung", "robotic process automation"]
 
 ROLE_GROUPS = [
     {
@@ -151,26 +141,13 @@ ROLE_GROUPS = [
         "id": "rpa_automation",
         "label": "RPA/Prozessautomatisierung",
         "context_keywords": RPA_CONTEXT_KEYWORDS,
-        "patterns": [
-            *AUTOMATION_TITLE_PATTERNS,
-            ["rpa", "developer"],
-            ["rpa", "entwickler"],
-            ["rpa", "consultant"],
-        ],
+        "patterns": [*AUTOMATION_TITLE_PATTERNS, ["rpa", "developer"], ["rpa", "entwickler"], ["rpa", "consultant"]],
     },
     {
         "id": "junior_modern_workplace",
         "label": "Junior Microsoft Cloud/Modern Workplace",
         "entry_only": True,
-        "context_keywords": [
-            "automation",
-            "automatisierung",
-            "powershell",
-            "cloud",
-            "copilot",
-            "ai",
-            "ki",
-        ],
+        "context_keywords": ["automation", "automatisierung", "powershell", "cloud", "copilot", "ai", "ki"],
         "patterns": [
             ["modern workplace", "engineer"],
             ["microsoft 365", "consultant"],
@@ -496,18 +473,7 @@ PROFILE_HEADING_PHRASES = [
     "qualifications",
 ]
 
-EMPLOYER_CONTEXT_WORDS = [
-    "wir",
-    "uns",
-    "unser",
-    "unsere",
-    "unserem",
-    "unseren",
-    "unserer",
-    "we",
-    "us",
-    "our",
-]
+EMPLOYER_CONTEXT_WORDS = ["wir", "uns", "unser", "unsere", "unserem", "unseren", "unserer", "we", "us", "our"]
 
 
 HIGH_TRAVEL_PHRASES = [

@@ -10,9 +10,7 @@ def extract_annual_salary(text):
     ranges = re.findall(range_pattern, text)
     if ranges:
         values = [(salary_number(low), salary_number(high)) for low, high in ranges]
-        plausible = [
-            (low, high) for low, high in values if valid_salary(low) and valid_salary(high)
-        ]
+        plausible = [(low, high) for low, high in values if valid_salary(low) and valid_salary(high)]
         if plausible:
             return max(plausible, key=lambda item: item[1])
 

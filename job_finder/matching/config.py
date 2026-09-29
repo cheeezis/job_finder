@@ -78,10 +78,5 @@ STEPSTONE_SEARCH_LOCATIONS = [LOCAL_SEARCH_POSTAL_CODE, "Remote"]
 COMMUTER_SEARCH_LOCATIONS = [
     item["search_location"] for item in USER_SETTINGS["matching"].get("commuter_locations", [])
 ]
-COMMUTER_SEARCH_TERMS = [
-    "Junior IT",
-    "Junior Softwareentwickler",
-    "Berufseinsteiger IT",
-    "Trainee IT",
-]
+COMMUTER_SEARCH_TERMS = ["Junior IT", "Junior Softwareentwickler", "Berufseinsteiger IT", "Trainee IT"]
 COMMUTER_SEARCH_RADIUS_KM = 10

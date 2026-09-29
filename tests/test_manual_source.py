@@ -10,12 +10,7 @@ from unittest.mock import patch
 
 from job_finder.models import WorkMode
 from job_finder.sources import manual
-from job_finder.sources.common import (
-    fetch_diagnostics,
-    load_detail_cache,
-    reset_fetch_diagnostics,
-    save_detail_cache,
-)
+from job_finder.sources.common import fetch_diagnostics, load_detail_cache, reset_fetch_diagnostics, save_detail_cache
 
 
 def career_page(title):
@@ -68,9 +63,7 @@ class ManualSourceTests(unittest.TestCase):
 
     def test_unmarked_page_is_still_rejected(self):
         with self.assertRaisesRegex(ValueError, "Kein Hauptinhalt"):
-            manual.job_from_page(
-                "https://example.com", "<h1>Website</h1><p>Generic content</p>" * 20
-            )
+            manual.job_from_page("https://example.com", "<h1>Website</h1><p>Generic content</p>" * 20)
 
     def test_remote_schema_uses_applicant_region_when_job_location_is_missing(self):
         html = """
@@ -132,23 +125,17 @@ class ManualSourceTests(unittest.TestCase):
             cache_path = Path(directory) / "manual.json"
             with (
                 patch.object(
-                    manual.socket,
-                    "getaddrinfo",
-                    return_value=[(None, None, None, None, ("93.184.216.34", 443))],
+                    manual.socket, "getaddrinfo", return_value=[(None, None, None, None, ("93.184.216.34", 443))]
                 ),
                 patch.object(
-                    manual,
-                    "fetch_text_with_final_url",
-                    return_value=("https://example.com/jobs/python", html),
+                    manual, "fetch_text_with_final_url", return_value=("https://example.com/jobs/python", html)
                 ) as fetch,
             ):
                 job = manual.add_url("https://example.com/jobs/python", cache_path=cache_path)
 
             cache = load_detail_cache(cache_path)
 
-        fetch.assert_called_once_with(
-            "https://example.com/jobs/python", url_validator=manual.validate_public_url
-        )
+        fetch.assert_called_once_with("https://example.com/jobs/python", url_validator=manual.validate_public_url)
         self.assertEqual(list(cache), ["https://example.com/jobs/python"])
         self.assertEqual(job.primary_source.source, "manual")
 
@@ -179,16 +166,12 @@ class ManualSourceTests(unittest.TestCase):
             saved = load_detail_cache(cache_path)
 
         self.assertEqual(
-            [(job.title, job.cache_stale) for job in jobs],
-            [("fresh", False), ("moved", False), ("stale-error", True)],
+            [(job.title, job.cache_stale) for job in jobs], [("fresh", False), ("moved", False), ("stale-error", True)]
         )
         self.assertEqual(
-            [call.args[0].rsplit("/", 1)[1] for call in fetched.call_args_list],
-            ["stale-ok", "stale-error", "too-old"],
+            [call.args[0].rsplit("/", 1)[1] for call in fetched.call_args_list], ["stale-ok", "stale-error", "too-old"]
         )
-        self.assertEqual(
-            [url.rsplit("/", 1)[1] for url in saved], ["fresh", "moved", "stale-error", "too-old"]
-        )
+        self.assertEqual([url.rsplit("/", 1)[1] for url in saved], ["fresh", "moved", "stale-error", "too-old"])
         self.assertEqual(fetch_diagnostics()["failed_segments"], 2)
         self.assertIn("WARNUNG Manuell: 2 Detailseite(n) nicht erreichbar", output.getvalue())
 
@@ -199,11 +182,7 @@ class ManualSourceTests(unittest.TestCase):
 
     def test_hostname_resolving_to_private_network_is_rejected(self):
         with (
-            patch.object(
-                manual.socket,
-                "getaddrinfo",
-                return_value=[(None, None, None, None, ("192.168.1.10", 443))],
-            ),
+            patch.object(manual.socket, "getaddrinfo", return_value=[(None, None, None, None, ("192.168.1.10", 443))]),
             self.assertRaisesRegex(ValueError, "Private Netzwerk"),
         ):
             manual.validate_public_url("https://public-name.example/job")

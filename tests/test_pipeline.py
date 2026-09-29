@@ -19,9 +19,7 @@ class PipelineTests(unittest.TestCase):
             title="Junior Python Developer",
             company="Example GmbH",
             locations=[LOCAL_PLACES[0]],
-            sources=[
-                JobSource(source="test", source_id="123", url="https://example.test/jobs/123")
-            ],
+            sources=[JobSource(source="test", source_id="123", url="https://example.test/jobs/123")],
             description_raw="<p>Python, keine Berufserfahrung erforderlich.</p>",
             description_clean="Python, keine Berufserfahrung erforderlich.",
             work_mode=WorkMode.HYBRID,
@@ -36,9 +34,7 @@ class PipelineTests(unittest.TestCase):
             restored_jobs = load_jobs(jobs_path)
             results = score_jobs(restored_jobs)
             write_recommendations(results, json_path=directory_path / "recommendations.json")
-            review = json.loads(
-                (directory_path / "recommendations.json").read_text(encoding="utf-8")
-            )
+            review = json.loads((directory_path / "recommendations.json").read_text(encoding="utf-8"))
 
         self.assertEqual(len(results["included"]), 1)
         self.assertEqual(review["recommendations"][0]["title"], "Junior Python Developer")

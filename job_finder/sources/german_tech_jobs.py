@@ -95,9 +95,7 @@ def job_from_element(element, fetched_at=None):
         description_clean=description,
         work_mode=work_mode,
         remote_percentage=remote_percentage,
-        employment_type=normalize_employment_type(
-            element_text(element, "job-type", "jobtype", "job-status")
-        ),
+        employment_type=normalize_employment_type(element_text(element, "job-type", "jobtype", "job-status")),
         salary_min_eur=salary_minimum,
         salary_max_eur=salary_maximum,
         published_at=parse_published_date(element_text(element, "pubdate")),
@@ -128,9 +126,7 @@ def annual_salary_eur(value):
     if not re.search(r"(?i)(?:€|eur)", text) or not re.search(r"(?i)(?:year|jahr|annual)", text):
         return None, None
     amounts = [
-        int(re.sub(r"\D", "", match))
-        for match in re.findall(r"\d[\d.,'’\s]*", text)
-        if re.sub(r"\D", "", match)
+        int(re.sub(r"\D", "", match)) for match in re.findall(r"\d[\d.,'’\s]*", text) if re.sub(r"\D", "", match)
     ]
     if not amounts:
         return None, None

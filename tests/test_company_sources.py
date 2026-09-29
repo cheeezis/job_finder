@@ -37,14 +37,11 @@ class CareerPageFetchTests(unittest.TestCase):
         return jobs, [call.args[0] for call in fetch.call_args_list]
 
     def test_career_page_imports_each_matching_detail_page_once(self):
-        page = CareerPage(
-            "example", "Example GmbH", "https://jobs.example.test/", r"example\.test/job/\d+$"
-        )
+        page = CareerPage("example", "Example GmbH", "https://jobs.example.test/", r"example\.test/job/\d+$")
         jobs, fetched = self.fetch(
             page,
             {
-                "https://jobs.example.test/": '<a href="/job/1">A</a><a href="/job/1">A</a>'
-                '<a href="/about">About</a>',
+                "https://jobs.example.test/": '<a href="/job/1">A</a><a href="/job/1">A</a><a href="/about">About</a>',
                 "https://jobs.example.test/job/1": POSTING_HTML,
             },
         )
@@ -57,10 +54,7 @@ class CareerPageFetchTests(unittest.TestCase):
 
     def test_paginated_career_page_reads_every_announced_page(self):
         page = PaginatedCareerPage(
-            "example",
-            "Example GmbH",
-            "https://example.test/jobs/",
-            r"example\.test/jobs/(?!page/)[^/]+/$",
+            "example", "Example GmbH", "https://example.test/jobs/", r"example\.test/jobs/(?!page/)[^/]+/$"
         )
         jobs, fetched = self.fetch(
             page,
@@ -105,11 +99,7 @@ class ComposeItSourceTests(unittest.TestCase):
             links = compose_it.COMPOSE_IT.collect_links()
 
         self.assertEqual(
-            links,
-            [
-                "https://compose-it.de/job/it-supporter/",
-                "https://compose-it.de/job/it-systemadministrator/",
-            ],
+            links, ["https://compose-it.de/job/it-supporter/", "https://compose-it.de/job/it-systemadministrator/"]
         )
 
     def test_job_from_html_extracts_visible_job_content(self):
@@ -124,9 +114,7 @@ class ComposeItSourceTests(unittest.TestCase):
         <div id="bewerberform">Bewerbungsformular mit irrelevanten Feldern</div>
         """
 
-        job = compose_it.job_from_html(
-            "compose_it", "COMPOSE IT", "https://compose-it.de/job/it-supporter/", html
-        )
+        job = compose_it.job_from_html("compose_it", "COMPOSE IT", "https://compose-it.de/job/it-supporter/", html)
 
         self.assertEqual(job.id, "compose_it:it-supporter")
         self.assertEqual(job.title, "IT-Supporter (m/w/d)")
@@ -191,9 +179,7 @@ class CompanyCareerTests(unittest.TestCase):
                     fetched_at=now - timedelta(days=age),
                 )
                 save_detail_cache(path, {url: job})
-                with patch(
-                    "job_finder.sources.company_careers.fetch_text", side_effect=OSError("offline")
-                ) as fetch:
+                with patch("job_finder.sources.company_careers.fetch_text", side_effect=OSError("offline")) as fetch:
                     jobs = fetch_company_jobs("example", "Example", [url], path, now=now)
                 self.assertEqual(len(jobs), expected_count)
                 self.assertEqual(fetch.called, age >= 7)
@@ -233,12 +219,10 @@ class CompanyCareerTests(unittest.TestCase):
 
     def test_jumo_cache_key_keeps_job_offer_id(self):
         first = canonical_detail_url(
-            "https://jobs.jumo.de/engage/jobexchange/showJobOfferDetail.do?"
-            "jobOfferId=first&j=jobexchange"
+            "https://jobs.jumo.de/engage/jobexchange/showJobOfferDetail.do?jobOfferId=first&j=jobexchange"
         )
         second = canonical_detail_url(
-            "https://jobs.jumo.de/engage/jobexchange/showJobOfferDetail.do?"
-            "jobOfferId=second&j=jobexchange"
+            "https://jobs.jumo.de/engage/jobexchange/showJobOfferDetail.do?jobOfferId=second&j=jobexchange"
         )
 
         self.assertNotEqual(first, second)

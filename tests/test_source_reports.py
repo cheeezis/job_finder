@@ -85,8 +85,7 @@ class SourceReportTests(unittest.TestCase):
         output = io.StringIO()
         with (
             patch(
-                "run_finder.log_event",
-                side_effect=lambda event, **fields: events.append({"event": event, **fields}),
+                "run_finder.log_event", side_effect=lambda event, **fields: events.append({"event": event, **fields})
             ),
             redirect_stdout(output),
         ):
@@ -117,10 +116,7 @@ class SourceReportTests(unittest.TestCase):
             self.assertIn(line, output)
 
     def test_get_in_it_reports_searched_and_failed_segments(self):
-        searches = [
-            {"priority_id": 1, "location": "Fulda"},
-            {"priority_id": 2, "location": "remote"},
-        ]
+        searches = [{"priority_id": 1, "location": "Fulda"}, {"priority_id": 2, "location": "remote"}]
         cases = [
             ([[GET_IN_IT_RECORD], [GET_IN_IT_RECORD]], "success", 0, ["1 Stellen"]),
             (
@@ -140,12 +136,7 @@ class SourceReportTests(unittest.TestCase):
                 patch.object(get_in_it, "search_api", side_effect=answers),
             ):
                 self.assert_report(
-                    get_in_it,
-                    "get_in_it",
-                    status,
-                    1,
-                    {"failed_segments": failed, "total_segments": 2},
-                    console,
+                    get_in_it, "get_in_it", status, 1, {"failed_segments": failed, "total_segments": 2}, console
                 )
 
     def test_studysmarter_reports_searched_and_failed_segments(self):
@@ -176,15 +167,9 @@ class SourceReportTests(unittest.TestCase):
                 )
 
     def test_german_tech_jobs_reports_invalid_feed_entries_as_segments(self):
-        cases = [
-            (feed(FEED_JOB), "success", 0, 1),
-            (feed(FEED_JOB, FEED_WITHOUT_TITLE), "partial", 1, 2),
-        ]
+        cases = [(feed(FEED_JOB), "success", 0, 1), (feed(FEED_JOB, FEED_WITHOUT_TITLE), "partial", 1, 2)]
         for xml, status, failed, total in cases:
-            with (
-                self.subTest(status),
-                patch.object(german_tech_jobs, "fetch_text", return_value=xml),
-            ):
+            with self.subTest(status), patch.object(german_tech_jobs, "fetch_text", return_value=xml):
                 self.assert_report(
                     german_tech_jobs,
                     "german_tech_jobs",
@@ -203,34 +188,16 @@ class SourceReportTests(unittest.TestCase):
                 1,
                 ["WARNUNG StepStone: HTTP 429; nutze letzten Cache-Stand"],
             ),
-            (
-                RuntimeError("offline"),
-                "partial",
-                1,
-                ["WARNUNG StepStone: 1 Suchseite(n) nicht erreichbar"],
-            ),
+            (RuntimeError("offline"), "partial", 1, ["WARNUNG StepStone: 1 Suchseite(n) nicht erreichbar"]),
         ]
         for answer, status, failed, console in cases:
             with (
                 self.subTest(status=status, answer=type(answer).__name__),
-                patch.multiple(
-                    stepstone,
-                    STEPSTONE_SEARCH_TERMS=["python"],
-                    STEPSTONE_SEARCH_LOCATIONS=["Fulda"],
-                ),
-                patch.object(
-                    stepstone,
-                    "StepStoneHttpClient",
-                    type("Client", (StepStoneClient,), {"answer": answer}),
-                ),
+                patch.multiple(stepstone, STEPSTONE_SEARCH_TERMS=["python"], STEPSTONE_SEARCH_LOCATIONS=["Fulda"]),
+                patch.object(stepstone, "StepStoneHttpClient", type("Client", (StepStoneClient,), {"answer": answer})),
             ):
                 self.assert_report(
-                    stepstone,
-                    "stepstone",
-                    status,
-                    0,
-                    {"failed_segments": failed, "total_segments": 1},
-                    console,
+                    stepstone, "stepstone", status, 0, {"failed_segments": failed, "total_segments": 1}, console
                 )
 
     def test_plain_sources_report_handled_failures_errors_and_empty_results(self):
@@ -247,23 +214,14 @@ class SourceReportTests(unittest.TestCase):
             ["1 Stellen · Teilergebnis (2 Segment(e) fehlgeschlagen)"],
         )
         self.assert_report(
-            SimpleNamespace(SOURCE_NAME="jobicy", fetch_jobs=list),
-            "jobicy",
-            "empty",
-            0,
-            {},
-            ["0 Stellen"],
+            SimpleNamespace(SOURCE_NAME="jobicy", fetch_jobs=list), "jobicy", "empty", 0, {}, ["0 Stellen"]
         )
 
         def broken():
             raise RuntimeError("kaputt")
 
-        reports, events, output = self.collect(
-            SimpleNamespace(SOURCE_NAME="css", fetch_jobs=broken)
-        )
-        self.assertEqual(
-            reports, [{"name": "css", "status": "failed", "jobs": 0, "error": "RuntimeError"}]
-        )
+        reports, events, output = self.collect(SimpleNamespace(SOURCE_NAME="css", fetch_jobs=broken))
+        self.assertEqual(reports, [{"name": "css", "status": "failed", "jobs": 0, "error": "RuntimeError"}])
         self.assertEqual(
             events,
             [

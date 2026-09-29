@@ -29,11 +29,7 @@ class GetInItSourceTests(unittest.TestCase):
             company="Reply Deutschland SE",
             locations=["München"],
             sources=[
-                JobSource(
-                    source="get_in_it",
-                    source_id="311970",
-                    url="https://www.get-in-it.de/jobsuche/p311970",
-                )
+                JobSource(source="get_in_it", source_id="311970", url="https://www.get-in-it.de/jobsuche/p311970")
             ],
             description_raw="Python und Azure",
             description_clean="Python und Azure",
@@ -62,9 +58,7 @@ class GetInItSourceTests(unittest.TestCase):
                 patch.object(get_in_it, "fetch_job") as fetch_job,
             ):
                 jobs = get_in_it.fetch_jobs(cache_path=cache_path, now=now)
-                enriched = get_in_it.enrich_candidate_jobs(
-                    jobs, {jobs[0].id}, cache_path=cache_path, now=now
-                )
+                enriched = get_in_it.enrich_candidate_jobs(jobs, {jobs[0].id}, cache_path=cache_path, now=now)
 
         self.assertEqual(enriched, 0)
         self.assertEqual(jobs[0].description_clean, "Python und Azure")
@@ -76,24 +70,15 @@ class GetInItSourceTests(unittest.TestCase):
         stale = self.detailed_job(now - timedelta(days=8))
         detailed = self.detailed_job(now)
         detailed.description_clean = "Python, Azure und Kubernetes"
-        excluded_record = {
-            **API_RECORD,
-            "id": 311971,
-            "title": "Senior Sales Manager",
-            "url": "/jobsuche/p311971",
-        }
+        excluded_record = {**API_RECORD, "id": 311971, "title": "Senior Sales Manager", "url": "/jobsuche/p311971"}
         with tempfile.TemporaryDirectory() as directory:
             cache_path = Path(directory) / "get_in_it.json"
             save_detail_cache(cache_path, {stale.primary_url: stale})
             with patch.object(get_in_it, "fetch_job", return_value=detailed) as fetch_job:
-                jobs = get_in_it.jobs_from_records(
-                    [API_RECORD, excluded_record], cache_path, now=now
-                )
+                jobs = get_in_it.jobs_from_records([API_RECORD, excluded_record], cache_path, now=now)
                 jobs[0].is_new = True
                 jobs[0].workflow_status = WorkflowStatus.INTERESTING
-                enriched = get_in_it.enrich_candidate_jobs(
-                    jobs, {jobs[0].id}, cache_path=cache_path, now=now
-                )
+                enriched = get_in_it.enrich_candidate_jobs(jobs, {jobs[0].id}, cache_path=cache_path, now=now)
                 cache = load_detail_cache(cache_path)
 
         self.assertEqual(enriched, 1)

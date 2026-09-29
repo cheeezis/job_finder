@@ -74,12 +74,8 @@ def parse_limits(section):
     limits = dict(DEFAULT_LIMITS)
     for name in DEFAULT_LIMITS.keys() & section.keys():
         limits[name] = parse_limit(name, section[name])
-    if not (
-        limits["job_max_cost_eur"] <= limits["daily_max_cost_eur"] <= limits["monthly_max_cost_eur"]
-    ):
-        raise ValueError(
-            "agent: job_max_cost_eur <= daily_max_cost_eur <= monthly_max_cost_eur muss gelten"
-        )
+    if not (limits["job_max_cost_eur"] <= limits["daily_max_cost_eur"] <= limits["monthly_max_cost_eur"]):
+        raise ValueError("agent: job_max_cost_eur <= daily_max_cost_eur <= monthly_max_cost_eur muss gelten")
     return AgentLimits(**limits)
 
 

@@ -17,13 +17,7 @@ import psycopg
 
 from job_finder.matching.config import LOCAL_SEARCH_LOCATION, LOCAL_SEARCH_POSTAL_CODE
 from job_finder.models import WorkflowStatus
-from job_finder.paths import (
-    APPLICATION_DOCUMENTS_DIR,
-    JOBS_FILE,
-    MANUAL_CACHE_FILE,
-    MEMORY_FILE,
-    RECOMMENDATIONS_JSON,
-)
+from job_finder.paths import APPLICATION_DOCUMENTS_DIR, JOBS_FILE, MANUAL_CACHE_FILE, MEMORY_FILE, RECOMMENDATIONS_JSON
 from job_finder.persistence import document_store
 from job_finder.persistence.application_documents import find_document, resolve_document_key
 from job_finder.workflow.applications import load_application_overview
@@ -151,9 +145,7 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
                 raise ValueError("JSON-Objekt erforderlich")
             result = action(payload)
         except psycopg.Error:
-            self.send_json(
-                {"error": "Datenbankänderung fehlgeschlagen; bitte erneut versuchen."}, status=503
-            )
+            self.send_json({"error": "Datenbankänderung fehlgeschlagen; bitte erneut versuchen."}, status=503)
             return
         except (TypeError, ValueError, KeyError, OSError, RuntimeError) as error:
             self.send_json({"error": str(error)}, status=400)
@@ -175,9 +167,7 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
             self.memory_path,
             payload.get("documents"),
             self.application_documents_dir,
-            salary_expectation_eur=payload.get(
-                "salary_expectation_eur", payload.get("salary_expectation")
-            ),
+            salary_expectation_eur=payload.get("salary_expectation_eur", payload.get("salary_expectation")),
             salary_period=payload.get("salary_period", "year"),
         )
 
@@ -190,17 +180,13 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
         )
 
     def _review_status(self, payload):
-        return update_review_decision(
-            payload["job_id"], payload["workflow_status"], self.memory_path
-        )
+        return update_review_decision(payload["job_id"], payload["workflow_status"], self.memory_path)
 
     def _review_note(self, payload):
         return update_review_note(payload["job_id"], payload.get("review_note"), self.memory_path)
 
     def _undo_review(self, payload):
-        return undo_ignored_decision(
-            payload["job_id"], payload["expected_status"], self.memory_path
-        )
+        return undo_ignored_decision(payload["job_id"], payload["expected_status"], self.memory_path)
 
     def _update_status(self, payload):
         return {

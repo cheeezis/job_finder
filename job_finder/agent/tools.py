@@ -33,10 +33,7 @@ PAST_DECISIONS_TOOL = {
     "parameters": {
         "type": "object",
         "properties": {
-            "company": {
-                "type": ["string", "null"],
-                "description": "Firmenname wie in der Anzeige, oder null.",
-            },
+            "company": {"type": ["string", "null"], "description": "Firmenname wie in der Anzeige, oder null."},
             "title_keywords": {
                 "type": "array",
                 "items": {"type": "string"},
@@ -61,14 +58,9 @@ def past_decisions(arguments, current_job_id, rows=None):
         if isinstance(keyword, str) and len(keyword.strip()) >= 3
     ]
     if not company_key and not keywords:
-        return json.dumps(
-            {"fehler": "Firma oder mindestens ein Titelwort mit 3 Zeichen angeben."},
-            ensure_ascii=False,
-        )
+        return json.dumps({"fehler": "Firma oder mindestens ein Titelwort mit 3 Zeichen angeben."}, ensure_ascii=False)
     entries = []
-    for job_id, title, row_company, status, rating, note, decided_on in (
-        decided_jobs() if rows is None else rows
-    ):
+    for job_id, title, row_company, status, rating, note, decided_on in decided_jobs() if rows is None else rows:
         if job_id == current_job_id:
             continue
         if company_key and companies_match(company_key, normalize_company(row_company or "")):

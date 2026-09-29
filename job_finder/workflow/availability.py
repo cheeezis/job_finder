@@ -13,12 +13,7 @@ from job_finder.sources.arbeitnow import application_page_is_missing
 from job_finder.sources.manual import VisibleJobParser, validate_public_url
 from job_finder.structured_data import extract_json_ld_job_posting
 from job_finder.workflow.applications import record_status_change
-from job_finder.workflow.memory import (
-    edit_memory,
-    has_application_state,
-    load_memory,
-    sources_succeeded,
-)
+from job_finder.workflow.memory import edit_memory, has_application_state, load_memory, sources_succeeded
 
 CLOSED_MESSAGE = re.compile(
     r"^(?:(?:diese|die) (?:stelle|stellenanzeige|position|ausschreibung) "
@@ -246,10 +241,7 @@ def _save_checks(candidates, checked_urls, memory_path, now):
                 continue
             updated = {url: checked_urls.get(url, checks.get(url, {})) for url in urls}
             entry["availability_checks"] = updated
-            if not all(
-                recent_check(check, now) and check.get("closed") is True
-                for check in updated.values()
-            ):
+            if not all(recent_check(check, now) and check.get("closed") is True for check in updated.values()):
                 continue
             record_status_change(entry, WorkflowStatus.IGNORED)
             entry["workflow_history"][-1]["reason"] = "listing_unavailable"

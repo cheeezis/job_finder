@@ -32,9 +32,7 @@ REQUEST_PAUSE_SECONDS = 0.25
 def fetch_jobs():
     """Return recent Germany-focused and international remote IT jobs."""
     return [
-        job_from_record(record)
-        for record in collect_records()
-        if remote_region_allows_germany(record.get("jobGeo"))
+        job_from_record(record) for record in collect_records() if remote_region_allows_germany(record.get("jobGeo"))
     ]
 
 

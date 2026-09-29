@@ -17,15 +17,7 @@ def decisions(arguments, current_job_id="job:current", rows=None):
 class PastDecisionsTests(unittest.TestCase):
     def test_company_matches_come_first_then_the_newest_title_matches(self):
         rows = [
-            (
-                "job:1",
-                "SAP Consultant",
-                "neylux GmbH",
-                "ignored",
-                None,
-                "SAP-Kern",
-                date(2026, 9, 1),
-            ),
+            ("job:1", "SAP Consultant", "neylux GmbH", "ignored", None, "SAP-Kern", date(2026, 9, 1)),
             ("job:2", "Java Developer", "SEITENBAU GmbH", "ignored", None, None, date(2026, 8, 1)),
             ("job:3", "SAP Berater", "Andere AG", "applied", "gut", None, date(2026, 9, 20)),
             ("job:current", "SAP Consultant", "SEITENBAU", "interesting", None, None, None),
@@ -43,10 +35,7 @@ class PastDecisionsTests(unittest.TestCase):
     def test_short_words_do_not_match_everything_and_notes_are_cut(self):
         rows = [("job:1", "Sapient Developer", "Firma X", "ignored", None, "x" * 999, None)]
 
-        self.assertEqual(
-            decisions({"company": None, "title_keywords": ["SAP"]}, rows=rows),
-            {"entscheidungen": []},
-        )
+        self.assertEqual(decisions({"company": None, "title_keywords": ["SAP"]}, rows=rows), {"entscheidungen": []})
         found = decisions({"company": "Firma X", "title_keywords": []}, rows=rows)
         self.assertEqual(len(found["entscheidungen"][0]["notiz"]), MAX_NOTE_CHARS)
 
@@ -84,9 +73,7 @@ class PastDecisionsDatabaseTests(unittest.TestCase):
                         ],
                     ),
                     "job:new": job("Python Developer", "new"),
-                    "job:closed": job(
-                        "Go Developer", "ignored", availability_checked_at="2026-09-12T08:00:00"
-                    ),
+                    "job:closed": job("Go Developer", "ignored", availability_checked_at="2026-09-12T08:00:00"),
                 },
             )
 

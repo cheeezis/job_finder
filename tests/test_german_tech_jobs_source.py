@@ -59,12 +59,8 @@ class GermanTechJobsTests(unittest.TestCase):
         self.assertEqual(invalid, 1)
 
     def test_non_annual_or_non_euro_salary_is_not_imported(self):
-        self.assertEqual(
-            german_tech_jobs.annual_salary_eur("4.000 - 5.000 € per month"), (None, None)
-        )
-        self.assertEqual(
-            german_tech_jobs.annual_salary_eur("60,000 - 80,000 USD per year"), (None, None)
-        )
+        self.assertEqual(german_tech_jobs.annual_salary_eur("4.000 - 5.000 € per month"), (None, None))
+        self.assertEqual(german_tech_jobs.annual_salary_eur("60,000 - 80,000 USD per year"), (None, None))
 
     def test_recent_cache_is_used_and_marked_after_feed_failure(self):
         now = datetime(2026, 8, 17, tzinfo=UTC)

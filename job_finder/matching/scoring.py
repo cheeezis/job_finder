@@ -5,11 +5,7 @@ from datetime import date, timedelta
 
 from job_finder.matching import location_rules
 from job_finder.matching.config import LOCAL_SEARCH_RADIUS_KM
-from job_finder.matching.experience import (
-    analyze_experience,
-    extract_required_years,
-    strong_experience_is_required,
-)
+from job_finder.matching.experience import analyze_experience, extract_required_years, strong_experience_is_required
 from job_finder.matching.location_rules import is_hybrid, remote_possible_from_germany
 from job_finder.matching.matching_rules import (
     BLOCKED_TITLE_WORDS,
@@ -20,12 +16,7 @@ from job_finder.matching.matching_rules import (
     MANDATORY_ADVANCED_DEGREE_PATTERNS,
     ROLE_GROUPS,
 )
-from job_finder.matching.matching_text import (
-    contains_any,
-    contains_keyword,
-    is_entry_level,
-    matches_pattern,
-)
+from job_finder.matching.matching_text import contains_any, contains_keyword, is_entry_level, matches_pattern
 from job_finder.matching.ranking_weights import ROLE_POINTS, SCORE_LIMITS, SKILL_GROUPS
 from job_finder.matching.remote import detect_remote
 from job_finder.matching.salary import extract_annual_salary
@@ -63,8 +54,7 @@ def score_job(job: Job, today=None):
     cutoff = reference_date - timedelta(days=MAX_JOB_AGE_DAYS)
     if job.published_at is not None and job.published_at < cutoff:
         return excluded_result(
-            f"Veröffentlichung älter als {MAX_JOB_AGE_DAYS} Tage: "
-            f"{job.published_at.strftime('%d.%m.%Y')}"
+            f"Veröffentlichung älter als {MAX_JOB_AGE_DAYS} Tage: {job.published_at.strftime('%d.%m.%Y')}"
         )
 
     title = normalize_text(job.title)
@@ -72,9 +62,7 @@ def score_job(job: Job, today=None):
     description = strip_platform_boilerplate(normalize_text(job.description_clean))
     remote = normalize_text(job.remote_text)
     if job.remote_percentage is None:
-        remote = normalize_text(
-            detect_remote(title, location, description, structured_remote=remote)
-        )
+        remote = normalize_text(detect_remote(title, location, description, structured_remote=remote))
     salary_text = structured_salary_text(job)
     employment = normalize_text(job.employment_type or "")
     # Structured employment data must influence preferences even when portals
@@ -209,14 +197,7 @@ def find_role(title, description):
             continue
 
         if role["id"] == "testing" and contains_any(title, ["qa", "quality assurance"]):
-            testing_context = [
-                "software",
-                "test",
-                "automation",
-                "automatisierung",
-                "playwright",
-                "jest",
-            ]
+            testing_context = ["software", "test", "automation", "automatisierung", "playwright", "jest"]
             if not contains_any(full_text, testing_context):
                 continue
 
@@ -249,16 +230,7 @@ def find_blocked_title_word(title):
 
 def structured_advanced_level(career_levels):
     """Return the first explicitly advanced portal seniority label."""
-    advanced_words = (
-        "senior",
-        "sr",
-        "staff",
-        "lead",
-        "principal",
-        "manager",
-        "director",
-        "executive",
-    )
+    advanced_words = ("senior", "sr", "staff", "lead", "principal", "manager", "director", "executive")
     for level in career_levels or []:
         if any(contains_keyword(normalize_text(str(level)), word) for word in advanced_words):
             return str(level).strip()
@@ -296,16 +268,8 @@ def analyze_location_for_role(title, location, remote, description):
     )
     if result["allowed"]:
         return result
-    if (
-        is_entry_level(title, title)
-        and is_hybrid(remote)
-        and remote_possible_from_germany(location, description)
-    ):
-        return {
-            "allowed": True,
-            "points": 0,
-            "label": "Junior-Hybrid außerhalb des Suchgebiets; Präsenzumfang prüfen",
-        }
+    if is_entry_level(title, title) and is_hybrid(remote) and remote_possible_from_germany(location, description):
+        return {"allowed": True, "points": 0, "label": "Junior-Hybrid außerhalb des Suchgebiets; Präsenzumfang prüfen"}
     return result
 
 

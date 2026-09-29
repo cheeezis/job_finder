@@ -32,31 +32,18 @@ MAX_EXTRA_LINES = 2
 
 def closed_object(properties):
     """Strict structured output wants every property required and no others allowed."""
-    return {
-        "type": "object",
-        "properties": properties,
-        "required": list(properties),
-        "additionalProperties": False,
-    }
+    return {"type": "object", "properties": properties, "required": list(properties), "additionalProperties": False}
 
 
-LINE = closed_object(
-    {"ampel": {"type": "string", "enum": list(FIXED_LIGHTS)}, "text": {"type": "string"}}
-)
+LINE = closed_object({"ampel": {"type": "string", "enum": list(FIXED_LIGHTS)}, "text": {"type": "string"}})
 EXTRA_LINE = closed_object(
-    {
-        "thema": {"type": "string"},
-        "ampel": {"type": "string", "enum": list(LIGHTS)},
-        "text": {"type": "string"},
-    }
+    {"thema": {"type": "string"}, "ampel": {"type": "string", "enum": list(LIGHTS)}, "text": {"type": "string"}}
 )
 SCHEMA = closed_object(
     {
         **{key: LINE for key, _label in FIXED_LINES},
         "zusatz": {"type": "array", "items": EXTRA_LINE},
-        "fazit": closed_object(
-            {"stufe": {"type": "string", "enum": list(VERDICTS)}, "text": {"type": "string"}}
-        ),
+        "fazit": closed_object({"stufe": {"type": "string", "enum": list(VERDICTS)}, "text": {"type": "string"}}),
         "kurzgrund": {"type": "string"},
         "quellen": {"type": "array", "items": {"type": "string"}},
     }
@@ -92,9 +79,7 @@ def parse_fact_sheet(text):
     if not non_empty_text(verdict.get("text")) or not non_empty_text(sheet["kurzgrund"]):
         raise ValueError("Fazit oder Kurzgrund ist leer")
     verdict["text"], sheet["kurzgrund"] = tidy(verdict["text"]), tidy(sheet["kurzgrund"])
-    if not isinstance(sheet["quellen"], list) or not all(
-        isinstance(source, str) for source in sheet["quellen"]
-    ):
+    if not isinstance(sheet["quellen"], list) or not all(isinstance(source, str) for source in sheet["quellen"]):
         raise ValueError("Quellen müssen eine Liste von Texten sein")
     return sheet
 

@@ -9,20 +9,13 @@ from urllib.error import HTTPError
 
 from job_finder.models import WorkflowStatus, WorkMode
 from job_finder.sources import studysmarter
-from job_finder.sources.common import (
-    fetch_diagnostics,
-    load_detail_cache,
-    reset_fetch_diagnostics,
-    save_detail_cache,
-)
+from job_finder.sources.common import fetch_diagnostics, load_detail_cache, reset_fetch_diagnostics, save_detail_cache
 
 
 class StudySmarterTests(unittest.TestCase):
     JOB_URL = "https://talents.studysmarter.de/companies/example/junior-python-developer-12345678/"
     # The API spells the city segment "koeln"; the site only routes "koln".
-    CITY_LINK = (
-        "https://talents.studysmarter.de/companies/example/koeln/junior-python-developer-12345678/"
-    )
+    CITY_LINK = "https://talents.studysmarter.de/companies/example/koeln/junior-python-developer-12345678/"
     JOB_HTML = """
     <script type="application/ld+json">
     {
@@ -58,9 +51,7 @@ class StudySmarterTests(unittest.TestCase):
                 "job_listing_category": ",".join(studysmarter.IT_CATEGORIES),
             },
         )
-        self.assertTrue(
-            all(search.get("is_remote_position") == "completely" for search in searches[1:])
-        )
+        self.assertTrue(all(search.get("is_remote_position") == "completely" for search in searches[1:]))
 
     def test_current_search_metadata_replaces_stale_cached_prefilter_fields(self):
         record = {
@@ -73,9 +64,7 @@ class StudySmarterTests(unittest.TestCase):
             "job_types": [{"name": "Vollzeit"}],
             "posted": "2026-08-20",
         }
-        cached = studysmarter.enrich_summary_job(
-            studysmarter.summary_job_from_record(record), self.JOB_HTML
-        )
+        cached = studysmarter.enrich_summary_job(studysmarter.summary_job_from_record(record), self.JOB_HTML)
         cached.title = "Senior Developer"
         cached.locations = ["München"]
         cached.work_mode = WorkMode.ONSITE
@@ -112,10 +101,7 @@ class StudySmarterTests(unittest.TestCase):
         pages = [
             {"data": [{"id": 1, "link": "https://example.test/1"}], "total_pages": 2},
             {
-                "data": [
-                    {"id": 1, "link": "https://example.test/1"},
-                    {"id": 2, "link": "https://example.test/2"},
-                ],
+                "data": [{"id": 1, "link": "https://example.test/1"}, {"id": 2, "link": "https://example.test/2"}],
                 "total_pages": 2,
             },
         ]
@@ -138,9 +124,7 @@ class StudySmarterTests(unittest.TestCase):
             "salary": {"salary_type": "ai_predicted"},
         }
 
-        job = studysmarter.enrich_summary_job(
-            studysmarter.summary_job_from_record(record), self.JOB_HTML
-        )
+        job = studysmarter.enrich_summary_job(studysmarter.summary_job_from_record(record), self.JOB_HTML)
 
         self.assertEqual(job.id, "studysmarter:12345678")
         self.assertEqual(job.title, "Junior Python Developer (m/w/d)")
@@ -160,9 +144,7 @@ class StudySmarterTests(unittest.TestCase):
                 "company_name": "Example GmbH",
                 "is_remote_positions": "completely",
             }
-            cached_job = studysmarter.enrich_summary_job(
-                studysmarter.summary_job_from_record(record), self.JOB_HTML
-            )
+            cached_job = studysmarter.enrich_summary_job(studysmarter.summary_job_from_record(record), self.JOB_HTML)
             cached_job.fetched_at = datetime(2026, 8, 25, tzinfo=UTC)
             save_detail_cache(cache_path, {self.JOB_URL: cached_job})
 
@@ -228,16 +210,10 @@ class StudySmarterTests(unittest.TestCase):
 
         with (
             tempfile.TemporaryDirectory() as directory,
-            patch.object(
-                studysmarter,
-                "fetch_text",
-                side_effect=HTTPError(self.JOB_URL, 404, "Not Found", {}, None),
-            ),
+            patch.object(studysmarter, "fetch_text", side_effect=HTTPError(self.JOB_URL, 404, "Not Found", {}, None)),
             patch("builtins.print"),
         ):
-            enriched = studysmarter.enrich_candidate_jobs(
-                jobs, {jobs[0].id}, Path(directory) / "studysmarter.json"
-            )
+            enriched = studysmarter.enrich_candidate_jobs(jobs, {jobs[0].id}, Path(directory) / "studysmarter.json")
 
         self.assertEqual(enriched, 0)
         self.assertEqual(fetch_diagnostics(), {"failed_segments": 0, "failed_candidates": 1})

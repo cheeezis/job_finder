@@ -369,16 +369,11 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(result["filter_status"], "excluded")
         self.assertEqual(result["reasons"][0], "Ort/Remote passt nicht")
 
-    def test_remote_portugal_is_excluded(self):
-        result = score_job(make_job(location="Portugal", remote="100%"))
-        self.assertEqual(result["filter_status"], "excluded")
-        self.assertIn("Deutschland", result["reasons"][0])
-
-    def test_remote_foreign_city_without_country_name_is_excluded(self):
-        """A city-only location must be rejected even without the country name."""
-        for city in ("London", "Paris", "Zuerich", "Warschau"):
-            with self.subTest(city=city):
-                result = score_job(make_job(location=city, remote="100%"))
+    def test_remote_foreign_location_is_excluded(self):
+        """A foreign country or a city-only location is rejected, even without the country name."""
+        for place in ("Portugal", "London", "Paris", "Zuerich", "Warschau"):
+            with self.subTest(place=place):
+                result = score_job(make_job(location=place, remote="100%"))
                 self.assertEqual(result["filter_status"], "excluded")
                 self.assertIn("Deutschland", result["reasons"][0])
 
@@ -441,20 +436,14 @@ class ScoringTests(unittest.TestCase):
         self.assertTrue(any(reason.startswith("+8 Erfahrung") for reason in result["reasons"]))
 
     def test_non_junior_strong_experience_is_excluded(self):
-        german = score_job(
-            make_job(
-                title="Webentwickler IoT",
-                description="Du hast bereits Berufserfahrung im Data Engineering.",
-            )
-        )
-        english = score_job(
-            make_job(
-                title="Frontend Engineer",
-                description="Deep previous experience with React is required.",
-            )
-        )
-        self.assertEqual(german["filter_status"], "excluded")
-        self.assertEqual(english["filter_status"], "excluded")
+        for title, description in (
+            ("Webentwickler IoT", "Du hast bereits Berufserfahrung im Data Engineering."),
+            ("Frontend Engineer", "Deep previous experience with React is required."),
+            ("Software Engineer", "Du hast mehrere Jahre Erfahrung in der Softwareentwicklung."),
+        ):
+            with self.subTest(title=title):
+                result = score_job(make_job(title=title, description=description))
+                self.assertEqual(result["filter_status"], "excluded")
 
     def test_inflected_strong_experience_is_excluded(self):
         for phrase in (
@@ -511,15 +500,6 @@ class ScoringTests(unittest.TestCase):
     def test_missing_description_keeps_the_junior_title_signal(self):
         result = score_job(make_job(title="Junior Data Analyst", description=""))
         self.assertEqual(result["experience_level"], "klare Einstiegsstelle")
-
-    def test_several_years_in_german_are_strong_experience(self):
-        result = score_job(
-            make_job(
-                title="Software Engineer",
-                description="Du hast mehrere Jahre Erfahrung in der Softwareentwicklung.",
-            )
-        )
-        self.assertEqual(result["filter_status"], "excluded")
 
     def test_plus_years_without_the_word_experience_are_excluded(self):
         result = score_job(
@@ -609,25 +589,16 @@ class ScoringTests(unittest.TestCase):
                 self.assertEqual(result["filter_status"], "excluded")
                 self.assertIn(reason, result["reasons"][0])
 
-    def test_frontend_and_web_roles_are_general_software_development(self):
-        frontend = score_job(
-            make_job(title="Frontend Developer", description="TypeScript und React.")
-        )
-        web = score_job(
-            make_job(title="Webentwickler IoT", description="JavaScript und REST APIs.")
-        )
-        self.assertEqual(frontend["filter_status"], "included")
-        self.assertEqual(web["filter_status"], "included")
-
-    def test_devops_synonyms_are_allowed(self):
-        sre = score_job(
-            make_job(title="Site Reliability Engineer", description="Kubernetes und Python.")
-        )
-        netops = score_job(
-            make_job(title="SysOps-/NetOps-Engineer", description="Netzwerk und Automation.")
-        )
-        self.assertEqual(sre["filter_status"], "included")
-        self.assertEqual(netops["filter_status"], "included")
+    def test_frontend_web_and_devops_roles_are_allowed(self):
+        for title, description in (
+            ("Frontend Developer", "TypeScript und React."),
+            ("Webentwickler IoT", "JavaScript und REST APIs."),
+            ("Site Reliability Engineer", "Kubernetes und Python."),
+            ("SysOps-/NetOps-Engineer", "Netzwerk und Automation."),
+        ):
+            with self.subTest(title=title):
+                result = score_job(make_job(title=title, description=description))
+                self.assertEqual(result["filter_status"], "included")
 
     def test_rpa_is_allowed_with_lower_role_score(self):
         result = score_job(

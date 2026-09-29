@@ -424,6 +424,27 @@ class ApplicationTrackingTests(unittest.TestCase):
                 self.assertEqual(after["statistics"]["responses"], 1)
                 self.assertEqual(load_memory(self.memory_path)["job:1"]["workflow_status"], status)
 
+    def test_a_past_interview_stays_visible_until_a_newer_event(self):
+        history = [
+            {"status": "applied", "occurred_on": "2026-08-01"},
+            {"status": "interview", "occurred_on": "2026-08-05", "scheduled_for": "2026-08-07T10:00"},
+        ]
+        self.save_job({"workflow_status": "interview", "workflow_history": history})
+        past = load_application_overview(self.memory_path, as_of=date(2026, 8, 10))["applications"][0]
+
+        history[1]["scheduled_for"] = "2099-08-07T10:00"
+        self.save_job({"workflow_status": "interview", "workflow_history": history})
+        upcoming = load_application_overview(self.memory_path, as_of=date(2026, 8, 10))["applications"][0]
+
+        history[1]["scheduled_for"] = "2026-08-07T10:00"
+        history.append({"status": "response", "occurred_on": "2026-08-08"})
+        self.save_job({"workflow_status": "response", "workflow_history": history})
+        answered = load_application_overview(self.memory_path, as_of=date(2026, 8, 10))["applications"][0]
+
+        self.assertEqual((past["next_interview_at"], past["last_interview_at"]), (None, "2026-08-07T10:00"))
+        self.assertEqual((upcoming["next_interview_at"], upcoming["last_interview_at"]), ("2099-08-07T10:00", None))
+        self.assertIsNone(answered["last_interview_at"])
+
     def test_upcoming_interview_keeps_the_application_open(self):
         self.save_job(
             {

@@ -191,6 +191,7 @@ def application_row(job_id, entry, as_of=None):
         "next_interview_at": (
             first_upcoming_interview(history) if current_status in OPEN_APPLICATION_STATUSES else None
         ),
+        "last_interview_at": last_past_interview(history),
         "last_event_on": max(
             (event["occurred_on"] for event in history if event["occurred_on"] is not None), default=None
         ),
@@ -301,6 +302,15 @@ def first_upcoming_interview(history):
         if event["status"] == WorkflowStatus.INTERVIEW.value and event.get("scheduled_for", "") >= current
     ]
     return min(appointments, default=None)
+
+
+def last_past_interview(history):
+    """Return the appointment of the latest event while it is a past interview."""
+    latest = history[-1] if history else {}
+    appointment = latest.get("scheduled_for")
+    if latest.get("status") != WorkflowStatus.INTERVIEW.value or not appointment:
+        return None
+    return appointment if appointment < datetime.now().strftime("%Y-%m-%dT%H:%M") else None
 
 
 def first_event_date(history, statuses, not_before=None):

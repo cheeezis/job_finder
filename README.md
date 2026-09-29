@@ -96,6 +96,8 @@ Geänderte Bewertungsregeln wirken ab dem nächsten Finder-Lauf.
   bilden eine Karte mit allen Orten und Links, über Portale und Läufe hinweg;
   eine Entscheidung gilt für alle. Eine schon entschiedene Stelle übernimmt eine
   neue Anzeige nur ohne neuen Ort oder wenn beide komplett remote sind.
+- **Gespräche:** Die Karte hebt das nächste Gespräch hervor; ist es vorbei,
+  zeigt sie „Letztes Gespräch“, bis ein neues Ereignis eingetragen wird.
 - **Keine Rückmeldung:** Kommt 14 Tage nach Bewerbung, Rückmeldung oder letztem
   Gesprächstermin nichts Neues, zeigt die Übersicht „Keine Rückmeldung“; ein
   späteres Ereignis öffnet die Bewerbung wieder. Der Status lässt sich auch

@@ -1,6 +1,7 @@
 """Normalized keyword matching shared by scoring analyses."""
 
 import re
+from functools import cache
 
 from job_finder.matching.matching_rules import BODY_ENTRY_LEVEL_PHRASES, ENTRY_LEVEL_WORDS
 from job_finder.text import normalize_text
@@ -25,7 +26,11 @@ def contains_keyword(text, keyword):
 
 def keyword_pattern(keyword):
     """Escape a keyword and add boundaries for letters, digits or underscores."""
-    normalized = normalize_text(keyword)
+    return normalized_pattern(normalize_text(keyword))
+
+
+@cache
+def normalized_pattern(normalized):
     escaped = re.escape(normalized)
     if re.fullmatch(r"[a-z0-9_]+", normalized):
         return rf"(?<!\w){escaped}(?!\w)"

@@ -119,10 +119,10 @@ def _update_queue(results, state, timestamp):
     # A job may have been queued in an earlier run but be excluded after a
     # stricter general rule or an updated posting. It must not remain queued.
     for job in results.get("excluded", []):
-        state["pending"].pop(notification_key(job), None)
+        state["pending"].pop(job["id"], None)
 
     for job in results["included"]:
-        key = notification_key(job)
+        key = job["id"]
         jobs_by_key[key] = job
         is_new_job = bool(job.get("is_new"))
         if is_new_job:
@@ -230,11 +230,6 @@ def is_notifiable(job):
     return job.get(
         "workflow_status", "new"
     ) in NOTIFIABLE_STATUSES and is_visible_in_default_review(job)
-
-
-def notification_key(job):
-    """Identify a job independently of later content or scoring changes."""
-    return job["id"]
 
 
 def pending_entry(job, timestamp):

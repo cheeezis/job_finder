@@ -37,8 +37,7 @@ class LocalHybridRunTests(unittest.TestCase):
             ),
             patch.dict(os.environ, {"DISCORD_WEBHOOK_URL": "https://discord.test/hook"}),
         ):
-            patcher.start()
-            self.addCleanup(patcher.stop)
+            self.enterContext(patcher)
 
     def run_main(self, container_exit=0, **steps):
         """Run main() with Docker, az and the container replaced; return the container call."""

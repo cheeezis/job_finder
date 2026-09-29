@@ -36,12 +36,10 @@ def run_fake_agent(guard, job_ids):
 
 class CostGuardTests(unittest.TestCase):
     def setUp(self):
-        spent = patch.object(cost_guard, "spent_today_and_this_month", return_value=(0, 0))
-        record = patch.object(cost_guard, "record_model_call")
-        self.spent = spent.start()
-        self.record = record.start()
-        self.addCleanup(spent.stop)
-        self.addCleanup(record.stop)
+        self.spent = self.enterContext(
+            patch.object(cost_guard, "spent_today_and_this_month", return_value=(0, 0))
+        )
+        self.record = self.enterContext(patch.object(cost_guard, "record_model_call"))
 
     def test_no_call_without_switch_price_or_readable_ledger(self):
         for guard, message in (

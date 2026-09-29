@@ -40,6 +40,10 @@ COMMUTER_LOCATIONS = MATCHING_SETTINGS.get("commuter_locations", [])
 PROFILE_DOMAIN_KEYWORDS = MATCHING_SETTINGS["profile_domain_keywords"]
 SALARY_TARGET = MATCHING_SETTINGS["salary_target_eur"]
 SALARY_MINIMUM = MATCHING_SETTINGS["salary_minimum_eur"]
+BOILERPLATE = (
+    "bei dieser jobboerse erstellen wir fuer stellen",
+    "mithilfe von kuenstlicher intelligenz (ki) automatisch generierte zusammenfassungen",
+)
 
 
 def score_job(job: Job, today=None):
@@ -141,28 +145,19 @@ def excluded_result(reason):
 
 def structured_salary_text(job):
     """Expose structured annual salary data to the existing scoring rules."""
-    minimum = job.salary_min_eur
-    maximum = job.salary_max_eur
-    if minimum is not None and maximum is not None:
-        return f"jahresgehalt {minimum} - {maximum} EUR"
-    if maximum is not None:
-        return f"jahresgehalt {maximum} EUR"
-    return ""
+    if job.salary_max_eur is None:
+        return ""
+    minimum = f"{job.salary_min_eur} - " if job.salary_min_eur is not None else ""
+    return f"jahresgehalt {minimum}{job.salary_max_eur} EUR"
 
 
 def strip_platform_boilerplate(description):
     """Remove portal text that would otherwise look like job requirements."""
-    markers = [
-        "bei dieser jobboerse erstellen wir fuer stellen",
-        "mithilfe von kuenstlicher intelligenz (ki) automatisch generierte zusammenfassungen",
-    ]
-    positions = [description.find(marker) for marker in markers if marker in description]
-    if positions:
-        return description[: min(positions)].strip()
-    return description
+    positions = [description.find(marker) for marker in BOILERPLATE if marker in description]
+    return description[: min(positions)].strip() if positions else description
 
 
-def hard_filter_reason(title, description, full_text, role, career_levels, required_years=None):
+def hard_filter_reason(title, description, full_text, role, career_levels, required_years):
     """Return the first blocking job requirement, or an empty string.
 
     Inputs use normalize_text; role is a matching profile dictionary
@@ -180,8 +175,6 @@ def hard_filter_reason(title, description, full_text, role, career_levels, requi
     if advanced_level and not is_entry_level(title, description):
         return f"Portal-Karrierestufe ist nicht fuer den Einstieg: {advanced_level}"
 
-    if required_years is None:
-        required_years = extract_required_years(full_text)
     if required_years > 3:
         return f"Mehr als 3 Jahre Erfahrung gefordert: {required_years} Jahre"
 
@@ -267,10 +260,8 @@ def structured_advanced_level(career_levels):
         "executive",
     )
     for level in career_levels or []:
-        normalized = normalize_text(str(level))
-        for word in advanced_words:
-            if contains_keyword(normalized, word):
-                return str(level).strip()
+        if any(contains_keyword(normalize_text(str(level)), word) for word in advanced_words):
+            return str(level).strip()
     return None
 
 
@@ -295,7 +286,14 @@ def score_profile_connection(text):
 
 def analyze_location_for_role(title, location, remote, description):
     """Allow explicit entry roles with hybrid work to reach manual review."""
-    result = analyze_location(location, remote, description)
+    result = location_rules.analyze_location(
+        location,
+        remote,
+        description,
+        local_places=LOCAL_PLACES,
+        commuter_locations=COMMUTER_LOCATIONS,
+        radius=LOCAL_SEARCH_RADIUS_KM,
+    )
     if result["allowed"]:
         return result
     if (
@@ -357,15 +355,3 @@ def score_preferences(full_text):
         penalties.append({"points": 3, "label": "Gehalt unter Wunschgehalt"})
 
     return penalties
-
-
-def analyze_location(location, remote, description):
-    """Analyze location using the currently configured local and commuter rules."""
-    return location_rules.analyze_location(
-        location,
-        remote,
-        description,
-        local_places=LOCAL_PLACES,
-        commuter_locations=COMMUTER_LOCATIONS,
-        radius=LOCAL_SEARCH_RADIUS_KM,
-    )

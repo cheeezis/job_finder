@@ -9,10 +9,6 @@ from urllib.request import Request, urlopen
 
 from job_finder.models import format_remote
 from job_finder.paths import NOTIFICATION_STATE_FILE
-from job_finder.persistence.state_compat import (
-    NOTIFICATION_STATE_VERSION as STATE_VERSION,
-    decode_notification_state,
-)
 from job_finder.persistence.storage import read_json, write_json_atomic
 from job_finder.workflow.reporting import (
     format_role_group,
@@ -24,6 +20,7 @@ NOTIFIABLE_STATUSES = {"new", "review", "interesting", "inquiry"}
 MAX_EMBEDS = 10
 MAX_EMBED_CHARACTERS = 6000
 HEALTH_LABELS = {"partial": "teilweise", "empty": "ohne Treffer", "failed": "fehlgeschlagen"}
+STATE_VERSION = 3
 
 
 class NotificationError(RuntimeError):
@@ -391,6 +388,19 @@ def load_notification_state(path=NOTIFICATION_STATE_FILE):
     """Load the delivery state keyed by stable job IDs."""
     document = read_json(path, {"version": STATE_VERSION, "sent": {}, "pending": {}})
     return decode_notification_state(document)
+
+
+def decode_notification_state(document):
+    """Decode the current version into stable sent and pending job-ID mappings."""
+    if document.get("version") != STATE_VERSION:
+        raise ValueError("Benachrichtigungsstatus verwendet eine unbekannte Version")
+    sent = {entry.get("job_id", key): entry for key, entry in document.get("sent", {}).items()}
+    pending = {
+        entry["job_id"]: entry
+        for entry in document.get("pending", {}).values()
+        if entry.get("job_id") and entry["job_id"] not in sent
+    }
+    return {"sent": sent, "pending": pending}
 
 
 def save_notification_state(state, path=NOTIFICATION_STATE_FILE):

@@ -5,7 +5,6 @@ from datetime import date, datetime, timedelta
 from job_finder.models import APPLICATION_STATUSES, WorkflowStatus
 from job_finder.paths import MEMORY_FILE
 from job_finder.persistence.application_documents import public_documents
-from job_finder.persistence.state_compat import first_seen_date
 from job_finder.workflow.memory import (
     has_application_state as is_application,
     load_memory,
@@ -56,6 +55,15 @@ def record_status_change(entry, workflow_status, occurred_on=None, scheduled_for
         return synchronize_current_status(entry)
     entry["workflow_status"] = status
     return status
+
+
+def first_seen_date(entry):
+    """Recover only the initial discovery date, never a later decision date."""
+    try:
+        timestamp = datetime.fromisoformat(entry["first_seen_at"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    return timestamp.astimezone().date().isoformat()
 
 
 def validated_date(value):

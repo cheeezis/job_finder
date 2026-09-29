@@ -55,7 +55,7 @@ beschreibt Titel und Beschreibung.
 | `job_finder/workflow/duplicates.py` | Einmaliges Zusammenlegen alter, mehrfach entschiedener Stellen (`job_finder.db merge-duplicates`) |
 | `job_finder/workflow/availability.py` | Fehlende interessante Stellen auf bestätigte Schließung prüfen |
 | `job_finder/review.py`, `job_finder/workflow/review_data.py`, `review_actions.py` | HTTP-Server, Review-Datenaufbereitung und transaktionale Aktionen |
-| `job_finder/workflow/applications.py`; `job_finder/persistence/application_documents.py`, `document_store.py`, `state_compat.py` | Bewerbungsverlauf, Unterlagen (lokal oder im Blob Storage) und unterstützte Speicherformate |
+| `job_finder/workflow/applications.py`; `job_finder/persistence/application_documents.py`, `document_store.py` | Bewerbungsverlauf und Unterlagen (lokal oder im Blob Storage) |
 | `job_finder/app.js`, `landing.js`, `review.js`, `applications.js` und zugehörige HTML-Dateien | Gemeinsame Browser-Helfer, Seitenskripte und Arbeitsansichten |
 | `job_finder/workflow/reporting.py`, `notifications.py` | Review-Ausgabe und Discord-Warteschlange |
 | `job_finder/matching/user_settings.py`, `config.py`; `job_finder/paths.py` | Konfiguration, Suche und lokale Dateipfade |

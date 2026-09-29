@@ -36,9 +36,7 @@ def import_manual_url(
     # both review datasets in the same transaction as the remembered job.
     if dataset_name(cache_path):
         requested_url = manual.validate_public_url(url)
-        final_url, html = manual.fetch_text_with_final_url(
-            requested_url, url_validator=manual.validate_public_url
-        )
+        final_url, html = manual.fetch_text_with_final_url(requested_url, url_validator=manual.validate_public_url)
         imported = manual.job_from_page(final_url, html)
     else:
         imported = manual.add_url(url, cache_path=cache_path)
@@ -100,9 +98,7 @@ def save_recommendation(job, path):
         item
         for item in document.get("recommendations", [])
         if item.get("id") != recommendation["id"]
-        and not urls.intersection(
-            link.get("url") for link in item.get("source_links", []) if link.get("url")
-        )
+        and not urls.intersection(link.get("url") for link in item.get("source_links", []) if link.get("url"))
     ]
     retained.append(recommendation)
     retained.sort(

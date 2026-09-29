@@ -23,9 +23,7 @@ from job_finder.sources.stepstone import build_search_url
 
 class CommuterSearchTests(unittest.TestCase):
     def test_arbeitsagentur_search_can_target_one_commuter_city(self):
-        url = arbeitsagentur.build_search_url(
-            "Junior IT", location="Beispielstadt", radius=COMMUTER_SEARCH_RADIUS_KM
-        )
+        url = arbeitsagentur.build_search_url("Junior IT", location="Beispielstadt", radius=COMMUTER_SEARCH_RADIUS_KM)
 
         self.assertIn("wo=Beispielstadt", url)
         self.assertIn(f"umkreis={COMMUTER_SEARCH_RADIUS_KM}", url)
@@ -117,8 +115,7 @@ class StepStoneCacheTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             cache_path = Path(directory) / "stepstone.json"
             stepstone.save_cache(
-                cache_path,
-                {"version": stepstone.CACHE_VERSION, "last_links": [url], "jobs": {url: job}},
+                cache_path, {"version": stepstone.CACHE_VERSION, "last_links": [url], "jobs": {url: job}}
             )
             saved_job = json.loads(cache_path.read_text(encoding="utf-8"))["jobs"][url]
 
@@ -154,9 +151,7 @@ class StepStoneCacheTests(unittest.TestCase):
             self.write_cache(cache_path, [url], {url: job})
 
             with patch.object(
-                stepstone,
-                "search_links",
-                side_effect=stepstone.StepStoneBlockedError(403, "search-url"),
+                stepstone, "search_links", side_effect=stepstone.StepStoneBlockedError(403, "search-url")
             ):
                 jobs = stepstone.fetch_jobs(cache_path=cache_path, client=Mock())
 
@@ -176,9 +171,7 @@ class StepStoneCacheTests(unittest.TestCase):
             with (
                 patch.object(stepstone, "search_links", return_value=links),
                 patch.object(
-                    stepstone,
-                    "fetch_job",
-                    side_effect=stepstone.StepStoneBlockedError(429, blocked_url),
+                    stepstone, "fetch_job", side_effect=stepstone.StepStoneBlockedError(429, blocked_url)
                 ) as fetch_job,
             ):
                 jobs = stepstone.fetch_jobs(cache_path=cache_path, client=Mock())
@@ -289,9 +282,7 @@ class SharedDetailCacheTests(unittest.TestCase):
                 patch.object(get_in_it, "fetch_job", return_value=refreshed_job) as fetch_job,
             ):
                 jobs = get_in_it.fetch_jobs(cache_path=cache_path, now=now)
-                enriched = get_in_it.enrich_candidate_jobs(
-                    jobs, {jobs[0].id}, cache_path=cache_path, now=now
-                )
+                enriched = get_in_it.enrich_candidate_jobs(jobs, {jobs[0].id}, cache_path=cache_path, now=now)
 
         self.assertEqual(jobs, [refreshed_job])
         self.assertEqual(enriched, 1)
@@ -307,9 +298,7 @@ class SharedDetailCacheTests(unittest.TestCase):
             save_detail_cache(cache_path, {url: cached_job})
             with (
                 patch.object(arbeitsagentur, "collect_links", return_value=[url]),
-                patch.object(
-                    arbeitsagentur, "fetch_job", side_effect=RuntimeError("nicht erreichbar")
-                ),
+                patch.object(arbeitsagentur, "fetch_job", side_effect=RuntimeError("nicht erreichbar")),
             ):
                 jobs = arbeitsagentur.fetch_jobs(cache_path=cache_path, now=now)
 

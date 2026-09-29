@@ -18,10 +18,7 @@ from job_finder.text import html_to_text
 SOURCE_NAME = "startup_jobs"
 API_URL = "https://api.startup.jobs/v1/jobs"
 API_KEY_ENV = "STARTUP_JOBS_API_KEY"
-SEARCH_SCOPES = (
-    {"role": "engineering", "country": "DE"},
-    {"role": "engineering", "workplace_type": "remote"},
-)
+SEARCH_SCOPES = ({"role": "engineering", "country": "DE"}, {"role": "engineering", "workplace_type": "remote"})
 PAGE_SIZE = 50
 MAX_PAGES_PER_SCOPE = 5
 WORK_ARRANGEMENTS = {
@@ -43,11 +40,7 @@ def fetch_jobs(api_key=None):
     if not key:
         raise ValueError(f"{API_KEY_ENV} fehlt")
     headers = {"Accept": "application/json", "Authorization": f"Bearer {key}"}
-    return [
-        job_from_record(record)
-        for record in collect_records(headers)
-        if available_from_germany(record)
-    ]
+    return [job_from_record(record) for record in collect_records(headers) if available_from_germany(record)]
 
 
 def collect_records(headers, scopes=SEARCH_SCOPES):
@@ -81,9 +74,7 @@ def build_search_url(scope, cursor=None):
 def available_from_germany(record):
     """Reject explicit foreign-only locations from the global remote scope."""
     location = record.get("location") or {}
-    return remote_region_allows_germany(
-        location.get("country"), country_code=location.get("country_code")
-    )
+    return remote_region_allows_germany(location.get("country"), country_code=location.get("country_code"))
 
 
 def job_from_record(record):
@@ -103,9 +94,7 @@ def job_from_record(record):
         title=title,
         company=company,
         locations=location_names(record.get("location")),
-        sources=[
-            JobSource(source=SOURCE_NAME, source_id=str(record.get("id") or "") or None, url=url)
-        ],
+        sources=[JobSource(source=SOURCE_NAME, source_id=str(record.get("id") or "") or None, url=url)],
         description_raw=raw_description,
         description_clean=html_to_text(raw_description),
         work_mode=work_mode,

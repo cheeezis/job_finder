@@ -62,10 +62,7 @@ def fetch_jobs(cache_path=CACHE_FILE):
         jobs = [job for job in cache.values() if detail_is_fresh(job)]
         if not jobs:
             raise
-        print(
-            "WARNUNG Arbeitnow: API-Limit erreicht; nutze "
-            f"{len(jobs)} aktuelle Stellen aus dem lokalen Cache"
-        )
+        print(f"WARNUNG Arbeitnow: API-Limit erreicht; nutze {len(jobs)} aktuelle Stellen aus dem lokalen Cache")
         record_partial_failure(1)
         return jobs
 
@@ -88,9 +85,7 @@ def collect_records():
     records = {}
 
     for page in range(1, MAX_PAGES + 1):
-        payload = fetch_json(
-            f"{API_URL}?{urlencode({'page': page})}", headers={"Accept": "application/json"}
-        )
+        payload = fetch_json(f"{API_URL}?{urlencode({'page': page})}", headers={"Accept": "application/json"})
         page_records = payload.get("data") or []
         for record in page_records:
             slug = str(record.get("slug") or "").strip()

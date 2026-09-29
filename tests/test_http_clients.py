@@ -95,10 +95,7 @@ class HttpHelperTests(unittest.TestCase):
 
     def test_announced_size_above_the_default_limit_is_rejected(self):
         routes = {"/huge": (200, {"Content-Length": str(30 * 1024 * 1024)}, b"x")}
-        with (
-            local_server(routes) as (base, _requests),
-            self.assertRaisesRegex(ValueError, "Größenlimit"),
-        ):
+        with local_server(routes) as (base, _requests), self.assertRaisesRegex(ValueError, "Größenlimit"):
             fetch_text(f"{base}/huge")
 
     def test_size_limit_checks_header_and_actual_body(self):
@@ -111,10 +108,7 @@ class HttpHelperTests(unittest.TestCase):
             for path in ("/announced", "/unannounced"):
                 with self.subTest(path), self.assertRaisesRegex(ValueError, "Größenlimit"):
                     fetch_text_with_final_url(f"{base}{path}", max_bytes=10)
-            self.assertEqual(
-                fetch_text_with_final_url(f"{base}/exact", max_bytes=10),
-                (f"{base}/exact", "x" * 10),
-            )
+            self.assertEqual(fetch_text_with_final_url(f"{base}/exact", max_bytes=10), (f"{base}/exact", "x" * 10))
 
     def test_redirects_are_validated_and_report_the_final_url(self):
         routes = {
@@ -136,10 +130,7 @@ class HttpHelperTests(unittest.TestCase):
         self.assertNotIn("/blocked", [request["path"] for request in requests])
 
     def test_http_errors_propagate_with_their_status(self):
-        with (
-            local_server({"/missing": (404, {}, b"")}) as (base, _requests),
-            self.assertRaises(HTTPError) as caught,
-        ):
+        with local_server({"/missing": (404, {}, b"")}) as (base, _requests), self.assertRaises(HTTPError) as caught:
             fetch_text(f"{base}/missing")
         self.assertEqual(caught.exception.code, 404)
 

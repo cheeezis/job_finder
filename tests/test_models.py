@@ -13,9 +13,7 @@ def make_job(**overrides):
         "title": "Junior Python Developer",
         "company": "Example GmbH",
         "locations": ["Fulda"],
-        "sources": [
-            JobSource(source="stepstone", source_id="123", url="https://example.test/job/123")
-        ],
+        "sources": [JobSource(source="stepstone", source_id="123", url="https://example.test/job/123")],
         "description_raw": "<p>Python</p>",
         "description_clean": "Python",
     }
@@ -31,11 +29,7 @@ class JobModelTests(unittest.TestCase):
         self.assertEqual(job.work_mode, WorkMode.UNKNOWN)
 
     def test_workflow_and_work_mode_use_separate_status_fields(self):
-        job = make_job(
-            workflow_status=WorkflowStatus.INTERESTING,
-            work_mode=WorkMode.REMOTE,
-            remote_percentage=100,
-        )
+        job = make_job(workflow_status=WorkflowStatus.INTERESTING, work_mode=WorkMode.REMOTE, remote_percentage=100)
 
         self.assertEqual(job.workflow_status, WorkflowStatus.INTERESTING)
         self.assertEqual(job.work_mode, WorkMode.REMOTE)

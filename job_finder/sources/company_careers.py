@@ -6,12 +6,7 @@ from urllib.parse import urljoin, urlsplit
 
 from job_finder.http import fetch_text
 from job_finder.paths import cache_file
-from job_finder.sources.common import (
-    canonical_detail_url,
-    fetch_cached_details,
-    job_from_schema_posting,
-    source_job_id,
-)
+from job_finder.sources.common import canonical_detail_url, fetch_cached_details, job_from_schema_posting, source_job_id
 from job_finder.structured_data import extract_json_ld_job_posting
 
 
@@ -34,9 +29,7 @@ class CareerPage:
         """Import the listings through the shared company detail cache."""
         links = self.collect_links()
         cache_path = self.CACHE_FILE if cache_path is None else cache_path
-        return fetch_company_jobs(
-            self.SOURCE_NAME, self.company, links, cache_path, now=now, parser=self.parser
-        )
+        return fetch_company_jobs(self.SOURCE_NAME, self.company, links, cache_path, now=now, parser=self.parser)
 
     def collect_links(self):
         """Extract the detail links from the public career page."""
@@ -135,15 +128,11 @@ def ensure_url_identity(job, source_name, url):
 
 def identifier_from_url(url):
     """Prefer a numeric or hexadecimal ID at the end of a career URL."""
-    match = re.search(
-        r"(?:jobOfferId=|/job/|[-/])([a-f0-9]{8,}|\d{3,})(?:\D*$|$)", url, re.IGNORECASE
-    )
+    match = re.search(r"(?:jobOfferId=|/job/|[-/])([a-f0-9]{8,}|\d{3,})(?:\D*$|$)", url, re.IGNORECASE)
     return match.group(1) if match else urlsplit(url).path.rstrip("/").rsplit("/", 1)[-1]
 
 
-CSS = CareerPage(
-    "css", "CSS AG", "https://jobs.css.de/public/jobs/?standort=1", r"jobs\.css\.de/job-.+\.html$"
-)
+CSS = CareerPage("css", "CSS AG", "https://jobs.css.de/public/jobs/?standort=1", r"jobs\.css\.de/job-.+\.html$")
 PROEMION = CareerPage(
     "proemion",
     "Proemion GmbH",

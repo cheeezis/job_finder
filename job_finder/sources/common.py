@@ -103,13 +103,7 @@ def save_detail_cache(path, jobs):
 
 
 def fetch_cached_details(
-    links,
-    cache_path,
-    fetch_detail,
-    source_label,
-    now=None,
-    max_age=DETAIL_REFRESH_AGE,
-    normalize_cached=None,
+    links, cache_path, fetch_detail, source_label, now=None, max_age=DETAIL_REFRESH_AGE, normalize_cached=None
 ):
     """Load requested details with a persistent cache and bounded fallback.
 
@@ -165,9 +159,7 @@ def fetch_cached_details(
                 jobs.append(cached_job)
                 stale_fallbacks += 1
         if progress_checkpoint(link_index, total_links):
-            print_progress(
-                f"{source_label} Details", link_index, total_links, f"{len(jobs)} übernommen"
-            )
+            print_progress(f"{source_label} Details", link_index, total_links, f"{len(jobs)} übernommen")
 
     if cache_changed:
         save_detail_cache(cache_path, cache)
@@ -178,9 +170,7 @@ def fetch_cached_details(
             f"nicht erreichbar, {stale_fallbacks} aus altem Cache übernommen"
         )
     if unavailable:
-        print(
-            f"HINWEIS {source_label}: {unavailable} nicht mehr verfügbare Anzeige(n) übersprungen"
-        )
+        print(f"HINWEIS {source_label}: {unavailable} nicht mehr verfügbare Anzeige(n) übersprungen")
     return jobs
 
 
@@ -307,17 +297,13 @@ def extract_schema_locations(job_location):
     return cities or ["unbekannt"]
 
 
-def job_from_schema_posting(
-    source_name, url, posting, *, identifier, company, structured_remote=""
-):
+def job_from_schema_posting(source_name, url, posting, *, identifier, company, structured_remote=""):
     """Map a schema.org JobPosting to a Job; sources pass the fields they derive their own way."""
     raw_description = posting.get("description", "")
     description = html_to_text(raw_description)
     locations = extract_schema_locations(posting.get("jobLocation"))
     title = posting.get("title", "")
-    remote = detect_remote(
-        title, description, ", ".join(locations), structured_remote=structured_remote
-    )
+    remote = detect_remote(title, description, ", ".join(locations), structured_remote=structured_remote)
     work_mode, remote_percentage = classify_remote(remote)
     salary_min_eur, salary_max_eur = extract_annual_salary_eur(posting)
     return Job(
@@ -354,18 +340,12 @@ def integer(value, default):
         return default
 
 
-def enrich_cached_candidates(
-    jobs, candidate_ids, cache_path, source_name, label, fetch_detail, now=None
-):
+def enrich_cached_candidates(jobs, candidate_ids, cache_path, source_name, label, fetch_detail, now=None):
     """Replace only eligible source summaries whose details need refreshing."""
     cache = load_detail_cache(cache_path)
     enriched = unsaved = errors = 0
     for index, job in enumerate(jobs):
-        if (
-            job.id not in candidate_ids
-            or not job.primary_source
-            or job.primary_source.source != source_name
-        ):
+        if job.id not in candidate_ids or not job.primary_source or job.primary_source.source != source_name:
             continue
         url = canonical_detail_url(job.primary_url)
         cached_job = cache.get(url)
@@ -405,9 +385,7 @@ def with_current_summary(cached_job, summary, **details):
         id=summary.id,
         title=summary.title or cached_job.title,
         company=summary.company or cached_job.company,
-        locations=(
-            summary.locations if summary.locations != ["unbekannt"] else cached_job.locations
-        ),
+        locations=(summary.locations if summary.locations != ["unbekannt"] else cached_job.locations),
         sources=summary.sources,
         **details,
     )

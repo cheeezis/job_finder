@@ -11,11 +11,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from job_finder.models import Job, JobSource
-from job_finder.sources.common import (
-    record_candidate_failure,
-    record_partial_failure,
-    record_total_segments,
-)
+from job_finder.sources.common import record_candidate_failure, record_partial_failure, record_total_segments
 from run_finder import (
     SOURCES,
     IncompleteSourceSnapshotError,
@@ -50,8 +46,7 @@ class RunFinderTests(unittest.TestCase):
         calls = []
         plain_source = SimpleNamespace(SOURCE_NAME="plain")
         detailed_source = SimpleNamespace(
-            SOURCE_NAME="detailed",
-            enrich_candidate_jobs=lambda jobs, ids: calls.append((jobs, ids)) or 2,
+            SOURCE_NAME="detailed", enrich_candidate_jobs=lambda jobs, ids: calls.append((jobs, ids)) or 2
         )
         jobs = [make_job("detailed:1")]
 
@@ -77,23 +72,12 @@ class RunFinderTests(unittest.TestCase):
 
         self.assertEqual(
             reports,
-            [
-                {"name": "studysmarter", "enriched": 1, "failed": 3},
-                {"name": "get_in_it", "enriched": 2, "failed": 0},
-            ],
+            [{"name": "studysmarter", "enriched": 1, "failed": 3}, {"name": "get_in_it", "enriched": 2, "failed": 0}],
         )
-        events = [
-            json.loads(line) for line in output.getvalue().splitlines() if line.startswith("{")
-        ]
+        events = [json.loads(line) for line in output.getvalue().splitlines() if line.startswith("{")]
         self.assertEqual(
-            [
-                (event["event"], event["source"], event["level"], event["failed"])
-                for event in events
-            ],
-            [
-                ("enrichment_completed", "studysmarter", "warning", 3),
-                ("enrichment_completed", "get_in_it", "info", 0),
-            ],
+            [(event["event"], event["source"], event["level"], event["failed"]) for event in events],
+            [("enrichment_completed", "studysmarter", "warning", 3), ("enrichment_completed", "get_in_it", "info", 0)],
         )
         self.assertEqual({event["run_id"] for event in events}, {"run-1"})
 
@@ -193,17 +177,14 @@ class RunFinderTests(unittest.TestCase):
         ):
             run_pipeline(exclude_sources={"arbeitnow"})
 
-        self.assertEqual(
-            publish.call_args.kwargs["exclude_sources"], {"arbeitnow", "remotely", "manual"}
-        )
+        self.assertEqual(publish.call_args.kwargs["exclude_sources"], {"arbeitnow", "remotely", "manual"})
 
     def test_pipeline_enriches_only_selected_sources(self):
         job = make_job("kept:1")
         called = []
         sources = [
             SimpleNamespace(
-                SOURCE_NAME=name,
-                enrich_candidate_jobs=lambda jobs, ids, name=name: called.append(name) or 0,
+                SOURCE_NAME=name, enrich_candidate_jobs=lambda jobs, ids, name=name: called.append(name) or 0
             )
             for name in ("kept", "excluded")
         ]
@@ -213,10 +194,7 @@ class RunFinderTests(unittest.TestCase):
             patch("run_finder.MEMORY_FILE", Path(directory) / "state.sqlite3"),
             patch("run_finder.create_backup"),
             patch("run_finder.SOURCES", sources),
-            patch(
-                "run_finder.collect_jobs",
-                return_value=([job], [{"name": "kept", "status": "success", "jobs": 1}]),
-            ),
+            patch("run_finder.collect_jobs", return_value=([job], [{"name": "kept", "status": "success", "jobs": 1}])),
             patch("run_finder.write_recommendations"),
             patch(
                 "run_finder.process_notifications",
@@ -232,8 +210,7 @@ class RunFinderTests(unittest.TestCase):
         with (
             patch("run_finder.create_backup"),
             patch(
-                "run_finder.collect_jobs",
-                return_value=([job], [{"name": "source", "status": "success", "jobs": 1}]),
+                "run_finder.collect_jobs", return_value=([job], [{"name": "source", "status": "success", "jobs": 1}])
             ),
             patch("run_finder.enrich_candidate_jobs"),
             patch("run_finder.evaluate_jobs", side_effect=ValueError("invalid details")),
@@ -306,9 +283,7 @@ class RunFinderTests(unittest.TestCase):
         with redirect_stdout(output):
             print_source_summary(reports, 3)
 
-        self.assertIn(
-            "1 vollständig · 1 teilweise · 1 ohne Treffer · 1 fehlgeschlagen", output.getvalue()
-        )
+        self.assertIn("1 vollständig · 1 teilweise · 1 ohne Treffer · 1 fehlgeschlagen", output.getvalue())
 
     def test_failed_source_does_not_stop_following_sources(self):
         failing = SimpleNamespace(
@@ -329,11 +304,7 @@ class RunFinderTests(unittest.TestCase):
         with redirect_stdout(output):
             collect_jobs([failing, working], run_id="test-run-1")
 
-        events = [
-            json.loads(line)
-            for line in output.getvalue().splitlines()
-            if line.strip().startswith("{")
-        ]
+        events = [json.loads(line) for line in output.getvalue().splitlines() if line.strip().startswith("{")]
         self.assertEqual([e["event"] for e in events], ["source_completed"] * 2)
         self.assertEqual(events[0]["run_id"], "test-run-1")
         self.assertEqual(events[0]["source"], "broken")
@@ -355,9 +326,7 @@ class RunFinderTests(unittest.TestCase):
             record_partial_failure(2)
             return [make_job("partial:1")]
 
-        jobs, reports = collect_jobs(
-            [SimpleNamespace(SOURCE_NAME="partial", fetch_jobs=fetch_jobs)]
-        )
+        jobs, reports = collect_jobs([SimpleNamespace(SOURCE_NAME="partial", fetch_jobs=fetch_jobs)])
 
         self.assertEqual([job.id for job in jobs], ["partial:1"])
         self.assertEqual(reports[0]["status"], "partial")
@@ -399,10 +368,7 @@ class RunFinderTests(unittest.TestCase):
     def test_only_sources_skip_every_other_source(self):
         all_names = {source.SOURCE_NAME for source in SOURCES}
         cases = {
-            "exclude": (
-                SimpleNamespace(exclude_sources="stepstone", only_sources=None),
-                {"stepstone"},
-            ),
+            "exclude": (SimpleNamespace(exclude_sources="stepstone", only_sources=None), {"stepstone"}),
             "only": (
                 SimpleNamespace(exclude_sources="", only_sources="stepstone, remotely"),
                 all_names - {"stepstone", "remotely"},
@@ -416,10 +382,7 @@ class RunFinderTests(unittest.TestCase):
         every_source = ",".join(source.SOURCE_NAME for source in SOURCES)
         for exclude, only in (("", ""), ("", " , "), (every_source, None)):
             args = SimpleNamespace(exclude_sources=exclude, only_sources=only)
-            with (
-                self.subTest(exclude=exclude, only=only),
-                self.assertRaisesRegex(SystemExit, "Keine Quelle"),
-            ):
+            with self.subTest(exclude=exclude, only=only), self.assertRaisesRegex(SystemExit, "Keine Quelle"):
                 excluded_source_names(args)
 
     def test_empty_source_list_runs_no_source(self):

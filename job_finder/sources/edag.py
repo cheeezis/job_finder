@@ -8,11 +8,7 @@ from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource
 from job_finder.paths import cache_file
 from job_finder.sources.common import normalize_employment_type, source_job_id, utc_now
-from job_finder.sources.company_careers import (
-    extract_links,
-    fetch_company_jobs,
-    identifier_from_url,
-)
+from job_finder.sources.company_careers import extract_links, fetch_company_jobs, identifier_from_url
 from job_finder.text import compact_text, html_to_text, normalize_text
 
 SOURCE_NAME = "edag"
@@ -26,9 +22,7 @@ CAREER_LEVELS = {"professionals", "studierende", "absolventen", "schueler", "fue
 def fetch_jobs(cache_path=CACHE_FILE, now=None):
     """Fetch locally relevant EDAG listings using cached visible-page details."""
     links = collect_links()
-    return fetch_company_jobs(
-        SOURCE_NAME, COMPANY, links, cache_path, now=now, parser=job_from_html
-    )
+    return fetch_company_jobs(SOURCE_NAME, COMPANY, links, cache_path, now=now, parser=job_from_html)
 
 
 def collect_links():
@@ -39,11 +33,7 @@ def collect_links():
     links = {}
 
     for page in range(1, last_page + 1):
-        html = (
-            first_html
-            if page == 1
-            else fetch_text(f"{LIST_URL}?tx_successfactors_view%5BcurrentPage%5D={page}")
-        )
+        html = first_html if page == 1 else fetch_text(f"{LIST_URL}?tx_successfactors_view%5BcurrentPage%5D={page}")
         links.update(dict.fromkeys(extract_local_links(html)))
     return list(links)
 
@@ -62,9 +52,7 @@ def extract_local_links(html):
             continue
         links.extend(
             extract_links(
-                f'<a href="{match.group(1)}">',
-                LIST_URL,
-                r"edag\.com/de/karriere/stellenanzeigen/detail/.+-\d+$",
+                f'<a href="{match.group(1)}">', LIST_URL, r"edag\.com/de/karriere/stellenanzeigen/detail/.+-\d+$"
             )
         )
     return links
@@ -90,20 +78,11 @@ def job_from_html(source_name, fallback_company, url, html):
     facts = extract_facts(html)
     company = facts[0] if facts else fallback_company
     employment = next(
-        (
-            fact
-            for fact in facts
-            if "vollzeit" in normalize_text(fact) or "teilzeit" in normalize_text(fact)
-        ),
-        None,
+        (fact for fact in facts if "vollzeit" in normalize_text(fact) or "teilzeit" in normalize_text(fact)), None
     )
     locations = [fact for fact in facts[1:] if is_location_fact(fact, employment)] or ["unbekannt"]
-    structured_remote = (
-        "homeoffice" if any("hybrid" in normalize_text(fact) for fact in facts) else ""
-    )
-    remote = detect_remote(
-        title, clean_description, ", ".join(locations), structured_remote=structured_remote
-    )
+    structured_remote = "homeoffice" if any("hybrid" in normalize_text(fact) for fact in facts) else ""
+    remote = detect_remote(title, clean_description, ", ".join(locations), structured_remote=structured_remote)
     work_mode, remote_percentage = classify_remote(remote)
     identifier = identifier_from_url(url)
 

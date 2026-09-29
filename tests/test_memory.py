@@ -76,9 +76,7 @@ class MemoryTests(unittest.TestCase):
         first_job = make_job()
         update_memory([first_job], memory)
         memory[first_job.id]["workflow_status"] = "interesting"
-        memory[first_job.id]["workflow_history"] = [
-            {"status": "applied", "occurred_on": "2026-08-01"}
-        ]
+        memory[first_job.id]["workflow_history"] = [{"status": "applied", "occurred_on": "2026-08-01"}]
 
         known_job = make_job()
         stats = update_memory([known_job], memory)
@@ -87,10 +85,7 @@ class MemoryTests(unittest.TestCase):
         self.assertFalse(known_job.is_new)
         self.assertEqual(known_job.first_seen_at, first_job.first_seen_at)
         self.assertEqual(known_job.workflow_status, WorkflowStatus.INTERESTING)
-        self.assertEqual(
-            memory[first_job.id]["workflow_history"],
-            [{"status": "applied", "occurred_on": "2026-08-01"}],
-        )
+        self.assertEqual(memory[first_job.id]["workflow_history"], [{"status": "applied", "occurred_on": "2026-08-01"}])
 
     def test_changed_known_job_keeps_its_decision_and_is_not_new(self):
         memory = {}
@@ -130,9 +125,7 @@ class MemoryTests(unittest.TestCase):
     def test_returning_job_is_reactivated_without_losing_status(self):
         memory = {}
         update_memory([make_job()], memory)
-        memory["test:123"].update(
-            {"active": False, "missed_runs": 3, "workflow_status": "interesting"}
-        )
+        memory["test:123"].update({"active": False, "missed_runs": 3, "workflow_status": "interesting"})
 
         job = make_job()
         stats = update_memory([job], memory, successful_sources={"test"})
@@ -177,12 +170,8 @@ class MemoryTests(unittest.TestCase):
         self.assertEqual(job.id, old_id)
         self.assertEqual(job.workflow_status, WorkflowStatus.APPLIED)
         self.assertNotIn("test:123", memory)
-        self.assertEqual(
-            memory[old_id]["workflow_history"], [{"status": "applied", "occurred_on": "2026-08-01"}]
-        )
-        self.assertEqual(
-            memory[old_id]["source_urls"], ["https://stepstone.test/jobs/456", job.primary_url]
-        )
+        self.assertEqual(memory[old_id]["workflow_history"], [{"status": "applied", "occurred_on": "2026-08-01"}])
+        self.assertEqual(memory[old_id]["source_urls"], ["https://stepstone.test/jobs/456", job.primary_url])
 
     def test_application_wins_over_conflicting_review_entry(self):
         job = make_job()
@@ -268,9 +257,7 @@ class MemoryTests(unittest.TestCase):
         self.assertEqual(stats["new"], 0)
         self.assertEqual(job.id, old_id)
         self.assertEqual(job.workflow_status, WorkflowStatus.IGNORED)
-        self.assertEqual(
-            memory[old_id]["source_urls"], ["https://stepstone.test/jobs/old", job.primary_url]
-        )
+        self.assertEqual(memory[old_id]["source_urls"], ["https://stepstone.test/jobs/old", job.primary_url])
 
     def test_existing_new_repost_is_folded_into_earlier_application(self):
         job = make_job()
@@ -434,9 +421,7 @@ class MemoryTests(unittest.TestCase):
 
     def test_each_run_counts_a_job_of_both_runs_as_missed_by_its_own_sources(self):
         # One job with listings from the Azure run (Arbeitnow) and the local run (Remotely).
-        memory = {
-            "arbeitnow:1": {**remembered("new", "Fulda"), "source_names": ["arbeitnow", "remotely"]}
-        }
+        memory = {"arbeitnow:1": {**remembered("new", "Fulda"), "source_names": ["arbeitnow", "remotely"]}}
         local_run = {"stepstone", "remotely"}
 
         update_memory([], memory, successful_sources={"stepstone"}, run_sources=local_run)

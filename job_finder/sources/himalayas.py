@@ -66,13 +66,7 @@ def collect_records(search_terms=SEARCH_TERMS):
 
 def build_search_url(search_term, page=1):
     """Build one Germany-compatible, entry-level search request."""
-    parameters = {
-        "q": search_term,
-        "country": "DE",
-        "seniority": "Entry-level",
-        "sort": "recent",
-        "page": page,
-    }
+    parameters = {"q": search_term, "country": "DE", "seniority": "Entry-level", "sort": "recent", "page": page}
     return f"{API_URL}?{urlencode(parameters)}"
 
 

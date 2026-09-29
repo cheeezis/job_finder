@@ -13,11 +13,7 @@ from urllib.parse import quote, urlencode, urljoin, urlsplit
 
 from job_finder.console import print_progress, progress_checkpoint
 from job_finder.http import fetch_text
-from job_finder.matching.config import (
-    LOCAL_SEARCH_RADIUS_KM,
-    STEPSTONE_SEARCH_LOCATIONS,
-    STEPSTONE_SEARCH_TERMS,
-)
+from job_finder.matching.config import LOCAL_SEARCH_RADIUS_KM, STEPSTONE_SEARCH_LOCATIONS, STEPSTONE_SEARCH_TERMS
 from job_finder.models import Job
 from job_finder.paths import cache_file
 from job_finder.persistence.storage import read_versioned, write_versioned
@@ -39,12 +35,7 @@ CACHE_FILE = cache_file("stepstone")
 CACHE_VERSION = 2
 REQUEST_DELAY_SECONDS = 1.5
 BLOCKING_STATUS_CODES = {403, 429}
-CAREER_LEVEL_LABELS = {
-    "Berufseinstieg/Trainee",
-    "Berufserfahrene",
-    "Führungskraft",
-    "Studentische Aushilfe",
-}
+CAREER_LEVEL_LABELS = {"Berufseinstieg/Trainee", "Berufserfahrene", "Führungskraft", "Studentische Aushilfe"}
 
 
 class StepStoneBlockedError(RuntimeError):
@@ -172,10 +163,7 @@ def search_links(client=None):
 
             page += 1
         print_progress(
-            "StepStone Suche",
-            processed_queries,
-            planned_queries,
-            f"{requested_pages} Seiten · {len(links)} Anzeigen",
+            "StepStone Suche", processed_queries, planned_queries, f"{requested_pages} Seiten · {len(links)} Anzeigen"
         )
 
     if search_errors:
@@ -200,10 +188,7 @@ def extract_detail_links(html):
         r'|/stellenangebote--[^"\'<> ]+?\.html[^"\'<> ]*',
         html,
     )
-    urls = (
-        normalize_detail_url(urljoin("https://www.stepstone.de", unescape(match)))
-        for match in matches
-    )
+    urls = (normalize_detail_url(urljoin("https://www.stepstone.de", unescape(match))) for match in matches)
     return list(dict.fromkeys(urls))
 
 

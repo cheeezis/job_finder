@@ -18,11 +18,7 @@ def analyze_location(location, remote, description, *, local_places, commuter_lo
     """
     full_remote = is_full_remote(location, remote)
     if full_remote and not remote_possible_from_germany(location, description):
-        return {
-            "allowed": False,
-            "points": 0,
-            "label": "Remote-Stelle ist nicht aus Deutschland ausuebbar",
-        }
+        return {"allowed": False, "points": 0, "label": "Remote-Stelle ist nicht aus Deutschland ausuebbar"}
 
     if contains_any(location, local_places):
         radius_label = f"{radius}-km-Radius"
@@ -43,9 +39,7 @@ def analyze_location(location, remote, description, *, local_places, commuter_lo
             return {
                 "allowed": True,
                 "points": 8,
-                "label": (
-                    f"Pendelort {commuter_location['search_location']} mit {percentage}% Remote"
-                ),
+                "label": (f"Pendelort {commuter_location['search_location']} mit {percentage}% Remote"),
             }
 
     return {"allowed": False, "points": 0, "label": "Ort/Remote passt nicht"}
@@ -92,10 +86,7 @@ def remote_possible_from_germany(location, description):
 
 def is_hybrid(remote):
     """Recognize hybrid wording or a remote percentage between 0 and 100."""
-    return (
-        contains_any(remote, ["hybrid", "homeoffice", "home office"])
-        or 0 < remote_percent(remote) < 100
-    )
+    return contains_any(remote, ["hybrid", "homeoffice", "home office"]) or 0 < remote_percent(remote) < 100
 
 
 def remote_percent(remote):

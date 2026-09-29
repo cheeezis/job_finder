@@ -10,11 +10,7 @@ from urllib.request import Request, urlopen
 from job_finder.models import format_remote
 from job_finder.paths import NOTIFICATION_STATE_FILE
 from job_finder.persistence.storage import read_json, write_json_atomic
-from job_finder.workflow.reporting import (
-    format_role_group,
-    is_visible_in_default_review,
-    primary_url,
-)
+from job_finder.workflow.reporting import format_role_group, is_visible_in_default_review, primary_url
 
 NOTIFIABLE_STATUSES = {"new", "review", "interesting", "inquiry"}
 MAX_EMBEDS = 10
@@ -53,13 +49,7 @@ class DiscordWebhookClient:
 
 
 def process_notifications(
-    results,
-    *,
-    send=False,
-    webhook_url=None,
-    review_host=None,
-    state_path=NOTIFICATION_STATE_FILE,
-    client=None,
+    results, *, send=False, webhook_url=None, review_host=None, state_path=NOTIFICATION_STATE_FILE, client=None
 ):
     """Update the persistent queue and optionally send eligible Discord cards.
 
@@ -87,9 +77,7 @@ def process_notifications(
     for chunk in notification_chunks(candidates, review_host=review_host):
         keys = [key for key, _job in chunk]
         try:
-            webhook_client.send(
-                discord_payload([job for _key, job in chunk], review_host=review_host)
-            )
+            webhook_client.send(discord_payload([job for _key, job in chunk], review_host=review_host))
         except NotificationError as error:
             for key in keys:
                 entry = state["pending"][key]
@@ -134,9 +122,7 @@ def _update_queue(results, state, timestamp):
             queued += 1
 
     candidates = [
-        (key, jobs_by_key[key])
-        for key in state["pending"]
-        if key in jobs_by_key and is_notifiable(jobs_by_key[key])
+        (key, jobs_by_key[key]) for key in state["pending"] if key in jobs_by_key and is_notifiable(jobs_by_key[key])
     ]
     stats = {
         "queued": queued,
@@ -174,23 +160,15 @@ def run_summary_payload(summary):
     detail_warnings = detail_failure_text(summary.get("detail_failures", []))
     color = (
         0xD99A2B
-        if failed
-        or detail_warnings
-        or any(source["status"] in {"failed", "partial"} for source in sources)
+        if failed or detail_warnings or any(source["status"] in {"failed", "partial"} for source in sources)
         else 0x2E8B57
     )
     lines = [
         f"Laufzeit: **{summary['duration']}**",
         "",
         "**Ergebnis**",
-        (
-            f"{format_count(summary['jobs_total'])} Stellen erfasst · "
-            f"{format_count(summary['jobs_new'])} neu"
-        ),
-        (
-            f"{format_count(summary['included'])} im Vorfilter · "
-            f"{format_count(summary['excluded'])} ausgeschlossen"
-        ),
+        (f"{format_count(summary['jobs_total'])} Stellen erfasst · {format_count(summary['jobs_new'])} neu"),
+        (f"{format_count(summary['included'])} im Vorfilter · {format_count(summary['excluded'])} ausgeschlossen"),
         "",
         "**Benachrichtigungen**",
         (
@@ -207,13 +185,7 @@ def run_summary_payload(summary):
         lines.append(detail_warnings)
     lines.extend(["", "**Neue Treffer nach Quelle**", new_source_text(sources)])
     return {
-        "embeds": [
-            {
-                "title": "Job Finder · Lauf abgeschlossen",
-                "description": "\n".join(lines),
-                "color": color,
-            }
-        ],
+        "embeds": [{"title": "Job Finder · Lauf abgeschlossen", "description": "\n".join(lines), "color": color}],
         "allowed_mentions": {"parse": []},
     }
 
@@ -224,9 +196,7 @@ def is_notifiable(job):
     Matches what the default review actually shows; a job hidden behind an
     extra filter (Junior-Hybrid, international remote) is never notified.
     """
-    return job.get(
-        "workflow_status", "new"
-    ) in NOTIFIABLE_STATUSES and is_visible_in_default_review(job)
+    return job.get("workflow_status", "new") in NOTIFIABLE_STATUSES and is_visible_in_default_review(job)
 
 
 def pending_entry(job, timestamp):
@@ -252,9 +222,7 @@ def notification_chunks(candidates, *, review_host=None):
     for candidate in candidates:
         embed = discord_embed(candidate[1], review_host=review_host)
         characters = embed_character_count(embed)
-        if current and (
-            len(current) >= MAX_EMBEDS or current_characters + characters > MAX_EMBED_CHARACTERS
-        ):
+        if current and (len(current) >= MAX_EMBEDS or current_characters + characters > MAX_EMBED_CHARACTERS):
             chunks.append(current)
             current = []
             current_characters = 0
@@ -284,9 +252,7 @@ def discord_embed(job, *, review_host=None):
     fields = [
         embed_field("Kurzcheck", f"Neu · {role} · Vorfilter {job.get('match_percent', 0)}/100"),
         embed_field("Einstieg", job.get("experience_level") or "nicht erkannt", inline=True),
-        embed_field(
-            "Standortprüfung", job.get("location_precheck") or "keine Auffälligkeit erkannt"
-        ),
+        embed_field("Standortprüfung", job.get("location_precheck") or "keine Auffälligkeit erkannt"),
     ]
     link = review_url(job, review_host)
     if link:
@@ -294,9 +260,7 @@ def discord_embed(job, *, review_host=None):
     return {
         "title": truncate(job["title"], 256),
         "url": primary_url(job),
-        "description": truncate(
-            f"**{job.get('company') or 'Unbekannte Firma'}**\n📍 {locations} · 🏠 {remote}", 4096
-        ),
+        "description": truncate(f"**{job.get('company') or 'Unbekannte Firma'}**\n📍 {locations} · 🏠 {remote}", 4096),
         "color": 0x2E8B57,
         "fields": fields,
         "footer": {"text": "Titel anklicken, um die Originalanzeige zu öffnen."},
@@ -328,19 +292,14 @@ def source_health_text(sources):
 
 def new_source_text(sources):
     """List only sources that contributed new jobs."""
-    lines = [
-        f"**{source['label']}** {format_count(source['new'])}"
-        for source in sources
-        if source.get("new")
-    ]
+    lines = [f"**{source['label']}** {format_count(source['new'])}" for source in sources if source.get("new")]
     return truncate(" · ".join(lines) or "Keine neuen Treffer", 1024)
 
 
 def exceptional_source_text(sources):
     """Keep partial and failed sources separate from successful new results."""
     warnings = [
-        f"{source['label']} "
-        + ("nur teilweise geladen" if source["status"] == "partial" else "fehlgeschlagen")
+        f"{source['label']} " + ("nur teilweise geladen" if source["status"] == "partial" else "fehlgeschlagen")
         for source in sources
         if source["status"] in {"partial", "failed"}
     ]
@@ -349,10 +308,7 @@ def exceptional_source_text(sources):
 
 def detail_failure_text(detail_failures):
     """Name sources whose prefiltered candidates lack detail text."""
-    warnings = [
-        f"{failure['label']} {format_count(failure['failed'])} Kandidat(en)"
-        for failure in detail_failures
-    ]
+    warnings = [f"{failure['label']} {format_count(failure['failed'])} Kandidat(en)" for failure in detail_failures]
     return f"⚠️ Details fehlen: {', '.join(warnings)}" if warnings else ""
 
 
@@ -361,10 +317,7 @@ def embed_character_count(embed):
     return (
         len(embed.get("title", ""))
         + len(embed.get("description", ""))
-        + sum(
-            len(field.get("name", "")) + len(field.get("value", ""))
-            for field in embed.get("fields", [])
-        )
+        + sum(len(field.get("name", "")) + len(field.get("value", "")) for field in embed.get("fields", []))
         + len(embed.get("footer", {}).get("text", ""))
     )
 

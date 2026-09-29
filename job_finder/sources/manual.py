@@ -74,9 +74,7 @@ def fetch_jobs(cache_path=MANUAL_CACHE_FILE, now=None):
             jobs.append(cached_job)
             continue
         try:
-            final_url, html = fetch_text_with_final_url(
-                saved_url, url_validator=validate_public_url
-            )
+            final_url, html = fetch_text_with_final_url(saved_url, url_validator=validate_public_url)
             job = job_from_page(final_url, html)
             job.cache_stale = False
             refreshed[canonical_detail_url(final_url)] = job
@@ -94,10 +92,7 @@ def fetch_jobs(cache_path=MANUAL_CACHE_FILE, now=None):
         save_detail_cache(cache_path, refreshed)
     if errors:
         record_partial_failure(errors)
-        print(
-            f"WARNUNG Manuell: {errors} Detailseite(n) nicht erreichbar, "
-            "aus lokalem Cache übernommen"
-        )
+        print(f"WARNUNG Manuell: {errors} Detailseite(n) nicht erreichbar, aus lokalem Cache übernommen")
     return jobs
 
 
@@ -119,9 +114,7 @@ def applicant_region(posting):
     if isinstance(requirement, dict):
         return str(requirement.get("name") or "").strip()
     if isinstance(requirement, list):
-        names = [
-            str(item.get("name") or "").strip() for item in requirement if isinstance(item, dict)
-        ]
+        names = [str(item.get("name") or "").strip() for item in requirement if isinstance(item, dict)]
         return ", ".join(name for name in names if name)
     return ""
 
@@ -136,9 +129,7 @@ def job_from_visible_page(url, html):
     description = " ".join(parser.lines)
     location = first_labeled_value(parser.lines, {"standort", "arbeitsort", "location"})
     locations = [location] if location else []
-    employment = first_labeled_value(
-        parser.lines, {"beschaeftigungsart", "anstellungsart", "employment type"}
-    )
+    employment = first_labeled_value(parser.lines, {"beschaeftigungsart", "anstellungsart", "employment type"})
 
     if not title or not company or len(description) < 200:
         raise ValueError("Auf der Seite wurde keine vollständige Stellenanzeige erkannt")
@@ -151,9 +142,7 @@ def job_from_visible_page(url, html):
         title=title,
         company=company,
         locations=locations,
-        sources=[
-            JobSource(source=SOURCE_NAME, source_id=identifier, url=canonical_detail_url(url))
-        ],
+        sources=[JobSource(source=SOURCE_NAME, source_id=identifier, url=canonical_detail_url(url))],
         description_raw=description_html,
         description_clean=description,
         work_mode=work_mode,

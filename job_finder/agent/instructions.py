@@ -113,14 +113,10 @@ def profile_with_places(profile_text, values):
 def job_prompt(job, today, web_searches_left):
     """Return the per-job part: today's date, the search budget and the ad with its facts."""
     salary = " bis ".join(
-        f"{value:,} €".replace(",", ".")
-        for value in (job.get("salary_min_eur"), job.get("salary_max_eur"))
-        if value
+        f"{value:,} €".replace(",", ".") for value in (job.get("salary_min_eur"), job.get("salary_max_eur")) if value
     )
     remote = job.get("remote_percentage")
-    sources = "\n".join(
-        f"- {source.get('source')}: {source.get('url')}" for source in job.get("sources") or []
-    )
+    sources = "\n".join(f"- {source.get('source')}: {source.get('url')}" for source in job.get("sources") or [])
     text = (job.get("description_clean") or "").strip()
     if len(text) > MAX_AD_CHARS:
         text = text[:MAX_AD_CHARS] + "\n[Anzeigentext gekürzt]"

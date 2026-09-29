@@ -49,10 +49,7 @@ class SourceJobModelTests(unittest.TestCase):
         self.assertEqual(job.employment_type, "FULL_TIME")
 
     def test_stepstone_creates_job_model(self):
-        url = (
-            "https://www.stepstone.de/"
-            "stellenangebote--Junior-Python-Developer--14250000-inline.html"
-        )
+        url = "https://www.stepstone.de/stellenangebote--Junior-Python-Developer--14250000-inline.html"
         client = Mock()
         client.get.return_value = json_ld_html(self.posting())
 
@@ -88,8 +85,7 @@ class SourceJobModelTests(unittest.TestCase):
         url = "https://www.get-in-it.de/jobsuche/p309921"
         posting = self.posting()
         posting["description"] = (
-            "<p>Karrierestufe: Absolventinnen &amp; Absolventen; "
-            "Berufserfahrene Beschäftigungsgrad: Vollzeit</p>"
+            "<p>Karrierestufe: Absolventinnen &amp; Absolventen; Berufserfahrene Beschäftigungsgrad: Vollzeit</p>"
         )
 
         with patch.object(get_in_it, "fetch_text", return_value=json_ld_html(posting)):
@@ -131,9 +127,7 @@ class SourceJobModelTests(unittest.TestCase):
 
     def test_company_json_ld_creates_job_model(self):
         url = "https://careers.example.test/job/123"
-        job = job_from_json_ld(
-            "example_company", "Fallback GmbH", url, json_ld_html(self.posting())
-        )
+        job = job_from_json_ld("example_company", "Fallback GmbH", url, json_ld_html(self.posting()))
 
         self.assert_common_job(job, "example_company:123")
         self.assertEqual(job.company, "Example GmbH")
@@ -149,9 +143,7 @@ class SourceJobModelTests(unittest.TestCase):
         self.assertEqual(job.id, "example_company:456")
 
     def test_edag_visible_detail_creates_job_model(self):
-        url = (
-            "https://www.edag.com/de/karriere/stellenanzeigen/detail/junior-python-developer-58815"
-        )
+        url = "https://www.edag.com/de/karriere/stellenanzeigen/detail/junior-python-developer-58815"
         html = """
             <div class="short-facts">
               <span>EDAG Engineering GmbH</span>
@@ -198,8 +190,5 @@ class SourceJobModelTests(unittest.TestCase):
             "description": "<p>Python und APIs, Homeoffice</p>",
             "employmentType": "FULL_TIME",
             "datePosted": "2026-07-10",
-            "baseSalary": {
-                "currency": "EUR",
-                "value": {"minValue": 73_000, "maxValue": 91_000, "unitText": "YEAR"},
-            },
+            "baseSalary": {"currency": "EUR", "value": {"minValue": 73_000, "maxValue": 91_000, "unitText": "YEAR"}},
         }

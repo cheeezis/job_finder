@@ -56,13 +56,9 @@ class CostGuard:
         except Exception as error:
             raise AgentStopped(f"Kostenbuch nicht lesbar ({type(error).__name__})") from error
         if today >= self.limits.daily_max_cost_eur:
-            raise AgentStopped(
-                f"Tagesgrenze erreicht: {euro(today)} von {euro(self.limits.daily_max_cost_eur)}"
-            )
+            raise AgentStopped(f"Tagesgrenze erreicht: {euro(today)} von {euro(self.limits.daily_max_cost_eur)}")
         if month >= self.limits.monthly_max_cost_eur:
-            raise AgentStopped(
-                f"Monatsgrenze erreicht: {euro(month)} von {euro(self.limits.monthly_max_cost_eur)}"
-            )
+            raise AgentStopped(f"Monatsgrenze erreicht: {euro(month)} von {euro(self.limits.monthly_max_cost_eur)}")
 
     def before_model_call(self):
         """Count the call before it happens, so a failed call still uses up a slot."""
@@ -70,13 +66,10 @@ class CostGuard:
             raise RuntimeError("start_job muss vor dem ersten Modellaufruf laufen")
         self.check_run()
         if self.model_calls >= self.limits.job_max_model_calls:
-            raise JobLimitReached(
-                f"Stelle abgebrochen: {self.limits.job_max_model_calls} Modellaufrufe erreicht"
-            )
+            raise JobLimitReached(f"Stelle abgebrochen: {self.limits.job_max_model_calls} Modellaufrufe erreicht")
         if self.job_cost >= self.limits.job_max_cost_eur:
             raise JobLimitReached(
-                f"Stelle abgebrochen: {euro(self.job_cost, 3)} von "
-                f"{euro(self.limits.job_max_cost_eur)} verbraucht"
+                f"Stelle abgebrochen: {euro(self.job_cost, 3)} von {euro(self.limits.job_max_cost_eur)} verbraucht"
             )
         self.model_calls += 1
 
@@ -88,8 +81,7 @@ class CostGuard:
             cost = self.limits.job_max_cost_eur
             self.book(Usage(0, 0, 0), cost)
             raise JobLimitReached(
-                "Stelle abgebrochen: Token-Angaben fehlen oder sind ungültig, "
-                f"vorsichtshalber {euro(cost)} gebucht"
+                f"Stelle abgebrochen: Token-Angaben fehlen oder sind ungültig, vorsichtshalber {euro(cost)} gebucht"
             ) from error
         self.book(usage, cost)
 
@@ -107,7 +99,5 @@ class CostGuard:
 
     def before_tool_call(self):
         if self.tool_calls >= self.limits.job_max_tool_calls:
-            raise JobLimitReached(
-                f"Stelle abgebrochen: {self.limits.job_max_tool_calls} Werkzeugaufrufe erreicht"
-            )
+            raise JobLimitReached(f"Stelle abgebrochen: {self.limits.job_max_tool_calls} Werkzeugaufrufe erreicht")
         self.tool_calls += 1

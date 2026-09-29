@@ -107,23 +107,15 @@ class AgentPhaseTests(unittest.TestCase):
         )
 
         profile_text = run_agent.call_args.args[1]
-        self.assertTrue(
-            profile_text.startswith("version: 6\n\n# Orte aus seinen Sucheinstellungen")
-        )
-        self.assertIn(
-            "- Nahbereich, vor Ort gut erreichbar (um Fulda, etwa 25 km): Fulda, Hünfeld",
-            profile_text,
-        )
+        self.assertTrue(profile_text.startswith("version: 6\n\n# Orte aus seinen Sucheinstellungen"))
+        self.assertIn("- Nahbereich, vor Ort gut erreichbar (um Fulda, etwa 25 km): Fulda, Hünfeld", profile_text)
         self.assertIn("Frankfurt am Main (mindestens 60 % Homeoffice)", profile_text)
         self.assertEqual(run.profile_with_places("version: 6", {}), "version: 6")
 
 
 class RunAgentTests(unittest.TestCase):
     def run_agent(self, outcomes, clock=None):
-        waiting = [
-            {"id": f"memory:{number}", "recommendation_id": f"job:{number}"}
-            for number in range(1, 5)
-        ]
+        waiting = [{"id": f"memory:{number}", "recommendation_id": f"job:{number}"} for number in range(1, 5)]
         ads = {f"job:{number}": {"id": f"job:{number}"} for number in (1, 3, 4)}
         self.write = Mock(side_effect=outcomes)
         with patch.multiple(
@@ -133,20 +125,15 @@ class RunAgentTests(unittest.TestCase):
             write_fact_sheet=self.write,
             spent_today_and_this_month=Mock(return_value=(Decimal("0.2"), 1)),
         ):
-            return run.run_agent(
-                agent_settings(ENABLED), "version: 5", object(), clock=clock or count().__next__
-            )
+            return run.run_agent(agent_settings(ENABLED), "version: 5", object(), clock=clock or count().__next__)
 
     def test_every_job_with_details_gets_its_turn_under_the_review_id(self):
         stats = self.run_agent(["fertig", "abgebrochen", "fertig"])
 
-        self.assertEqual(
-            (stats["fertig"], stats["abgebrochen"], stats["offen"], stats["stopp"]), (2, 1, 0, "")
-        )
+        self.assertEqual((stats["fertig"], stats["abgebrochen"], stats["offen"], stats["stopp"]), (2, 1, 0, ""))
         self.assertEqual(stats["heute_eur"], Decimal("0.2"))
         self.assertEqual(
-            [call.args[0]["id"] for call in self.write.call_args_list],
-            ["memory:1", "memory:3", "memory:4"],
+            [call.args[0]["id"] for call in self.write.call_args_list], ["memory:1", "memory:3", "memory:4"]
         )
 
     def test_a_run_stop_leaves_the_rest_waiting(self):
@@ -194,9 +181,7 @@ class AgentSelectionTests(unittest.TestCase):
                     recommendation("job:decided", 80, 0),
                     recommendation("job:review", 60, 0),
                     recommendation("job:international", 90, 0, international=True),
-                    recommendation(
-                        "job:junior-hybrid", 85, 0, location_precheck="Junior-Hybrid: Pendelweg"
-                    ),
+                    recommendation("job:junior-hybrid", 85, 0, location_precheck="Junior-Hybrid: Pendelweg"),
                     recommendation("job:done", 75, 0),
                     recommendation("job:unknown-state", 55, 0),
                     # Same listing as an older, already decided memory entry.
@@ -257,15 +242,7 @@ class AgentSelectionTests(unittest.TestCase):
         jobs = read_jobs(dataset_name(JOBS_FILE), ["job:1", "job:unbekannt"])
 
         self.assertEqual(
-            jobs,
-            {
-                "job:1": {
-                    "id": "job:1",
-                    "title": "Python",
-                    "company": "A",
-                    "description_clean": "Text",
-                }
-            },
+            jobs, {"job:1": {"id": "job:1", "title": "Python", "company": "A", "description_clean": "Text"}}
         )
 
 

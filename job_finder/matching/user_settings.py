@@ -54,14 +54,8 @@ def parse_user_settings(text, source):
     require_positive_int(search.get("local_radius_km"), "search.local_radius_km")
     require_text(matching.get("preferred_location_label"), "matching.preferred_location_label")
     require_text_list(matching.get("local_places"), "matching.local_places")
-    require_commuter_locations(
-        matching.get("commuter_locations", []), "matching.commuter_locations"
-    )
-    require_text_list(
-        matching.get("profile_domain_keywords"),
-        "matching.profile_domain_keywords",
-        allow_empty=True,
-    )
+    require_commuter_locations(matching.get("commuter_locations", []), "matching.commuter_locations")
+    require_text_list(matching.get("profile_domain_keywords"), "matching.profile_domain_keywords", allow_empty=True)
     require_optional_positive_int(matching.get("salary_target_eur"), "matching.salary_target_eur")
     require_optional_positive_int(matching.get("salary_minimum_eur"), "matching.salary_minimum_eur")
     return values
@@ -111,9 +105,7 @@ def require_commuter_locations(value, name):
         require_mapping(item, item_name)
         require_text(item.get("search_location"), f"{item_name}.search_location")
         require_text_list(item.get("aliases"), f"{item_name}.aliases")
-        require_text_list(
-            item.get("excluded_aliases", []), f"{item_name}.excluded_aliases", allow_empty=True
-        )
+        require_text_list(item.get("excluded_aliases", []), f"{item_name}.excluded_aliases", allow_empty=True)
         percentage = require_positive_int(
             item.get("minimum_remote_percentage"), f"{item_name}.minimum_remote_percentage"
         )

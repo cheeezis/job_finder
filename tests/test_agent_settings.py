@@ -24,9 +24,7 @@ class AgentSettingsTests(unittest.TestCase):
         self.assertEqual(settings.limits, AgentLimits(**DEFAULT_LIMITS))
 
     def test_given_limits_replace_defaults(self):
-        settings = agent_settings(
-            {"agent": {"enabled": True, "job_max_model_calls": 5, "daily_max_cost_eur": 0.3}}
-        )
+        settings = agent_settings({"agent": {"enabled": True, "job_max_model_calls": 5, "daily_max_cost_eur": 0.3}})
 
         self.assertTrue(settings.enabled)
         self.assertEqual(settings.reason, "")

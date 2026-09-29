@@ -58,9 +58,7 @@ class JobSource:
     @classmethod
     def from_dict(cls, values):
         """Restore a source from the current JSON representation."""
-        return cls(
-            values["source"], values["url"], values.get("source_id"), values.get("application_url")
-        )
+        return cls(values["source"], values["url"], values.get("source_id"), values.get("application_url"))
 
 
 @dataclass(slots=True)

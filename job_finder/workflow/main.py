@@ -30,20 +30,14 @@ def combine_listings(evaluated_jobs):
             cards[job.id] = (job, result)
             continue
         # sorted() is stable: on a tie the listing seen first keeps the lead.
-        (lead, lead_result), (other, _) = sorted(
-            [cards[job.id], (job, result)], key=lambda card: card_rank(card[1])
-        )
+        (lead, lead_result), (other, _) = sorted([cards[job.id], (job, result)], key=lambda card: card_rank(card[1]))
         cards[job.id] = (join_listings(lead, other), lead_result)
     return list(cards.values())
 
 
 def card_rank(result):
     """Order listings of one job: included first, then by score and entry level."""
-    return (
-        result["filter_status"] != "included",
-        -result["match_percent"],
-        result["experience_rank"],
-    )
+    return (result["filter_status"] != "included", -result["match_percent"], result["experience_rank"])
 
 
 def join_listings(lead, other):
@@ -62,9 +56,7 @@ def build_score_results(evaluated_jobs):
     results = {"included": [], "excluded": []}
     for job, result in evaluated_jobs:
         results[result["filter_status"]].append({**job.to_dict(), "is_new": job.is_new, **result})
-    results["included"].sort(
-        key=lambda job: (-job["match_percent"], job["experience_rank"], job["title"].lower())
-    )
+    results["included"].sort(key=lambda job: (-job["match_percent"], job["experience_rank"], job["title"].lower()))
     return results
 
 
@@ -81,9 +73,7 @@ def score_for_pipeline(job):
         "experience_rank": 99,
         "experience_level": "manuell zur Prüfung eingereicht",
         "role_group": "manual_review",
-        "location_precheck": (
-            f"Konflikt: {warning}" if "Ort/Remote" in warning else "Manuelle Prüfung"
-        ),
+        "location_precheck": (f"Konflikt: {warning}" if "Ort/Remote" in warning else "Manuelle Prüfung"),
         "reasons": [f"Manuell geprüft trotz Vorfilter: {warning}"],
         "prefilter_warning": warning,
     }
@@ -96,6 +86,5 @@ def load_jobs(path):
         return [Job.from_dict(job) for job in values]
     except KeyError as error:
         raise ValueError(
-            "Importdatei verwendet das alte Jobformat; zuerst einen neuen "
-            "vollstaendigen Lauf starten"
+            "Importdatei verwendet das alte Jobformat; zuerst einen neuen vollstaendigen Lauf starten"
         ) from error

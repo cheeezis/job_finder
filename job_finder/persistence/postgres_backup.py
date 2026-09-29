@@ -10,12 +10,7 @@ from job_finder.paths import APPLICATION_DOCUMENTS_DIR, BACKUP_DIR
 from job_finder.persistence import document_store
 from job_finder.persistence.application_documents import live_document_manifest
 from job_finder.persistence.database import initialize, lock, snapshot, transaction
-from job_finder.persistence.postgres_store import (
-    read_dataset,
-    read_memory,
-    write_dataset,
-    write_memory,
-)
+from job_finder.persistence.postgres_store import read_dataset, read_memory, write_dataset, write_memory
 
 
 def create_postgres_backup(backup_dir=BACKUP_DIR, documents_dir=APPLICATION_DOCUMENTS_DIR):
@@ -27,10 +22,7 @@ def create_postgres_backup(backup_dir=BACKUP_DIR, documents_dir=APPLICATION_DOCU
     temporary = target.with_suffix(".zip.tmp")
     hashes = {}
     try:
-        with (
-            snapshot() as connection,
-            zipfile.ZipFile(temporary, "w", zipfile.ZIP_DEFLATED) as archive,
-        ):
+        with snapshot() as connection, zipfile.ZipFile(temporary, "w", zipfile.ZIP_DEFLATED) as archive:
             memory = read_memory(connection, "default")
             documents = live_document_manifest(memory, documents_dir)
 
@@ -59,9 +51,7 @@ def restore_backup(archive_path, documents_dir):
     """Restore into an empty database and document store; verify before commit."""
     initialize()
     if not document_store.is_empty(documents_dir):
-        raise ValueError(
-            "Dokumentziel muss leer sein; bestehende Dateien werden nicht überschrieben."
-        )
+        raise ValueError("Dokumentziel muss leer sein; bestehende Dateien werden nicht überschrieben.")
     written = []
     with zipfile.ZipFile(archive_path) as archive:
         manifest = json.loads(archive.read("manifest.json"))
@@ -92,9 +82,7 @@ def restore_backup(archive_path, documents_dir):
                         value = json.loads(archive.read(name))
                         write_dataset(dataset, value)
                         if read_dataset(dataset) != value:
-                            raise RuntimeError(
-                                "Datenvergleich nach Wiederherstellung fehlgeschlagen"
-                            )
+                            raise RuntimeError("Datenvergleich nach Wiederherstellung fehlgeschlagen")
                     elif name.startswith("documents/"):
                         key = name.removeprefix("documents/")
                         if document_store.exists(key, documents_dir):

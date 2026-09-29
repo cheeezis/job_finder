@@ -100,9 +100,7 @@ def update_memory(jobs, memory, successful_sources=None, run_sources=None):
             entry["title"] = job.title
             entry["company"] = job.company
             entry["locations"] = unique_values(entry.get("locations") or [], job.locations)
-            entry["source_urls"] = unique_values(
-                entry.get("source_urls", []), [source.url for source in job.sources]
-            )
+            entry["source_urls"] = unique_values(entry.get("source_urls", []), [source.url for source in job.sources])
             entry["source_names"] = unique_values(entry.get("source_names", []), job.source_names)
             entry["missed_runs"] = 0
             entry["active"] = True
@@ -165,8 +163,7 @@ def resolve_memory_id(job, memory, memory_index=None):
         by_title = [
             job_id
             for job_id in same_job_ids(job, memory, index)
-            if job_id not in candidates
-            and all(may_share_decision(memory[own], memory[job_id]) for own in candidates)
+            if job_id not in candidates and all(may_share_decision(memory[own], memory[job_id]) for own in candidates)
         ]
         candidates += by_title
     if not candidates:
@@ -184,9 +181,7 @@ def resolve_memory_id(job, memory, memory_index=None):
             continue
         for field in ("source_urls", "source_names"):
             canonical[field] = unique_values(canonical.get(field, []), candidate.get(field, []))
-        canonical["locations"] = unique_values(
-            canonical.get("locations") or [], candidate.get("locations") or []
-        )
+        canonical["locations"] = unique_values(canonical.get("locations") or [], candidate.get("locations") or [])
         if candidate.get("fully_remote"):
             canonical["fully_remote"] = True
         del memory[candidate_id]
@@ -225,11 +220,7 @@ def may_share_decision(entry, other):
     if not has_manual_state(other) or (remote_entry(entry) and remote_entry(other)):
         return True
     known = other.get("locations") or []
-    return all(
-        locations_match([place], known)
-        for place in entry.get("locations") or []
-        if normalize_location(place)
-    )
+    return all(locations_match([place], known) for place in entry.get("locations") or [] if normalize_location(place))
 
 
 def remote_job(job):
@@ -267,38 +258,26 @@ def add_memory_index_entry(index, job_id, entry):
 
 def repost_decision_is_reusable(entry):
     """Return whether a decision also applies to a repost once the ads are gone."""
-    return entry.get("workflow_status") == WorkflowStatus.IGNORED.value or has_application_state(
-        entry
-    )
+    return entry.get("workflow_status") == WorkflowStatus.IGNORED.value or has_application_state(entry)
 
 
 def preferred_memory_id(candidates, memory, current_job_id):
     """Prefer application history, then reviewed and stable memory entries."""
-    application_candidates = [
-        job_id for job_id in candidates if has_application_state(memory[job_id])
-    ]
+    application_candidates = [job_id for job_id in candidates if has_application_state(memory[job_id])]
     manual_candidates = [job_id for job_id in candidates if has_manual_state(memory[job_id])]
     preferred = application_candidates or manual_candidates or candidates
-    return min(
-        preferred, key=lambda job_id: memory_candidate_key(job_id, memory[job_id], current_job_id)
-    )
+    return min(preferred, key=lambda job_id: memory_candidate_key(job_id, memory[job_id], current_job_id))
 
 
 def memory_candidate_key(job_id, entry, current_job_id):
     """Prefer reviewed history, then the oldest stable memory entry."""
-    return (
-        not has_manual_state(entry),
-        entry.get("first_seen_at", "9999"),
-        job_id != current_job_id,
-        job_id,
-    )
+    return (not has_manual_state(entry), entry.get("first_seen_at", "9999"), job_id != current_job_id, job_id)
 
 
 def has_manual_state(entry):
     """Return whether removing an entry could discard a manual decision."""
     return bool(
-        entry.get("workflow_status")
-        not in {None, WorkflowStatus.NEW.value, WorkflowStatus.REVIEW.value}
+        entry.get("workflow_status") not in {None, WorkflowStatus.NEW.value, WorkflowStatus.REVIEW.value}
         or entry.get("workflow_history")
         or entry.get("review_note")
         or entry.get("personal_rating")

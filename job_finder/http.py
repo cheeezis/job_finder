@@ -17,9 +17,7 @@ def fetch_json(url, headers=None):
     return json.loads(fetch_text(url, headers=headers))
 
 
-def fetch_text_with_final_url(
-    url, headers=None, timeout=20, *, url_validator=None, max_bytes=MAX_RESPONSE_BYTES
-):
+def fetch_text_with_final_url(url, headers=None, timeout=20, *, url_validator=None, max_bytes=MAX_RESPONSE_BYTES):
     """Fetch text while optionally validating every redirect destination."""
     if url_validator is not None:
         url = url_validator(url)

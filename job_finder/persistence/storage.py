@@ -76,17 +76,11 @@ def _with_skipped_listings(current, previous, key, exclude_sources):
             added = [listing for listing in skipped if listing.get("url") not in known]
             if added:
                 entry[key] = [*entry.get(key, []), *added]
-                entry["locations"] = list(
-                    dict.fromkeys([*entry.get("locations", []), *old.get("locations", [])])
-                )
+                entry["locations"] = list(dict.fromkeys([*entry.get("locations", []), *old.get("locations", [])]))
         elif any(listing.get("source") == "manual" for listing in listings):
             kept.append(old)
         elif skipped:
-            remaining = [
-                listing
-                for listing in listings
-                if listing in skipped or listing.get("source") == "original"
-            ]
+            remaining = [listing for listing in listings if listing in skipped or listing.get("source") == "original"]
             kept.append({**old, key: remaining})
     return [*current, *kept]
 
@@ -105,9 +99,7 @@ def publish_results(jobs, results, *, jobs_path, writer, exclude_sources=frozens
     with transaction() if managed else nullcontext() as connection:
         if managed:
             lock(connection, "finder-publication")
-            values = _with_skipped_listings(
-                values, read_json(jobs_path, []), "sources", exclude_sources
-            )
+            values = _with_skipped_listings(values, read_json(jobs_path, []), "sources", exclude_sources)
             previous = read_json(RECOMMENDATIONS_JSON, {}).get("recommendations", [])
         write_json_atomic(jobs_path, values)
         writer(results)

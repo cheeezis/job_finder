@@ -95,9 +95,7 @@ def container_environment():
     """Build the -e KEY=VALUE pairs the container needs, none of it inherited."""
     postgres = read_dotenv(PROJECT_DIR / ".env.postgres-azure")
     database_url = re.sub(
-        r"sslrootcert=[^&]+",
-        "sslrootcert=/etc/ssl/certs/ca-certificates.crt",
-        postgres["JOBFINDER_DATABASE_URL"],
+        r"sslrootcert=[^&]+", "sslrootcert=/etc/ssl/certs/ca-certificates.crt", postgres["JOBFINDER_DATABASE_URL"]
     )
     service_principal = read_dotenv(PROJECT_DIR / ".env.docker-local")
     values = {
@@ -127,9 +125,7 @@ def az(*args, log):
     executable = shutil.which("az")
     if executable is None:
         raise RunFailed("Azure CLI (az) nicht gefunden")
-    result = subprocess.run(
-        [executable, *args], capture_output=True, text=True, encoding="utf-8", errors="replace"
-    )
+    result = subprocess.run([executable, *args], capture_output=True, text=True, encoding="utf-8", errors="replace")
     if result.returncode:
         log.line(result.stderr.strip())
         raise RunFailed(f"az {' '.join(args[:2])} fehlgeschlagen, az-Anmeldung prüfen")
@@ -199,11 +195,7 @@ def pull(image, log):
     """Fetch the worker's image from the registry."""
     az("acr", "login", "--name", REGISTRY, log=log)
     result = subprocess.run(
-        ["docker", "pull", "--quiet", image],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
+        ["docker", "pull", "--quiet", image], capture_output=True, text=True, encoding="utf-8", errors="replace"
     )
     if result.returncode:
         log.line(result.stderr.strip())
@@ -229,12 +221,7 @@ def run_container(image, log):
         LOCAL_ONLY_SOURCES,
     ]
     with subprocess.Popen(
-        command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
+        command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace"
     ) as process:
         for line in process.stdout:
             log.line(line.rstrip("\n"))

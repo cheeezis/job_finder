@@ -94,15 +94,10 @@ class StartupJobsTests(unittest.TestCase):
             {"data": [{"id": "three"}], "has_more": False, "next_cursor": None},
             {"data": [{"id": "two"}, {"id": "four"}], "has_more": False, "next_cursor": None},
         ]
-        scopes = (
-            {"role": "engineering", "country": "DE"},
-            {"role": "engineering", "workplace_type": "remote"},
-        )
+        scopes = ({"role": "engineering", "country": "DE"}, {"role": "engineering", "workplace_type": "remote"})
 
         with patch.object(startup_jobs, "fetch_json", side_effect=pages) as fetch:
-            records = startup_jobs.collect_records(
-                {"Authorization": "Bearer sj_test"}, scopes=scopes
-            )
+            records = startup_jobs.collect_records({"Authorization": "Bearer sj_test"}, scopes=scopes)
 
         self.assertEqual([record["id"] for record in records], ["one", "two", "three", "four"])
         self.assertEqual(fetch.call_count, 3)
@@ -163,15 +158,10 @@ class JobicyTests(unittest.TestCase):
     def test_build_search_url_uses_bounded_official_filters(self):
         url = jobicy.build_search_url({"industry": "technical-support"})
 
-        self.assertEqual(
-            url, "https://jobicy.com/api/v2/remote-jobs?industry=technical-support&count=100"
-        )
+        self.assertEqual(url, "https://jobicy.com/api/v2/remote-jobs?industry=technical-support&count=100")
 
     def test_collect_records_merges_scopes_and_removes_duplicates(self):
-        pages = [
-            {"jobs": [{"id": "one"}, {"id": "two"}]},
-            {"jobs": [{"id": "two"}, {"id": "three"}]},
-        ]
+        pages = [{"jobs": [{"id": "one"}, {"id": "two"}]}, {"jobs": [{"id": "two"}, {"id": "three"}]}]
 
         with (
             patch.object(jobicy, "fetch_json", side_effect=pages) as fetch,
@@ -184,15 +174,7 @@ class JobicyTests(unittest.TestCase):
         self.assertEqual(sleep.call_count, 1)
 
     def test_remote_regions_only_allow_germany_compatible_scopes(self):
-        allowed = [
-            "Germany",
-            "Austria, Germany",
-            "Europe",
-            "Europe, UK",
-            "Anywhere",
-            "Worldwide",
-            "",
-        ]
+        allowed = ["Germany", "Austria, Germany", "Europe", "Europe, UK", "Anywhere", "Worldwide", ""]
         rejected = ["USA", "Canada", "India", "APAC", "EMEA", "LATAM"]
 
         for location in allowed:

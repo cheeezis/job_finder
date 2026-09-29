@@ -44,9 +44,7 @@ class RemotelySourceTests(unittest.TestCase):
             "locations": ["Remote"],
             "sources": [
                 JobSource(
-                    source="remotely",
-                    url=f"https://www.remotely.de/job/{identifier}",
-                    application_url=application_url,
+                    source="remotely", url=f"https://www.remotely.de/job/{identifier}", application_url=application_url
                 )
             ],
             "description_raw": "Python",
@@ -81,9 +79,7 @@ class RemotelySourceTests(unittest.TestCase):
 
         self.assertEqual(links, ["https://www.remotely.de/job/one"])
         self.assertEqual(client.get.call_count, 3)
-        self.assertEqual(
-            client.get.call_args_list[1].args[0], "https://www.remotely.de/alle-jobs/seite/2"
-        )
+        self.assertEqual(client.get.call_args_list[1].args[0], "https://www.remotely.de/alle-jobs/seite/2")
 
     def test_followup_scan_still_returns_complete_recent_window(self):
         client = Mock()
@@ -109,15 +105,11 @@ class RemotelySourceTests(unittest.TestCase):
         )
 
         self.assertTrue(entries[0]["promoted"])
-        self.assertTrue(
-            remotely.page_is_before_cutoff(entries, date(2026, 3, 13), date(2026, 3, 20))
-        )
+        self.assertTrue(remotely.page_is_before_cutoff(entries, date(2026, 3, 13), date(2026, 3, 20)))
         self.assertFalse(remotely.entry_is_recent(entries[0], date(2026, 3, 13), date(2026, 3, 20)))
 
     def test_job_from_html_reads_visible_semantic_fields(self):
-        job = remotely.job_from_html(
-            "https://www.remotely.de/job/example", DETAIL_HTML, today=date(2026, 8, 28)
-        )
+        job = remotely.job_from_html("https://www.remotely.de/job/example", DETAIL_HTML, today=date(2026, 8, 28))
 
         self.assertEqual(job.id, "remotely:example")
         self.assertEqual(job.title, "Junior Python Developer (m/w/d)")
@@ -136,9 +128,7 @@ class RemotelySourceTests(unittest.TestCase):
         """
 
         with self.assertRaises(ListingUnavailableError):
-            remotely.job_from_html(
-                "https://www.remotely.de/job/closed", html, today=date(2026, 8, 29)
-            )
+            remotely.job_from_html("https://www.remotely.de/job/closed", html, today=date(2026, 8, 29))
 
     def test_translation_text_in_script_does_not_reject_active_listing(self):
         html = DETAIL_HTML.replace(
@@ -151,9 +141,7 @@ class RemotelySourceTests(unittest.TestCase):
             """,
         )
 
-        job = remotely.job_from_html(
-            "https://www.remotely.de/job/active", html, today=date(2026, 8, 29)
-        )
+        job = remotely.job_from_html("https://www.remotely.de/job/active", html, today=date(2026, 8, 29))
 
         self.assertEqual(job.id, "remotely:active")
 
@@ -198,9 +186,7 @@ class RemotelySourceTests(unittest.TestCase):
     def test_fetch_jobs_removes_closed_listing_from_stale_cache(self):
         now = datetime(2026, 8, 29, 12, tzinfo=UTC)
         url = "https://www.remotely.de/job/now-closed"
-        cached = self.remotely_job(
-            "now-closed", title="Old cached job", fetched_at=now - timedelta(days=8)
-        )
+        cached = self.remotely_job("now-closed", title="Old cached job", fetched_at=now - timedelta(days=8))
         with tempfile.TemporaryDirectory() as directory:
             cache_path = Path(directory) / "remotely.json"
             save_detail_cache(cache_path, {url: cached})
@@ -222,9 +208,7 @@ class RemotelySourceTests(unittest.TestCase):
             self.remotely_job("active", active_url),
             self.remotely_job("closed", closed_url),
             self.remotely_job("redirected", redirected_url),
-            self.remotely_job(
-                "not-prefiltered", "https://de.linkedin.com/jobs/view/other-at-example-104"
-            ),
+            self.remotely_job("not-prefiltered", "https://de.linkedin.com/jobs/view/other-at-example-104"),
         ]
 
         def fetcher(url, headers=None):

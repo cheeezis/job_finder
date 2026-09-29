@@ -35,11 +35,7 @@ IT_CATEGORIES = (
 REMOTE_ENTRY_TERMS = ("Junior", "Graduate", "Berufseinsteiger", "Einstieg")
 MAX_PAGES_PER_SEARCH = 20
 REQUEST_PAUSE_SECONDS = 0.2
-REMOTE_MODES = {
-    "completely": (WorkMode.REMOTE, 100),
-    "partly": (WorkMode.HYBRID, None),
-    "no": (WorkMode.ONSITE, 0),
-}
+REMOTE_MODES = {"completely": (WorkMode.REMOTE, 100), "partly": (WorkMode.HYBRID, None), "no": (WorkMode.ONSITE, 0)}
 
 
 def fetch_jobs(cache_path=CACHE_FILE, now=None):
@@ -125,11 +121,7 @@ def build_searches():
         "job_listing_category": categories,
     }
     for term in REMOTE_ENTRY_TERMS:
-        yield {
-            "keyword": term,
-            "is_remote_position": "completely",
-            "job_listing_category": categories,
-        }
+        yield {"keyword": term, "is_remote_position": "completely", "job_listing_category": categories}
 
 
 def build_search_url(parameters, page=1):
@@ -167,19 +159,13 @@ def summary_job_from_record(record):
     work_mode, remote_percentage = REMOTE_MODES.get(remote, (WorkMode.UNKNOWN, None))
 
     job_types = [
-        item.get("name")
-        for item in record.get("job_types") or []
-        if isinstance(item, dict) and item.get("name")
+        item.get("name") for item in record.get("job_types") or [] if isinstance(item, dict) and item.get("name")
     ]
     return Job(
         id=source_job_id(SOURCE_NAME, identifier, url),
         title=str(record.get("title") or "").strip(),
         company=str(record.get("company_name") or "").strip(),
-        locations=[
-            str(location).strip()
-            for location in record.get("locations") or []
-            if str(location).strip()
-        ]
+        locations=[str(location).strip() for location in record.get("locations") or [] if str(location).strip()]
         or ["unbekannt"],
         sources=[JobSource(source=SOURCE_NAME, source_id=identifier, url=url)],
         description_raw="",
@@ -199,10 +185,7 @@ def enrich_summary_job(summary, html):
     if summary.work_mode is WorkMode.REMOTE:
         job.work_mode = WorkMode.REMOTE
         job.remote_percentage = 100
-    elif summary.work_mode is WorkMode.HYBRID and job.work_mode in {
-        WorkMode.ONSITE,
-        WorkMode.UNKNOWN,
-    }:
+    elif summary.work_mode is WorkMode.HYBRID and job.work_mode in {WorkMode.ONSITE, WorkMode.UNKNOWN}:
         job.work_mode = WorkMode.HYBRID
     # StudySmarter marks some salary values as AI predictions in its API.
     # Without reliable provenance on the detail page, keep no salary value.

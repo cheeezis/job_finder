@@ -88,12 +88,7 @@ def run_agent(settings, profile_text, client, clock=time.monotonic, today=None):
                 raise AgentStopped("Zeitbudget des Laufs erreicht")
             # Stored under the review's id, so the review finds the sheet.
             outcome = write_fact_sheet(
-                {**ad, "id": job["id"]},
-                profile_text,
-                guard,
-                client,
-                settings,
-                today or date.today(),
+                {**ad, "id": job["id"]}, profile_text, guard, client, settings, today or date.today()
             )
         except AgentStopped as stop:
             stats["stopp"] = str(stop)
@@ -137,10 +132,6 @@ def model_client(endpoint, environ=os.environ):
 
     In Azure the worker's managed identity signs in, locally the az login.
     """
-    credential = DefaultAzureCredential(
-        managed_identity_client_id=environ.get("JOBFINDER_MANAGED_IDENTITY_CLIENT_ID")
-    )
+    credential = DefaultAzureCredential(managed_identity_client_id=environ.get("JOBFINDER_MANAGED_IDENTITY_CLIENT_ID"))
     token = get_bearer_token_provider(credential, "https://cognitiveservices.azure.com/.default")
-    return OpenAI(
-        base_url=f"{endpoint.rstrip('/')}/openai/v1/", api_key=token, timeout=120, max_retries=2
-    )
+    return OpenAI(base_url=f"{endpoint.rstrip('/')}/openai/v1/", api_key=token, timeout=120, max_retries=2)

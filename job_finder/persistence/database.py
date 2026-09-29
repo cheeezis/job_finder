@@ -194,9 +194,7 @@ def initialize():
         versions = connection.execute("SELECT version FROM schema_version").fetchall()
         if versions and versions != [(SCHEMA_VERSION,)]:
             raise RuntimeError("Nicht unterstützte PostgreSQL-Schemaversion")
-        connection.execute(
-            "INSERT INTO schema_version VALUES (%s) ON CONFLICT DO NOTHING", (SCHEMA_VERSION,)
-        )
+        connection.execute("INSERT INTO schema_version VALUES (%s) ON CONFLICT DO NOTHING", (SCHEMA_VERSION,))
 
 
 def memory_scope(path):

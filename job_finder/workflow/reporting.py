@@ -6,16 +6,7 @@ from job_finder.paths import RECOMMENDATIONS_JSON
 from job_finder.persistence.storage import write_json_atomic
 from job_finder.text import text_is_mainly_english
 
-INTERNATIONAL_LOCATION_TERMS = {
-    "anywhere",
-    "emea",
-    "eu",
-    "europa",
-    "europe",
-    "global",
-    "weltweit",
-    "worldwide",
-}
+INTERNATIONAL_LOCATION_TERMS = {"anywhere", "emea", "eu", "europa", "europe", "global", "weltweit", "worldwide"}
 INTERNATIONAL_REMOTE_SOURCES = {"himalayas", "jobicy", "startup_jobs"}
 FOREIGN_COUNTRY_TERMS = {
     "australia",
@@ -98,13 +89,9 @@ def is_international_listing(job):
     location = " ".join(locations)
     normalized = location.casefold()
     source_names = {
-        source.get("source")
-        for source in job.get("sources", job.get("source_links", []))
-        if isinstance(source, dict)
+        source.get("source") for source in job.get("sources", job.get("source_links", [])) if isinstance(source, dict)
     }
-    exclusively_from_international_feeds = bool(
-        source_names and source_names <= INTERNATIONAL_REMOTE_SOURCES
-    )
+    exclusively_from_international_feeds = bool(source_names and source_names <= INTERNATIONAL_REMOTE_SOURCES)
     words = set(re.findall(r"[a-zäöüß]+", normalized))
     if words & INTERNATIONAL_LOCATION_TERMS:
         return True
@@ -119,9 +106,7 @@ def is_international_listing(job):
 def primary_url(job):
     """Return the preferred listing URL from serialized source data."""
     sources = job.get("sources", [])
-    application_url = next(
-        (source.get("application_url") for source in sources if source.get("application_url")), None
-    )
+    application_url = next((source.get("application_url") for source in sources if source.get("application_url")), None)
     return application_url or (sources[0].get("url", "") if sources else "")
 
 
@@ -143,6 +128,4 @@ def format_role_group(job):
 
 def is_visible_in_default_review(job):
     """Return whether a job passes the default review visibility filters."""
-    return not is_international_listing(job) and not str(
-        job.get("location_precheck") or ""
-    ).startswith("Junior-Hybrid")
+    return not is_international_listing(job) and not str(job.get("location_precheck") or "").startswith("Junior-Hybrid")

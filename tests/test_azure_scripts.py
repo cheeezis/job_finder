@@ -36,9 +36,7 @@ class AzureAdminConnectionTests(unittest.TestCase):
         context = SimpleNamespace(get_ca_certs=lambda binary_form: list(certificates))
         with (
             patch.object(module, "PROJECT", project),
-            patch.object(
-                module.subprocess, "run", return_value=SimpleNamespace(stdout=json.dumps(OUTPUTS))
-            ),
+            patch.object(module.subprocess, "run", return_value=SimpleNamespace(stdout=json.dumps(OUTPUTS))),
             patch.object(module.ssl, "create_default_context", return_value=context),
         ):
             return module.admin_connection(), project
@@ -49,9 +47,7 @@ class AzureAdminConnectionTests(unittest.TestCase):
         bundle = project / "tmp/azure-postgres-trusted-roots.pem"
         self.assertEqual(connection["sslmode"], "verify-full")
         self.assertEqual(connection["sslrootcert"], str(bundle))
-        self.assertTrue(
-            bundle.read_text(encoding="ascii").startswith("-----BEGIN CERTIFICATE-----")
-        )
+        self.assertTrue(bundle.read_text(encoding="ascii").startswith("-----BEGIN CERTIFICATE-----"))
         self.assertEqual(connection["host"], OUTPUTS["postgres_host"]["value"])
 
     def test_admin_connection_refuses_an_empty_trust_store(self):
@@ -64,9 +60,7 @@ class AppRoleSqlTests(unittest.TestCase):
 
     def statements(self, function_name, *args, row=("found",)):
         with patch.dict(sys.modules, {"azure_postgres": load_azure_postgres()}):
-            spec = importlib.util.spec_from_file_location(
-                "create_app_role", SCRIPT.with_name("create_app_role.py")
-            )
+            spec = importlib.util.spec_from_file_location("create_app_role", SCRIPT.with_name("create_app_role.py"))
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
         connection = Mock()
@@ -93,9 +87,7 @@ class AppRoleSqlTests(unittest.TestCase):
         )
 
     def test_grants_skip_the_revoke_before_the_schema_exists(self):
-        _, statements = self.statements(
-            "_apply_grants", "jobfinder", "jobfinder_admin", row=(None,)
-        )
+        _, statements = self.statements("_apply_grants", "jobfinder", "jobfinder_admin", row=(None,))
 
         self.assertNotIn('REVOKE ALL ON schema_version FROM "jobfinder_app"', statements)
         self.assertEqual(len(statements), 5)

@@ -22,10 +22,7 @@ HISTORY_FIELDS = ("status", "occurred_on", "scheduled_for")
 DOCUMENT_FIELDS = ("id", "name", "kind", "stored_name", "folder_name")
 # Child tables share their name with the list field of the memory entry.
 CHILD_TABLES = (("workflow_history", HISTORY_FIELDS), ("application_documents", DOCUMENT_FIELDS))
-SNAPSHOT_FIELDS = {
-    "jobs": ("title", "company"),
-    "recommendations": ("title", "company", "match_percent"),
-}
+SNAPSHOT_FIELDS = {"jobs": ("title", "company"), "recommendations": ("title", "company", "match_percent")}
 NOTIFICATION_FIELDS = ("job_id", "sent_at", "attempts")
 CACHE_TABLES = {"manual": ("manual_sources", "url"), "cache": ("source_cache", "cache_key")}
 
@@ -74,8 +71,7 @@ def upsert_records(connection, table, keys, fields, records):
         sql.SQL(",").join(sql.Placeholder() for _ in columns),
         sql.SQL(",").join(map(sql.Identifier, keys)),
         sql.SQL(",").join(
-            sql.SQL("{}=EXCLUDED.{}").format(sql.Identifier(c), sql.Identifier(c))
-            for c in columns[len(keys) :]
+            sql.SQL("{}=EXCLUDED.{}").format(sql.Identifier(c), sql.Identifier(c)) for c in columns[len(keys) :]
         ),
     )
     with connection.cursor() as cursor:
@@ -94,8 +90,7 @@ def read_memory(connection, scope, job_id=None, *, for_update=False):
     memory = {row[0]: unpack(row[1:], STATE_FIELDS) for row in rows}
     for table, fields in CHILD_TABLES:
         rows = connection.execute(
-            f"SELECT job_id,{','.join(fields)},present,extra FROM {table} "
-            f"WHERE {where} ORDER BY job_id,position",
+            f"SELECT job_id,{','.join(fields)},present,extra FROM {table} WHERE {where} ORDER BY job_id,position",
             params,
         )
         for row in rows:
@@ -107,9 +102,7 @@ def write_memory(connection, scope, before, after):
     """Persist only added, removed and changed records inside a transaction."""
     removed = list(before.keys() - after.keys())
     if removed:
-        connection.execute(
-            "DELETE FROM job_state WHERE scope=%s AND job_id=ANY(%s)", (scope, removed)
-        )
+        connection.execute("DELETE FROM job_state WHERE scope=%s AND job_id=ANY(%s)", (scope, removed))
     changed = {key: value for key, value in after.items() if before.get(key) != value}
     records = []
     children = {table: [] for table, _fields in CHILD_TABLES}
@@ -128,9 +121,7 @@ def write_memory(connection, scope, before, after):
     upsert_records(connection, "job_state", ("scope", "job_id"), STATE_FIELDS, records)
     for table, fields in CHILD_TABLES:
         if changed:
-            connection.execute(
-                f"DELETE FROM {table} WHERE scope=%s AND job_id=ANY(%s)", (scope, list(changed))
-            )
+            connection.execute(f"DELETE FROM {table} WHERE scope=%s AND job_id=ANY(%s)", (scope, list(changed)))
         upsert_records(connection, table, ("scope", "job_id", "position"), fields, children[table])
 
 
@@ -139,8 +130,7 @@ def read_jobs(name, job_ids):
     fields = SNAPSHOT_FIELDS["jobs"]
     with snapshot() as connection:
         rows = connection.execute(
-            f"SELECT job_id,{','.join(fields)},present,extra FROM jobs "
-            "WHERE dataset=%s AND job_id = ANY(%s)",
+            f"SELECT job_id,{','.join(fields)},present,extra FROM jobs WHERE dataset=%s AND job_id = ANY(%s)",
             (name, list(job_ids)),
         )
         return {row[0]: {"id": row[0], **unpack(row[1:], fields)} for row in rows}
@@ -160,8 +150,7 @@ def read_dataset(name, default=None):
             values = [
                 {"id": row[0], **unpack(row[1:], fields)}
                 for row in connection.execute(
-                    f"SELECT job_id,{','.join(fields)},present,extra FROM {kind} "
-                    "WHERE dataset=%s ORDER BY position",
+                    f"SELECT job_id,{','.join(fields)},present,extra FROM {kind} WHERE dataset=%s ORDER BY position",
                     (name,),
                 )
             ]
@@ -235,10 +224,7 @@ def write_dataset(name, value):
         elif kind in {"cache", "manual"}:
             table, key_column = CACHE_TABLES[kind]
             entries = enumerate(value[field]) if info["list"] else value[field].items()
-            rows = [
-                (name, str(key), position, Jsonb(item))
-                for position, (key, item) in enumerate(entries)
-            ]
+            rows = [(name, str(key), position, Jsonb(item)) for position, (key, item) in enumerate(entries)]
             if kind != "manual":
                 connection.execute(
                     f"DELETE FROM {table} WHERE dataset=%s AND NOT ({key_column}=ANY(%s))",

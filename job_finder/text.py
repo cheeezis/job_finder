@@ -3,9 +3,7 @@
 import re
 from html.parser import HTMLParser
 
-_SEARCH_TRANSLATION = str.maketrans(
-    {"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss", "\u00ad": None, "\u200b": None}
-)
+_SEARCH_TRANSLATION = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss", "\u00ad": None, "\u200b": None})
 
 
 class _TextExtractor(HTMLParser):

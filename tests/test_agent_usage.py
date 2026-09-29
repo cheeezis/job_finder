@@ -13,10 +13,7 @@ from job_finder.persistence.database import transaction
 class PricingTests(unittest.TestCase):
     def test_cached_input_and_reasoning_are_priced_like_the_bill(self):
         usage = Usage(
-            input_tokens=1_000_000,
-            cached_input_tokens=500_000,
-            output_tokens=100_000,
-            reasoning_tokens=40_000,
+            input_tokens=1_000_000, cached_input_tokens=500_000, output_tokens=100_000, reasoning_tokens=40_000
         )
 
         # 0.5M fresh input x 0.2147 + 0.5M cached x 0.0215 + 0.1M output x 1.7173;
@@ -25,13 +22,7 @@ class PricingTests(unittest.TestCase):
 
     def test_web_searches_are_billed_per_search_on_top_of_the_tokens(self):
         # The real probe of 25.09.2026: one search step, two billed searches.
-        usage = Usage(
-            input_tokens=8540,
-            cached_input_tokens=0,
-            output_tokens=210,
-            reasoning_tokens=64,
-            web_searches=2,
-        )
+        usage = Usage(input_tokens=8540, cached_input_tokens=0, output_tokens=210, reasoning_tokens=64, web_searches=2)
 
         # (8540 x 0.2147 + 210 x 1.7173) / 1M for the tokens + 2 x 0.0120213.
         self.assertEqual(call_cost("gpt-5-mini", usage), Decimal("0.026236771"))

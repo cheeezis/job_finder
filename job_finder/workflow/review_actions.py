@@ -15,9 +15,7 @@ from job_finder.workflow.memory import edit_job
 MAX_REVIEW_NOTE_CHARS = 2000
 
 
-def update_workflow_status(
-    job_id, workflow_status, memory_path=MEMORY_FILE, occurred_on=None, scheduled_for=None
-):
+def update_workflow_status(job_id, workflow_status, memory_path=MEMORY_FILE, occurred_on=None, scheduled_for=None):
     """Validate and persist one manual workflow decision."""
     status = WorkflowStatus(workflow_status)
     with edit_job(job_id, memory_path) as entry:
@@ -82,16 +80,10 @@ def start_application(
     try:
         with edit_job(job_id, memory_path) as entry:
             if is_application(entry):
-                return status_result(
-                    entry.get("workflow_status", WorkflowStatus.APPLIED.value), True
-                )
+                return status_result(entry.get("workflow_status", WorkflowStatus.APPLIED.value), True)
             salary_eur = validated_salary_expectation_eur(salary_expectation_eur, salary_period)
             stored_documents = store_documents(
-                job_id,
-                documents,
-                documents_dir,
-                company=entry.get("company", ""),
-                title=entry.get("title", ""),
+                job_id, documents, documents_dir, company=entry.get("company", ""), title=entry.get("title", "")
             )
             if stored_documents:
                 entry["application_documents"] = stored_documents
@@ -168,16 +160,9 @@ def update_workflow_history(
 
 
 def delete_workflow_history(
-    job_id,
-    event_index,
-    previous_status,
-    previous_occurred_on,
-    memory_path=MEMORY_FILE,
-    previous_scheduled_for=None,
+    job_id, event_index, previous_status, previous_occurred_on, memory_path=MEMORY_FILE, previous_scheduled_for=None
 ):
     """Delete one manual workflow event."""
     with edit_job(job_id, memory_path) as entry:
-        status = delete_history_event(
-            entry, event_index, previous_status, previous_occurred_on, previous_scheduled_for
-        )
+        status = delete_history_event(entry, event_index, previous_status, previous_occurred_on, previous_scheduled_for)
     return {"workflow_status": status}

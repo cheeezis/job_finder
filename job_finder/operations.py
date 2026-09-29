@@ -57,9 +57,7 @@ class TeeStream:
         self.progress_width = 0 if complete else width
         self.progress_active = not complete
         if complete:
-            self.log_file.write(
-                f"{datetime.now().astimezone().isoformat(timespec='seconds')} {text}\n"
-            )
+            self.log_file.write(f"{datetime.now().astimezone().isoformat(timespec='seconds')} {text}\n")
             self.log_file.flush()
 
     def flush(self):
@@ -97,9 +95,7 @@ class RunLog(AbstractContextManager):
         finished_at = datetime.now().astimezone()
         duration_seconds = round(time.monotonic() - self.started_monotonic, 1)
         if error is None:
-            print(
-                f"Lauf erfolgreich beendet · Gesamtdauer {format_clock(time.monotonic() - self.started_monotonic)}"
-            )
+            print(f"Lauf erfolgreich beendet · Gesamtdauer {format_clock(time.monotonic() - self.started_monotonic)}")
             log_event("run_finished", run_id=self.run_id, duration_seconds=duration_seconds)
         else:
             print(f"Lauf fehlgeschlagen: {type(error).__name__}: {error}")

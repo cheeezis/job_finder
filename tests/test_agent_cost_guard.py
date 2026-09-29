@@ -36,9 +36,7 @@ def run_fake_agent(guard, job_ids):
 
 class CostGuardTests(unittest.TestCase):
     def setUp(self):
-        self.spent = self.enterContext(
-            patch.object(cost_guard, "spent_today_and_this_month", return_value=(0, 0))
-        )
+        self.spent = self.enterContext(patch.object(cost_guard, "spent_today_and_this_month", return_value=(0, 0)))
         self.record = self.enterContext(patch.object(cost_guard, "record_model_call"))
 
     def test_no_call_without_switch_price_or_readable_ledger(self):
@@ -107,9 +105,7 @@ class CostGuardTests(unittest.TestCase):
         settings = agent_settings({"agent": {"enabled": True, "job_max_cost_eur": 0.25}})
         guard = CostGuard(settings, "gpt-5-mini")
         guard.start_job("job:1")
-        searching = Usage(
-            input_tokens=8540, cached_input_tokens=0, output_tokens=210, web_searches=2
-        )
+        searching = Usage(input_tokens=8540, cached_input_tokens=0, output_tokens=210, web_searches=2)
 
         self.assertTrue(guard.search_allowed())
         guard.before_model_call()
@@ -145,9 +141,7 @@ class CostGuardLedgerTests(unittest.TestCase):
             connection.execute("TRUNCATE agent_usage")
 
     def test_fake_agent_run_stops_at_the_daily_limit(self):
-        settings = agent_settings(
-            {"agent": {"enabled": True, "job_max_cost_eur": 0.01, "daily_max_cost_eur": 0.02}}
-        )
+        settings = agent_settings({"agent": {"enabled": True, "job_max_cost_eur": 0.01, "daily_max_cost_eur": 0.02}})
 
         outcome = run_fake_agent(CostGuard(settings, "gpt-5-mini"), ["job:1", "job:2", "job:3"])
 

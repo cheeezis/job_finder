@@ -10,9 +10,7 @@ OUTPUT_DIR = DATA_DIR / "output"
 LOG_DIR = DATA_DIR / "logs"
 BACKUP_DIR = DATA_DIR / "backups"
 # Mount a persistent directory here when the review runs in a container.
-APPLICATION_DOCUMENTS_DIR = Path(
-    os.environ.get("JOBFINDER_DOCUMENTS_DIR", INTERNAL_DIR / "application_documents")
-)
+APPLICATION_DOCUMENTS_DIR = Path(os.environ.get("JOBFINDER_DOCUMENTS_DIR", INTERNAL_DIR / "application_documents"))
 
 JOBS_FILE = INTERNAL_DIR / "jobs.json"
 MEMORY_FILE = INTERNAL_DIR / "job_finder.sqlite3"

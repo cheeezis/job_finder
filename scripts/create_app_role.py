@@ -43,9 +43,7 @@ def _local_target():
         "database": "jobfinder",
         "admin_role": "jobfinder",
         "admin_url": f"postgresql://jobfinder:{quote(password)}@127.0.0.1:{port}/jobfinder",
-        "app_url": lambda app_password: (
-            f"postgresql://{APP_ROLE}:{quote(app_password)}@127.0.0.1:{port}/jobfinder"
-        ),
+        "app_url": lambda app_password: f"postgresql://{APP_ROLE}:{quote(app_password)}@127.0.0.1:{port}/jobfinder",
         "env_file": PROJECT / ".env.postgres",
     }
 
@@ -60,8 +58,7 @@ def _azure_target():
         "database": database,
         "admin_role": "jobfinder_admin",
         "admin_url": (
-            f"postgresql://jobfinder_admin:{quote(connect_kwargs['password'])}@{host}:5432/"
-            f"{database}{tls_suffix}"
+            f"postgresql://jobfinder_admin:{quote(connect_kwargs['password'])}@{host}:5432/{database}{tls_suffix}"
         ),
         "app_url": lambda app_password: (
             f"postgresql://{APP_ROLE}:{quote(app_password)}@{host}:5432/{database}{tls_suffix}"
@@ -97,16 +94,12 @@ def _ensure_role(connection):
     # sql.Literal still escapes it safely, just at SQL-composition time.
     password = secrets.token_hex(24)
     if exists:
-        connection.execute(
-            sql.SQL("ALTER ROLE {} PASSWORD {}").format(
-                sql.Identifier(APP_ROLE), sql.Literal(password)
-            )
-        )
+        connection.execute(sql.SQL("ALTER ROLE {} PASSWORD {}").format(sql.Identifier(APP_ROLE), sql.Literal(password)))
     else:
         connection.execute(
-            sql.SQL(
-                "CREATE ROLE {} LOGIN PASSWORD {} NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION"
-            ).format(sql.Identifier(APP_ROLE), sql.Literal(password))
+            sql.SQL("CREATE ROLE {} LOGIN PASSWORD {} NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION").format(
+                sql.Identifier(APP_ROLE), sql.Literal(password)
+            )
         )
     return password
 
@@ -122,14 +115,11 @@ def _apply_grants(connection, database, admin_role):
     grant("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO {}", APP_ROLE)
     # Schema may not be initialized yet (job_finder.db init runs independently
     # of this script); skip the revoke rather than fail on a missing table.
-    schema_version_exists = connection.execute(
-        "SELECT to_regclass('public.schema_version')"
-    ).fetchone()[0]
+    schema_version_exists = connection.execute("SELECT to_regclass('public.schema_version')").fetchone()[0]
     if schema_version_exists:
         grant("REVOKE ALL ON schema_version FROM {}", APP_ROLE)
     grant(
-        "ALTER DEFAULT PRIVILEGES FOR ROLE {} IN SCHEMA public "
-        "GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO {}",
+        "ALTER DEFAULT PRIVILEGES FOR ROLE {} IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO {}",
         admin_role,
         APP_ROLE,
     )
@@ -138,9 +128,7 @@ def _apply_grants(connection, database, admin_role):
 def main():
     """Create/refresh jobfinder_app and its env entries for the chosen target."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--azure", action="store_true", help="Gegen Azure statt die lokale Docker-DB ausführen."
-    )
+    parser.add_argument("--azure", action="store_true", help="Gegen Azure statt die lokale Docker-DB ausführen.")
     args = parser.parse_args()
     target = _azure_target() if args.azure else _local_target()
     env_file = target["env_file"]

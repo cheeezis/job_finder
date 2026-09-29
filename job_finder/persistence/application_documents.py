@@ -135,9 +135,7 @@ def document_directory(job_id, folder_name=None):
 
 def application_folder_name(company, title, job_id):
     """Create a readable folder whose stable suffix prevents cross-job collisions."""
-    label = " - ".join(
-        value for value in [str(company or "").strip(), str(title or "").strip()] if value
-    )
+    label = " - ".join(value for value in [str(company or "").strip(), str(title or "").strip()] if value)
     identifier = hashlib.sha256(str(job_id).encode("utf-8")).hexdigest()[:12]
     suffix = f" [{identifier}]"
     readable = safe_windows_name(label or "Bewerbung")

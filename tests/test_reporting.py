@@ -6,11 +6,7 @@ import unittest
 from pathlib import Path
 
 from job_finder.matching.matching_rules import ROLE_GROUPS
-from job_finder.workflow.reporting import (
-    ROLE_LABELS,
-    is_international_listing,
-    write_recommendations,
-)
+from job_finder.workflow.reporting import ROLE_LABELS, is_international_listing, write_recommendations
 
 
 def included_job(job_id="test:1"):
@@ -39,19 +35,13 @@ class ReportingTests(unittest.TestCase):
         first = included_job()
         first["sources"] = [
             {"source": "listing", "url": "https://portal.test/job"},
-            {
-                "source": "arbeitnow",
-                "url": "https://arbeitnow.test/job",
-                "application_url": "https://company.test/job",
-            },
+            {"source": "arbeitnow", "url": "https://arbeitnow.test/job", "application_url": "https://company.test/job"},
         ]
         second = included_job("test:2")
 
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "recommendations.json"
-            write_recommendations(
-                {"included": [first, second], "excluded": [included_job("excluded")]}, path
-            )
+            write_recommendations({"included": [first, second], "excluded": [included_job("excluded")]}, path)
             stored = json.loads(path.read_text(encoding="utf-8"))["recommendations"]
 
         self.assertEqual(len(stored), 2)

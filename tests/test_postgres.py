@@ -47,16 +47,8 @@ class PostgresTests(unittest.TestCase):
             die Wartung unserer Anwendungen im agilen Produktteam. Erste Kenntnisse in
             Python und Datenbanken sind willkommen.</p></main>"""
         with (
-            patch.object(
-                manual.socket,
-                "getaddrinfo",
-                return_value=[(None, None, None, None, ("93.184.216.34", 443))],
-            ),
-            patch.object(
-                manual,
-                "fetch_text_with_final_url",
-                return_value=("https://example.com/jobs/python", page),
-            ),
+            patch.object(manual.socket, "getaddrinfo", return_value=[(None, None, None, None, ("93.184.216.34", 443))]),
+            patch.object(manual, "fetch_text_with_final_url", return_value=("https://example.com/jobs/python", page)),
         ):
             result = import_manual_url("https://example.com/jobs/python")
 
@@ -66,8 +58,7 @@ class PostgresTests(unittest.TestCase):
         self.assertEqual(list(cache["jobs"]), ["https://example.com/jobs/python"])
         self.assertEqual([job["id"] for job in read_dataset("internal/jobs.json")], [job_id])
         self.assertEqual(
-            [card["id"] for card in read_dataset("output/recommendations.json")["recommendations"]],
-            [job_id],
+            [card["id"] for card in read_dataset("output/recommendations.json")["recommendations"]], [job_id]
         )
         self.assertIn(job_id, load_memory())
 
@@ -131,9 +122,7 @@ class PostgresTests(unittest.TestCase):
         save_memory(value)
         self.assertEqual(load_memory(), value)
         with transaction() as connection:
-            row = connection.execute(
-                "SELECT workflow_status,personal_rating,extra FROM job_state"
-            ).fetchone()
+            row = connection.execute("SELECT workflow_status,personal_rating,extra FROM job_state").fetchone()
             self.assertEqual(row[:2], ("interview", "good"))
             self.assertNotIn("workflow_status", row[2])
 
@@ -141,9 +130,7 @@ class PostgresTests(unittest.TestCase):
         records = [{"id": "same", "title": "a"}, {"id": "same", "title": "b"}]
         samples = {
             "internal/jobs.json": records,
-            "output/recommendations.json": {
-                "recommendations": [dict(records[0], match_percent=82)]
-            },
+            "output/recommendations.json": {"recommendations": [dict(records[0], match_percent=82)]},
             "internal/notifications.json": {
                 "version": 3,
                 "sent": {"x": {"job_id": "x", "sent_at": "2026-09-18"}},
@@ -212,9 +199,7 @@ class PostgresTests(unittest.TestCase):
         thread.join(5)
         self.assertFalse(thread.is_alive())
         self.assertEqual(errors, [])
-        self.assertEqual(
-            load_memory()["job:1"], {"title": "updated by worker", "workflow_status": "applied"}
-        )
+        self.assertEqual(load_memory()["job:1"], {"title": "updated by worker", "workflow_status": "applied"})
 
     def test_manual_sources_survive_an_outdated_cache_save(self):
         name = "internal/manual_jobs_cache.json"
@@ -225,16 +210,11 @@ class PostgresTests(unittest.TestCase):
 
     def test_cache_cleanup_keeps_manual_input_and_fresh_cache(self):
         write_dataset(
-            "internal/test_cache.json",
-            {"version": 1, "jobs": {"old": {"id": "old"}, "fresh": {"id": "fresh"}}},
+            "internal/test_cache.json", {"version": 1, "jobs": {"old": {"id": "old"}, "fresh": {"id": "fresh"}}}
         )
-        write_dataset(
-            "internal/manual_jobs_cache.json", {"version": 1, "jobs": {"manual": {"id": "manual"}}}
-        )
+        write_dataset("internal/manual_jobs_cache.json", {"version": 1, "jobs": {"manual": {"id": "manual"}}})
         with transaction() as connection:
-            connection.execute(
-                "UPDATE source_cache SET stored_at=now()-interval '40 days' WHERE cache_key='old'"
-            )
+            connection.execute("UPDATE source_cache SET stored_at=now()-interval '40 days' WHERE cache_key='old'")
         self.assertEqual(prune_cache(30), 1)
         self.assertEqual(list(read_dataset("internal/test_cache.json")["jobs"]), ["fresh"])
         self.assertIn("manual", read_dataset("internal/manual_jobs_cache.json")["jobs"])
@@ -273,10 +253,7 @@ class PostgresTests(unittest.TestCase):
         self.assertEqual(len(read_dataset("internal/jobs.json")), 1)
 
     def test_worker_publication_preserves_manual_import_not_in_snapshot(self):
-        manual_job = {
-            "id": "manual:1",
-            "sources": [{"source": "manual", "url": "https://example.test/manual"}],
-        }
+        manual_job = {"id": "manual:1", "sources": [{"source": "manual", "url": "https://example.test/manual"}]}
         manual_result = {"id": "manual:1", "source_links": manual_job["sources"]}
         write_dataset("internal/jobs.json", [manual_job])
         write_dataset("output/recommendations.json", {"recommendations": [manual_result]})
@@ -284,14 +261,10 @@ class PostgresTests(unittest.TestCase):
             [],
             {},
             jobs_path=JOBS_FILE,
-            writer=lambda _results: write_json_atomic(
-                RECOMMENDATIONS_JSON, {"recommendations": []}
-            ),
+            writer=lambda _results: write_json_atomic(RECOMMENDATIONS_JSON, {"recommendations": []}),
         )
         self.assertEqual(read_dataset("internal/jobs.json"), [manual_job])
-        self.assertEqual(
-            read_dataset("output/recommendations.json")["recommendations"], [manual_result]
-        )
+        self.assertEqual(read_dataset("output/recommendations.json")["recommendations"], [manual_result])
 
     def test_worker_publication_preserves_entries_from_excluded_sources(self):
         """A split schedule must not drop jobs a run deliberately skipped."""
@@ -300,28 +273,19 @@ class PostgresTests(unittest.TestCase):
             "sources": [{"source": "arbeitsagentur", "url": "https://example.test/1"}],
         }
         skipped_result = {"id": "arbeitsagentur:1", "source_links": skipped_job["sources"]}
-        stale_job = {
-            "id": "stepstone:2",
-            "sources": [{"source": "stepstone", "url": "https://example.test/2"}],
-        }
+        stale_job = {"id": "stepstone:2", "sources": [{"source": "stepstone", "url": "https://example.test/2"}]}
         stale_result = {"id": "stepstone:2", "source_links": stale_job["sources"]}
         write_dataset("internal/jobs.json", [skipped_job, stale_job])
-        write_dataset(
-            "output/recommendations.json", {"recommendations": [skipped_result, stale_result]}
-        )
+        write_dataset("output/recommendations.json", {"recommendations": [skipped_result, stale_result]})
         publish_results(
             [],
             {},
             jobs_path=JOBS_FILE,
-            writer=lambda _results: write_json_atomic(
-                RECOMMENDATIONS_JSON, {"recommendations": []}
-            ),
+            writer=lambda _results: write_json_atomic(RECOMMENDATIONS_JSON, {"recommendations": []}),
             exclude_sources={"arbeitsagentur"},
         )
         self.assertEqual(read_dataset("internal/jobs.json"), [skipped_job])
-        self.assertEqual(
-            read_dataset("output/recommendations.json")["recommendations"], [skipped_result]
-        )
+        self.assertEqual(read_dataset("output/recommendations.json")["recommendations"], [skipped_result])
 
     def test_each_run_replaces_only_its_own_listings_of_a_shared_job(self):
         """Azure and the local run show one job on one card with the links of both."""
@@ -336,10 +300,7 @@ class PostgresTests(unittest.TestCase):
         }
         write_dataset(
             "internal/jobs.json",
-            [
-                {"id": job_id, "locations": places, "sources": links}
-                for job_id, (places, links) in before.items()
-            ],
+            [{"id": job_id, "locations": places, "sources": links} for job_id, (places, links) in before.items()],
         )
         write_dataset(
             "output/recommendations.json",
@@ -359,19 +320,13 @@ class PostgresTests(unittest.TestCase):
             description_raw="",
             description_clean="",
         )
-        card = {
-            "id": "arbeitnow:1",
-            "locations": ["Würzburg"],
-            "source_links": [listing("arbeitnow", 1)],
-        }
+        card = {"id": "arbeitnow:1", "locations": ["Würzburg"], "source_links": [listing("arbeitnow", 1)]}
 
         publish_results(
             [found_again],
             {},
             jobs_path=JOBS_FILE,
-            writer=lambda _results: write_json_atomic(
-                RECOMMENDATIONS_JSON, {"recommendations": [card]}
-            ),
+            writer=lambda _results: write_json_atomic(RECOMMENDATIONS_JSON, {"recommendations": [card]}),
             exclude_sources={"stepstone", "remotely"},
         )
 
@@ -382,10 +337,7 @@ class PostgresTests(unittest.TestCase):
             "arbeitnow:2": ["https://remotely.test/2"],
         }
         self.assertEqual({job["id"]: [s["url"] for s in job["sources"]] for job in jobs}, expected)
-        self.assertEqual(
-            {shown["id"]: [link["url"] for link in shown["source_links"]] for shown in cards},
-            expected,
-        )
+        self.assertEqual({shown["id"]: [link["url"] for link in shown["source_links"]] for shown in cards}, expected)
 
     def test_backup_restore_includes_document_bytes_and_refuses_overwrite(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -393,20 +345,13 @@ class PostgresTests(unittest.TestCase):
             content = b"%PDF-1.4 test-document"
             metadata = store_documents(
                 "job:1",
-                [
-                    {
-                        "kind": "resume",
-                        "name": "resume.pdf",
-                        "content": base64.b64encode(content).decode(),
-                    }
-                ],
+                [{"kind": "resume", "name": "resume.pdf", "content": base64.b64encode(content).decode()}],
                 root / "documents",
             )
             memory = {"job:1": {"workflow_status": "applied", "application_documents": metadata}}
             save_memory(memory)
             write_dataset(
-                "internal/notifications.json",
-                {"version": 3, "sent": {"job:1": {"job_id": "job:1"}}, "pending": {}},
+                "internal/notifications.json", {"version": 3, "sent": {"job:1": {"job_id": "job:1"}}, "pending": {}}
             )
             backup = create_postgres_backup(root / "backups", root / "documents")
             with self.assertRaisesRegex(ValueError, "leere Datenbank"):

@@ -58,17 +58,9 @@ def analyze_experience(title, full_text, required_years=None, description=None):
 
     if required_years:
         points = {1: 14, 2: 8, 3: 3}[required_years]
-        return {
-            "rank": required_years + 1,
-            "points": points,
-            "label": f"{required_years} Jahr(e) gefordert",
-        }
+        return {"rank": required_years + 1, "points": points, "label": f"{required_years} Jahr(e) gefordert"}
 
-    if (
-        description is not None
-        and description_is_missing(description)
-        and not is_entry_level(title)
-    ):
+    if description is not None and description_is_missing(description) and not is_entry_level(title):
         return {"rank": 4, "points": 8, "label": "Beschreibung fehlt, Erfahrung unklar"}
 
     if contains_any(full_text, BODY_ENTRY_LEVEL_PHRASES):
@@ -84,11 +76,7 @@ def analyze_experience(title, full_text, required_years=None, description=None):
         return {"rank": 0, "points": 25, "label": "erste Erfahrung reicht aus"}
 
     if has_required_experience(full_text):
-        return {
-            "rank": 4,
-            "points": 8,
-            "label": "praktische Vorerfahrung mit Technologien vorausgesetzt",
-        }
+        return {"rank": 4, "points": 8, "label": "praktische Vorerfahrung mit Technologien vorausgesetzt"}
 
     if experience_is_optional(full_text):
         return {"rank": 1, "points": 18, "label": "Erfahrung nur wuenschenswert"}
@@ -163,9 +151,7 @@ def is_addressed_to_applicant(text, match):
     if contains_any(clause, EMPLOYER_CONTEXT_WORDS):
         return False
     heading_window = text[max(0, match.start() - 150) : match.start()]
-    return contains_any(clause, APPLICANT_SUBJECT_PHRASES) or contains_any(
-        heading_window, PROFILE_HEADING_PHRASES
-    )
+    return contains_any(clause, APPLICANT_SUBJECT_PHRASES) or contains_any(heading_window, PROFILE_HEADING_PHRASES)
 
 
 def match_is_optional(text, match):

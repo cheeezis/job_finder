@@ -66,12 +66,8 @@ def search(term, location=LOCAL_SEARCH_LOCATION, radius=LOCAL_SEARCH_RADIUS_KM):
     while True:
         html = fetch_text(build_search_url(term, page, location, radius))
         search_result = extract_script_json(html, "ng-state").get("suchergebnis", {})
-        page_results = (
-            search_result.get("ergebnisliste") or search_result.get("stellenangebote") or []
-        )
-        new_results = [
-            result for result in page_results if result.get("referenznummer") not in seen_references
-        ]
+        page_results = search_result.get("ergebnisliste") or search_result.get("stellenangebote") or []
+        new_results = [result for result in page_results if result.get("referenznummer") not in seen_references]
 
         for result in new_results:
             seen_references.add(result.get("referenznummer"))
@@ -86,13 +82,7 @@ def search(term, location=LOCAL_SEARCH_LOCATION, radius=LOCAL_SEARCH_RADIUS_KM):
 
 def build_search_url(term, page=1, location=LOCAL_SEARCH_LOCATION, radius=LOCAL_SEARCH_RADIUS_KM):
     """Encode a term, page and local search radius into a search URL."""
-    query = {
-        "angebotsart": "1",
-        "was": term,
-        "wo": location,
-        "umkreis": str(radius),
-        "page": str(page),
-    }
+    query = {"angebotsart": "1", "was": term, "wo": location, "umkreis": str(radius), "page": str(page)}
     return f"{SEARCH_BASE_URL}?{urlencode(query)}"
 
 
@@ -106,9 +96,7 @@ def fetch_job(url):
     raw_description = detail.get("stellenangebotsBeschreibung", "")
     description = html_to_text(raw_description)
     structured_remote = format_remote(detail)
-    detected_remote = detect_remote(
-        title, description, location_text, structured_remote=structured_remote
-    )
+    detected_remote = detect_remote(title, description, location_text, structured_remote=structured_remote)
     work_mode, remote_percentage = classify_remote(detected_remote)
     reference = url.rstrip("/").rsplit("/", 1)[-1]
 
@@ -119,10 +107,7 @@ def fetch_job(url):
         locations=locations,
         sources=[
             JobSource(
-                source=SOURCE_NAME,
-                source_id=reference,
-                url=url,
-                application_url=detail.get("externeURL") or None,
+                source=SOURCE_NAME, source_id=reference, url=url, application_url=detail.get("externeURL") or None
             )
         ],
         description_raw=raw_description,
@@ -150,9 +135,7 @@ def extract_jobdetail(html):
 
 def format_locations(detail):
     """Return unique city names, falling back to the unknown-location label."""
-    cities = (
-        location.get("adresse", {}).get("ort") for location in detail.get("stellenlokationen", [])
-    )
+    cities = (location.get("adresse", {}).get("ort") for location in detail.get("stellenlokationen", []))
     return list(dict.fromkeys(city for city in cities if city)) or ["unbekannt"]
 
 

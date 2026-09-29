@@ -14,9 +14,7 @@ def contains_any(text, words):
 
 def is_entry_level(title, description=""):
     """Return whether this specific vacancy explicitly welcomes beginners."""
-    return contains_any(title, ENTRY_LEVEL_WORDS) or contains_any(
-        description, BODY_ENTRY_LEVEL_PHRASES
-    )
+    return contains_any(title, ENTRY_LEVEL_WORDS) or contains_any(description, BODY_ENTRY_LEVEL_PHRASES)
 
 
 def contains_keyword(text, keyword):

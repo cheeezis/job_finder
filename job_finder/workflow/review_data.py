@@ -41,9 +41,7 @@ def load_review_jobs(recommendations_path=RECOMMENDATIONS_JSON, memory_path=MEMO
         # ``is_new`` describes the collection run, while a persisted workflow
         # status records that the user has already decided on the job. Never
         # resurrect that transient run marker after the review page reloads.
-        job["is_new"] = bool(job.get("is_new")) and (
-            job["workflow_status"] == WorkflowStatus.NEW.value
-        )
+        job["is_new"] = bool(job.get("is_new")) and (job["workflow_status"] == WorkflowStatus.NEW.value)
         job["application_tracked"] = is_application(entry)
         job["review_note"] = entry.get("review_note") or ""
         if not job.get("source_links"):
@@ -77,9 +75,7 @@ def one_card_per_job(review_jobs):
             *(card.get("source_links") or []),
             *(link for link in job.get("source_links") or [] if link.get("url") not in known),
         ]
-        card["locations"] = list(
-            dict.fromkeys([*(card.get("locations") or []), *(job.get("locations") or [])])
-        )
+        card["locations"] = list(dict.fromkeys([*(card.get("locations") or []), *(job.get("locations") or [])]))
         # Hidden as international only if no listing of the job is a German one.
         card["international"] = bool(card.get("international") and job.get("international"))
         card["is_new"] = bool(card.get("is_new") or job.get("is_new"))
@@ -112,17 +108,12 @@ def remembered_review_job(job_id, entry):
     """Keep a manual shortlist entry until the user changes its status."""
     source_links = memory_source_links(entry)
     if entry.get("availability_checked_at") and entry.get("workflow_status") == "ignored":
-        availability_warning = (
-            "Anzeige nicht mehr verfügbar; automatisch auf Nicht interessant gesetzt."
-        )
+        availability_warning = "Anzeige nicht mehr verfügbar; automatisch auf Nicht interessant gesetzt."
     elif entry.get("active", True):
-        availability_warning = (
-            "Im aktuellen Lauf nicht gefunden; Verfügbarkeit bitte über die Anzeige prüfen."
-        )
+        availability_warning = "Im aktuellen Lauf nicht gefunden; Verfügbarkeit bitte über die Anzeige prüfen."
     else:
         availability_warning = (
-            "Seit mehreren vollständigen Läufen nicht gefunden; die Stelle ist "
-            "möglicherweise nicht mehr verfügbar."
+            "Seit mehreren vollständigen Läufen nicht gefunden; die Stelle ist möglicherweise nicht mehr verfügbar."
         )
     job = {
         "id": job_id,
@@ -161,11 +152,7 @@ def memory_id_finder(memory):
 
 def job_urls(job):
     """Return the listing URLs a recommendation can be matched by."""
-    urls = {
-        link.get("url")
-        for link in job.get("source_links", [])
-        if isinstance(link, dict) and link.get("url")
-    }
+    urls = {link.get("url") for link in job.get("source_links", []) if isinstance(link, dict) and link.get("url")}
     if job.get("url"):
         urls.add(job["url"])
     return urls

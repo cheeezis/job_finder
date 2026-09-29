@@ -38,7 +38,7 @@ class PostgresTests(unittest.TestCase):
     def clear_database(self):
         with transaction() as connection:
             self.assertTrue(connection.info.dbname.endswith("_test"))
-            connection.execute("TRUNCATE job_state,datasets,migration_runs CASCADE")
+            connection.execute("TRUNCATE job_state,datasets CASCADE")
 
     def test_default_manual_import_writes_source_state_and_review_to_the_database(self):
         page = """<meta property="og:site_name" content="Example GmbH">

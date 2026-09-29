@@ -110,11 +110,6 @@ CREATE TABLE IF NOT EXISTS manual_sources (
     payload jsonb NOT NULL,
     PRIMARY KEY (dataset, url)
 );
-CREATE TABLE IF NOT EXISTS migration_runs (
-    source_fingerprint text PRIMARY KEY,
-    completed_at timestamptz NOT NULL DEFAULT now(),
-    summary jsonb NOT NULL
-);
 CREATE TABLE IF NOT EXISTS agent_usage (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     called_at timestamptz NOT NULL DEFAULT now(),

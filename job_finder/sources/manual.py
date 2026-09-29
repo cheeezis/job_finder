@@ -106,10 +106,9 @@ def job_from_page(url, html):
     posting = extract_json_ld_job_posting(html)
     if posting:
         job = job_from_posting(SOURCE_NAME, "", url, posting)
-        if not job.locations or job.locations == ["unbekannt"]:
-            remote_region = applicant_region(posting)
-            if remote_region:
-                job.locations = [remote_region]
+        unknown = not job.locations or job.locations == ["unbekannt"]
+        if unknown and (region := applicant_region(posting)):
+            job.locations = [region]
         return job
     return job_from_visible_page(url, html)
 
@@ -170,12 +169,10 @@ def first_labeled_value(lines, labels):
     normalized_labels = {normalize_text(label).rstrip(":") for label in labels}
     for index, line in enumerate(lines):
         normalized = normalize_text(line).strip()
-        key = normalized.rstrip(":")
-        if key in normalized_labels:
+        if normalized.rstrip(":") in normalized_labels:
             return lines[index + 1].strip() if index + 1 < len(lines) else ""
         for label in normalized_labels:
-            match = re.match(rf"^{re.escape(label)}\s*:\s*(.+)$", normalized)
-            if match:
+            if re.match(rf"^{re.escape(label)}\s*:\s*(.+)$", normalized):
                 return line[line.find(":") + 1 :].strip()
     return ""
 
@@ -267,9 +264,7 @@ class VisibleJobParser(HTMLParser):
 
     def handle_endtag(self, tag):
         """Close nested capture scopes and record the main fragment boundary."""
-        if not self._in_main:
-            return
-        if tag not in self._main_stack:
+        if not self._in_main or tag not in self._main_stack:
             return
         index = len(self._main_stack) - 1 - self._main_stack[::-1].index(tag)
         closed_count = len(self._main_stack) - index

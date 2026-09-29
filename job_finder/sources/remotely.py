@@ -96,7 +96,7 @@ def enrich_candidate_jobs(
         return 0
 
     checked_at = now or utc_now()
-    checks = load_linkedin_status_cache(status_cache_path)
+    checks = read_versioned(status_cache_path, 1).get("checks", {})
     cache_changed = False
     closed_indices = set()
     errors = 0
@@ -126,7 +126,7 @@ def enrich_candidate_jobs(
             )
 
     if cache_changed:
-        save_linkedin_status_cache(status_cache_path, checks)
+        write_versioned(status_cache_path, 1, checks=checks)
     if closed_indices:
         jobs[:] = [job for index, job in enumerate(jobs) if index not in closed_indices]
         print(
@@ -175,18 +175,7 @@ def linkedin_job_id(url):
 
 def linkedin_job_key(url):
     """Use the extracted job ID or normalized URL as the status-cache key."""
-    identifier = linkedin_job_id(url)
-    return identifier or normalize_detail_url(url)
-
-
-def load_linkedin_status_cache(path):
-    """Return cached checks or {} for unreadable or incompatible cache data."""
-    return read_versioned(path, 1).get("checks", {})
-
-
-def save_linkedin_status_cache(path, checks):
-    """Atomically persist LinkedIn checks with the supported cache version."""
-    write_versioned(path, 1, checks=checks)
+    return linkedin_job_id(url) or normalize_detail_url(url)
 
 
 def fresh_linkedin_status(entry, now):

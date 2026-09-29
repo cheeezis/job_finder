@@ -34,9 +34,7 @@ def extract_annual_salary(text):
 def salary_number(value):
     """Parse an integer salary with grouping separators or a trailing k."""
     cleaned = str(value).lower().replace(".", "").replace(" ", "")
-    if cleaned.endswith("k"):
-        return int(cleaned[:-1]) * 1000
-    return int(cleaned)
+    return int(cleaned[:-1]) * 1000 if cleaned.endswith("k") else int(cleaned)
 
 
 def valid_salary(value):

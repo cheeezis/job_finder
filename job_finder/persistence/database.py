@@ -146,11 +146,6 @@ def database_url():
     return _required_env("JOBFINDER_DATABASE_URL")
 
 
-def admin_database_url():
-    """DDL-capable connection; only initialize() may use this, never runtime reads/writes."""
-    return _required_env("JOBFINDER_ADMIN_DATABASE_URL")
-
-
 def _required_env(name):
     """Read one connection URL from the environment or the ignored .env.postgres."""
     load_dotenv(PROJECT_DIR / ".env.postgres", override=False)
@@ -168,7 +163,8 @@ def transaction(*, admin=False):
         with existing.transaction():
             yield existing
         return
-    url = admin_database_url() if admin else database_url()
+    # Only initialize() asks for the DDL-capable admin connection.
+    url = _required_env("JOBFINDER_ADMIN_DATABASE_URL") if admin else database_url()
     with psycopg.connect(url, connect_timeout=10) as connection:
         connection.execute("SET LOCAL lock_timeout = '30s'")
         token = _connection.set(connection)

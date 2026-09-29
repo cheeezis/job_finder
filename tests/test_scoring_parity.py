@@ -25,6 +25,6 @@ class ScoringParityTests(unittest.TestCase):
                     before = job.to_dict()
                     self.assertEqual(
                         scoring.score_job(job, today=date.fromisoformat(fixture["today"])),
-                        case["expected"],
+                        fixture["results"][case["result"]],
                     )
                     self.assertEqual(job.to_dict(), before)

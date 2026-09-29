@@ -52,18 +52,15 @@ class TeeStream:
             return
 
         width = max(self.progress_width, len(text))
-        self.original.write("\r" + text.ljust(width))
+        self.original.write("\r" + text.ljust(width) + ("\n" if complete else ""))
         self.original.flush()
-        self.progress_width = width
+        self.progress_width = 0 if complete else width
         self.progress_active = not complete
         if complete:
-            self.original.write("\n")
-            self.original.flush()
             self.log_file.write(
                 f"{datetime.now().astimezone().isoformat(timespec='seconds')} {text}\n"
             )
             self.log_file.flush()
-            self.progress_width = 0
 
     def flush(self):
         """Flush the original stream and log file together."""
@@ -82,10 +79,6 @@ class RunLog(AbstractContextManager):
         self.started_at = now or datetime.now().astimezone()
         self.path = self.log_dir / f"run-{self.started_at:%Y%m%d-%H%M%S}.log"
         self.run_id = run_id or new_run_id()
-        self.log_file = None
-        self.started_monotonic = None
-        self.original_stdout = None
-        self.original_stderr = None
 
     def __enter__(self):
         self.started_monotonic = time.monotonic()
@@ -123,7 +116,6 @@ class RunLog(AbstractContextManager):
         sys.stdout = self.original_stdout
         sys.stderr = self.original_stderr
         self.log_file.close()
-        return False
 
 
 def create_backup(backup_dir=BACKUP_DIR, keep=BACKUP_FILES_TO_KEEP):

@@ -102,11 +102,9 @@ def parse_fact_sheet(text):
 def check_line(line, label, lights):
     if not isinstance(line, dict) or line.get("ampel") not in lights:
         raise ValueError(f"{label}: keine gültige Ampel")
-    if not non_empty_text(line.get("text")):
+    if not isinstance(line.get("text"), str) or not (text := tidy(line["text"])):
         raise ValueError(f"{label}: Text fehlt")
-    line["text"] = tidy(line["text"])
-    if not line["text"]:
-        raise ValueError(f"{label}: Text fehlt")
+    line["text"] = text
 
 
 def tidy(text):

@@ -58,13 +58,8 @@
     verdict.className = sheet ? `fact-sheet-verdict verdict-${sheet.fazit.stufe}` : "fact-sheet-verdict";
     verdict.textContent = sheet ? `Fazit: ${sheet.fazit.text}` : "";
     setText("fact-sheet-reason", sheet ? `Kurzgrund: ${sheet.kurzgrund}` : "");
-    const links = (sheet?.quellen || []).map(safeUrl).filter(Boolean).map(url => {
-      const link = make("a", new URL(url).hostname);
-      link.href = url;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-      return link;
-    });
+    const links = (sheet?.quellen || []).map(safeUrl).filter(Boolean)
+      .map(url => JobFinder.externalLink(url, new URL(url).hostname));
     element("fact-sheet-sources").replaceChildren(...(links.length ? [make("span", "Quellen: "), ...links] : []));
     setText("fact-sheet-meta", entry
       ? `${entry.model} · ${(entry.cost_eur * 100).toFixed(1).replace(".", ",")} Cent · ${displayDate(entry.created_at)}`
@@ -72,10 +67,7 @@
   }
 
   function routeDestination(job) {
-    const ignored = new Set([
-      "deutschland", "germany", "bundesweit", "deutschlandweit",
-      "remote", "hybrid"
-    ]);
+    const ignored = new Set(["deutschland", "germany", "bundesweit", "deutschlandweit", "remote", "hybrid"]);
     return (job.locations || [])
       .flatMap(value => String(value).split(","))
       .map(value => value.trim().replace(/^u\.\s*a\.\s*/i, ""))
@@ -97,9 +89,7 @@
       return;
     }
     const parameters = new URLSearchParams({
-      api: "1",
-      origin: `${routeOrigin}, Deutschland`,
-      destination: `${destination}, Deutschland`
+      api: "1", origin: `${routeOrigin}, Deutschland`, destination: `${destination}, Deutschland`
     });
     link.href = `https://www.google.com/maps/dir/?${parameters}`;
   }
@@ -107,9 +97,7 @@
   function displayDate(value) {
     if (!value) return "nicht angegeben";
     const date = new Date(`${String(value).slice(0, 10)}T00:00:00`);
-    return Number.isNaN(date.getTime())
-      ? String(value)
-      : date.toLocaleDateString("de-DE");
+    return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString("de-DE");
   }
 
   function renderNote(job) {
@@ -190,10 +178,7 @@
     setText("role-badge", job.current_snapshot_missing
       ? "Vorgemerkt"
       : job.role_label || "Allgemeine IT");
-    const newBadge = element("new-badge");
-    newBadge.hidden = job.workflow_status !== "new";
-    newBadge.className = "badge";
-    newBadge.textContent = "Neu";
+    element("new-badge").hidden = job.workflow_status !== "new";
     setText("title", job.title);
     setText("company", job.company);
     setText("location", `Ort: ${(job.locations || []).join(", ") || "unbekannt"}`);
@@ -204,9 +189,7 @@
     setText("published", `Veröffentlicht: ${displayDate(job.published_at)}`);
     const freshness = element("freshness");
     freshness.hidden = !job.cache_stale;
-    freshness.textContent = job.cache_stale
-      ? `Cache-Fallback · Stand: ${displayDate(job.fetched_at)}`
-      : "";
+    freshness.textContent = job.cache_stale ? `Cache-Fallback · Stand: ${displayDate(job.fetched_at)}` : "";
     setText("current-status", `Status: ${statusLabels[job.workflow_status] || job.workflow_status}`);
     setText("role-group", job.current_snapshot_missing
       ? "aktuell nicht verfügbar"
@@ -226,9 +209,7 @@
     element("application-link").hidden = !applicationTracked;
     const warning = element("prefilter-warning");
     warning.hidden = !job.prefilter_warning;
-    warning.textContent = job.prefilter_warning
-      ? `Hinweis aus dem Vorfilter: ${job.prefilter_warning}`
-      : "";
+    warning.textContent = job.prefilter_warning ? `Hinweis aus dem Vorfilter: ${job.prefilter_warning}` : "";
     const links = element("job-links");
     links.replaceChildren();
     appendSourceLinks(links, job, sourceLabels, true);
@@ -279,11 +260,8 @@
     const job = jobs.find(item => item.id === decision.jobId);
     if (job) job.workflow_status = result.workflow_status;
     undoDecision = null;
-    if ([...element("status-filter").options].some(option => option.value === result.workflow_status)) {
-      element("status-filter").value = result.workflow_status;
-    } else {
-      element("status-filter").value = "";
-    }
+    const known = [...element("status-filter").options].some(option => option.value === result.workflow_status);
+    element("status-filter").value = known ? result.workflow_status : "";
     applyFilters();
     const restoredIndex = visibleJobs.findIndex(item => item.id === decision.jobId);
     if (restoredIndex >= 0) currentIndex = restoredIndex;
@@ -335,16 +313,10 @@
       if (!response.ok) throw new Error("Empfehlungen konnten nicht geladen werden");
       const result = await response.json();
       routeOrigin = result.route_origin || "";
-      jobs = result.recommendations.sort((a, b) => {
-        const verdict = verdictRank(a) - verdictRank(b);
-        if (verdict) return verdict;
-        const score = (b.match_percent ?? -1) - (a.match_percent ?? -1);
-        if (score) return score;
-        const published = String(b.published_at || "").localeCompare(String(a.published_at || ""));
-        if (published) return published;
-        const firstSeen = String(b.first_seen_at || "").localeCompare(String(a.first_seen_at || ""));
-        return firstSeen;
-      });
+      jobs = result.recommendations.sort((a, b) => verdictRank(a) - verdictRank(b)
+        || (b.match_percent ?? -1) - (a.match_percent ?? -1)
+        || String(b.published_at || "").localeCompare(String(a.published_at || ""))
+        || String(b.first_seen_at || "").localeCompare(String(a.first_seen_at || "")));
       addOptions(
         element("status-filter"),
         result.workflow_statuses.filter(status => reviewStatuses.has(status)),

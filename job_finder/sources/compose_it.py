@@ -3,36 +3,11 @@
 import re
 from html import unescape
 
-from job_finder.http import fetch_text
 from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource
-from job_finder.paths import cache_file
 from job_finder.sources.common import normalize_employment_type, source_job_id, utc_now
-from job_finder.sources.company_careers import (
-    extract_links,
-    fetch_company_jobs,
-    identifier_from_url,
-)
+from job_finder.sources.company_careers import CareerPage, identifier_from_url
 from job_finder.text import compact_text, html_to_text, normalize_text
-
-SOURCE_NAME = "compose_it"
-COMPANY = "COMPOSE IT"
-LIST_URL = "https://compose-it.de/unternehmen/karriere/"
-CACHE_FILE = cache_file("compose_it")
-
-
-def fetch_jobs(cache_path=CACHE_FILE, now=None):
-    """Import Compose IT listings through the shared company detail cache."""
-    links = collect_links()
-    return fetch_company_jobs(
-        SOURCE_NAME, COMPANY, links, cache_path, now=now, parser=job_from_html
-    )
-
-
-def collect_links():
-    """Extract Compose IT detail links from the public careers page."""
-    html = fetch_text(LIST_URL)
-    return extract_links(html, LIST_URL, r"compose-it\.de/job/[^/?#]+/$")
 
 
 def job_from_html(source_name, fallback_company, url, html):
@@ -93,3 +68,12 @@ def job_from_html(source_name, fallback_company, url, html):
         employment_type=normalize_employment_type(employment),
         fetched_at=utc_now(),
     )
+
+
+COMPOSE_IT = CareerPage(
+    "compose_it",
+    "COMPOSE IT",
+    "https://compose-it.de/unternehmen/karriere/",
+    r"compose-it\.de/job/[^/?#]+/$",
+    parser=job_from_html,
+)

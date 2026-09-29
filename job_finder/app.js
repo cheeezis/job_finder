@@ -37,6 +37,14 @@ const JobFinder = (() => {
     }
   }
 
+  function externalLink(url, text, className) {
+    const link = make("a", text, className);
+    link.href = url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    return link;
+  }
+
   function appendSourceLinks(parent, job, labels = sourceLabels, asButtons = false) {
     const candidates = (job.source_links || []).length
       ? job.source_links : [{source: "listing", url: job.url}];
@@ -48,21 +56,14 @@ const JobFinder = (() => {
       return [{url, label: labels[item.source] || `Anzeige ${index + 1}`}];
     });
     if (!links.length) return;
-    const linkFor = (item, text, className) => {
-      const link = make("a", text, className);
-      link.href = item.url;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-      return link;
-    };
     if (links.length === 1) {
-      parent.append(linkFor(links[0], "Anzeige öffnen", asButtons ? "button" : ""));
+      parent.append(externalLink(links[0].url, "Anzeige öffnen", asButtons ? "button" : ""));
       return;
     }
     const menu = make("details", null, "source-menu");
     const summary = make("summary", `Anzeigen öffnen (${links.length})`, asButtons ? "button" : "");
     const options = make("div", null, "source-options");
-    links.forEach(item => options.append(linkFor(item, item.label)));
+    links.forEach(item => options.append(externalLink(item.url, item.label)));
     menu.append(summary, options);
     parent.append(menu);
   }
@@ -106,6 +107,6 @@ const JobFinder = (() => {
   }
 
   const showError = error => showFeedback(error.message);
-  return {element, make, addOptions, safeUrl, appendSourceLinks, postJson, showError, showFeedback,
+  return {element, make, addOptions, safeUrl, externalLink, appendSourceLinks, postJson, showError, showFeedback,
     statusLabels, sourceLabels, salaryYearAmount, bindSalaryInputs};
 })();

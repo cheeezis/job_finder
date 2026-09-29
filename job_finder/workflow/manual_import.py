@@ -59,11 +59,9 @@ def _persist_import(imported, jobs_path, memory_path, recommendations_path):
 
     with edit_memory(memory_path) as memory:
         update_memory([target], memory, successful_sources=None)
-    save_jobs(jobs, jobs_path)
+    write_json_atomic(jobs_path, [job.to_dict() for job in jobs])
 
     score = score_for_pipeline(target)
-    warning = score.get("prefilter_warning")
-
     row = {**target.to_dict(), "is_new": target.is_new, **score}
     save_recommendation(row, recommendations_path)
     return {
@@ -71,7 +69,7 @@ def _persist_import(imported, jobs_path, memory_path, recommendations_path):
         "title": row["title"],
         "company": row["company"],
         "match_percent": row.get("match_percent"),
-        "prefilter_warning": warning,
+        "prefilter_warning": score.get("prefilter_warning"),
     }
 
 
@@ -93,11 +91,6 @@ def replace_or_add_job(jobs, imported):
         ):
             return job
     raise RuntimeError("Die manuell importierte Stelle konnte nicht zugeordnet werden")
-
-
-def save_jobs(jobs, path):
-    """Atomically replace the stored jobs dataset with serialized Job objects."""
-    write_json_atomic(path, [job.to_dict() for job in jobs])
 
 
 def save_recommendation(job, path):

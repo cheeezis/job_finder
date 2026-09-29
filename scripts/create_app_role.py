@@ -113,33 +113,25 @@ def _ensure_role(connection):
 
 def _apply_grants(connection, database, admin_role):
     """Idempotent; safe to reapply on every run, including for future tables."""
-    connection.execute(
-        sql.SQL("GRANT CONNECT ON DATABASE {} TO {}").format(
-            sql.Identifier(database), sql.Identifier(APP_ROLE)
-        )
-    )
-    connection.execute(
-        sql.SQL("GRANT USAGE ON SCHEMA public TO {}").format(sql.Identifier(APP_ROLE))
-    )
-    connection.execute(
-        sql.SQL("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO {}").format(
-            sql.Identifier(APP_ROLE)
-        )
-    )
+
+    def grant(statement, *names):
+        connection.execute(sql.SQL(statement).format(*map(sql.Identifier, names)))
+
+    grant("GRANT CONNECT ON DATABASE {} TO {}", database, APP_ROLE)
+    grant("GRANT USAGE ON SCHEMA public TO {}", APP_ROLE)
+    grant("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO {}", APP_ROLE)
     # Schema may not be initialized yet (job_finder.db init runs independently
     # of this script); skip the revoke rather than fail on a missing table.
     schema_version_exists = connection.execute(
         "SELECT to_regclass('public.schema_version')"
     ).fetchone()[0]
     if schema_version_exists:
-        connection.execute(
-            sql.SQL("REVOKE ALL ON schema_version FROM {}").format(sql.Identifier(APP_ROLE))
-        )
-    connection.execute(
-        sql.SQL(
-            "ALTER DEFAULT PRIVILEGES FOR ROLE {} IN SCHEMA public "
-            "GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO {}"
-        ).format(sql.Identifier(admin_role), sql.Identifier(APP_ROLE))
+        grant("REVOKE ALL ON schema_version FROM {}", APP_ROLE)
+    grant(
+        "ALTER DEFAULT PRIVILEGES FOR ROLE {} IN SCHEMA public "
+        "GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO {}",
+        admin_role,
+        APP_ROLE,
     )
 
 

@@ -16,7 +16,6 @@ from job_finder.persistence.storage import publish_results
 from job_finder.sources import (
     arbeitnow,
     arbeitsagentur,
-    compose_it,
     edag,
     german_tech_jobs,
     get_in_it,
@@ -35,6 +34,7 @@ from job_finder.sources.common import (
     reset_fetch_diagnostics,
 )
 from job_finder.sources.company_careers import BYTEWERK, CSS, NETHINKS, PROEMION, RHOENENERGIE
+from job_finder.sources.compose_it import COMPOSE_IT
 from job_finder.workflow.availability import ignore_closed_listings
 from job_finder.workflow.main import (
     build_score_results,
@@ -58,7 +58,7 @@ SOURCES = [
     *([startup_jobs] if startup_jobs.is_configured() else []),
     studysmarter,
     manual,
-    compose_it,
+    COMPOSE_IT,
     BYTEWERK,
     RHOENENERGIE,
     jumo,
@@ -297,7 +297,7 @@ def print_review_diagnostics(results, memory_stats):
     )
 
 
-def collect_jobs(sources=None, run_id=None):
+def collect_jobs(sources, run_id=None):
     """Return deduplicated jobs and coverage reports from selected sources.
 
     Each adapter provides SOURCE_NAME and fetch_jobs() and records its
@@ -309,7 +309,7 @@ def collect_jobs(sources=None, run_id=None):
     seen_urls = set()
     source_reports = []
 
-    for source in SOURCES if sources is None else sources:
+    for source in sources:
         label = source_label(source.SOURCE_NAME)
         print_progress(label, 0, 1, "wird geladen")
         reset_fetch_diagnostics()
@@ -358,7 +358,7 @@ def fetch_source_jobs(source):
     return source_jobs, status, ({"failed_segments": failed} if failed else {})
 
 
-def enrich_candidate_jobs(jobs, candidate_ids, sources=None, run_id=None):
+def enrich_candidate_jobs(jobs, candidate_ids, sources, run_id=None):
     """Let selected adapters update the candidate list in place.
 
     Each optional adapter hook receives jobs and candidate_ids and
@@ -369,7 +369,7 @@ def enrich_candidate_jobs(jobs, candidate_ids, sources=None, run_id=None):
     pipeline.
     """
     reports = []
-    for source in SOURCES if sources is None else sources:
+    for source in sources:
         enricher = getattr(source, "enrich_candidate_jobs", None)
         if enricher is not None:
             name = getattr(source, "SOURCE_NAME", "Details")

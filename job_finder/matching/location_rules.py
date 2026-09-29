@@ -65,14 +65,13 @@ def find_commuter_location(location, commuter_locations):
 
 def is_full_remote(location, remote):
     """Recognize full remote evidence in normalized work-mode or location text."""
-    if remote_percent(remote) >= 100:
-        return True
-    if remote in ["remote", "fully remote", "full remote"]:
-        return True
-
     # A structured location explicitly labelled remote is stronger evidence
     # than a generic "Homeoffice possible" phrase.
-    return contains_keyword(location, "remote")
+    return (
+        remote_percent(remote) >= 100
+        or remote in ["remote", "fully remote", "full remote"]
+        or contains_keyword(location, "remote")
+    )
 
 
 def remote_possible_from_germany(location, description):

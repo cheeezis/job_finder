@@ -32,7 +32,7 @@ def deduplicate_jobs(jobs: list[Job]) -> list[Job]:
     positions_by_title = defaultdict(list)
 
     for original in jobs:
-        job = clone_job(original)
+        job = replace(original, locations=list(original.locations), sources=list(original.sources))
         title_key = normalize_title(job.title)
         company_key = normalize_company(job.company)
         position = find_duplicate_position(
@@ -135,11 +135,6 @@ def merge_jobs(existing, duplicate):
         sources=unique_sources(existing.sources + duplicate.sources),
         is_new=existing.is_new or duplicate.is_new,
     )
-
-
-def clone_job(job):
-    """Copy mutable model fields before merging jobs."""
-    return replace(job, locations=list(job.locations), sources=list(job.sources))
 
 
 def unique_sources(sources):

@@ -4,6 +4,8 @@ Rows are deliberately not tied to job_state: deleting a job must not delete
 its costs, or the agent could spend the same money twice.
 """
 
+from dataclasses import astuple
+
 from job_finder.persistence.database import transaction
 
 
@@ -17,16 +19,7 @@ def record_model_call(job_id, model, usage, cost_eur):
                 output_tokens, reasoning_tokens, web_searches, cost_eur
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """,
-            (
-                job_id,
-                model,
-                usage.input_tokens,
-                usage.cached_input_tokens,
-                usage.output_tokens,
-                usage.reasoning_tokens,
-                usage.web_searches,
-                cost_eur,
-            ),
+            (job_id, model, *astuple(usage), cost_eur),
         )
 
 

@@ -53,23 +53,12 @@ def _prepare_documents(documents):
         if kind not in ALLOWED_KINDS or kind in kinds:
             raise ValueError("Anschreiben und Lebenslauf dürfen je einmal vorkommen")
         kinds.add(kind)
-        original_name = safe_original_name(document.get("name"))
-        suffix = Path(original_name).suffix.casefold()
-        if suffix not in ALLOWED_EXTENSIONS:
+        name = safe_original_name(document.get("name"))
+        if Path(name).suffix.casefold() not in ALLOWED_EXTENSIONS:
             raise ValueError("Erlaubt sind PDF-, DOC-, DOCX- und ODT-Dateien")
         content = decode_content(document.get("content"))
-        identifier = uuid.uuid4().hex
-        prepared.append(
-            (
-                {
-                    "id": identifier,
-                    "kind": kind,
-                    "name": original_name,
-                    "stored_name": original_name,
-                },
-                content,
-            )
-        )
+        metadata = {"id": uuid.uuid4().hex, "kind": kind, "name": name, "stored_name": name}
+        prepared.append((metadata, content))
 
     stored_names = [metadata["stored_name"].casefold() for metadata, _ in prepared]
     if len(stored_names) != len(set(stored_names)):
@@ -78,25 +67,14 @@ def _prepare_documents(documents):
     return prepared
 
 
-def document_path(job_id, metadata, root=APPLICATION_DOCUMENTS_DIR):
-    """Resolve one stored document without accepting a path from the browser."""
-    path = Path(root) / resolve_document_key(job_id, metadata)
-    if not path.is_file():
-        raise FileNotFoundError("Bewerbungsunterlage wurde nicht gefunden")
-    return path
-
-
 def resolve_document_key(job_id, metadata):
-    """Compute one document's storage key without touching either backend.
-
-    document_path() resolves the same key below the local root.
-    """
+    """Compute one document's storage key without touching either backend."""
     if not isinstance(metadata, dict):
         raise ValueError("Bewerbungsunterlage wurde nicht gefunden")
     stored_name = str(metadata.get("stored_name") or "")
     if Path(stored_name).name != stored_name or not stored_name:
         raise ValueError("Ungültiger Dokumentpfad")
-    directory = document_directory(job_id, "", metadata.get("folder_name"))
+    directory = document_directory(job_id, metadata.get("folder_name"))
     return (directory / stored_name).as_posix()
 
 
@@ -145,15 +123,14 @@ def remove_documents(job_id, documents, root=APPLICATION_DOCUMENTS_DIR):
             document_store.delete(resolve_document_key(job_id, document), root)
 
 
-def document_directory(job_id, root=APPLICATION_DOCUMENTS_DIR, folder_name=None):
+def document_directory(job_id, folder_name=None):
     """Resolve readable current folders and legacy opaque folders safely."""
     if folder_name:
         name = str(folder_name)
         if Path(name).name != name or safe_windows_name(name) != name:
             raise ValueError("Ungültiger Dokumentordner")
-        return Path(root) / name
-    identifier = hashlib.sha256(str(job_id).encode("utf-8")).hexdigest()[:20]
-    return Path(root) / identifier
+        return Path(name)
+    return Path(hashlib.sha256(str(job_id).encode("utf-8")).hexdigest()[:20])
 
 
 def application_folder_name(company, title, job_id):

@@ -162,8 +162,7 @@ def search_links(client=None):
                 search_errors += 1
                 break
 
-            found_links = extract_detail_links(html)
-            page_links = [url for url in found_links if url not in query_seen]
+            page_links = [url for url in extract_detail_links(html) if url not in query_seen]
             query_seen.update(page_links)
 
             links.update(dict.fromkeys(page_links))

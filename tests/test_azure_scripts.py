@@ -2,11 +2,12 @@
 
 import importlib.util
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "azure_postgres.py"
 OUTPUTS = {
@@ -56,3 +57,59 @@ class AzureAdminConnectionTests(unittest.TestCase):
     def test_admin_connection_refuses_an_empty_trust_store(self):
         with self.assertRaisesRegex(RuntimeError, "CA-Zertifikate"):
             self.connect([])
+
+
+class AppRoleSqlTests(unittest.TestCase):
+    """The exact statements create_app_role.py sends, with a fake connection."""
+
+    def statements(self, function_name, *args, row=("found",)):
+        with patch.dict(sys.modules, {"azure_postgres": load_azure_postgres()}):
+            spec = importlib.util.spec_from_file_location(
+                "create_app_role", SCRIPT.with_name("create_app_role.py")
+            )
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+        connection = Mock()
+        connection.execute.return_value.fetchone.return_value = row
+        with patch.object(module.secrets, "token_hex", return_value="fixed"):
+            result = getattr(module, function_name)(connection, *args)
+        sent = [call.args[0] for call in connection.execute.call_args_list]
+        return result, [s if isinstance(s, str) else s.as_string(None) for s in sent]
+
+    def test_grants_cover_the_app_role_and_keep_schema_version_admin_only(self):
+        _, statements = self.statements("_apply_grants", "jobfinder", "jobfinder_admin")
+
+        self.assertEqual(
+            statements,
+            [
+                'GRANT CONNECT ON DATABASE "jobfinder" TO "jobfinder_app"',
+                'GRANT USAGE ON SCHEMA public TO "jobfinder_app"',
+                'GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO "jobfinder_app"',
+                "SELECT to_regclass('public.schema_version')",
+                'REVOKE ALL ON schema_version FROM "jobfinder_app"',
+                'ALTER DEFAULT PRIVILEGES FOR ROLE "jobfinder_admin" IN SCHEMA public '
+                'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO "jobfinder_app"',
+            ],
+        )
+
+    def test_grants_skip_the_revoke_before_the_schema_exists(self):
+        _, statements = self.statements(
+            "_apply_grants", "jobfinder", "jobfinder_admin", row=(None,)
+        )
+
+        self.assertNotIn('REVOKE ALL ON schema_version FROM "jobfinder_app"', statements)
+        self.assertEqual(len(statements), 5)
+
+    def test_role_password_is_reset_or_the_role_created(self):
+        for row, expected in (
+            (("found",), "ALTER ROLE \"jobfinder_app\" PASSWORD 'fixed'"),
+            (
+                None,
+                "CREATE ROLE \"jobfinder_app\" LOGIN PASSWORD 'fixed' "
+                "NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION",
+            ),
+        ):
+            with self.subTest(row=row):
+                password, statements = self.statements("_ensure_role", row=row)
+                self.assertEqual(password, "fixed")
+                self.assertEqual(statements[1:], [expected])

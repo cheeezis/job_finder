@@ -22,15 +22,11 @@ def euro(value, digits=2):
     return f"{value:.{digits}f} €".replace(".", ",")
 
 
-class LimitReached(Exception):
+class JobLimitReached(Exception):
     pass
 
 
-class JobLimitReached(LimitReached):
-    pass
-
-
-class AgentStopped(LimitReached):
+class AgentStopped(Exception):
     pass
 
 

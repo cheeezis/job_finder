@@ -184,12 +184,8 @@ def resolve_memory_id(job, memory, memory_index=None):
             continue
         if candidate_id in by_title and not may_share_decision(candidate, canonical):
             continue
-        canonical["source_urls"] = unique_values(
-            canonical.get("source_urls", []), candidate.get("source_urls", [])
-        )
-        canonical["source_names"] = unique_values(
-            canonical.get("source_names", []), candidate.get("source_names", [])
-        )
+        for field in ("source_urls", "source_names"):
+            canonical[field] = unique_values(canonical.get(field, []), candidate.get(field, []))
         canonical["locations"] = unique_values(
             canonical.get("locations") or [], candidate.get("locations") or []
         )
@@ -314,10 +310,9 @@ def has_manual_state(entry):
 def has_application_state(entry):
     """Return whether an entry represents a current or past application."""
     history = entry.get("workflow_history", [])
-    if not isinstance(history, list):
-        history = []
     return entry.get("workflow_status") in APPLICATION_STATUSES or any(
-        isinstance(event, dict) and event.get("status") in APPLICATION_STATUSES for event in history
+        isinstance(event, dict) and event.get("status") in APPLICATION_STATUSES
+        for event in (history if isinstance(history, list) else [])
     )
 
 

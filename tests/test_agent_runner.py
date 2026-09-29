@@ -102,17 +102,10 @@ class AgentRunnerTests(unittest.TestCase):
             (cost_guard, "spent_today_and_this_month", (0, 0)),
             (runner, "past_decisions", '{"entscheidungen": []}'),
         ):
-            patcher = patch.object(target, name, return_value=value)
-            patcher.start()
-            self.addCleanup(patcher.stop)
-        self.booked = self.start(cost_guard, "record_model_call")
-        self.saved = self.start(runner, "save_fact_sheet")
-        self.aborted = self.start(runner, "save_aborted")
-
-    def start(self, target, name):
-        patcher = patch.object(target, name)
-        self.addCleanup(patcher.stop)
-        return patcher.start()
+            self.enterContext(patch.object(target, name, return_value=value))
+        self.booked = self.enterContext(patch.object(cost_guard, "record_model_call"))
+        self.saved = self.enterContext(patch.object(runner, "save_fact_sheet"))
+        self.aborted = self.enterContext(patch.object(runner, "save_aborted"))
 
     def run_job(self, model, settings=SETTINGS):
         guard = CostGuard(settings, runner.MODEL)

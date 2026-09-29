@@ -47,16 +47,9 @@ def find_job_posting(data):
     if isinstance(data, dict):
         if data.get("@type") == "JobPosting":
             return data
-
         children = data.values()
     elif isinstance(data, list):
         children = data
     else:
         return None
-
-    for child in children:
-        posting = find_job_posting(child)
-        if posting:
-            return posting
-
-    return None
+    return next(filter(None, map(find_job_posting, children)), None)

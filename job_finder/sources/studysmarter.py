@@ -61,17 +61,12 @@ def jobs_from_records(records, cache_path):
 
 def with_current_summary(cached_job, summary):
     """Keep cached detail text but refresh fields exposed by the search API."""
+    known = summary.work_mode is not WorkMode.UNKNOWN
     return refresh_summary(
         cached_job,
         summary,
-        work_mode=(
-            summary.work_mode if summary.work_mode is not WorkMode.UNKNOWN else cached_job.work_mode
-        ),
-        remote_percentage=(
-            summary.remote_percentage
-            if summary.work_mode is not WorkMode.UNKNOWN
-            else cached_job.remote_percentage
-        ),
+        work_mode=summary.work_mode if known else cached_job.work_mode,
+        remote_percentage=summary.remote_percentage if known else cached_job.remote_percentage,
         employment_type=summary.employment_type or cached_job.employment_type,
         published_at=summary.published_at or cached_job.published_at,
     )

@@ -61,10 +61,8 @@ def jobs_from_records(records, cache_path=CACHE_FILE, now=None):
     for record in records:
         summary = summary_job_from_record(record)
         cached_job = cache.get(canonical_detail_url(summary.primary_url))
-        if detail_is_fresh(cached_job, now):
-            jobs.append(with_current_summary(cached_job, summary))
-        else:
-            jobs.append(summary)
+        fresh = detail_is_fresh(cached_job, now)
+        jobs.append(with_current_summary(cached_job, summary) if fresh else summary)
     return jobs
 
 
@@ -219,15 +217,10 @@ def fetch_job(url):
 
 def extract_job_posting(html):
     """Prefer JSON-LD, then fall back to get-in-IT's embedded state."""
-    posting = extract_json_ld_job_posting(html)
-    if posting:
-        return posting
-
-    posting = extract_job_posting_from_next_data(html)
-    if posting:
-        return posting
-
-    raise ValueError("JobPosting JSON-LD nicht gefunden")
+    posting = extract_json_ld_job_posting(html) or extract_job_posting_from_next_data(html)
+    if not posting:
+        raise ValueError("JobPosting JSON-LD nicht gefunden")
+    return posting
 
 
 def extract_job_posting_from_next_data(html):
@@ -279,9 +272,7 @@ def clean_company(company):
 def format_schema_remote(posting):
     """Return a conservative remote hint from schema.org JobPosting data."""
     location_type = str(posting.get("jobLocationType", "")).lower()
-    if "telecommute" in location_type or "remote" in location_type:
-        return "homeoffice"
-    return ""
+    return "homeoffice" if "telecommute" in location_type or "remote" in location_type else ""
 
 
 def extract_career_levels(description):

@@ -111,13 +111,16 @@ def fetch_cached_details(
     max_age=DETAIL_REFRESH_AGE,
     normalize_cached=None,
 ):
-    """Load requested details with a persistent cache and bounded fallback; return the usable Jobs.
+    """Load requested details with a persistent cache and bounded fallback.
 
-    links is a sized iterable; fetch_detail(url) returns a Job or raises. Fresh entries (now and
-    max_age; now timezone-aware if given) are not fetched. A ListingUnavailableError evicts the
-    entry; other fetch errors keep cached data only within MAX_STALE_DETAIL_AGE, mark it stale and
-    record a partial source failure. Cache writes and progress output happen while processing.
-    normalize_cached(job, url), if given, mutates cached jobs and returns whether to save them.
+    links is a sized iterable; fetch_detail(url) returns a Job or
+    raises. Fresh entries (now and max_age; now timezone-aware if given)
+    are not fetched. A ListingUnavailableError evicts the entry; other
+    fetch errors keep cached data only within MAX_STALE_DETAIL_AGE, mark
+    it stale and record a partial source failure. Return the usable
+    Jobs; cache writes and progress output happen while processing.
+    normalize_cached(job, url), if given, mutates cached jobs and
+    returns whether to save them.
     """
     cache = load_detail_cache(cache_path)
     jobs = []

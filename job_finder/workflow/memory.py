@@ -64,17 +64,20 @@ def edit_job(job_id, path=MEMORY_FILE):
 
 
 def update_memory(jobs, memory, successful_sources=None, run_sources=None):
-    """Update job identity and discovery state in memory and the Job objects, without saving.
+    """Update job identity and discovery state, without saving it.
 
-    Resolve canonical IDs, restore workflow status and update discovery timestamps and is_new;
-    return counts keyed by new, known, inactive and reactivated. Every listing of one job gets the
-    same ID, also across portals and runs (see resolve_memory_id), so several jobs may share one; a
-    known entry collects the places and URLs of all of them.
+    Mutate memory and the Job objects: resolve canonical IDs, restore
+    workflow status and update discovery timestamps and is_new; return
+    counts keyed by new, known, inactive and reactivated. Every listing
+    of one job gets the same ID, also across portals and runs (see
+    resolve_memory_id), so several jobs may share one; a known entry
+    collects the places and URLs of all of them.
 
-    successful_sources=None disables missed-run accounting, as a single manual import needs.
-    Otherwise an absent job counts only if every known source this run collected succeeded (see
-    sources_succeeded); after INACTIVE_AFTER_MISSED_RUNS missed runs it becomes inactive and keeps
-    its workflow decision.
+    successful_sources=None disables missed-run accounting, as a single
+    manual import needs. Otherwise an absent job counts only if every
+    known source this run collected succeeded (see sources_succeeded);
+    after INACTIVE_AFTER_MISSED_RUNS missed runs it becomes inactive and
+    keeps its workflow decision.
     """
     now = datetime.now(UTC)
     counts = dict.fromkeys(("new", "known", "inactive", "reactivated"), 0)

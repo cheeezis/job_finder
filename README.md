@@ -338,9 +338,7 @@ unter `data/internal/application_documents`, in Azure im Blob Storage; ihre
 Zuordnung steht in der Datenbank.
 
 Einrichtung, Backups und Wiederherstellung sind in
-[PostgreSQL betreiben](docs/postgresql.md) beschrieben. Die alten SQLite-
-und JSON-Dateien bleiben nach der Migration als Sicherung erhalten und werden
-vom normalen Betrieb nicht mehr aktualisiert.
+[PostgreSQL betreiben](docs/postgresql.md) beschrieben.
 
 Direkte Arbeitnow-Anzeigen mit vollständigem Text bleiben unverändert. Nur bei
 dem bekannten Platzhaltertext wird nach bestandenem Vorfilter die verlinkte

@@ -43,9 +43,8 @@ oft wiederholbar. Passwörter werden dabei nie ausgegeben.
 ## Frühere Datenübernahme
 
 Die einmalige Übernahme der alten SQLite- und JSON-Daten nach PostgreSQL ist
-abgeschlossen; der Befehl `db migrate` wurde danach entfernt. Die Quellsicherung
-liegt weiter unter `data/backups/pre-postgres-…`, die alten Dateien bleiben
-unverändert erhalten. Der frühere Code ist im Git-Verlauf abrufbar:
+abgeschlossen; der Befehl `db migrate` wurde danach entfernt. Der frühere Code
+ist im Git-Verlauf abrufbar:
 
 ```powershell
 git show d8a829c:job_finder/persistence/migration.py
@@ -119,7 +118,6 @@ ausgeschlossen. Aufbewahrung verlängert nicht die Gültigkeit alter Quelldaten.
 Das ZIP enthält einen konsistenten PostgreSQL-Anwendungsstand, alle referenzierten
 Dokumentdateien und Prüfsummen. Vor jedem echten Finder-Lauf wird ebenfalls ein
 solches Backup erzeugt; die automatische Rotation behält sieben Archive.
-Die Quellsicherungen vor der Migration sind davon ausgenommen.
 
 In Containern (Azure-Worker, lokaler Hybrid-Lauf) entfällt dieses Backup
 (`JOBFINDER_SKIP_RUN_BACKUP=1`): Ihr Dateisystem überdauert den Lauf nicht, das

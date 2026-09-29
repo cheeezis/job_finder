@@ -30,7 +30,7 @@ from job_finder.matching.ranking_weights import ROLE_POINTS, SCORE_LIMITS, SKILL
 from job_finder.matching.remote import detect_remote
 from job_finder.matching.salary import extract_annual_salary
 from job_finder.matching.user_settings import USER_SETTINGS
-from job_finder.models import FilterStatus, Job
+from job_finder.models import Job
 from job_finder.text import normalize_text, text_is_mainly_english
 
 MAX_JOB_AGE_DAYS = 60
@@ -122,7 +122,7 @@ def score_job(job: Job, today=None):
 
     score = max(0, min(100, score))
     return {
-        "filter_status": FilterStatus.INCLUDED.value,
+        "filter_status": "included",
         "match_percent": score,
         "experience_rank": experience["rank"],
         "experience_level": experience["label"],
@@ -135,7 +135,7 @@ def score_job(job: Job, today=None):
 def excluded_result(reason):
     """Build the common excluded-result fields with one blocking reason."""
     return {
-        "filter_status": FilterStatus.EXCLUDED.value,
+        "filter_status": "excluded",
         "match_percent": 0,
         "experience_rank": 99,
         "experience_level": "ausgeschlossen",

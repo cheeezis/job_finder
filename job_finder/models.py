@@ -33,13 +33,6 @@ APPLICATION_STATUSES = (
 )
 
 
-class FilterStatus(str, Enum):
-    """Result of the rule-based job filter."""
-
-    INCLUDED = "included"
-    EXCLUDED = "excluded"
-
-
 class WorkMode(str, Enum):
     """Where the advertised work is performed."""
 

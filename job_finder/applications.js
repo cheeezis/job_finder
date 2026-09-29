@@ -10,10 +10,7 @@
 
   function formatDateTime(value) {
     if (!value) return "";
-    return new Date(value).toLocaleString("de-DE", {
-      dateStyle: "medium",
-      timeStyle: "short"
-    });
+    return new Date(value).toLocaleString("de-DE", {dateStyle: "medium", timeStyle: "short"});
   }
 
   function formatSalaryExpectation(value) {
@@ -33,14 +30,8 @@
     const container = make("div", null, "documents");
     container.append(make("strong", "Bewerbungsunterlagen:"));
     documents.forEach(document => {
-      const link = make(
-        "a",
-        document.kind === "cover_letter" ? "Anschreiben" : "Lebenslauf"
-      );
-      const query = new URLSearchParams({
-        job_id: application.id,
-        document_id: document.id
-      });
+      const link = make("a", document.kind === "cover_letter" ? "Anschreiben" : "Lebenslauf");
+      const query = new URLSearchParams({job_id: application.id, document_id: document.id});
       link.href = `/api/application-document?${query}`;
       link.title = document.name;
       container.append(link);
@@ -59,11 +50,7 @@
       ["rejections", "Absagen"],
       ["no_responses", "Ohne Rückmeldung"],
       ["response_rate_percent", `Antwortquote · ${stats.completed} abgeschlossen`, "%"],
-      [
-        "average_response_days",
-        `Ø Tage bis Antwort (${stats.response_time_samples} Fälle)`,
-        ""
-      ]
+      ["average_response_days", `Ø Tage bis Antwort (${stats.response_time_samples} Fälle)`]
     ];
     const container = element("stats");
     container.replaceChildren();
@@ -129,9 +116,7 @@
       const editing = editor.hidden;
       editor.hidden = !editing;
       readOnly.hidden = editing;
-      editButton.textContent = editing
-        ? "Bearbeitung beenden"
-        : "Verlauf bearbeiten";
+      editButton.textContent = editing ? "Bearbeitung beenden" : "Verlauf bearbeiten";
     });
 
     details.append(readOnly, editButton, editor);
@@ -150,9 +135,7 @@
     input.type = "datetime-local";
     input.value = initialValue || "";
     label.append(input);
-    const updateVisibility = () => {
-      label.hidden = select.value !== "interview";
-    };
+    const updateVisibility = () => { label.hidden = select.value !== "interview"; };
     select.addEventListener("change", updateVisibility);
     updateVisibility();
     return {label, input};

@@ -34,18 +34,7 @@ class OperationsTests(unittest.TestCase):
                     archive.write_bytes(b"new")
                     return archive
 
-                # Patch both import styles so the test survives moving the import.
-                with (
-                    patch(
-                        "job_finder.persistence.postgres_backup.create_postgres_backup",
-                        side_effect=fake_backup,
-                    ),
-                    patch(
-                        "job_finder.operations.create_postgres_backup",
-                        side_effect=fake_backup,
-                        create=True,
-                    ),
-                ):
+                with patch("job_finder.operations.create_postgres_backup", side_effect=fake_backup):
                     archive = create_backup(backup_dir=backup_dir, keep=keep)
                 archives = sorted(path.name[9:17] for path in backup_dir.glob("postgres-*.zip"))
 

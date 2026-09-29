@@ -104,8 +104,10 @@ Nach Änderungen das Secret neu setzen; Azure übernimmt es beim nächsten Start
 von Worker und Review:
 
 ```powershell
-az keyvault secret set --vault-name kv-jobfinder-e64bfdce --name JobfinderUserSettings --file user_settings.local.yaml --output none
+az keyvault secret set --vault-name <key-vault> --name JobfinderUserSettings --file user_settings.local.yaml --output none
 ```
+
+Den Namen des Key Vaults nennt `az keyvault list -g rg-jobfinder --query [].name -o tsv`.
 
 Der Finder bewertet und sortiert Stellen eigenständig, auch ohne KI-Stufe.
 Der Vorfilter verwendet wieder die bewährte Punkteverteilung: bis zu 30 für
@@ -135,7 +137,7 @@ Für Discord kann `DISCORD_WEBHOOK_URL` als Umgebungsvariable gesetzt werden.
 Lokale Geheimnisse gehören nicht in YAML-Dateien oder ins Repository.
 
 Ist zusätzlich `JOBFINDER_REVIEW_HOST` gesetzt (der Hostname der Review-Seite,
-z. B. `jobfinder-review.ashyisland-3b6e9522.francecentral.azurecontainerapps.io`),
+z. B. `jobfinder-review.<umgebung>.<region>.azurecontainerapps.io`),
 enthält jede Discord-Benachrichtigung einen Direktlink zur passenden Stelle
 in der Review.
 
@@ -242,7 +244,7 @@ Einstellungen aus einem Key-Vault-Secret und muss nach Änderungen neu gesetzt
 werden:
 
 ```powershell
-az keyvault secret set --vault-name kv-jobfinder-e64bfdce --name JobfinderProfile --file profile.local.yaml --output none
+az keyvault secret set --vault-name <key-vault> --name JobfinderProfile --file profile.local.yaml --output none
 ```
 
 Jeder Lauf nennt im Abschnitt „Steckbriefe (Agent)“ entweder, warum der Agent

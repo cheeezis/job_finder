@@ -273,6 +273,7 @@ speichern (von Git ausgeschlossen, nicht dieselben Werte wie
 AZURE_CLIENT_ID=<appId>
 AZURE_TENANT_ID=<tenant>
 AZURE_CLIENT_SECRET=<password>
+JOBFINDER_REVIEW_HOST=<Hostname der Review-App, für Direktlinks in Discord>
 ```
 
 Danach in `infrastructure/variables.tf` die `object_id` des neuen Service

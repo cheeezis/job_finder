@@ -39,7 +39,6 @@ RESOURCE_GROUP = "rg-jobfinder"
 WORKER_JOB = "jobfinder-worker"
 STORAGE_ACCOUNT = "stjobfindere64bfdce"
 STORAGE_CONTAINER = "application-documents"
-REVIEW_HOST = "jobfinder-review.ashyisland-3b6e9522.francecentral.azurecontainerapps.io"
 LOCAL_ONLY_SOURCES = "stepstone,remotely"
 LOG_DIR = PROJECT_DIR / "data" / "logs"
 LOG_DAYS = 14
@@ -97,19 +96,21 @@ def container_environment():
     database_url = re.sub(
         r"sslrootcert=[^&]+", "sslrootcert=/etc/ssl/certs/ca-certificates.crt", postgres["JOBFINDER_DATABASE_URL"]
     )
-    service_principal = read_dotenv(PROJECT_DIR / ".env.docker-local")
+    docker_local = read_dotenv(PROJECT_DIR / ".env.docker-local")
     values = {
         "JOBFINDER_DATABASE_URL": database_url,
         "JOBFINDER_DOCUMENTS_BACKEND": "blob",
         "JOBFINDER_STORAGE_ACCOUNT": STORAGE_ACCOUNT,
         "JOBFINDER_STORAGE_CONTAINER": STORAGE_CONTAINER,
-        "JOBFINDER_REVIEW_HOST": REVIEW_HOST,
         # The container is removed after the run, so a ZIP backup would be lost.
         "JOBFINDER_SKIP_RUN_BACKUP": "1",
-        "AZURE_CLIENT_ID": service_principal["AZURE_CLIENT_ID"],
-        "AZURE_TENANT_ID": service_principal["AZURE_TENANT_ID"],
-        "AZURE_CLIENT_SECRET": service_principal["AZURE_CLIENT_SECRET"],
+        "AZURE_CLIENT_ID": docker_local["AZURE_CLIENT_ID"],
+        "AZURE_TENANT_ID": docker_local["AZURE_TENANT_ID"],
+        "AZURE_CLIENT_SECRET": docker_local["AZURE_CLIENT_SECRET"],
     }
+    # Without it the Discord cards only miss their direct review link.
+    if docker_local.get("JOBFINDER_REVIEW_HOST"):
+        values["JOBFINDER_REVIEW_HOST"] = docker_local["JOBFINDER_REVIEW_HOST"]
     webhook = os.environ.get("DISCORD_WEBHOOK_URL")
     if webhook:
         values["DISCORD_WEBHOOK_URL"] = webhook

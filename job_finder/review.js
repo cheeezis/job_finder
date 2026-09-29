@@ -58,13 +58,8 @@
     verdict.className = sheet ? `fact-sheet-verdict verdict-${sheet.fazit.stufe}` : "fact-sheet-verdict";
     verdict.textContent = sheet ? `Fazit: ${sheet.fazit.text}` : "";
     setText("fact-sheet-reason", sheet ? `Kurzgrund: ${sheet.kurzgrund}` : "");
-    const links = (sheet?.quellen || []).map(safeUrl).filter(Boolean).map(url => {
-      const link = make("a", new URL(url).hostname);
-      link.href = url;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-      return link;
-    });
+    const links = (sheet?.quellen || []).map(safeUrl).filter(Boolean)
+      .map(url => JobFinder.externalLink(url, new URL(url).hostname));
     element("fact-sheet-sources").replaceChildren(...(links.length ? [make("span", "Quellen: "), ...links] : []));
     setText("fact-sheet-meta", entry
       ? `${entry.model} · ${(entry.cost_eur * 100).toFixed(1).replace(".", ",")} Cent · ${displayDate(entry.created_at)}`

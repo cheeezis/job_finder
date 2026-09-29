@@ -66,10 +66,7 @@ class JobSource:
     def from_dict(cls, values):
         """Restore a source from the current JSON representation."""
         return cls(
-            source=values["source"],
-            url=values["url"],
-            source_id=values.get("source_id"),
-            application_url=values.get("application_url"),
+            values["source"], values["url"], values.get("source_id"), values.get("application_url")
         )
 
 
@@ -106,11 +103,7 @@ class Job:
         salary_values = [self.salary_min_eur, self.salary_max_eur]
         if any(value is not None and value < 0 for value in salary_values):
             raise ValueError("salary values cannot be negative")
-        if (
-            self.salary_min_eur is not None
-            and self.salary_max_eur is not None
-            and self.salary_min_eur > self.salary_max_eur
-        ):
+        if None not in salary_values and self.salary_min_eur > self.salary_max_eur:
             raise ValueError("salary_min_eur cannot exceed salary_max_eur")
 
     @property

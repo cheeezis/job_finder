@@ -19,9 +19,6 @@ RESPONSE_STATUSES = {
     WorkflowStatus.OFFER.value,
 }
 NO_RESPONSE_AFTER_DAYS = 14
-MANUAL_APPLICATION_STATUSES = tuple(
-    status for status in APPLICATION_STATUSES if status != WorkflowStatus.NO_RESPONSE.value
-)
 
 
 def record_status_change(entry, workflow_status, occurred_on=None, scheduled_for=None):
@@ -90,7 +87,7 @@ def load_application_overview(memory_path=MEMORY_FILE, as_of=None):
         "applications": applications,
         "completed_applications": completed_applications,
         "statistics": application_statistics(all_applications),
-        "application_statuses": list(MANUAL_APPLICATION_STATUSES),
+        "application_statuses": list(APPLICATION_STATUSES),
         "workflow_statuses": [status.value for status in WorkflowStatus],
     }
 
@@ -169,12 +166,8 @@ def application_row(job_id, entry, as_of=None):
     if current_status in APPLICATION_STATUSES:
         statuses.add(current_status)
     reference_date = as_of or date.today()
-    if (
-        current_status == WorkflowStatus.APPLIED.value
-        and applied_on is not None
-        and not statuses.intersection(RESPONSE_STATUSES)
-        and date.fromisoformat(applied_on) + timedelta(days=NO_RESPONSE_AFTER_DAYS) <= reference_date
-    ):
+    since = waiting_since(current_status, history, statuses, applied_on)
+    if since is not None and date.fromisoformat(since) + timedelta(days=NO_RESPONSE_AFTER_DAYS) <= reference_date:
         current_status = WorkflowStatus.NO_RESPONSE.value
     days_to_response = None
     if applied_on and response_on:
@@ -215,6 +208,22 @@ def application_row(job_id, entry, as_of=None):
         ),
         "has_offer": WorkflowStatus.OFFER.value in statuses,
     }
+
+
+def waiting_since(current_status, history, statuses, applied_on):
+    """Return the date since which an open application waits for news, or None.
+
+    After applying without any answer the application date counts. After a
+    response or an interview the latest event or interview appointment
+    counts, so a future appointment keeps the application open.
+    """
+    if current_status == WorkflowStatus.APPLIED.value:
+        return None if statuses & RESPONSE_STATUSES else applied_on
+    if current_status not in (WorkflowStatus.RESPONSE.value, WorkflowStatus.INTERVIEW.value):
+        return None
+    dates = [event["occurred_on"] for event in history if event["occurred_on"] is not None]
+    dates += [event["scheduled_for"][:10] for event in history if "scheduled_for" in event]
+    return max(dates, default=None)
 
 
 def application_salary_expectation_eur(entry):

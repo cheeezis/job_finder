@@ -184,6 +184,11 @@ hinweg, und eine Entscheidung gilt für alle. Eine schon entschiedene Stelle
 beide komplett remote sind: Wird eine abgelehnte Stelle in einer anderen Stadt
 ausgeschrieben, kommt sie als eigene Karte.
 
+Eine Bewerbung zeigt die Übersicht als „Keine Rückmeldung“, sobald 14 Tage nach
+der Bewerbung, der letzten Rückmeldung oder dem letzten Gesprächstermin nichts
+Neues eingetragen wurde; ein späteres Ereignis öffnet sie wieder. Der Status
+lässt sich auch selbst als Ereignis eintragen.
+
 ## Betrieb
 
 - **Lokal:** Finder und Review laufen wie oben beschrieben auf dem eigenen

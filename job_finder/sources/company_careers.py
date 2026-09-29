@@ -5,21 +5,14 @@ from html import unescape
 from urllib.parse import urljoin, urlsplit
 
 from job_finder.http import fetch_text
-from job_finder.matching.remote import classify_remote, detect_remote
-from job_finder.models import Job, JobSource
 from job_finder.paths import cache_file
 from job_finder.sources.common import (
     canonical_detail_url,
-    extract_annual_salary_eur,
-    extract_schema_locations,
     fetch_cached_details,
-    normalize_employment_type,
-    parse_published_date,
+    job_from_schema_posting,
     source_job_id,
-    utc_now,
 )
 from job_finder.structured_data import extract_json_ld_job_posting
-from job_finder.text import html_to_text
 
 
 class CareerPage:
@@ -90,39 +83,24 @@ def job_from_json_ld(source_name, fallback_company, url, html):
 
 
 def job_from_posting(source_name, fallback_company, url, posting):
-    """Convert an already extracted schema.org JobPosting to a shared Job."""
-    raw_description = posting.get("description", "")
-    if not re.search(r"<[a-z][^>]*>", raw_description, re.IGNORECASE):
-        raw_description = unescape(raw_description)
-    description = html_to_text(raw_description)
-    locations = extract_schema_locations(posting.get("jobLocation"))
-    location_text = ", ".join(locations)
+    """Convert an already extracted schema.org JobPosting to a shared Job.
+
+    Company pages may escape plain descriptions and titles and name no employer.
+    """
+    description = posting.get("description", "")
+    if not re.search(r"<[a-z][^>]*>", description, re.IGNORECASE):
+        description = unescape(description)
     title = unescape(str(posting.get("title") or "")).strip()
-    structured_remote = (
-        "100%" if str(posting.get("jobLocationType") or "").upper() == "TELECOMMUTE" else ""
-    )
-    remote = detect_remote(title, description, location_text, structured_remote=structured_remote)
-    work_mode, remote_percentage = classify_remote(remote)
-    identifier = identifier_from_url(url)
-    salary_min, salary_max = extract_annual_salary_eur(posting)
     organization = posting.get("hiringOrganization") or {}
     company = organization.get("name", "") if isinstance(organization, dict) else ""
-
-    return Job(
-        id=source_job_id(source_name, identifier, url),
-        title=title,
+    telecommute = str(posting.get("jobLocationType") or "").upper() == "TELECOMMUTE"
+    return job_from_schema_posting(
+        source_name,
+        url,
+        {**posting, "description": description, "title": title},
+        identifier=identifier_from_url(url),
         company=unescape(str(company or fallback_company)).strip(),
-        locations=locations,
-        sources=[JobSource(source=source_name, source_id=identifier, url=url)],
-        description_raw=raw_description,
-        description_clean=description,
-        work_mode=work_mode,
-        remote_percentage=remote_percentage,
-        employment_type=normalize_employment_type(posting.get("employmentType")),
-        salary_min_eur=salary_min,
-        salary_max_eur=salary_max,
-        published_at=parse_published_date(posting.get("datePosted")),
-        fetched_at=utc_now(),
+        structured_remote="100%" if telecommute else "",
     )
 
 

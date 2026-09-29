@@ -302,35 +302,35 @@ Drossel ändern kann.
 
 ## Ablauf
 
-1. Die Quellen liefern Suchtreffer und Detaildaten.
-2. URLs und inhaltlich gleiche Stellen werden zusammengeführt.
-3. Der Vorfilter schließt klare Konflikte sowie automatisch gefundene Anzeigen
-   aus, deren bekanntes Veröffentlichungsdatum mehr als 60 Tage zurückliegt.
-   Ein fehlendes Datum allein führt nicht zum Ausschluss. Zusätzliche Detail-
-   und Verfügbarkeitsprüfungen hängen von der jeweiligen Quelle ab.
-   Manuell eingereichte alte Anzeigen bleiben mit Warnung prüfbar.
-   Die übrigen Stellen erhalten nachvollziehbare Kategorien für IT-Bereich,
-   Einstieg und Standort.
-4. Für passende Kandidaten werden je nach Quelle vollständige Details ergänzt.
-   Die endgültige Bewertung erfolgt vor dem Speichern des Gedächtnisses.
-   Anschließend werden neue, bekannte und inaktive Stellen zugeordnet sowie
-   fehlende interessante Anzeigen unter den unten beschriebenen Bedingungen
-   auf Verfügbarkeit geprüft.
-5. Alle durchgelassenen Stellen erscheinen im Review. Neue Stellen können
-   zusätzlich an Discord gesendet werden. Nachträgliche Textänderungen werden
-   eingelesen, lösen aber weder eine erneute Benachrichtigung noch ein erneutes
-   Auftauchen unter „Neu“ aus.
-6. Bewerbungen werden getrennt vom Stellen-Review dauerhaft nachverfolgt.
+Die Quellen liefern Suchtreffer und Detaildaten. Gleiche Anzeigen werden
+zusammengeführt und vorgefiltert, passende Kandidaten je nach Quelle um
+vollständige Details ergänzt und vor dem Speichern des Gedächtnisses endgültig
+bewertet. Alle durchgelassenen Stellen erscheinen im Review; Bewerbungen werden
+getrennt davon dauerhaft nachverfolgt. Die Schritte im Einzelnen beschreibt
+[Datenfluss eines Finder-Laufs](docs/development.md#datenfluss-eines-finder-laufs).
 
-Interessante Stellen bleiben auch bei fehlenden Suchtreffern vorgemerkt. Ein
-Finder-Lauf prüft ausschließlich die URLs fehlender interessanter Stellen, wenn
-alle bekannten Quellen vollständig erfolgreich abgeschlossen wurden. Aktuelle
-Treffer werden übersprungen; veraltete Cache-Treffer gelten als fehlend. Nur wenn
-alle bekannten URLs eindeutig geschlossen sind (HTTP 404/410 oder expliziter
-Schließungshinweis), wechselt die Stelle automatisch auf „Nicht interessant“.
-Fehlende Suchtreffer, Login-Weiterleitungen und Abruffehler reichen dafür nicht.
-Bestehende Bewerbungen bleiben davon ausgenommen. Der automatische Wechsel wird
-mit Datum und Grund gespeichert.
+Der Vorfilter schließt klare Konflikte und automatisch gefundene Anzeigen aus,
+deren bekanntes Veröffentlichungsdatum mehr als 60 Tage zurückliegt; ein
+fehlendes Datum allein genügt nicht, und manuell eingereichte alte Anzeigen
+bleiben mit Warnung prüfbar. Zusätzliche Detail- und Verfügbarkeitsprüfungen
+hängen von der Quelle ab. Die übrigen Stellen erhalten nachvollziehbare
+Kategorien für IT-Bereich, Einstieg und Standort. Neue Stellen können zusätzlich
+an Discord gehen; spätere Textänderungen werden eingelesen, lösen aber weder eine
+neue Benachrichtigung noch ein erneutes Auftauchen unter „Neu“ aus.
+
+Interessante Stellen bleiben auch ohne Suchtreffer vorgemerkt. Nur wenn alle
+bekannten Quellen vollständig erfolgreich abgeschlossen wurden, prüft ein Lauf
+die URLs fehlender interessanter Stellen; aktuelle Treffer werden übersprungen,
+veraltete Cache-Treffer gelten als fehlend, Bewerbungen und unbearbeitete
+Stellen mit Status Neu bleiben ausgenommen. Die Stelle wechselt erst dann
+automatisch auf „Nicht interessant“ (gespeichert mit Datum und Grund), wenn alle
+ihre URLs innerhalb der letzten 24 Stunden eindeutig als geschlossen bestätigt
+wurden (HTTP 404/410 oder expliziter Schließungshinweis); fehlende Suchtreffer,
+Login-Weiterleitungen und Abruffehler reichen nicht. Die Anfragen laufen
+sequenziell, höchstens 200 URLs pro Lauf, und nach zwei Minuten beginnt keine
+neue mehr; eine laufende darf fertig werden. Ergebnisse, auch unklare, gelten 24
+Stunden. Offene Prüfungen verteilen sich auf spätere Läufe und ändern den Status
+nicht.
 
 Der Stellen- und Bewerbungszustand, Empfehlungen, Versandstatus und Quellencaches
 liegen in PostgreSQL. Bewerbungsunterlagen bleiben separate Dateien, lokal
@@ -340,25 +340,17 @@ Zuordnung steht in der Datenbank.
 Einrichtung, Backups und Wiederherstellung sind in
 [PostgreSQL betreiben](docs/postgresql.md) beschrieben.
 
-Direkte Arbeitnow-Anzeigen mit vollständigem Text bleiben unverändert. Nur bei
-dem bekannten Platzhaltertext wird nach bestandenem Vorfilter die verlinkte
-Originalanzeige geladen. Review und Discord verwenden anschließend bevorzugt
-deren URL.
-
-Remotely übernimmt ausschließlich Anzeigen aus einem rollierenden
-Sieben-Tage-Fenster. Alte hervorgehobene Anzeigen und bereits vergebene Stellen
-werden verworfen; jeder Lauf liest die Listenansicht bis zur alten
-Trefferfront. Detailseiten werden sieben Tage gecacht. Bei Kandidaten mit
-LinkedIn als Originalquelle wird zusätzlich geprüft, ob dort noch Bewerbungen
-angenommen werden; geschlossene Anzeigen gelangen nicht ins Review.
-
-get-in-IT liefert zunächst kompakte Suchdaten. Vollständige Detailseiten werden
-nur für Stellen geladen, die den bewusst großzügigen ersten Vorfilter bestehen;
-erfolgreich geladene Details bleiben sieben Tage im Cache.
-
-StudySmarter wird lokal im konfigurierten Radius und deutschlandweit nach
-vollständig remote möglichen Einstiegsrollen durchsucht. Detailseiten werden
-erst nach dem ersten Vorfilter geladen und anschließend sieben Tage gecacht.
+Direkte Arbeitnow-Anzeigen mit vollständigem Text bleiben unverändert; nur beim
+bekannten Platzhaltertext wird nach bestandenem Vorfilter die verlinkte
+Originalanzeige geladen, deren URL Review und Discord dann bevorzugen. Remotely
+übernimmt nur Anzeigen aus einem rollierenden Sieben-Tage-Fenster, verwirft alte
+hervorgehobene und bereits vergebene Stellen und liest die Listenansicht bis zur
+alten Trefferfront. Ist LinkedIn die Originalquelle, wird zusätzlich geprüft, ob
+dort noch Bewerbungen angenommen werden; geschlossene Anzeigen gelangen nicht ins
+Review. get-in-IT liefert zunächst kompakte Suchdaten; StudySmarter sucht lokal
+im konfigurierten Radius und deutschlandweit nach vollständig remote möglichen
+Einstiegsrollen. Bei beiden werden Detailseiten erst nach dem bewusst
+großzügigen ersten Vorfilter geladen.
 
 Detaildaten gelten sieben Tage als frisch. Bei einem vorübergehenden
 Netzwerkfehler darf ein höchstens 14 Tage alter Cache-Eintrag als sichtbar
@@ -367,29 +359,18 @@ Ein teilweise fehlgeschlagenes Suchsegment darf keine alten Stellen dieser
 Quelle automatisch inaktiv setzen.
 
 Jede Quelle erhält eine Ergebniszeile mit Treffern, Dauer und gegebenenfalls
-Teilergebnis oder Fehler. Im Terminal werden laufende Meldungen ersetzt.
-Konsole und Laufprotokoll zeigen außerdem die Dauer ihrer
-Detailanreicherung und der Pipeline-Schritte einschließlich Offline-Prüfung.
-Auch abgebrochene Schritte melden ihre bis dahin verstrichene Zeit. Die
+Teilergebnis oder Fehler. Konsole und Laufprotokoll zeigen außerdem die Dauer
+der Detailanreicherung und der Pipeline-Schritte einschließlich Offline-Prüfung,
+bei abgebrochenen Schritten die bis dahin verstrichene Zeit. Verschachtelte
+Zeiten überlappen und dürfen nicht zur Gesamtlaufzeit addiert werden. Die
 Offline-Prüfung zeigt erledigte und insgesamt geplante eindeutige URLs, ohne
-URLs oder Stelleninhalte auszugeben. Verschachtelte Zeiten überlappen und dürfen
-nicht zur Gesamtlaufzeit addiert werden.
+URLs oder Stelleninhalte auszugeben.
 
 Die Review-Diagnose trennt erstmals gespeicherte und bekannte Treffer, passende
 und ausgeschlossene neue Treffer sowie den Status Neu vom Standardfilter Neu.
-Letzterer zeigt unbearbeitete Stellen mit Status Neu unabhängig vom Fundlauf;
-internationale und Junior-Hybrid-Sonderfälle sind standardmäßig ausgeblendet.
-Das Erstfund-Merkmal bleibt für Laufstatistik und Benachrichtigungen bestehen.
-Ein Abbruch nach dem Speichern des Gedächtnisses und anschließender Neustart
-entfernt unbearbeitete Stellen deshalb nicht mehr aus dem Filter Neu. Die
-Offline-Prüfung bearbeitet höchstens 200 URLs pro Lauf und startet nach zwei
-Minuten keine weitere Anfrage; eine laufende Anfrage darf noch fertig werden.
-Unbearbeitete Stellen mit Status Neu werden nicht zusätzlich geprüft.
-Prüfergebnisse einschließlich unklarer
-Antworten werden 24 Stunden berücksichtigt, bevor die URL erneut geprüft wird.
-Offene Prüfungen werden auf spätere Läufe verteilt; sie ändern den Status nicht.
-Bei mehreren Anzeigen-URLs müssen alle innerhalb der letzten 24 Stunden eindeutig
-als geschlossen bestätigt worden sein. Die Anfragen bleiben sequenziell.
+Das Erstfund-Merkmal bleibt für Laufstatistik und Benachrichtigungen bestehen;
+ein Abbruch nach dem Speichern des Gedächtnisses und ein Neustart entfernen
+unbearbeitete Stellen deshalb nicht mehr aus dem Filter Neu.
 
 ## Tests
 

@@ -126,10 +126,7 @@ def location_names(restrictions):
     """Return readable eligible countries or a worldwide marker."""
     names = []
     for restriction in restrictions or []:
-        if isinstance(restriction, dict):
-            value = restriction.get("name") or restriction.get("alpha2")
-        else:
-            value = restriction
+        value = (restriction.get("name") or restriction.get("alpha2")) if isinstance(restriction, dict) else restriction
         text = str(value or "").strip()
         if text and text not in names:
             names.append(text)

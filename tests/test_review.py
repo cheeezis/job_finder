@@ -17,12 +17,7 @@ from urllib.request import Request, urlopen
 
 from job_finder.matching.config import LOCAL_SEARCH_LOCATION, LOCAL_SEARCH_POSTAL_CODE
 from job_finder.review import (
-    APP_SCRIPT,
-    APP_STYLES,
-    APPLICATIONS_SCRIPT,
-    LANDING_SCRIPT,
-    REVIEW_PAGE,
-    REVIEW_SCRIPT,
+    PACKAGE,
     LocalReviewServer,
     ReviewRequestHandler,
     address_is_in_use,
@@ -569,20 +564,20 @@ class ReviewTests(unittest.TestCase):
                     )
             with urlopen(base_url + "/review?job=job%3A1") as response:
                 targeted = response.read()
-            self.assertEqual(targeted, REVIEW_PAGE.read_bytes())
+            self.assertEqual(targeted, (PACKAGE / "review.html").read_bytes())
 
     def test_shared_assets_are_served_with_correct_types(self):
         with self.server_context() as base_url:
             for route, content_type, path in [
-                ("/app.css", "text/css", APP_STYLES),
-                ("/app.js", "text/javascript", APP_SCRIPT),
-                ("/landing.js", "text/javascript", LANDING_SCRIPT),
-                ("/review.js", "text/javascript", REVIEW_SCRIPT),
-                ("/applications.js", "text/javascript", APPLICATIONS_SCRIPT),
+                ("/app.css", "text/css", "app.css"),
+                ("/app.js", "text/javascript", "app.js"),
+                ("/landing.js", "text/javascript", "landing.js"),
+                ("/review.js", "text/javascript", "review.js"),
+                ("/applications.js", "text/javascript", "applications.js"),
             ]:
                 with self.subTest(route=route), urlopen(base_url + route) as response:
                     self.assertIn(content_type, response.headers["Content-Type"])
-                    self.assertEqual(response.read(), path.read_bytes())
+                    self.assertEqual(response.read(), (PACKAGE / path).read_bytes())
 
     def test_manual_import_api_forwards_paths_and_url(self):
         calls = []
@@ -797,10 +792,9 @@ class ReviewTests(unittest.TestCase):
 
         self.assertIn("Bewerbungsübersicht", page)
         self.assertIn("Abgeschlossene Bewerbungen bearbeiten", page)
-        self.assertIn(
-            'input.type = "datetime-local"', APPLICATIONS_SCRIPT.read_text(encoding="utf-8")
-        )
-        self.assertIn("Nächstes Gespräch", APPLICATIONS_SCRIPT.read_text(encoding="utf-8"))
+        script = (PACKAGE / "applications.js").read_text(encoding="utf-8")
+        self.assertIn('input.type = "datetime-local"', script)
+        self.assertIn("Nächstes Gespräch", script)
         self.assertEqual(overview["statistics"]["total"], 1)
         self.assertEqual(overview["applications"], [])
         self.assertEqual(overview["completed_applications"][0]["applied_on"], event_on)

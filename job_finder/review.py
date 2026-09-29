@@ -41,29 +41,22 @@ from job_finder.workflow.review_actions import (
 )
 from job_finder.workflow.review_data import attach_fact_sheets, load_review_jobs
 
-LANDING_PAGE = Path(__file__).with_name("landing.html")
-REVIEW_PAGE = Path(__file__).with_name("review.html")
-APPLICATIONS_PAGE = Path(__file__).with_name("applications.html")
-APP_STYLES = Path(__file__).with_name("app.css")
-APP_SCRIPT = Path(__file__).with_name("app.js")
-LANDING_SCRIPT = Path(__file__).with_name("landing.js")
-REVIEW_SCRIPT = Path(__file__).with_name("review.js")
-APPLICATIONS_SCRIPT = Path(__file__).with_name("applications.js")
+PACKAGE = Path(__file__).parent
 HTML = "text/html; charset=utf-8"
 JAVASCRIPT = "text/javascript; charset=utf-8"
 # Browser paths only select one of these packaged files; they never become file paths.
 STATIC_FILES = {
-    "/": (LANDING_PAGE, HTML),
-    "/index.html": (LANDING_PAGE, HTML),
-    "/review": (REVIEW_PAGE, HTML),
-    "/review.html": (REVIEW_PAGE, HTML),
-    "/applications": (APPLICATIONS_PAGE, HTML),
-    "/applications.html": (APPLICATIONS_PAGE, HTML),
-    "/app.css": (APP_STYLES, "text/css; charset=utf-8"),
-    "/app.js": (APP_SCRIPT, JAVASCRIPT),
-    "/landing.js": (LANDING_SCRIPT, JAVASCRIPT),
-    "/review.js": (REVIEW_SCRIPT, JAVASCRIPT),
-    "/applications.js": (APPLICATIONS_SCRIPT, JAVASCRIPT),
+    "/": (PACKAGE / "landing.html", HTML),
+    "/index.html": (PACKAGE / "landing.html", HTML),
+    "/review": (PACKAGE / "review.html", HTML),
+    "/review.html": (PACKAGE / "review.html", HTML),
+    "/applications": (PACKAGE / "applications.html", HTML),
+    "/applications.html": (PACKAGE / "applications.html", HTML),
+    "/app.css": (PACKAGE / "app.css", "text/css; charset=utf-8"),
+    "/app.js": (PACKAGE / "app.js", JAVASCRIPT),
+    "/landing.js": (PACKAGE / "landing.js", JAVASCRIPT),
+    "/review.js": (PACKAGE / "review.js", JAVASCRIPT),
+    "/applications.js": (PACKAGE / "applications.js", JAVASCRIPT),
 }
 ROUTE_ORIGIN = f"{LOCAL_SEARCH_POSTAL_CODE} {LOCAL_SEARCH_LOCATION}".strip()
 MAX_REQUEST_BYTES = 45 * 1024 * 1024

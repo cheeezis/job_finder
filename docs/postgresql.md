@@ -115,8 +115,8 @@ ausgeschlossen. Aufbewahrung verlängert nicht die Gültigkeit alter Quelldaten.
 .\.venv\Scripts\python.exe -m job_finder.db backup
 ```
 
-Das ZIP enthält einen konsistenten PostgreSQL-Anwendungsstand, alle referenzierten
-Dokumentdateien und Prüfsummen. Vor jedem echten Finder-Lauf wird ebenfalls ein
+Das ZIP enthält einen konsistenten PostgreSQL-Anwendungsstand samt Steckbriefen und
+Kostenbuch des Agenten, alle referenzierten Dokumentdateien und Prüfsummen. Vor jedem echten Finder-Lauf wird ebenfalls ein
 solches Backup erzeugt; die automatische Rotation behält sieben Archive.
 
 In Containern (Azure-Worker, lokaler Hybrid-Lauf) entfällt dieses Backup

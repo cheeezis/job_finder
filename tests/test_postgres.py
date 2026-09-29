@@ -9,15 +9,19 @@ import threading
 import unittest
 from contextlib import redirect_stdout
 from copy import deepcopy
+from decimal import Decimal
 from pathlib import Path
 from unittest.mock import patch
 
 from job_finder import db
+from job_finder.agent.pricing import Usage
 from job_finder.matching.scoring import LOCAL_PLACES
 from job_finder.models import Job, JobSource
 from job_finder.paths import JOBS_FILE, RECOMMENDATIONS_JSON
+from job_finder.persistence.agent_usage import record_model_call, spent_today_and_this_month
 from job_finder.persistence.application_documents import store_documents
 from job_finder.persistence.database import transaction
+from job_finder.persistence.fact_sheets import fact_sheets, save_fact_sheet
 from job_finder.persistence.postgres_backup import create_postgres_backup, restore_backup
 from job_finder.persistence.postgres_store import prune_cache, read_dataset, write_dataset
 from job_finder.persistence.storage import publish_results, write_json_atomic
@@ -38,7 +42,7 @@ class PostgresTests(unittest.TestCase):
     def clear_database(self):
         with transaction() as connection:
             self.assertTrue(connection.info.dbname.endswith("_test"))
-            connection.execute("TRUNCATE job_state,datasets CASCADE")
+            connection.execute("TRUNCATE job_state,datasets,agent_usage,agent_fact_sheets CASCADE")
 
     def test_default_manual_import_writes_source_state_and_review_to_the_database(self):
         page = """<meta property="og:site_name" content="Example GmbH">
@@ -353,6 +357,9 @@ class PostgresTests(unittest.TestCase):
             write_dataset(
                 "internal/notifications.json", {"version": 3, "sent": {"job:1": {"job_id": "job:1"}}, "pending": {}}
             )
+            save_fact_sheet("job:1", "gpt-5-mini", {"fazit": "Bewerben"}, Decimal("0.0123"))
+            record_model_call("job:1", "gpt-5-mini", Usage(1200, 200, 300, 100, 1), Decimal("0.004567"))
+            sheets, spent = fact_sheets(), spent_today_and_this_month()
             backup = create_postgres_backup(root / "backups", root / "documents")
             with self.assertRaisesRegex(ValueError, "leere Datenbank"):
                 restore_backup(backup, root / "restored")
@@ -362,3 +369,5 @@ class PostgresTests(unittest.TestCase):
             self.assertEqual(load_memory(), memory)
             self.assertEqual(next((root / "restored").rglob("*.pdf")).read_bytes(), content)
             self.assertIn("job:1", read_dataset("internal/notifications.json")["sent"])
+            self.assertEqual(fact_sheets(), sheets)
+            self.assertEqual(spent_today_and_this_month(), spent)

@@ -256,10 +256,7 @@ def remote_region_allows_germany(value, country_code=None):
         return True
 
     labels = {label.strip() for label in re.split(r"[,;/|]+", text) if label.strip()}
-    return bool(
-        labels.intersection(GERMANY_LOCATION_LABELS)
-        or labels.intersection(GERMANY_REMOTE_REGION_LABELS)
-    )
+    return bool(labels & (GERMANY_LOCATION_LABELS | GERMANY_REMOTE_REGION_LABELS))
 
 
 def extract_annual_salary_eur(posting):

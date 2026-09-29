@@ -24,6 +24,11 @@ SEARCH_SCOPES = (
 )
 PAGE_SIZE = 50
 MAX_PAGES_PER_SCOPE = 5
+WORK_ARRANGEMENTS = {
+    "remote": (WorkMode.REMOTE, 100),
+    "hybrid": (WorkMode.HYBRID, None),
+    "on-site": (WorkMode.ONSITE, 0),
+}
 
 
 def is_configured(environ=None):
@@ -125,14 +130,7 @@ def location_names(location):
 
 def work_arrangement(value):
     """Map the API workplace enum to the shared remote model."""
-    normalized = str(value or "").casefold()
-    if normalized == "remote":
-        return WorkMode.REMOTE, 100
-    if normalized == "hybrid":
-        return WorkMode.HYBRID, None
-    if normalized == "on-site":
-        return WorkMode.ONSITE, 0
-    return WorkMode.UNKNOWN, None
+    return WORK_ARRANGEMENTS.get(str(value or "").casefold(), (WorkMode.UNKNOWN, None))
 
 
 def annual_salary_eur(salary):

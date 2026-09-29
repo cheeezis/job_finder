@@ -22,18 +22,21 @@ class CareerPage:
     registry entry like any other source.
     """
 
-    def __init__(self, source_name, company, list_url, link_pattern):
+    def __init__(self, source_name, company, list_url, link_pattern, parser=None):
         self.SOURCE_NAME = source_name
         self.CACHE_FILE = cache_file(source_name)
         self.company = company
         self.list_url = list_url
         self.link_pattern = link_pattern
+        self.parser = parser
 
     def fetch_jobs(self, cache_path=None, now=None):
         """Import the listings through the shared company detail cache."""
         links = self.collect_links()
         cache_path = self.CACHE_FILE if cache_path is None else cache_path
-        return fetch_company_jobs(self.SOURCE_NAME, self.company, links, cache_path, now=now)
+        return fetch_company_jobs(
+            self.SOURCE_NAME, self.company, links, cache_path, now=now, parser=self.parser
+        )
 
     def collect_links(self):
         """Extract the detail links from the public career page."""

@@ -16,7 +16,6 @@ from job_finder.persistence.storage import publish_results
 from job_finder.sources import (
     arbeitnow,
     arbeitsagentur,
-    compose_it,
     edag,
     german_tech_jobs,
     get_in_it,
@@ -35,6 +34,7 @@ from job_finder.sources.common import (
     reset_fetch_diagnostics,
 )
 from job_finder.sources.company_careers import BYTEWERK, CSS, NETHINKS, PROEMION, RHOENENERGIE
+from job_finder.sources.compose_it import COMPOSE_IT
 from job_finder.workflow.availability import ignore_closed_listings
 from job_finder.workflow.main import (
     build_score_results,
@@ -58,7 +58,7 @@ SOURCES = [
     *([startup_jobs] if startup_jobs.is_configured() else []),
     studysmarter,
     manual,
-    compose_it,
+    COMPOSE_IT,
     BYTEWERK,
     RHOENENERGIE,
     jumo,

@@ -86,7 +86,7 @@ class CareerPageFetchTests(unittest.TestCase):
 
 class SourceNameTests(unittest.TestCase):
     def test_source_names_stay_stable(self):
-        sources = (CSS, PROEMION, BYTEWERK, RHOENENERGIE, NETHINKS, edag, compose_it)
+        sources = (CSS, PROEMION, BYTEWERK, RHOENENERGIE, NETHINKS, edag, compose_it.COMPOSE_IT)
         self.assertEqual(
             [source.SOURCE_NAME for source in sources],
             ["css", "proemion", "bytewerk", "rhoenenergie", "nethinks", "edag", "compose_it"],
@@ -101,8 +101,8 @@ class ComposeItSourceTests(unittest.TestCase):
         <a href="https://compose-it.de/unternehmen/karriere/">Karriere</a>
         """
 
-        with patch.object(compose_it, "fetch_text", return_value=html):
-            links = compose_it.collect_links()
+        with patch.object(company_careers, "fetch_text", return_value=html):
+            links = compose_it.COMPOSE_IT.collect_links()
 
         self.assertEqual(
             links,
@@ -125,10 +125,7 @@ class ComposeItSourceTests(unittest.TestCase):
         """
 
         job = compose_it.job_from_html(
-            compose_it.SOURCE_NAME,
-            compose_it.COMPANY,
-            "https://compose-it.de/job/it-supporter/",
-            html,
+            "compose_it", "COMPOSE IT", "https://compose-it.de/job/it-supporter/", html
         )
 
         self.assertEqual(job.id, "compose_it:it-supporter")

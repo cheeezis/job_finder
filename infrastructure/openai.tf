@@ -1,4 +1,4 @@
-# Sprachmodell für den geplanten KI-Agenten. Bezahlt wird nur pro Token; ohne
+# Sprachmodell für den KI-Agenten. Bezahlt wird nur pro Token; ohne
 # Aufrufe kostet die Ressource nichts. Die Kostenbremsen im Code
 # (job_finder/agent/cost_guard.py) greifen vor jedem Aufruf; die Drossel an der
 # Bereitstellung und der Token-Alarm (monitoring.tf) wirken auch dann, wenn der

@@ -1,24 +1,23 @@
-"""Local half of the hybrid worker schedule: only StepStone and Remotely.
+"""Local half of the hybrid worker schedule: StepStone and Remotely.
 
-Both are blocked from Azure IPs, so they run from here against the shared
-Azure database instead; see docs/postgresql.md for the reliable-sources half
-that runs in Azure.
+Both block Azure IPs, so they run here against the shared Azure
+database (the reliable sources run in Azure, see docs/postgresql.md),
+in the image the Azure worker currently uses, looked up through the
+host's az-CLI session on every start, so both halves always share one
+code version. Docker instead of the local .venv also avoids stale reads
+seen from a native Windows psycopg connection to the Azure database
+(root cause still unexplained).
 
-Runs the image the Azure worker currently uses, looked up through the host's
-az-CLI session on every start, so both halves always share one code version.
-Running in Docker rather than the local .venv also sidestepped stale reads
-seen from a native Windows psycopg connection to the Azure database; that
-root cause is still unexplained.
+The container has no Managed Identity or az-CLI session, so Blob access
+uses a scoped service principal: infrastructure/storage.tf
+(storage_blob_data_contributor_local_docker) and the gitignored
+.env.docker-local, a credential separate from every Azure-hosted
+identity.
 
-Inside the container there is no Managed Identity or az-CLI session, so Blob
-access needs a scoped service principal - see infrastructure/storage.tf
-(storage_blob_data_contributor_local_docker) and .env.docker-local
-(gitignored, not the same credential as any Azure-hosted identity).
-
-A Windows task starts this unattended, where a failure would leave no trace.
-So the script starts Docker Desktop when its engine does not answer (and
-stops it again afterwards), keeps each run's output in data/logs for two
-weeks and reports every failure to Discord.
+A Windows task starts this unattended, where a failure would leave no
+trace, so the script starts Docker Desktop when its engine does not
+answer (and stops it afterwards), keeps each run's output in data/logs
+for two weeks and reports every failure to Discord.
 """
 
 import os

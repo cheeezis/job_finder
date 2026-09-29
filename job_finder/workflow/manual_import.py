@@ -23,16 +23,14 @@ def import_manual_url(
 ):
     """Fetch, remember and score one user-supplied public listing URL.
 
-    Write the manual source, update PostgreSQL state, and replace the job's
-    entries in the job snapshot and recommendations. Unrelated review
-    results are retained. Default runtime writes share one transaction.
-
-    Return job_id, title, company, match_percent and prefilter_warning.
-    Manual submissions remain reviewable even when the filter rejects
-    them; prefilter_warning explains that conflict.
-
-    Invalid URLs or unrecognized pages raise ValueError. Network,
-    filesystem and database failures propagate to the caller.
+    Write the manual source, update PostgreSQL state and replace the
+    job's entries in the job snapshot and recommendations, keeping
+    unrelated review results; default runtime writes share one
+    transaction. Return job_id, title, company, match_percent and
+    prefilter_warning, which explains why a submission the filter
+    rejects stays reviewable. Invalid URLs or unrecognized pages raise
+    ValueError; network, filesystem and database failures propagate to
+    the caller.
     """
     # Download before taking a database lock. Persist the manual source and
     # both review datasets in the same transaction as the remembered job.

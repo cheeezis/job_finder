@@ -1,7 +1,7 @@
 """Local half of the hybrid worker schedule: StepStone and Remotely.
 
 Both block Azure IPs, so they run here against the shared Azure
-database (the reliable sources run in Azure, see docs/postgresql.md),
+database (the reliable sources run in Azure, see docs/operations.md),
 in the image the Azure worker currently uses, looked up through the
 host's az-CLI session on every start, so both halves always share one
 code version. Docker instead of the local .venv also avoids stale reads

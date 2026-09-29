@@ -1,10 +1,7 @@
 # Entwicklung am Job Finder
 
-Diese Anleitung beschreibt die gemeinsame Anwendung. Einrichtung und Bedienung
-stehen in der [README](../README.md). Docker- und Azure-Betrieb sind seit der
-vollständigen Umstellung auf PostgreSQL und Azure Teil von `main`
-(`infrastructure/`, [PostgreSQL-Anleitung](postgresql.md),
-[Netzwerkpfade](networking.md)); ein separater Cloud-Branch existiert nicht mehr.
+Diese Anleitung beschreibt Aufbau und Entwicklung. Einrichtung und Bedienung
+stehen in der [README](../README.md), der Betrieb in [Betrieb](operations.md).
 
 ## Arbeitsumgebung und Prüfungen
 
@@ -26,19 +23,27 @@ Python-Betrieb reicht `requirements.txt`. `requirements-dev.txt` installiert
 zusätzlich die festgelegte Ruff-Version, damit lokale Prüfung und CI dieselben
 Formatierungsregeln verwenden.
 
-Der [GitHub-Workflow](../.github/workflows/checks.yml) prüft Python auf Linux mit PostgreSQL sowie Python 3.11 und 3.13.
-Lokal ist derselbe Teststarter auch unter Windows nutzbar. Ein weiterer Job prüft Stil und Frontend.
 Die Tests verwenden lokale Fixtures, temporäre Datenpfade, eine separate
-PostgreSQL-Testdatenbank und ersetzte Netzwerkzugriffe. Die Datenbank wird gemäß
-[PostgreSQL-Anleitung](postgresql.md) eingerichtet; der Teststarter schützt den
-Produktivbestand vor Testschreibzugriffen. Ein vollständiger Finder-Lauf gehört nicht zur Testsuite.
-GitHub-Checks werden damit ausgeführt; ob sie einen Merge blockieren, wird
-separat in den Repository-Regeln eingestellt.
+PostgreSQL-Testdatenbank ([Betrieb](operations.md#lokale-datenbank)) und
+ersetzte Netzwerkzugriffe; ein vollständiger Finder-Lauf gehört nicht dazu.
+
+Der [GitHub-Workflow](../.github/workflows/checks.yml) testet Python 3.11 und
+3.13 auf Linux mit PostgreSQL, prüft Stil und Frontend und zeigt bei Pull
+Requests einen `terraform plan` gegen den gespeicherten State
+(`-refresh=false`). Nach einem Merge auf `main` baut er das Image, pusht es in
+die Registry, wendet nach manueller Freigabe im Environment `production`
+Terraform an und rollt das Image auf Worker und Review aus. Ein neuerer Deploy
+bricht einen älteren, noch wartenden ab, und nach der Freigabe rollt er nur aus,
+wenn sein Commit noch der aktuelle `main` ist. Terraform verwaltet die
+Image-Version nicht; ein lokales `terraform apply` setzt die App also nie
+zurück.
 
 Neue allgemeine Änderungen beginnen auf einem aktuellen `main`, zum Beispiel
 auf `docs/...`, `fix/...` oder `feat/...`. Inhaltliche und große rein mechanische
 Änderungen getrennt committen. Die [PR-Vorlage](../.github/PULL_REQUEST_TEMPLATE.md)
-beschreibt Titel und Beschreibung.
+beschreibt Titel und Beschreibung. Das Repository ist öffentlich: Commit- und
+PR-Texte bleiben kurz und nennen keine persönlichen Daten, keine Firmen aus
+eigenen Bewerbungen, keine Zahlen aus dem eigenen Bestand und keine Azure-Namen.
 
 ## Orientierung im Code
 
@@ -91,7 +96,34 @@ beschreibt Titel und Beschreibung.
 `is_new` beschreibt einen Erstfund im Suchlauf. `workflow_status="new"`
 bedeutet dagegen, dass die Stelle noch nicht bearbeitet wurde. Der Review-
 Filter „Neu“ richtet sich nach dem Workflow-Status und seinen Sichtbarkeitsfiltern.
-Diese Merkmale dürfen bei Änderungen nicht gleichgesetzt werden.
+Diese Merkmale dürfen bei Änderungen nicht gleichgesetzt werden: Ein Abbruch
+nach dem Speichern des Gedächtnisses und ein Neustart entfernen unbearbeitete
+Stellen deshalb nicht aus „Neu“.
+
+### Offline-Prüfung
+
+Geprüft werden nur fehlende interessante Stellen ohne Bewerbungsverlauf, nicht
+unbearbeitete Stellen mit Status Neu. Aktuelle Treffer werden übersprungen,
+veraltete Cache-Treffer gelten als fehlend. Die Anfragen laufen sequenziell,
+höchstens 200 URLs pro Lauf; nach zwei Minuten beginnt keine neue mehr, eine
+laufende darf fertig werden. Ergebnisse gelten 24 Stunden, auch unklare; offene
+Prüfungen verteilen sich auf spätere Läufe und ändern den Status nicht. Eine
+Stelle wird nur „Nicht interessant“, wenn alle ihre URLs in den letzten 24
+Stunden eindeutig als geschlossen bestätigt wurden; fehlende Suchtreffer,
+Login-Weiterleitungen und Abruffehler reichen nicht.
+
+### Laufausgabe
+
+Jede Quelle erhält eine Ergebniszeile mit Treffern, Dauer und gegebenenfalls
+Teilergebnis oder Fehler. Konsole und Laufprotokoll zeigen außerdem die Dauer
+der Detailanreicherung und der Pipeline-Schritte, bei abgebrochenen Schritten
+die bis dahin verstrichene Zeit; verschachtelte Zeiten überlappen und ergeben
+addiert nicht die Gesamtlaufzeit. Im Terminal werden Fortschrittszeilen
+ersetzt, ohne Terminal erscheinen zeitgestempelte Zwischenstände höchstens alle
+30 Sekunden je Vorgang. Die Offline-Prüfung zeigt erledigte und geplante
+eindeutige URLs, aber keine URLs oder Stelleninhalte. Die Review-Diagnose trennt
+erstmals gespeicherte und bekannte Treffer, passende und ausgeschlossene neue
+Treffer sowie den Status Neu vom Standardfilter Neu.
 
 ### Manueller Import
 
@@ -221,11 +253,10 @@ Ausschlussmerkmale ohne persönliche Werte oder Punkte. Die erste passende
 Rollengruppe gewinnt; ihre Reihenfolge ist fachliche Erkennungspriorität und
 wird nicht durch persönliche Vorlieben umsortiert.
 
-`user_settings.local.yaml` steuert Standort, Gehalt
-und den Bezug zu Projekten oder Weiterbildungen. Ein früheres Feld
-`matching.preferred_role_groups` wird beim Laden ignoriert. `profile.local.yaml` ist davon unabhängig und wird nicht automatisch
-eingelesen. Die alte Python-Datei `profile.py` wurde durch `matching_rules.py`
-abgelöst; interne Imports verwenden die neuen Zuständigkeiten.
+`user_settings.local.yaml` steuert Standort, Gehalt und über
+`matching.profile_domain_keywords` den Bezug zu Projekten oder Weiterbildungen.
+Unbekannte Schlüssel werden beim Laden ignoriert. `profile.local.yaml` ist die
+Faktenbasis des KI-Agenten; der Vorfilter liest es nicht.
 
 Die Bewertung bleibt eine vollständige, regelbasierte Sortierhilfe:
 
@@ -243,15 +274,15 @@ Die Bewertung bleibt eine vollständige, regelbasierte Sortierhilfe:
 Die Junior-Hybrid-Ausnahme außerhalb des Suchgebiets bleibt mit null
 Standortpunkten sichtbar zuschaltbar. Bestehende Präferenzabzüge folgen auf
 die Summe; das Ergebnis bleibt auf 0 bis 100 begrenzt. Es gibt keinen
-Mindestscore für die Aufnahme ins Review. `ranking_weights.py` enthält die
-wiederhergestellten Rollen- und Technologiegewichte aus `201417f`; die
-Erkennungsregeln und persönlichen Einstellungen bleiben davon getrennt.
+Mindestscore für die Aufnahme ins Review. Das Wort „Weiterbildung“ in einer
+Beschreibung ist kein Ausbildungsmerkmal. `ranking_weights.py` enthält die
+Rollen- und Technologiegewichte, getrennt von Erkennungsregeln und persönlichen
+Einstellungen.
 
-Die 32 festen Vergleichsfälle behalten ihre Eingaben und Ausschlussentscheidungen;
-die Erwartungen entsprechen wieder der Sortierung vor der Umgewichtung.
-Änderungen an einzelnen Erkennungsfehlern werden separat getestet und mit
-gespeicherten Entscheidungen verglichen. Persönliche Anzeigen und Bewertungen
-bleiben dabei lokal außerhalb des Repositories.
+Die 32 festen Vergleichsfälle in `tests/fixtures/scoring_parity.json` halten
+vollständige Bewertungsergebnisse fest. Änderungen an einzelnen
+Erkennungsfehlern werden separat getestet; persönliche Anzeigen und Bewertungen
+bleiben dabei außerhalb des Repositories.
 
 Die Review-API ordnet POST-Routen kurzen Aktionsmethoden zu. Host-/Origin-Prüfung,
 Größenlimit und JSON-Objektprüfung erfolgen gemeinsam vor dem Aufruf der Aktion;
@@ -259,10 +290,9 @@ Fehlerantworten und Antwortheader bleiben zentral. Im Browser verwenden die
 Bewerbungsformulare denselben Speicherablauf, der ihre Aktionsbuttons auch nach
 einem Fehler wieder freigibt.
 
-Fachliche Funktionen werden aus ihrem zuständigen Modul importiert;
-Kompatibilitätspfade über `job_finder.review` oder das frühere
-`job_finder.scoring` gibt es nicht mehr. Standortregeln bekommen lokale
-Einstellungen explizit vom Scoring-Einstiegspunkt übergeben.
+Fachliche Funktionen werden aus ihrem zuständigen Modul importiert.
+Standortregeln bekommen lokale Einstellungen explizit vom Scoring-Einstiegspunkt
+übergeben.
 
 ## Python-Stil und hilfreiche Dokumentation
 

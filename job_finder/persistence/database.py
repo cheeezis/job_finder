@@ -146,7 +146,7 @@ def _required_env(name):
     load_dotenv(PROJECT_DIR / ".env.postgres", override=False)
     value = os.getenv(name)
     if not value:
-        raise RuntimeError(f"{name} fehlt. PostgreSQL einrichten; siehe docs/postgresql.md.")
+        raise RuntimeError(f"{name} fehlt. PostgreSQL einrichten; siehe docs/operations.md.")
     return value
 
 

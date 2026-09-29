@@ -24,9 +24,8 @@ ROLE_POINTS = {
 }
 
 SKILL_GROUPS = [
-    {"id": "python", "label": "Python", "points": 10, "keywords": ["python"]},
+    {"label": "Python", "points": 10, "keywords": ["python"]},
     {
-        "id": "ai_ml",
         "label": "AI/ML/RAG/Agenten",
         "points": 10,
         "keywords": [
@@ -45,7 +44,6 @@ SKILL_GROUPS = [
         ],
     },
     {
-        "id": "data",
         "label": "Data/Analytics",
         "points": 7,
         "keywords": [
@@ -61,7 +59,6 @@ SKILL_GROUPS = [
         ],
     },
     {
-        "id": "testing",
         "label": "Testautomatisierung",
         "points": 6,
         "keywords": [
@@ -80,14 +77,12 @@ SKILL_GROUPS = [
         ],
     },
     {
-        "id": "javascript",
         "label": "JavaScript/TypeScript/Node.js",
         "points": 5,
         "keywords": ["javascript", "typescript", "node.js", "nodejs"],
     },
-    {"id": "java", "label": "Java", "points": 4, "keywords": ["java"]},
+    {"label": "Java", "points": 4, "keywords": ["java"]},
     {
-        "id": "devops",
         "label": "DevOps/Cloud-Automatisierung",
         "points": 5,
         "keywords": [
@@ -104,7 +99,6 @@ SKILL_GROUPS = [
         ],
     },
     {
-        "id": "security",
         "label": "Security/Network",
         "points": 4,
         "keywords": [
@@ -117,7 +111,6 @@ SKILL_GROUPS = [
         ],
     },
     {
-        "id": "web_api",
         "label": "Web/API",
         "points": 3,
         "keywords": ["rest api", "rest-api", "backend", "webanwendung", "web application"],

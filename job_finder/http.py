@@ -26,9 +26,7 @@ def fetch_text_with_final_url(
     request = Request(url, headers={**DEFAULT_HEADERS, **(headers or {})})
     opener = build_opener(ValidatingRedirectHandler(url_validator))
     with opener.open(request, timeout=timeout) as response:
-        final_url = response.url
-        if url_validator is not None:
-            final_url = url_validator(final_url)
+        final_url = url_validator(response.url) if url_validator else response.url
         return final_url, _read_bounded(response, max_bytes).decode("utf-8")
 
 

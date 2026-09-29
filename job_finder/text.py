@@ -49,6 +49,5 @@ def text_is_mainly_english(value):
     def count(words):
         return sum(len(re.findall(rf"(?<!\w){re.escape(word)}(?!\w)", text)) for word in words)
 
-    german_count = count(german_words)
     english_count = count(english_words)
-    return english_count >= 5 and english_count > german_count * 2
+    return english_count >= 5 and english_count > count(german_words) * 2

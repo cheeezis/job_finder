@@ -21,14 +21,11 @@ SETTINGS_PATH = LOCAL_SETTINGS_PATH if LOCAL_SETTINGS_PATH.exists() else EXAMPLE
 def load_user_settings(path=SETTINGS_PATH):
     """Load and validate the search and matching sections of a YAML file.
 
-    Return the parsed mapping without filling in missing optional keys
-    and ignore unknown keys. Raise ValueError for unreadable files, invalid YAML or invalid
-    field values. See user_settings.example.yaml for the input schema.
-
-    The default path is selected at module import: use the local file
-    when present, otherwise the example. USER_SETTINGS is also loaded
-    at import, so running processes need a restart after configuration
-    changes. An explicit path is useful for isolated validation/tests.
+    Return the parsed mapping as is: missing optional keys stay missing, unknown keys are ignored.
+    Raise ValueError for unreadable files, invalid YAML or invalid field values; the input schema is
+    in user_settings.example.yaml. The default path is chosen at import (the local file if present,
+    else the example); USER_SETTINGS is loaded at import too, so running processes need a restart
+    after configuration changes. An explicit path serves isolated validation and tests.
     """
     settings_path = Path(path)
     try:

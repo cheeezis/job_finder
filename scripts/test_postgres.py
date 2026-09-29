@@ -28,7 +28,7 @@ def main():
     os.environ["JOBFINDER_TEST_MODE"] = "1"
     initialize()
     with transaction() as connection:
-        connection.execute("TRUNCATE job_state,datasets,migration_runs CASCADE")
+        connection.execute("TRUNCATE job_state,datasets CASCADE")
     suite = unittest.defaultTestLoader.discover("tests")
     result = unittest.TextTestRunner(verbosity=1).run(suite)
     raise SystemExit(0 if result.wasSuccessful() else 1)

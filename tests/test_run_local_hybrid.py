@@ -117,6 +117,30 @@ class LocalHybridRunTests(unittest.TestCase):
         (message,) = self.sent
         self.assertIn("der Lauf im Container endete mit Code 1", message["content"])
 
+    def test_the_container_gets_the_optional_values_and_personal_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            (project / ".env.postgres-azure").write_text(
+                "JOBFINDER_DATABASE_URL=postgresql://app@db.test/jobfinder?sslrootcert=C:/ca.pem\n", encoding="utf-8"
+            )
+            docker_local = "AZURE_CLIENT_ID=c\nAZURE_TENANT_ID=t\nAZURE_CLIENT_SECRET=s\n"
+            (project / ".env.docker-local").write_text(docker_local, encoding="utf-8")
+            with patch.object(self.script, "PROJECT_DIR", project):
+                bare = self.script.container_environment()
+                (project / ".env.docker-local").write_text(
+                    docker_local + "JOBFINDER_OPENAI_ENDPOINT=https://model.test/\nJOBFINDER_REVIEW_HOST=review.test\n",
+                    encoding="utf-8",
+                )
+                (project / "profile.local.yaml").write_text("profil: ja\n", encoding="utf-8")
+                full = self.script.container_environment()
+
+        self.assertNotIn("JOBFINDER_OPENAI_ENDPOINT", bare)
+        self.assertNotIn("JOBFINDER_PROFILE", bare)
+        self.assertEqual(full["JOBFINDER_OPENAI_ENDPOINT"], "https://model.test/")
+        self.assertEqual(full["JOBFINDER_REVIEW_HOST"], "review.test")
+        self.assertEqual(full["JOBFINDER_PROFILE"], "profil: ja\n")
+        self.assertIn("sslrootcert=/etc/ssl/certs/ca-certificates.crt", full["JOBFINDER_DATABASE_URL"])
+
     def test_logs_older_than_two_weeks_are_removed(self):
         now = datetime(2026, 9, 26, 10, 0)
         ages = {"hybrid-20260911-100000.log": 15, "hybrid-20260920-100000.log": 6}

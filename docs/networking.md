@@ -51,7 +51,8 @@ Läuft auf demselben Rechner, dieselbe öffentliche IP wie oben - nutzt
 also ebenfalls `local-review` für Postgres. Storage-Zugriff über den
 eigens angelegten, eng begrenzten Service Principal
 (`jobfinder-local-docker`, nur `Storage Blob Data Contributor` auf dem
-Container `application-documents`).
+Container `application-documents` und `Cognitive Services OpenAI User` für den
+Agenten).
 
 **GitHub Actions (CI/CD) → Azure Resource Manager, ACR, tfstate-Container**
 OIDC-Föderation ohne gespeichertes Azure-Anmeldegeheimnis, mit drei

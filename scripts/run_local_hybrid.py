@@ -108,16 +108,22 @@ def container_environment():
         "AZURE_TENANT_ID": docker_local["AZURE_TENANT_ID"],
         "AZURE_CLIENT_SECRET": docker_local["AZURE_CLIENT_SECRET"],
     }
-    # Without it the Discord cards only miss their direct review link.
-    if docker_local.get("JOBFINDER_REVIEW_HOST"):
-        values["JOBFINDER_REVIEW_HOST"] = docker_local["JOBFINDER_REVIEW_HOST"]
+    # Optional: without the review host the Discord cards miss their direct link, without the
+    # model endpoint the agent writes no fact sheets in this run.
+    for key in ("JOBFINDER_REVIEW_HOST", "JOBFINDER_OPENAI_ENDPOINT"):
+        if docker_local.get(key):
+            values[key] = docker_local[key]
     webhook = os.environ.get("DISCORD_WEBHOOK_URL")
     if webhook:
         values["DISCORD_WEBHOOK_URL"] = webhook
-    # The image only carries the example settings; the personal file stays on this disk.
-    settings = PROJECT_DIR / "user_settings.local.yaml"
-    if settings.exists():
-        values["JOBFINDER_USER_SETTINGS"] = settings.read_text(encoding="utf-8")
+    # The image only carries the example settings and no profile; the personal files stay on this disk.
+    for key, name in (
+        ("JOBFINDER_USER_SETTINGS", "user_settings.local.yaml"),
+        ("JOBFINDER_PROFILE", "profile.local.yaml"),
+    ):
+        path = PROJECT_DIR / name
+        if path.exists():
+            values[key] = path.read_text(encoding="utf-8")
     return values
 
 

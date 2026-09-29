@@ -56,6 +56,15 @@ resource "azurerm_role_assignment" "openai_user_worker" {
   principal_type       = "ServicePrincipal"
 }
 
+# Der lokale Hybrid-Lauf schreibt die Steckbriefe seiner Stellen gleich selbst,
+# statt bis zum nächsten Azure-Lauf zu warten; ebenfalls nur Aufrufe.
+resource "azurerm_role_assignment" "openai_user_local_docker" {
+  scope                = azurerm_cognitive_account.openai.id
+  role_definition_name = "Cognitive Services OpenAI User"
+  principal_id         = var.local_docker_sp_object_id
+  principal_type       = "ServicePrincipal"
+}
+
 # Eigener Zugriff für Tests vom lokalen Rechner (az login), ebenfalls ohne Schlüssel.
 resource "azurerm_role_assignment" "openai_user_dev" {
   scope                = azurerm_cognitive_account.openai.id

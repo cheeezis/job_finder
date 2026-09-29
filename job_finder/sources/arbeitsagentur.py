@@ -150,25 +150,17 @@ def extract_jobdetail(html):
 
 def format_locations(detail):
     """Return unique city names, falling back to the unknown-location label."""
-    locations = []
-    for location in detail.get("stellenlokationen", []):
-        address = location.get("adresse", {})
-        city = address.get("ort")
-        if city and city not in locations:
-            locations.append(city)
-
-    return locations or ["unbekannt"]
+    cities = (
+        location.get("adresse", {}).get("ort") for location in detail.get("stellenlokationen", [])
+    )
+    return list(dict.fromkeys(city for city in cities if city)) or ["unbekannt"]
 
 
 def format_remote(detail):
     """Map home-office flags to 0%, 100% or an unspecified hybrid hint."""
     if not detail.get("homeofficemoeglich"):
         return "0%"
-
-    remote_type = detail.get("homeofficetyp", "")
-    if remote_type == "AUSSCHLIESSLICH":
-        return "100%"
-    return "homeoffice"
+    return "100%" if detail.get("homeofficetyp", "") == "AUSSCHLIESSLICH" else "homeoffice"
 
 
 def format_employment_type(detail):

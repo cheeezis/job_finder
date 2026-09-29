@@ -175,8 +175,7 @@ def linkedin_job_id(url):
 
 def linkedin_job_key(url):
     """Use the extracted job ID or normalized URL as the status-cache key."""
-    identifier = linkedin_job_id(url)
-    return identifier or normalize_detail_url(url)
+    return linkedin_job_id(url) or normalize_detail_url(url)
 
 
 def load_linkedin_status_cache(path):

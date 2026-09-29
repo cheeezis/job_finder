@@ -157,9 +157,7 @@ def identifier_from_url(url):
     match = re.search(
         r"(?:jobOfferId=|/job/|[-/])([a-f0-9]{8,}|\d{3,})(?:\D*$|$)", url, re.IGNORECASE
     )
-    if match:
-        return match.group(1)
-    return urlsplit(url).path.rstrip("/").rsplit("/", 1)[-1]
+    return match.group(1) if match else urlsplit(url).path.rstrip("/").rsplit("/", 1)[-1]
 
 
 CSS = CareerPage(

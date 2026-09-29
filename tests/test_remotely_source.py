@@ -36,24 +36,25 @@ DETAIL_HTML = """
 
 
 class RemotelySourceTests(unittest.TestCase):
-    def remotely_job(self, identifier, application_url):
-        return Job(
-            id=f"remotely:{identifier}",
-            title="Junior Python Developer",
-            company="Example GmbH",
-            locations=["Remote"],
-            sources=[
+    def remotely_job(self, identifier, application_url=None, **fields):
+        values = {
+            "id": f"remotely:{identifier}",
+            "title": "Junior Python Developer",
+            "company": "Example GmbH",
+            "locations": ["Remote"],
+            "sources": [
                 JobSource(
                     source="remotely",
                     url=f"https://www.remotely.de/job/{identifier}",
                     application_url=application_url,
                 )
             ],
-            description_raw="Python",
-            description_clean="Python",
-            work_mode=WorkMode.REMOTE,
-            remote_percentage=100,
-        )
+            "description_raw": "Python",
+            "description_clean": "Python",
+            "work_mode": WorkMode.REMOTE,
+            "remote_percentage": 100,
+        }
+        return Job(**{**values, **fields})
 
     def test_extract_detail_links_normalizes_and_removes_duplicates(self):
         html = """
@@ -159,18 +160,7 @@ class RemotelySourceTests(unittest.TestCase):
     def test_fetch_jobs_reuses_fresh_detail_cache(self):
         now = datetime(2026, 8, 28, 12, tzinfo=UTC)
         url = "https://www.remotely.de/job/cached"
-        cached = Job(
-            id="remotely:cached",
-            title="Cached",
-            company="Example GmbH",
-            locations=["Remote"],
-            sources=[JobSource(source="remotely", url=url)],
-            description_raw="Python",
-            description_clean="Python",
-            work_mode=WorkMode.REMOTE,
-            remote_percentage=100,
-            fetched_at=now,
-        )
+        cached = self.remotely_job("cached", title="Cached", fetched_at=now)
         with tempfile.TemporaryDirectory() as directory:
             cache_path = Path(directory) / "remotely.json"
             save_detail_cache(cache_path, {url: cached})
@@ -187,14 +177,12 @@ class RemotelySourceTests(unittest.TestCase):
         now = datetime(2026, 8, 28, 12, tzinfo=UTC)
         url = "https://www.remotely.de/job/cached"
         for age, refresh in [(timedelta(days=7, seconds=-1), False), (timedelta(days=7), True)]:
-            cached = Job(
-                id="remotely:cached",
+            cached = self.remotely_job(
+                "cached",
                 title="Cached",
                 company="Example",
-                locations=["Remote"],
-                sources=[JobSource(source="remotely", url=url)],
-                description_raw="Python",
-                description_clean="Python",
+                work_mode=WorkMode.UNKNOWN,
+                remote_percentage=None,
                 fetched_at=now - age,
             )
             with self.subTest(age=age), tempfile.TemporaryDirectory() as directory:
@@ -210,17 +198,8 @@ class RemotelySourceTests(unittest.TestCase):
     def test_fetch_jobs_removes_closed_listing_from_stale_cache(self):
         now = datetime(2026, 8, 29, 12, tzinfo=UTC)
         url = "https://www.remotely.de/job/now-closed"
-        cached = Job(
-            id="remotely:now-closed",
-            title="Old cached job",
-            company="Example GmbH",
-            locations=["Remote"],
-            sources=[JobSource(source="remotely", url=url)],
-            description_raw="Python",
-            description_clean="Python",
-            work_mode=WorkMode.REMOTE,
-            remote_percentage=100,
-            fetched_at=now - timedelta(days=8),
+        cached = self.remotely_job(
+            "now-closed", title="Old cached job", fetched_at=now - timedelta(days=8)
         )
         with tempfile.TemporaryDirectory() as directory:
             cache_path = Path(directory) / "remotely.json"

@@ -114,8 +114,7 @@ def extract_required_years(text):
         if qualifier and qualifier.strip() in MORE_THAN_QUALIFIERS:
             year += 1
         years.append(year)
-    for match in required_matches(text, [PLUS_YEARS_PATTERN]):
-        years.append(int(match.group(1)))
+    years.extend(int(match.group(1)) for match in required_matches(text, [PLUS_YEARS_PATTERN]))
     plausible = [year for year in years if 0 < year <= 10]
     return max(plausible, default=0)
 

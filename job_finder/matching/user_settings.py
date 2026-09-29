@@ -90,9 +90,7 @@ def require_positive_int(value, name):
 
 def require_optional_positive_int(value, name):
     """Accept None or a positive integer for an optional setting."""
-    if value is None:
-        return None
-    return require_positive_int(value, name)
+    return None if value is None else require_positive_int(value, name)
 
 
 def require_text_list(value, name, allow_empty=False):

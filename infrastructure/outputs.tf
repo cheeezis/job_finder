@@ -4,7 +4,7 @@ output "postgres_server_name" {
 }
 
 output "postgres_host" {
-  description = "DNS-Name für die spätere TLS-Verbindung zur Cloud-Datenbank."
+  description = "DNS-Name für die TLS-Verbindung zur Cloud-Datenbank."
   value       = azurerm_postgresql_flexible_server.jobfinder.fqdn
 }
 

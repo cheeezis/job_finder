@@ -17,8 +17,8 @@ resource "azurerm_postgresql_flexible_server" "jobfinder" {
   geo_redundant_backup_enabled  = false
   public_network_access_enabled = true
 
-  # Nur für Einrichtung/Verwaltung. Ein eigener Anwendungsbenutzer folgt vor
-  # der Cloud-Anbindung des Finders. Das lokale Secret bleibt außerhalb von Git.
+  # Nur für Einrichtung/Verwaltung; Worker und Review nutzen die eingeschränkte
+  # Rolle jobfinder_app. Das lokale Secret bleibt außerhalb von Git.
   administrator_login               = "jobfinder_admin"
   administrator_password_wo         = var.postgres_admin_password
   administrator_password_wo_version = 1
@@ -60,7 +60,7 @@ resource "azurerm_postgresql_flexible_server_firewall_rule" "allow_azure_service
 }
 
 # Erzwingt verschlüsselte Verbindungen. Der Client prüft zusätzlich Zertifikat
-# und Hostnamen mit sslmode=verify-full, sobald wir ihn an Azure anbinden.
+# und Hostnamen mit sslmode=verify-full.
 resource "azurerm_postgresql_flexible_server_configuration" "require_tls" {
   name      = "require_secure_transport"
   server_id = azurerm_postgresql_flexible_server.jobfinder.id

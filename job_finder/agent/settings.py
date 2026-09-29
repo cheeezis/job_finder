@@ -5,17 +5,21 @@ The agent runs only with ``agent.enabled: true``. A missing or invalid
 why, so the run log can name it.
 """
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from decimal import Decimal
 
-DEFAULT_LIMITS = {
-    "job_max_cost_eur": Decimal("0.08"),
-    "job_max_model_calls": 8,
-    "job_max_tool_calls": 6,
-    "job_max_web_searches": 3,
-    "daily_max_cost_eur": Decimal("1.00"),
-    "monthly_max_cost_eur": Decimal("20.00"),
-}
+
+@dataclass(frozen=True)
+class AgentLimits:
+    job_max_cost_eur: Decimal = Decimal("0.08")
+    job_max_model_calls: int = 8
+    job_max_tool_calls: int = 6
+    job_max_web_searches: int = 3
+    daily_max_cost_eur: Decimal = Decimal("1.00")
+    monthly_max_cost_eur: Decimal = Decimal("20.00")
+
+
+DEFAULT_LIMITS = asdict(AgentLimits())
 # Catch typos such as a missing decimal point or an extra zero. These are not
 # budgets; the monthly ceiling stays well below the student credit.
 CEILINGS = {
@@ -28,16 +32,6 @@ CEILINGS = {
 }
 # 0 switches the paid web search off while the agent keeps working.
 MAY_BE_ZERO = {"job_max_web_searches"}
-
-
-@dataclass(frozen=True)
-class AgentLimits:
-    job_max_cost_eur: Decimal
-    job_max_model_calls: int
-    job_max_tool_calls: int
-    job_max_web_searches: int
-    daily_max_cost_eur: Decimal
-    monthly_max_cost_eur: Decimal
 
 
 @dataclass(frozen=True)
@@ -56,11 +50,11 @@ def agent_settings(values):
     """Read the agent section of the parsed settings; problems switch it off."""
     section = values.get("agent")
     if section is None:
-        return AgentSettings(False, AgentLimits(**DEFAULT_LIMITS), "Abschnitt agent fehlt")
+        return AgentSettings(False, AgentLimits(), "Abschnitt agent fehlt")
     try:
         limits = parse_limits(section)
     except ValueError as error:
-        return AgentSettings(False, AgentLimits(**DEFAULT_LIMITS), str(error))
+        return AgentSettings(False, AgentLimits(), str(error))
     effort = section.get("reasoning_effort", "medium")
     if effort not in REASONING_EFFORTS:
         reason = f"agent.reasoning_effort muss einer von {', '.join(REASONING_EFFORTS)} sein"

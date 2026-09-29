@@ -46,12 +46,8 @@ def record_status_change(entry, workflow_status, occurred_on=None, scheduled_for
         except ValueError:
             pass
         else:
-            history.append(
-                {
-                    "status": previous_status,
-                    "occurred_on": first_seen_date(entry) if previous_status == "new" else None,
-                }
-            )
+            first_seen = first_seen_date(entry) if previous_status == "new" else None
+            history.append(history_event(previous_status, first_seen))
             history_changed = True
     if (previous_status != status or explicit_event) and event not in history:
         history.append(event)

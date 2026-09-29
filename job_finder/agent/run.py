@@ -40,7 +40,7 @@ def agent_phase(run_id=None, values=USER_SETTINGS, environ=os.environ):
         return None
     endpoint = environ.get(ENDPOINT_ENV)
     if not endpoint:
-        print(f"  Agent übersprungen: {ENDPOINT_ENV} fehlt (so im lokalen Hybrid-Lauf)")
+        print(f"  Agent übersprungen: {ENDPOINT_ENV} fehlt")
         return None
     try:
         profile_text, source = configured_profile(environ)

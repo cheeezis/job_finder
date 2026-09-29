@@ -237,11 +237,13 @@ Studienmodule Grundlagen, aber keine Praxis belegen. Nahbereich und Pendelorte
 bekommt er aus den Sucheinstellungen, auf die das Profil nur verweist. Die
 Warnampel ⚠️ gibt es nur in Zusatzzeilen; die festen Zeilen urteilen immer.
 
-Er läuft nur, wenn in den Einstellungen `agent.enabled: true` steht, der Worker
-die Modell-Adresse kennt (setzt Terraform; der lokale Hybrid-Lauf hat keine und
-überspringt den Agenten) und ein Profil vorhanden ist. Das Profil kommt wie die
-Einstellungen aus einem Key-Vault-Secret und muss nach Änderungen neu gesetzt
-werden:
+Er läuft nur, wenn in den Einstellungen `agent.enabled: true` steht, der Lauf
+die Modell-Adresse kennt und ein Profil vorhanden ist. Im Azure-Worker setzt
+Terraform die Adresse und das Profil kommt wie die Einstellungen aus einem
+Key-Vault-Secret, das nach Änderungen neu gesetzt werden muss. Der lokale
+Hybrid-Lauf liest die Adresse aus `.env.docker-local`, reicht
+`profile.local.yaml` weiter und schreibt die Steckbriefe seiner Stellen damit
+direkt nach dem Lauf:
 
 ```powershell
 az keyvault secret set --vault-name <key-vault> --name JobfinderProfile --file profile.local.yaml --output none

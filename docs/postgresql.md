@@ -253,11 +253,12 @@ trat das einmal ebenfalls auf, danach nicht mehr. Die Ursache ist ungeklärt;
 der Container-Betrieb umgeht das Problem nur, er erklärt es nicht.
 
 Ohne Managed Identity oder interaktive `az`-Anmeldung im Container braucht
-das einen eigenen, eng begrenzten Service Principal für den Blob-Zugriff
-(nur `Storage Blob Data Contributor` auf dem Dokument-Container
-`application-documents`, nicht auf dem `tfstate`-Container daneben, siehe
-`infrastructure/storage.tf`,
-`storage_blob_data_contributor_local_docker`). Einmalig einrichten:
+das einen eigenen, eng begrenzten Service Principal: `Storage Blob Data
+Contributor` nur auf dem Dokument-Container `application-documents`, nicht auf
+dem `tfstate`-Container daneben (`infrastructure/storage.tf`,
+`storage_blob_data_contributor_local_docker`), und `Cognitive Services OpenAI
+User` für die Steckbriefe des Agenten (`infrastructure/openai.tf`,
+`openai_user_local_docker`). Einmalig einrichten:
 
 ```powershell
 az ad app create --display-name "jobfinder-local-docker"
@@ -274,6 +275,7 @@ AZURE_CLIENT_ID=<appId>
 AZURE_TENANT_ID=<tenant>
 AZURE_CLIENT_SECRET=<password>
 JOBFINDER_REVIEW_HOST=<Hostname der Review-App, für Direktlinks in Discord>
+JOBFINDER_OPENAI_ENDPOINT=<Adresse des Azure-OpenAI-Kontos, für den Agenten>
 ```
 
 Danach in `infrastructure/variables.tf` die `object_id` des neuen Service

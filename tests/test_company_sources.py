@@ -15,8 +15,73 @@ from job_finder.sources.company_careers import (
     NETHINKS,
     PROEMION,
     RHOENENERGIE,
+    CareerPage,
+    PaginatedCareerPage,
     fetch_company_jobs,
 )
+
+POSTING_HTML = """<script type="application/ld+json">
+{"@type": "JobPosting", "title": "Junior Developer", "description": "<p>Python</p>",
+ "jobLocation": {"address": {"addressLocality": "Fulda"}}}
+</script>"""
+
+
+class CareerPageFetchTests(unittest.TestCase):
+    def fetch(self, page, pages):
+        """Run fetch_jobs with fake pages; return the jobs and the fetched URLs in order."""
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(company_careers, "fetch_text", side_effect=pages.__getitem__) as fetch,
+        ):
+            jobs = page.fetch_jobs(cache_path=Path(directory) / "cache.json")
+        return jobs, [call.args[0] for call in fetch.call_args_list]
+
+    def test_career_page_imports_each_matching_detail_page_once(self):
+        page = CareerPage(
+            "example", "Example GmbH", "https://jobs.example.test/", r"example\.test/job/\d+$"
+        )
+        jobs, fetched = self.fetch(
+            page,
+            {
+                "https://jobs.example.test/": '<a href="/job/1">A</a><a href="/job/1">A</a>'
+                '<a href="/about">About</a>',
+                "https://jobs.example.test/job/1": POSTING_HTML,
+            },
+        )
+
+        self.assertEqual(
+            [(job.id, job.title, job.company, job.locations) for job in jobs],
+            [("example:1", "Junior Developer", "Example GmbH", ["Fulda"])],
+        )
+        self.assertEqual(fetched, ["https://jobs.example.test/", "https://jobs.example.test/job/1"])
+
+    def test_paginated_career_page_reads_every_announced_page(self):
+        page = PaginatedCareerPage(
+            "example",
+            "Example GmbH",
+            "https://example.test/jobs/",
+            r"example\.test/jobs/(?!page/)[^/]+/$",
+        )
+        jobs, fetched = self.fetch(
+            page,
+            {
+                "https://example.test/jobs/": '<a href="/jobs/one/">1</a><a href="/jobs/page/2/">2</a>',
+                "https://example.test/jobs/page/2/": '<a href="/jobs/two/">2</a><a href="/jobs/one/">1</a>',
+                "https://example.test/jobs/one/": POSTING_HTML,
+                "https://example.test/jobs/two/": POSTING_HTML,
+            },
+        )
+
+        self.assertEqual([job.id for job in jobs], ["example:one", "example:two"])
+        self.assertEqual(
+            fetched,
+            [
+                "https://example.test/jobs/",
+                "https://example.test/jobs/page/2/",
+                "https://example.test/jobs/one/",
+                "https://example.test/jobs/two/",
+            ],
+        )
 
 
 class SourceNameTests(unittest.TestCase):

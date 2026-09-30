@@ -3,13 +3,13 @@ requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "local-job-finder"
+name = "job-finder"
 version = "0.2.0"
-description = "Local-first multi-source IT job finder with review and application tracking"
+description = "Job-search assistant for entry-level IT roles with a cost-limited LLM agent, PostgreSQL and Azure"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {file = "LICENSE"}
-keywords = ["job-search", "job-tracker", "postgresql", "discord"]
+keywords = ["job-search", "job-tracker", "llm-agent", "langgraph", "azure", "postgresql", "terraform"]
 dynamic = ["dependencies"]
 
 [tool.setuptools.dynamic]

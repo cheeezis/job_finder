@@ -84,8 +84,11 @@ resource "azurerm_monitor_metric_alert" "model_tokens_high" {
 # Langsamer Rauchmelder für das ganze Projekt, also auch für die Produktion.
 # Kostendaten kommen mit bis zu 72 Stunden Verzögerung; die Hochrechnung warnt
 # oft früher, weil sie den Trend des Monats sieht. 25 € (Rechnungswährung des
-# Abos) sind das geplante Maximum: Registry etwa 4,35 € plus höchstens 20 € für
-# den Agenten. Ein Budget für das ganze Abo könnte die Pipeline mangels Rechten
+# Abos) sind das geplante Maximum, solange PostgreSQL im kostenlosen Kontingent
+# der Subscription läuft: Registry etwa 4,35 € plus höchstens 20 € für den
+# Agenten. Danach kommen etwa 15,55 € für den Server hinzu, und der Betrag muss
+# steigen (docs/operations.md, Abschnitt Kosten). Ein Budget warnt nur, es
+# stoppt nichts. Ein Budget für das ganze Abo könnte die Pipeline mangels Rechten
 # auf Abo-Ebene nicht verwalten; alle Projektressourcen liegen in dieser Gruppe.
 resource "azurerm_consumption_budget_resource_group" "jobfinder" {
   name              = "budget-jobfinder"

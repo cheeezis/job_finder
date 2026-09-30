@@ -1,240 +1,132 @@
 # Job Finder
 
-Ein Python-Job-Finder für IT-Einstiegsstellen. Er sammelt Anzeigen aus mehreren
-Quellen, führt gleiche Stellen zusammen, filtert klare Fehlgriffe regelbasiert
-heraus und begleitet die Sichtung bis zur Bewerbung. Er läuft lokal oder in
-einer eigenen Azure-Subscription (siehe [Betrieb](#betrieb)).
+A personal job-search assistant for entry-level IT roles in Germany. It collects
+listings from job boards, open feeds and company career pages, merges listings of
+the same job, filters out clear misfits with transparent rules and lets an LLM
+agent write a short fact sheet for the promising ones, within a hard cost limit.
+A small web app supports the review and tracks applications.
 
-Nach außen gehen nur kompakte Stellenkarten und Laufstatistiken an Discord,
-wenn ein Webhook gesetzt ist. Mit eingeschaltetem KI-Agenten gehen außerdem
-Anzeige, persönliches Profil und frühere Entscheidungen an das Sprachmodell in
-der eigenen Azure-Subscription und dessen Suchanfragen an die Bing-Suche.
+The user interface and the detailed documentation are in German, because the tool
+serves a job search in Germany. This page is the English overview.
 
-## Funktionen
+## Highlights
 
-- Jobportale, offene Feeds und ausgewählte Karriereseiten; manueller Import
-  einer einzelnen Anzeige per URL
-- ein einheitliches Jobmodell, quellenübergreifende Deduplizierung und ein
-  Gedächtnis für bekannte, entschiedene und inaktive Stellen
-- regelbasierter Vorfilter für Standort, Remote-Anteil, Erfahrung,
-  Beschäftigungsart, Reisetätigkeit und IT-Eignung; Junior-Hybrid-Sonderfälle
-  und internationale Stellen lassen sich im Review zuschalten
-- Review mit Interessant, Rückfrage, Ignorieren und Bewerben sowie eigener Notiz
-- optionaler KI-Agent (LangGraph und LangChain auf Azure OpenAI), der
-  vorgefilterten Stellen einen Steckbrief mit Ampeln, Fazit und Kurzgrund
-  schreibt, begrenzt durch einen mehrstufigen Kostenschutz
-- Bewerbungsübersicht mit Verlauf, Gesprächsterminen, Gehaltsvorstellung (pro
-  Monat oder Jahr eingegeben, als Jahresbrutto gespeichert) und Statistik
-- Discord-Karten für neue Stellen und eine Laufstatistik; Quellenfehler bleiben
-  isoliert und werden gemeldet
+- **LLM agent with guardrails:** a LangGraph graph with a LangChain model on Azure
+  OpenAI (Responses API with web search) writes a structured fact sheet per job:
+  seven traffic-light lines, a verdict and a short reason. Its tools only read, job
+  ads and web pages count as material rather than instructions, and only links the
+  model actually saw survive as sources.
+- **Cost control in layers:** every model and tool call passes a cost guard backed
+  by a ledger in PostgreSQL, with limits per job, day and month that fail closed.
+  In Azure, a throttled model deployment, a token alert and a monthly budget add to
+  it. A fact sheet costs a few cents.
+- **Azure without account keys:** storage and the model accept only Entra ID,
+  secrets come from Key Vault through a managed identity, and the review app sits
+  behind Entra ID sign-in for one account. It becomes public only after its
+  sign-in is configured, and every deploy checks that it serves nothing without
+  sign-in.
+- **Infrastructure as code and gated delivery:** Terraform manages all resources.
+  GitHub Actions sign in to Azure with OIDC, using separate identities for plan,
+  build and apply; production deploys wait for manual approval and roll out only
+  the current `main`.
+- **Careful data handling:** PostgreSQL with advisory locks and consistent
+  snapshot reads; a source that fails never wipes the listings it found before.
+- **Tests:** 460+ Python tests that run in CI against a real PostgreSQL, plus
+  frontend tests and Ruff for lint and formatting.
 
-Der Vorfilter-Score ist eine Sortierhilfe, keine Eignungsprognose. Die
-Entscheidung bleibt beim Nutzer.
+## Architecture
 
-## Quellen
+```mermaid
+flowchart LR
+    SRC["Job boards, feeds,<br/>career pages"]
+    subgraph AZ["Azure"]
+        JOB["Finder<br/>Container Apps job, twice a day"]
+        AGENT["Fact-sheet agent<br/>LangGraph + LangChain"]
+        AOAI["Azure OpenAI<br/>gpt-5-mini + web search"]
+        DB[("PostgreSQL")]
+        APP["Review app<br/>Container App"]
+        BLOB[("Blob Storage<br/>documents")]
+        KV["Key Vault"]
+    end
+    LOCAL["Local job<br/>Docker, daily"]
+    USER["Browser"]
+    DISCORD["Discord"]
 
-| Gruppe | Quellen |
+    SRC --> JOB
+    SRC --> LOCAL
+    JOB --> DB
+    LOCAL --> DB
+    JOB --> AGENT
+    AGENT <--> AOAI
+    AGENT <--> DB
+    JOB --> DISCORD
+    USER -- "Entra ID sign-in" --> APP
+    APP <--> DB
+    APP <--> BLOB
+    KV -. "secrets via managed identity" .-> JOB
+    KV -.-> APP
+```
+
+A finder run works in five steps:
+
+1. Sources deliver listings. If more than half of them fail, the run stops before
+   it replaces any stored results.
+2. A rule-based prefilter checks location, remote share, experience, employment
+   type, travel and IT fit. Its score sorts; it does not predict suitability.
+3. Promising candidates get their detail pages, and listings of the same job
+   become one card, also across portals and runs.
+4. Results, the job memory and the Discord queue are stored in PostgreSQL; new
+   matches go to Discord.
+5. The agent writes fact sheets for undecided jobs that are entry level or score
+   above 50, best first, until a limit is reached.
+
+Two sources run in a daily local job in Docker, with the same image and against
+the same database. Every push to `main` runs the tests, builds the image and,
+after approval, applies Terraform and rolls the image out to the finder job and
+the review app.
+
+## Tech stack
+
+| Area | Technology |
 | --- | --- |
-| Jobportale | Arbeitsagentur, StepStone, get-in-IT |
-| Feeds und Aggregatoren | Arbeitnow, GermanTechJobs, Himalayas, Jobicy, Remotely, Startup Jobs, StudySmarter |
-| Direkte Karriereseiten | Compose IT, bytewerk, RhönEnergie, JUMO, EDAG, CSS, Proemion, NETHINKS |
-| Eigene Einträge | manueller Import einer öffentlichen Stellen-URL |
+| Language | Python 3.11+ (CI tests 3.11 and 3.13) |
+| AI agent | LangGraph, LangChain (`langchain-openai`), Azure OpenAI `gpt-5-mini` |
+| Data | PostgreSQL 18 with psycopg 3, Azure Blob Storage |
+| Web app | Python standard-library HTTP server, vanilla JavaScript |
+| Cloud | Azure Container Apps (job and app), Database for PostgreSQL Flexible Server, Key Vault, Container Registry, Monitor |
+| Infrastructure | Terraform (`azurerm`, `azapi`), Docker |
+| CI/CD | GitHub Actions with OIDC and environment approval |
+| Quality | `unittest` against PostgreSQL, `node:test`, Ruff |
 
-Startup Jobs läuft nur mit `STARTUP_JOBS_API_KEY`. Liefert eine Quelle nur
-Teilergebnisse, etwa wegen Rate-Limits, meldet der Lauf das in Konsole, Log und
-Discord. Sind mehr als die Hälfte der Quellen unbrauchbar, bricht er ab und
-lässt den bisherigen Stand unverändert.
+## Quickstart (local)
 
-## Einrichtung
+Requirements: Python 3.11 or newer and Docker; Node.js 18 or newer only for the
+frontend tests. From the repository root in PowerShell:
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-Copy-Item user_settings.example.yaml user_settings.local.yaml
-```
-
-Benötigt werden Python 3.11 oder neuer und PostgreSQL
-([Einrichtung der Datenbank](docs/operations.md#lokale-datenbank)).
-
-`user_settings.local.yaml` (von Git ignoriert) enthält Suchort, Radius,
-Pendlerorte, fachliche Stichwörter und die Grenzen des Agenten. Ohne die Datei
-gilt die anonymisierte Beispielkonfiguration. Eine laufende Review übernimmt
-Änderungen erst nach einem Neustart. In Azure kommt der Inhalt aus dem
-Key-Vault-Secret `JobfinderUserSettings`, das nach Änderungen neu gesetzt wird:
-
-```powershell
-az keyvault secret set --vault-name <key-vault> --name JobfinderUserSettings --file user_settings.local.yaml --output none
-```
-
-Den Namen des Key Vaults nennt `az keyvault list -g rg-jobfinder --query [].name -o tsv`.
-Jeder Finder-Lauf nennt zu Beginn, woher seine Einstellungen stammen.
-
-Optional sind `DISCORD_WEBHOOK_URL` für Discord und `JOBFINDER_REVIEW_HOST`
-(Hostname der Review) für Direktlinks in den Karten. Geheimnisse gehören nicht
-in YAML-Dateien oder ins Repository.
-
-## Nutzung
-
-```powershell
+.\.venv\Scripts\python.exe scripts/setup_postgres.py
+docker compose --env-file .env.postgres up -d --wait
+.\.venv\Scripts\python.exe -m job_finder.db init
 .\.venv\Scripts\python.exe run_finder.py
-review_jobs.bat
+.\.venv\Scripts\python.exe -m job_finder.review
 ```
 
-`run_finder.py` sucht, bewertet und schickt neue Treffer an Discord, sofern
-konfiguriert. `review_jobs.bat` (oder `python -m job_finder.review`) startet die
-Oberfläche unter `http://127.0.0.1:8765`: Startseite mit manuellem Import,
-`/review` für die Sichtung und `/applications` für Bewerbungen und Statistik.
-Geänderte Bewertungsregeln wirken ab dem nächsten Finder-Lauf.
+The review opens at `http://127.0.0.1:8765`. Without `user_settings.local.yaml`
+the anonymised example settings apply. The agent stays off until
+`agent.enabled: true` is set and an Azure OpenAI endpoint and a profile are
+configured.
 
-- **Review:** Der Filter „Neu“ zeigt alle noch nicht eingestuften Stellen,
-  unabhängig vom Fundlauf. Internationale und Junior-Hybrid-Stellen sind eigene,
-  standardmäßig ausgeschaltete Filter. Sortiert wird nach dem Fazit des Agenten,
-  bei gleichem Fazit nach Vorfilter-Score.
-- **Notiz:** „Meine Notiz“ hält den Grund einer Entscheidung fest (bis 2.000
-  Zeichen) und wird beim Verlassen der Karte gespeichert. Der Agent liest bei
-  ähnlichen Stellen die ersten 300 Zeichen mit.
-- **Eine Karte je Stelle:** Anzeigen mit gleichem Titel und gleicher Firma
-  bilden eine Karte mit allen Orten und Links, über Portale und Läufe hinweg;
-  eine Entscheidung gilt für alle. Eine schon entschiedene Stelle übernimmt eine
-  neue Anzeige nur ohne neuen Ort oder wenn beide komplett remote sind.
-- **Gespräche:** Die Karte hebt das nächste Gespräch hervor; ist es vorbei,
-  zeigt sie „Letztes Gespräch“, bis ein neues Ereignis eingetragen wird. Mit
-  „Gespräch absagen“ endet die Bewerbung als „Selbst abgesagt“; das zählt weder
-  als Absage noch als „Keine Rückmeldung“.
-- **Links:** Die Karte zeigt alle Anzeigen, die die Review derselben Stelle
-  zuordnet, auch von anderen Portalen.
-- **Keine Rückmeldung:** Kommt 14 Tage nach Bewerbung, Rückmeldung oder letztem
-  Gesprächstermin nichts Neues, zeigt die Übersicht „Keine Rückmeldung“; ein
-  späteres Ereignis öffnet die Bewerbung wieder. Der Status lässt sich auch
-  selbst eintragen. Die Antwortquote zählt nur abgeschlossene Bewerbungen.
+## Documentation (German)
 
-## Betrieb
+- [Bedienung](docs/bedienung.md): features, sources, review workflow, rules and
+  the agent's settings
+- [Betrieb](docs/operations.md): database, backups, Azure, the local job and
+  access paths
+- [Entwicklung](docs/development.md): structure, data flow of a run, adding a
+  source and code style
 
-- **Lokal:** Finder und Review laufen auf dem eigenen Rechner, PostgreSQL in
-  Docker Compose, Dokumente unter `data/internal/application_documents`. Vor
-  jedem Finder-Lauf entsteht ein rotierendes Backup.
-- **Azure:** Der Finder läuft als Container-Apps-Job um 06:00 und 16:00 UTC,
-  ohne StepStone und Remotely. Die Review ist eine Container App hinter einer
-  Entra-ID-Anmeldung für das eigene Konto; jeder Deploy prüft, dass sie ohne
-  Anmeldung nichts ausliefert. Daten liegen in Azure PostgreSQL,
-  Dokumente im Blob Storage, Geheimnisse im Key Vault; statt ZIP-Backups
-  sichern Point-in-Time-Restore und Blob-Versionierung.
-- **Hybrid:** StepStone und Remotely liefern aus Azure keine Treffer. Ein
-  lokaler Windows-Task startet sie täglich in Docker, mit dem Image des
-  Azure-Workers und gegen dieselbe Datenbank (`scripts/run_local_hybrid.py`);
-  danach schreibt der Agent die Steckbriefe dieser Stellen. Jeder Lauf ersetzt
-  nur die Anzeigen seiner eigenen Portale. Das Skript startet Docker bei Bedarf,
-  schreibt ein Log und meldet Fehlschläge in Discord.
+## License
 
-Einrichtung, Backups, Azure und Zugriffswege beschreibt der
-[Betrieb](docs/operations.md).
-
-## KI-Agent und Kostenschutz
-
-Nach jedem Finder-Lauf in Azure und im Hybrid-Lauf schreibt der Agent
-(`job_finder/agent/`, ein LangGraph-Graph mit einem LangChain-Modell auf dem
-eigenen Azure OpenAI) für die besten wartenden Stellen einen Steckbrief: sieben
-Ampelzeilen (Status, Berufseinstieg, Fachlicher Fit, Lücken, Homeoffice /
-Standort, Reiseanteil, Gehalt), bis zu zwei Zusatzzeilen, Fazit und Kurzgrund.
-Er nimmt unentschiedene, im Standard-Review sichtbare Stellen ohne Steckbrief,
-die Einstiegsstellen sind oder mehr als 50 Punkte haben, die besten zuerst. Er
-darf im Web suchen und frühere Entscheidungen samt Notizen nachschlagen, aber
-nichts ändern. Anzeigen und Webseiten sind für ihn Material, keine Anweisungen,
-und als Quellen bleiben nur Links, die er tatsächlich gesehen hat. Seine
-Maßstäbe stehen in `job_finder/agent/instructions.py`.
-
-Er läuft nur, wenn `agent.enabled: true` gesetzt ist, der Lauf die
-Modell-Adresse kennt und ein Profil (`profile.local.yaml`) vorhanden ist. In
-Azure setzt Terraform die Adresse und das Profil kommt aus dem Key-Vault-Secret
-`JobfinderProfile`; der Hybrid-Lauf nimmt beides aus lokalen Dateien
-(`.env.docker-local`, `profile.local.yaml`). Nach Profiländerungen das Secret
-neu setzen:
-
-```powershell
-az keyvault secret set --vault-name <key-vault> --name JobfinderProfile --file profile.local.yaml --output none
-```
-
-Jeder Lauf nennt im Abschnitt „Steckbriefe (Agent)“, warum der Agent nicht lief
-oder wie viele Steckbriefe fertig, abgebrochen oder offen sind und was der Tag
-gekostet hat. Bricht der Agent ab oder stoppt er vor der letzten Stelle, etwa an
-der Tagesgrenze, meldet das zusätzlich eine Warnung in Discord.
-`agent.reasoning_effort` stellt den Denkaufwand ein (Standard `medium`).
-
-**Kostenschutz:** Vor jedem Modell- und Werkzeugaufruf prüft der Kostenwächter
-(`job_finder/agent/cost_guard.py`) den Schalter, den hinterlegten Preis, das
-Kostenbuch `agent_usage` mit Tages- und Monatsgrenze (deutsche Zeit, alle Läufe
-zusammen) sowie die Grenzen der Stelle für Kosten, Aufrufe und bezahlte
-Websuchen (`job_max_web_searches`, Standard 3). Eine erreichte Stellengrenze
-beendet nur diese Stelle, Tages- oder Monatsgrenze den Agenten für den Lauf;
-eine Grenze kann um höchstens einen Aufruf überschritten werden. Bei HTTP 429
-wartet er 5 bis 65 Sekunden und versucht es bis zu dreimal neu. Die Grenzen
-stehen im Abschnitt `agent` der Einstellungen, Standardwerte in
-`user_settings.example.yaml`. Ungültige Werte schalten den Agenten ab, und feste
-Obergrenzen im Code (5 € pro Tag, 50 € pro Monat) fangen Tippfehler ab.
-
-In Azure wirken zusätzlich eine Drossel der Modell-Bereitstellung
-(`infrastructure/openai.tf`), ein Token-Alarm und ein Monatsbudget mit
-E-Mail-Warnungen (`infrastructure/monitoring.tf`). Das Modell-Konto hat keine
-API-Schlüssel. Aufrufen dürfen es nur Worker, Hybrid-Lauf und das eigene Konto,
-jeweils mit einer Rolle, die an der Bereitstellung nichts ändern kann.
-
-## Regeln im Überblick
-
-Den Ablauf eines Laufs beschreibt die
-[Entwickleranleitung](docs/development.md#datenfluss-eines-finder-laufs).
-
-- **Alter:** Automatisch gefundene Anzeigen, deren bekanntes
-  Veröffentlichungsdatum mehr als 60 Tage zurückliegt, fallen heraus; ein
-  fehlendes Datum allein nicht. Manuell importierte alte Anzeigen bleiben mit
-  Warnung prüfbar.
-- **Benachrichtigungen:** Neue Stellen können an Discord gehen. Spätere
-  Textänderungen lösen weder eine neue Nachricht noch ein erneutes „Neu“ aus.
-- **Offline-Prüfung:** Interessante Stellen bleiben auch ohne Suchtreffer
-  vorgemerkt. Fehlen sie in einem Lauf, dessen Quellen alle vollständig waren,
-  prüft der Lauf ihre URLs. Erst wenn alle eindeutig geschlossen sind (HTTP
-  404/410 oder Schließungshinweis), wechselt die Stelle mit Datum und Grund auf
-  „Nicht interessant“; Bewerbungen bleiben unberührt.
-- **Caches:** Detaildaten gelten sieben Tage als frisch. Bei einem
-  Netzwerkfehler darf ein höchstens 14 Tage alter Eintrag als markierter
-  Fallback erscheinen. Ein teilweise fehlgeschlagenes Suchsegment setzt keine
-  Stellen inaktiv.
-- **Quellen:** Arbeitnow lädt nur beim bekannten Platzhaltertext die
-  Originalanzeige nach, deren URL Review und Discord dann bevorzugen. Remotely
-  übernimmt nur Anzeigen der letzten sieben Tage und lässt LinkedIn-Originale
-  weg, die keine Bewerbungen mehr annehmen. get-in-IT und StudySmarter laden
-  Detailseiten erst nach dem ersten, großzügigen Vorfilter; StudySmarter sucht
-  im Radius und deutschlandweit nach Remote-Stellen. Gehaltsspannen von
-  GermanTechJobs gelten als Euro brutto pro Jahr.
-
-## Tests und Entwicklung
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-.\.venv\Scripts\python.exe scripts/test_postgres.py
-.\.venv\Scripts\python.exe -m ruff check .
-node --test tests/frontend.test.cjs
-```
-
-Die Python-Tests brauchen eine eigene Testdatenbank
-([Betrieb](docs/operations.md#lokale-datenbank)), Node.js ab Version 18 nur
-die Frontend-Tests. Die [Entwickleranleitung](docs/development.md) erklärt
-Aufbau, Datenfluss, neue Quellen und Stilregeln. GitHub Actions prüfen jeden
-Pull Request; nach einem Merge auf `main` rollen sie Infrastruktur und Image
-erst nach manueller Freigabe aus.
-
-```text
-job_finder/            Kernlogik, Review und Bewerbungen
-job_finder/sources/    Quellenadapter
-job_finder/agent/      KI-Agent mit Kostenschutz
-scripts/               Einrichtung, Tests und lokaler Hybrid-Lauf
-infrastructure/        Terraform für Azure
-docs/                  Entwickler- und Betriebsdoku
-tests/                 automatisierte Tests
-run_finder.py          Einstieg für einen Finder-Lauf
-review_jobs.bat        Start der lokalen Oberfläche
-data/                  lokale Laufdaten (nicht versioniert)
-```
-
-## Lizenz
-
-MIT, siehe `LICENSE`.
+MIT, see [LICENSE](LICENSE).

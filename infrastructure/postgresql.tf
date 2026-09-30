@@ -46,10 +46,10 @@ resource "azurerm_postgresql_flexible_server_firewall_rule" "local_review" {
   end_ip_address   = var.postgres_client_ipv4
 }
 
-# Der Worker läuft als Container Apps Job ohne feste ausgehende IP; eine echte
-# Netzwerkisolation (VNet-Integration) würde einen verwalteten Load Balancer
-# erzwingen (~20+ EUR/Monat zusätzlich) und ist für diesen Umfang bewusst
-# nicht umgesetzt. Start/End 0.0.0.0 ist Azures Sonderwert für "beliebiger
+# Der Worker läuft als Container Apps Job ohne feste ausgehende IP. Privater
+# Zugriff bräuchte eine neu angelegte, VNet-integrierte Umgebung mit Private
+# Endpoint und ist für diesen Umfang bewusst nicht umgesetzt; die Abwägung steht
+# in docs/operations.md. Start/End 0.0.0.0 ist Azures Sonderwert für "beliebiger
 # Azure-Dienst", nicht nur diese Subscription. TLS (verify-full) und das
 # eingeschränkte jobfinder_app-Passwort bleiben die eigentliche Zugriffsschranke.
 resource "azurerm_postgresql_flexible_server_firewall_rule" "allow_azure_services" {

@@ -115,7 +115,8 @@ Geänderte Bewertungsregeln wirken ab dem nächsten Finder-Lauf.
   jedem Finder-Lauf entsteht ein rotierendes Backup.
 - **Azure:** Der Finder läuft als Container-Apps-Job um 06:00 und 16:00 UTC,
   ohne StepStone und Remotely. Die Review ist eine Container App hinter einer
-  Entra-ID-Anmeldung für das eigene Konto. Daten liegen in Azure PostgreSQL,
+  Entra-ID-Anmeldung für das eigene Konto; jeder Deploy prüft, dass sie ohne
+  Anmeldung nichts ausliefert. Daten liegen in Azure PostgreSQL,
   Dokumente im Blob Storage, Geheimnisse im Key Vault; statt ZIP-Backups
   sichern Point-in-Time-Restore und Blob-Versionierung.
 - **Hybrid:** StepStone und Remotely liefern aus Azure keine Treffer. Ein

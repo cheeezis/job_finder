@@ -185,3 +185,21 @@ jobs:
           az extension add --name containerapp --upgrade --only-show-errors
           az containerapp job update --name jobfinder-worker --resource-group rg-jobfinder --image "$image" --output none
           az containerapp update --name jobfinder-review --resource-group rg-jobfinder --image "$image" --output none
+      # Ohne Anmeldung darf die Review nichts ausliefern: Ein Aufruf muss auf
+      # den Login umleiten (302) oder abgewiesen werden (401). Die App startet
+      # beim ersten Aufruf erst (Scale to Zero), daher mehrere Versuche.
+      - name: Review ohne Anmeldung prüfen
+        env:
+          REVIEW_FQDN: ${{ secrets.REVIEW_FQDN }}
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 60 "https://$REVIEW_FQDN/api/recommendations" || true)
+            case "$status" in
+              302|401) echo "Ohne Anmeldung: HTTP $status"; exit 0 ;;
+              200) echo "::error::Die Review liefert ohne Anmeldung Daten aus."; exit 1 ;;
+            esac
+            echo "Versuch $attempt: HTTP $status, neuer Versuch in 20 Sekunden"
+            sleep 20
+          done
+          echo "::error::Die Review war nach dem Deploy nicht erreichbar."
+          exit 1

@@ -194,6 +194,21 @@ Löschen, auch per `terraform destroy`, scheitert, bis die Sperre bewusst lokal
 mit Owner-Rechten entfernt wurde. `terraform destroy` betrifft die gesamte
 Infrastruktur im Ordner und braucht vorher eine geprüfte Datensicherung.
 
+Die Review-App und ihre Anmeldekonfiguration schützt Terraform zusätzlich mit
+`prevent_destroy`: Ein Plan, der eine von beiden löschen oder neu anlegen würde,
+bricht ab, auch `terraform destroy`. Eine neu angelegte Review ist zunächst nur
+intern erreichbar; öffentlich schaltet sie erst `review_public`, nachdem die
+Anmeldung steht. Für einen bewussten Neuaufbau `prevent_destroy` lokal
+entfernen und die drei Teile zusammen ersetzen, mit denselben lokalen Werten
+wie oben:
+
+```powershell
+terraform -chdir=infrastructure apply -replace=azurerm_container_app.review -replace=azapi_resource.review_auth -replace=azapi_resource_action.review_public
+```
+
+Nach jedem Deploy prüft die Pipeline, dass die Review ohne Anmeldung nur mit
+302 (Umleitung zum Login) oder 401 antwortet.
+
 ## Lokaler Hybrid-Lauf (StepStone/Remotely)
 
 StepStone und Remotely liefern aus Azure keine Treffer; sie laufen einmal
@@ -251,7 +266,7 @@ Anmeldung, RBAC und TLS, nicht an der Netzwerkgrenze.
 
 | Ressource | Eigentlicher Zugriffsschutz |
 | --- | --- |
-| Review-Container-App | Easy Auth (Entra ID), nur das eigene Konto (`review.tf`) |
+| Review-Container-App | Easy Auth (Entra ID), nur das eigene Konto; öffentlich erst nach der Anmeldekonfiguration, jeder Deploy prüft den Zugriff ohne Login (`review.tf`) |
 | PostgreSQL | TLS mit `sslmode=verify-full` und das Passwort der Rolle `jobfinder_app`; Firewall: Azure-Dienste (`0.0.0.0`, jede Subscription) und `local-review` |
 | Blob Storage | RBAC, Kontoschlüssel abgeschaltet; Schreibrechte nur auf `application-documents` |
 | Key Vault | RBAC: `Key Vault Secrets User` für Worker und Review, `Secrets Officer` nur für das eigene Konto |

@@ -36,11 +36,11 @@ resource "azurerm_container_app" "review" {
     identity            = azurerm_user_assigned_identity.jobfinder.id
   }
 
-  # Öffentlich erreichbar über HTTPS (von Azure automatisch bereitgestellt).
-  # Wird erst zusammen mit der Auth-Konfiguration unten scharf geschaltet;
-  # siehe azapi_resource.review_auth.
+  # Beim Anlegen nur innerhalb der Umgebung erreichbar. Öffentlich (HTTPS,
+  # von Azure bereitgestellt) schaltet sie erst azapi_resource_action.review_public,
+  # nachdem die Anmeldung (azapi_resource.review_auth) steht.
   ingress {
-    external_enabled = true
+    external_enabled = false
     target_port      = 8765
     transport        = "auto"
     traffic_weight {
@@ -102,8 +102,13 @@ resource "azurerm_container_app" "review" {
   tags = azurerm_resource_group.jobfinder.tags
 
   # Wie beim Worker: Die App-Version setzt die CI/CD-Pipeline, nicht Terraform.
+  # Den öffentlichen Zugang setzt review_public; Terraform dreht ihn hier nicht
+  # zurück. Ein Löschen oder Neuanlegen verweigert Terraform: Ohne die
+  # Anmeldung wären Bewerbungsdaten kurz öffentlich. Einen bewussten Neuaufbau
+  # beschreibt docs/operations.md.
   lifecycle {
-    ignore_changes = [template[0].container[0].image]
+    ignore_changes  = [template[0].container[0].image, ingress[0].external_enabled]
+    prevent_destroy = true
   }
 
   depends_on = [
@@ -114,9 +119,8 @@ resource "azurerm_container_app" "review" {
 
 # Easy Auth (Microsoft-Entra-ID-Anmeldung). azurerm bildet diese Ressource
 # noch nicht ab; azapi spricht dafür direkt die Azure-Resource-Manager-API an.
-# Liegt im selben Apply wie die Container App. Das hält die Zeit ohne Anmeldung
-# kurz, schließt sie aber nicht aus: Terraform legt die Konfiguration erst nach
-# der App an.
+# Terraform legt sie nach der App an; öffentlich wird die App erst danach
+# (review_public).
 resource "azapi_resource" "review_auth" {
   type      = "Microsoft.App/containerApps/authConfigs@2024-03-01"
   name      = "current"
@@ -153,4 +157,32 @@ resource "azapi_resource" "review_auth" {
       }
     }
   }
+
+  # Wie bei der App: Ohne diese Konfiguration wäre die Review offen.
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+# Schaltet die Review erst öffentlich, wenn die Anmeldung konfiguriert ist; so
+# gibt es beim Neuaufbau keinen Moment ohne Login. Bei der bestehenden,
+# schon öffentlichen App ändert dieser PATCH nichts. Läuft die Aktion nicht,
+# bleibt die App intern: Das Deploy scheitert dann an der Zugangsprüfung,
+# statt die Daten offenzulegen.
+resource "azapi_resource_action" "review_public" {
+  type        = "Microsoft.App/containerApps@2024-03-01"
+  resource_id = azurerm_container_app.review.id
+  method      = "PATCH"
+
+  body = {
+    properties = {
+      configuration = {
+        ingress = {
+          external = true
+        }
+      }
+    }
+  }
+
+  depends_on = [azapi_resource.review_auth]
 }

@@ -20,7 +20,7 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "~> 4.81"
+      version = "~> 5.7"
     }
     # Nur für die eine Ressource, die azurerm (noch) nicht abbildet: die
     # Auth-Konfiguration der Review-Container-App (Easy Auth).

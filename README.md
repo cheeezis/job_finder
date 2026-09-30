@@ -30,9 +30,10 @@ serves a job search in Germany. This page is the English overview.
   build and apply; production deploys wait for manual approval and roll out only
   the current `main`.
 - **Supply chain:** builds install the exact versions from `uv.lock`, actions are
-  pinned to commit SHAs, and the image runs as a non-root user. CI scans the image
-  and the Terraform code with Trivy, analyses the code with CodeQL, and Dependabot
-  proposes updates every week.
+  pinned to commit SHAs, and the image runs as a non-root user without pip or uv.
+  CI scans the image and the Terraform code with Trivy; a new Terraform finding
+  fails the pull request, and the accepted ones are documented with a reason.
+  CodeQL analyses the code, and Dependabot proposes updates every week.
 - **Careful data handling:** PostgreSQL with advisory locks and consistent
   snapshot reads; a source that fails never wipes the listings it found before.
 - **Tests:** 460+ Python tests that run in CI against a real PostgreSQL, plus

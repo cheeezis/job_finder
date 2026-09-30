@@ -65,9 +65,12 @@ jobs:
           package-manager-cache: false
       - run: node --test tests/frontend.test.cjs
 
-  # Prüft den Terraform-Code ohne Azure-Zugang: tflint auf Fehler, Trivy auf
-  # unsichere Einstellungen. Bewusste Abwägungen stehen mit Begründung in
-  # infrastructure/.trivyignore.yaml und fehlen deshalb im Bericht.
+  # Prüft den Terraform-Code ohne Azure-Zugang: tflint auf Fehler und
+  # Warnungen, Trivy auf unsichere Einstellungen; jeder neue Befund bricht ab.
+  # Bewusste Abwägungen stehen mit Begründung in infrastructure/.trivyignore.yaml.
+  # Trivy läuft ohne Cache und ohne Regel-Update, also mit den Regeln seiner
+  # festen Version (daher die Log-Zeile "Falling back to embedded checks"):
+  # Neue Regeln kommen nur mit einem Update der Action, nicht in fremden PRs.
   infrastructure-checks:
     name: Infrastructure checks
     runs-on: ubuntu-latest
@@ -84,14 +87,17 @@ jobs:
       - run: tflint --init
         env:
           GITHUB_TOKEN: ${{ github.token }}
-      - run: tflint --format compact --minimum-failure-severity=error
-      - name: Unsichere Einstellungen melden
+      - run: tflint --format compact --minimum-failure-severity=warning
+      - name: Unsichere Einstellungen prüfen
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_SKIP_CHECK_UPDATE: "true"
         with:
           scan-type: config
           scan-ref: infrastructure
           trivyignores: infrastructure/.trivyignore.yaml
-          exit-code: "0"
+          cache: "false"
+          exit-code: "1"
 
   # Nur bei Pull Requests: zeigt, was ein Merge an der Infrastruktur ändern
   # würde. Rein lesend, kein apply - unabhängig vom Testergebnis interessant.

@@ -32,9 +32,10 @@ Der [GitHub-Workflow](../.github/workflows/checks.yml) testet Python 3.11 und
 3.13 auf Linux mit PostgreSQL, prüft Stil, Frontend und ob `uv.lock` zu
 `pyproject.toml` passt. Bei Pull Requests baut er außerdem das Image, startet es
 kurz als eingeschränkter Benutzer und prüft es mit Trivy auf bekannte Lücken;
-tflint und Trivy prüfen den Terraform-Code (bewusste Abwägungen stehen mit
-Begründung in [.trivyignore.yaml](../infrastructure/.trivyignore.yaml)), und
-ein `terraform plan` gegen den gespeicherten State (`-refresh=false`) zeigt die
+tflint und Trivy prüfen den Terraform-Code und brechen bei jedem neuen Befund
+ab (bewusste Abwägungen stehen mit Begründung in
+[.trivyignore.yaml](../infrastructure/.trivyignore.yaml)), und ein
+`terraform plan` gegen den gespeicherten State (`-refresh=false`) zeigt die
 Folgen für Azure (nicht für Forks und Dependabot, die keinen Azure-Zugang
 haben). CodeQL analysiert Python,
 JavaScript und die Workflows ([codeql.yml](../.github/workflows/codeql.yml)),

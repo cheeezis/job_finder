@@ -155,8 +155,9 @@ az keyvault secret set --vault-name <key-vault> --name JobfinderProfile --file p
 
 Jeder Lauf nennt im Abschnitt „Steckbriefe (Agent)“, warum der Agent nicht lief
 oder wie viele Steckbriefe fertig, abgebrochen oder offen sind und was der Tag
-gekostet hat. `agent.reasoning_effort` stellt den Denkaufwand ein (Standard
-`medium`).
+gekostet hat. Bricht der Agent ab oder stoppt er vor der letzten Stelle, etwa an
+der Tagesgrenze, meldet das zusätzlich eine Warnung in Discord.
+`agent.reasoning_effort` stellt den Denkaufwand ein (Standard `medium`).
 
 **Kostenschutz:** Vor jedem Modell- und Werkzeugaufruf prüft der Kostenwächter
 (`job_finder/agent/cost_guard.py`) den Schalter, den hinterlegten Preis, das

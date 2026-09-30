@@ -12,6 +12,7 @@ from job_finder.workflow.notifications import (
     discord_embed,
     process_notifications,
     run_summary_payload,
+    send_warning,
 )
 
 
@@ -248,6 +249,27 @@ class NotificationTests(unittest.TestCase):
         )
         self.assertIn("1 erfolgreich", embed["description"])
         self.assertEqual(embed["color"], 0xD99A2B)
+
+    def test_warning_is_one_orange_embed_without_mentions(self):
+        client = FakeClient()
+
+        error = send_warning(
+            "Job Finder · Steckbriefe", "Agent abgebrochen: RuntimeError", webhook_url=None, client=client
+        )
+
+        self.assertIsNone(error)
+        (payload,) = client.payloads
+        embed = payload["embeds"][0]
+        self.assertEqual(embed["title"], "Job Finder · Steckbriefe")
+        self.assertEqual(embed["description"], "Agent abgebrochen: RuntimeError")
+        self.assertEqual(embed["color"], 0xD99A2B)
+        self.assertEqual(payload["allowed_mentions"], {"parse": []})
+
+    def test_a_warning_that_cannot_be_sent_says_why(self):
+        failing = FakeClient(error=NotificationError("Discord ist nicht erreichbar"))
+
+        self.assertEqual(send_warning("t", "x", webhook_url=None), "DISCORD_WEBHOOK_URL ist nicht gesetzt")
+        self.assertEqual(send_warning("t", "x", webhook_url=None, client=failing), "Discord ist nicht erreichbar")
 
 
 class StateCompatibilityTests(unittest.TestCase):

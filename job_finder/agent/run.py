@@ -23,9 +23,11 @@ from job_finder.persistence.agent_usage import spent_today_and_this_month
 from job_finder.persistence.fact_sheets import fact_sheets
 from job_finder.persistence.postgres_store import read_jobs
 from job_finder.persistence.storage import dataset_name
+from job_finder.workflow.notifications import send_warning
 from job_finder.workflow.review_data import load_review_jobs
 
 ENDPOINT_ENV = "JOBFINDER_OPENAI_ENDPOINT"
+WARNING_TITLE = "Job Finder · Steckbriefe"
 # The worker job ends after 60 minutes and the finder itself needs about 10.
 RUN_SECONDS = 35 * 60
 
@@ -55,6 +57,7 @@ def agent_phase(run_id=None, values=USER_SETTINGS, environ=os.environ):
         # The finder's results are saved already; only the agent's part fails.
         print(f"  Agent abgebrochen: {type(error).__name__}")
         log_event("agent_failed", run_id=run_id, level="error", error=type(error).__name__)
+        warn(f"Agent abgebrochen: {type(error).__name__}", environ)
         return None
     print(
         f"  {stats['fertig']} fertig · {stats['abgebrochen']} abgebrochen · "
@@ -63,12 +66,23 @@ def agent_phase(run_id=None, values=USER_SETTINGS, environ=os.environ):
     )
     if stats["stopp"]:
         print(f"  Stopp: {stats['stopp']}")
+        warn(f"Agent gestoppt: {stats['stopp']} · {stats['offen']} offen", environ)
     log_event(
         "agent_completed",
         run_id=run_id,
         **{key: str(value) if key.endswith("_eur") else value for key, value in stats.items()},
     )
     return stats
+
+
+def warn(text, environ):
+    """Report in Discord that the agent did not finish normally.
+
+    The worker job still succeeds, so no failed-run alert shows it.
+    """
+    error = send_warning(WARNING_TITLE, text, webhook_url=environ.get("DISCORD_WEBHOOK_URL"))
+    if error:
+        print(f"  Discord-Warnung: {error}")
 
 
 def run_agent(settings, profile_text, client, clock=time.monotonic, today=None):

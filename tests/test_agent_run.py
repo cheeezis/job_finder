@@ -44,17 +44,22 @@ class AgentPhaseTests(unittest.TestCase):
                 self.assertIsNone(result)
                 self.assertIn(message, text)
 
-    def test_an_agent_failure_never_breaks_the_finder_run(self):
+    def test_an_agent_failure_never_breaks_the_finder_run_but_warns_in_discord(self):
+        warning = Mock(return_value=None)
         result, text = phase(
             ENABLED,
-            ENDPOINT,
+            {**ENDPOINT, "DISCORD_WEBHOOK_URL": "https://discord.example/hook"},
             configured_profile=Mock(return_value=("version: 5", "profile.local.yaml")),
             model_client=Mock(),
             run_agent=Mock(side_effect=RuntimeError("kaputt")),
+            send_warning=warning,
         )
 
         self.assertIsNone(result)
         self.assertIn("Agent abgebrochen: RuntimeError", text)
+        warning.assert_called_once_with(
+            "Job Finder · Steckbriefe", "Agent abgebrochen: RuntimeError", webhook_url="https://discord.example/hook"
+        )
 
     def test_a_finished_run_reports_its_numbers(self):
         stats = {
@@ -66,17 +71,43 @@ class AgentPhaseTests(unittest.TestCase):
             "monat_eur": Decimal("3.5"),
         }
 
+        warning = Mock(return_value="DISCORD_WEBHOOK_URL ist nicht gesetzt")
         result, text = phase(
             ENABLED,
             ENDPOINT,
             configured_profile=Mock(return_value=("version: 5", "JOBFINDER_PROFILE")),
             model_client=Mock(),
             run_agent=Mock(return_value=stats),
+            send_warning=warning,
         )
 
         self.assertEqual(result, stats)
         self.assertIn("12 fertig · 1 abgebrochen · 4 offen · heute 1,00 € von 1,00 €", text)
         self.assertIn("Stopp: Tagesgrenze erreicht", text)
+        self.assertEqual(warning.call_args.args[1], "Agent gestoppt: Tagesgrenze erreicht: 1,00 € von 1,00 € · 4 offen")
+        self.assertIn("Discord-Warnung: DISCORD_WEBHOOK_URL ist nicht gesetzt", text)
+
+    def test_a_run_that_finishes_its_jobs_sends_no_warning(self):
+        warning = Mock(return_value=None)
+        stats = {
+            "fertig": 3,
+            "abgebrochen": 0,
+            "offen": 0,
+            "stopp": "",
+            "heute_eur": Decimal("0.12"),
+            "monat_eur": Decimal("1.5"),
+        }
+
+        phase(
+            ENABLED,
+            ENDPOINT,
+            configured_profile=Mock(return_value=("version: 5", "JOBFINDER_PROFILE")),
+            model_client=Mock(),
+            run_agent=Mock(return_value=stats),
+            send_warning=warning,
+        )
+
+        warning.assert_not_called()
 
     def test_the_agent_gets_the_places_the_profile_refers_to(self):
         values = {

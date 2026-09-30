@@ -103,9 +103,12 @@ resource "azurerm_container_app" "review" {
 
   # Wie beim Worker: Die App-Version setzt die CI/CD-Pipeline, nicht Terraform.
   # Den öffentlichen Zugang setzt review_public; Terraform dreht ihn hier nicht
-  # zurück.
+  # zurück. Ein Löschen oder Neuanlegen verweigert Terraform: Ohne die
+  # Anmeldung wären Bewerbungsdaten kurz öffentlich. Einen bewussten Neuaufbau
+  # beschreibt docs/operations.md.
   lifecycle {
-    ignore_changes = [template[0].container[0].image, ingress[0].external_enabled]
+    ignore_changes  = [template[0].container[0].image, ingress[0].external_enabled]
+    prevent_destroy = true
   }
 
   depends_on = [
@@ -153,6 +156,11 @@ resource "azapi_resource" "review_auth" {
         }
       }
     }
+  }
+
+  # Wie bei der App: Ohne diese Konfiguration wäre die Review offen.
+  lifecycle {
+    prevent_destroy = true
   }
 }
 

@@ -17,13 +17,13 @@ dependencies = [
     "python-dotenv>=1.0,<2",
     "azure-storage-blob>=12.24,<13",
     "azure-identity>=1.19,<2",
-    "openai>=2.54,<3",
+    "openai>=2.54,<4",
     "langgraph>=1.2,<2",
     "langchain-openai>=1.6,<2",
 ]
 
 [dependency-groups]
-dev = ["ruff==0.16.7"]
+dev = ["ruff==0.16.9"]
 
 [tool.uv]
 # The code runs from the checkout (run_finder.py, python -m job_finder.review),

@@ -1,5 +1,8 @@
 # Wöchentliche Update-PRs, je Ökosystem gebündelt: Die festen Versionen aus
 # uv.lock, die SHA-Pins der Actions und die Image-Digests bleiben so aktuell.
+# Hauptversionen und den Wechsel auf ein neues Python schlägt Dependabot nicht
+# vor: Solche Sprünge (etwa azurerm 5 oder openai 3) brauchen Tests, einen
+# Terraform-Plan mit Azure-Zugang und oft Codeänderungen, also einen eigenen PR.
 version: 2
 updates:
   - package-ecosystem: uv
@@ -9,6 +12,9 @@ updates:
     groups:
       python:
         patterns: ["*"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
@@ -17,6 +23,9 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: docker
     directory: /
@@ -25,6 +34,13 @@ updates:
     groups:
       images:
         patterns: ["*"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+      # CI und die lokale .venv laufen mit 3.13; neue Builds von 3.13-slim
+      # kommen weiter, der Tag bleibt dabei 3.13.
+      - dependency-name: "python"
+        versions: [">= 3.14"]
 
   - package-ecosystem: terraform
     directory: /infrastructure
@@ -33,3 +49,6 @@ updates:
     groups:
       terraform:
         patterns: ["*"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]

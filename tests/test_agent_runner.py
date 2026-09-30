@@ -1,13 +1,11 @@
-"""Tests for the agent loop of one job, with a fake model instead of real calls."""
+"""Tests for the agent graph of one job: the real LangChain model talks to a fake HTTP endpoint."""
 
 import json
 import unittest
 from datetime import date
-from types import SimpleNamespace
 from unittest.mock import ANY, patch
 
 import httpx
-import openai
 
 from job_finder.agent import cost_guard, runner
 from job_finder.agent.cost_guard import AgentStopped, CostGuard
@@ -43,8 +41,12 @@ TOKENS = {"input_tokens": 9000, "output_tokens": 800}
 
 
 def reply(response_id, *output, searches=0, status="completed", usage=TOKENS):
+    """One Responses API answer as Azure sends it, including the billed search count."""
     return {
         "id": response_id,
+        "object": "response",
+        "created_at": 1790000000,
+        "model": runner.MODEL,
         "status": status,
         "output": list(output),
         "usage": usage,
@@ -53,40 +55,48 @@ def reply(response_id, *output, searches=0, status="completed", usage=TOKENS):
 
 
 def message(text):
-    return {"type": "message", "content": [{"type": "output_text", "text": text}]}
+    content = [{"type": "output_text", "text": text, "annotations": []}]
+    return {"type": "message", "id": "msg_1", "role": "assistant", "status": "completed", "content": content}
 
 
 def decisions_call(call_id="call_1"):
     arguments = json.dumps({"company": "Beispiel GmbH", "title_keywords": ["Python"]})
-    return {"type": "function_call", "name": "past_decisions", "arguments": arguments, "call_id": call_id}
+    return {
+        "type": "function_call",
+        "id": f"fc_{call_id}",
+        "name": "past_decisions",
+        "arguments": arguments,
+        "call_id": call_id,
+        "status": "completed",
+    }
 
 
 class FakeModel:
-    """Answers with prepared replies and remembers every request."""
+    """Answers the model's HTTP requests with prepared replies and remembers every request."""
 
     def __init__(self, *replies):
         self.replies, self.requests, self.deleted = list(replies), [], []
-        self.responses = self
+        transport = httpx.MockTransport(self.handle)
+        self.model = runner.agent_model("https://example.test/openai/v1/", "test", max_retries=0, transport=transport)
 
-    def create(self, **request):
-        self.requests.append(request)
+    def handle(self, request):
+        if request.method == "DELETE":
+            response_id = request.url.path.rsplit("/", 1)[-1]
+            self.deleted.append(response_id)
+            return httpx.Response(200, json={"id": response_id, "object": "response", "deleted": True})
+        self.requests.append(json.loads(request.content))
         answer = self.replies.pop(0)
         if isinstance(answer, Exception):
             raise answer
-        return SimpleNamespace(model_dump=lambda: answer)
-
-    def delete(self, response_id):
-        self.deleted.append(response_id)
+        return answer if isinstance(answer, httpx.Response) else httpx.Response(200, json=answer)
 
 
 def api_error(kind, retry_after="7"):
-    request = httpx.Request("POST", "https://example.com/openai/v1/responses")
     if kind == "bad_request":
-        return openai.BadRequestError("abgelehnt", response=httpx.Response(400, request=request), body=None)
+        return httpx.Response(400, json={"error": {"message": "abgelehnt", "code": "invalid_prompt"}})
     if kind == "rate_limit":
-        response = httpx.Response(429, headers={"retry-after": retry_after}, request=request)
-        return openai.RateLimitError("gedrosselt", response=response, body=None)
-    return openai.APIConnectionError(request=request)
+        return httpx.Response(429, headers={"retry-after": retry_after}, json={"error": {"message": "gedrosselt"}})
+    return httpx.ConnectError("Verbindung abgebrochen")
 
 
 class AgentRunnerTests(unittest.TestCase):
@@ -102,8 +112,15 @@ class AgentRunnerTests(unittest.TestCase):
 
     def run_job(self, model, settings=SETTINGS):
         guard = CostGuard(settings, runner.MODEL)
-        outcome = runner.write_fact_sheet(JOB, "version: 5\n", guard, model, settings, date(2026, 9, 25))
+        outcome = runner.write_fact_sheet(JOB, "version: 5\n", guard, model.model, settings, date(2026, 9, 25))
         return outcome, guard
+
+    def test_the_graph_loops_between_model_and_tools(self):
+        graph = runner.job_graph("job:1", "", None, None, SETTINGS, set(), []).get_graph()
+
+        edges = {(edge.source, edge.target) for edge in graph.edges}
+
+        self.assertEqual(edges, {("__start__", "model"), ("model", "tools"), ("model", "__end__"), ("tools", "model")})
 
     def test_a_tool_round_ends_in_a_stored_fact_sheet(self):
         model = FakeModel(
@@ -115,7 +132,7 @@ class AgentRunnerTests(unittest.TestCase):
         self.assertEqual(outcome, "fertig")
         first, second = model.requests
         self.assertIn("# Profil des Nutzers\n\nversion: 5", first["instructions"])
-        self.assertIn("Stelle: Junior Python Developer", first["input"][0]["content"])
+        self.assertIn("Stelle: Junior Python Developer", json.dumps(first["input"], ensure_ascii=False))
         self.assertIn(runner.WEB_SEARCH_TOOL, first["tools"])
         self.assertEqual(first["max_tool_calls"], 3)
         self.assertEqual(second["previous_response_id"], "resp_1")
@@ -143,7 +160,7 @@ class AgentRunnerTests(unittest.TestCase):
         model = FakeModel(reply("resp_1", answer, searches=1))
 
         runner.write_fact_sheet(
-            job, "version: 5\n", CostGuard(SETTINGS, runner.MODEL), model, SETTINGS, date(2026, 9, 25)
+            job, "version: 5\n", CostGuard(SETTINGS, runner.MODEL), model.model, SETTINGS, date(2026, 9, 25)
         )
 
         self.assertEqual(

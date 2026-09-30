@@ -2,7 +2,7 @@
 
 It runs after the finder has saved its results and never breaks the finder
 run. It only starts when the switch is on, a model endpoint is configured
-(the Azure worker has one, the local hybrid run not) and a profile exists.
+(the Azure worker and the local hybrid run have one) and a profile exists.
 """
 
 import os
@@ -10,12 +10,11 @@ import time
 from datetime import date
 
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
-from openai import OpenAI
 
 from job_finder.agent.cost_guard import AgentStopped, CostGuard, euro
 from job_finder.agent.instructions import profile_with_places
 from job_finder.agent.profile import configured_profile
-from job_finder.agent.runner import MODEL, write_fact_sheet
+from job_finder.agent.runner import MODEL, agent_model, write_fact_sheet
 from job_finder.agent.settings import agent_settings
 from job_finder.console import log_event
 from job_finder.matching.user_settings import USER_SETTINGS
@@ -128,10 +127,11 @@ def shown_by_default(job):
 
 
 def model_client(endpoint, environ=os.environ):
-    """Client for the Azure deployment, signed in with Entra ID instead of a key.
+    """Model for the Azure deployment, signed in with Entra ID instead of a key.
 
-    In Azure the worker's managed identity signs in, locally the az login.
+    In Azure the worker's managed identity signs in, in the hybrid container
+    the service principal from the environment, otherwise the az login.
     """
     credential = DefaultAzureCredential(managed_identity_client_id=environ.get("JOBFINDER_MANAGED_IDENTITY_CLIENT_ID"))
     token = get_bearer_token_provider(credential, "https://cognitiveservices.azure.com/.default")
-    return OpenAI(base_url=f"{endpoint.rstrip('/')}/openai/v1/", api_key=token, timeout=120, max_retries=2)
+    return agent_model(f"{endpoint.rstrip('/')}/openai/v1/", token)

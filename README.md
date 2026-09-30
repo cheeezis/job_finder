@@ -20,8 +20,9 @@ der eigenen Azure-Subscription und dessen Suchanfragen an die Bing-Suche.
   Beschäftigungsart, Reisetätigkeit und IT-Eignung; Junior-Hybrid-Sonderfälle
   und internationale Stellen lassen sich im Review zuschalten
 - Review mit Interessant, Rückfrage, Ignorieren und Bewerben sowie eigener Notiz
-- optionaler KI-Agent, der vorgefilterten Stellen einen Steckbrief mit Ampeln,
-  Fazit und Kurzgrund schreibt, begrenzt durch einen mehrstufigen Kostenschutz
+- optionaler KI-Agent (LangGraph und LangChain auf Azure OpenAI), der
+  vorgefilterten Stellen einen Steckbrief mit Ampeln, Fazit und Kurzgrund
+  schreibt, begrenzt durch einen mehrstufigen Kostenschutz
 - Bewerbungsübersicht mit Verlauf, Gesprächsterminen, Gehaltsvorstellung (pro
   Monat oder Jahr eingegeben, als Jahresbrutto gespeichert) und Statistik
 - Discord-Karten für neue Stellen und eine Laufstatistik; Quellenfehler bleiben
@@ -130,7 +131,8 @@ Einrichtung, Backups, Azure und Zugriffswege beschreibt der
 ## KI-Agent und Kostenschutz
 
 Nach jedem Finder-Lauf in Azure und im Hybrid-Lauf schreibt der Agent
-(`job_finder/agent/`) für die besten wartenden Stellen einen Steckbrief: sieben
+(`job_finder/agent/`, ein LangGraph-Graph mit einem LangChain-Modell auf dem
+eigenen Azure OpenAI) für die besten wartenden Stellen einen Steckbrief: sieben
 Ampelzeilen (Status, Berufseinstieg, Fachlicher Fit, Lücken, Homeoffice /
 Standort, Reiseanteil, Gehalt), bis zu zwei Zusatzzeilen, Fazit und Kurzgrund.
 Er nimmt unentschiedene, im Standard-Review sichtbare Stellen ohne Steckbrief,

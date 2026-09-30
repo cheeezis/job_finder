@@ -178,9 +178,9 @@ try {
 }
 ```
 
-Der Server kostet mit Standardspeicher etwa 15 EUR im Monat (vor Steuern, ohne
-Registry und Logs) und läuft auch zwischen den Finder-Läufen. Pausieren spart nur Rechenleistung, nicht den
-Speicher; ein gestoppter Server startet nach sieben Tagen von selbst wieder:
+Der Server läuft auch zwischen den Finder-Läufen (Preise unter
+[Kosten](#kosten)). Pausieren spart nur Rechenleistung, nicht den Speicher; ein
+gestoppter Server startet nach sieben Tagen von selbst wieder:
 
 ```powershell
 $jobfinderPostgresServer = terraform -chdir=infrastructure output -raw postgres_server_name
@@ -257,6 +257,26 @@ Danach die Objekt-ID des Service Principals (`az ad sp show --id <appId> --query
 als `local_docker_sp_object_id` in `infrastructure/variables.tf` eintragen und
 die Rollenzuweisungen anwenden.
 
+## Kosten
+
+Listenpreise in Frankreich Mitte, ohne Steuern, laut Azure Retail Prices API am
+30.09.2026:
+
+| Posten | Art | Etwa pro Monat |
+| --- | --- | --- |
+| PostgreSQL Flexible Server B1ms mit 32 GiB | fix | 15,55 € (11,90 € Rechenleistung, 3,65 € Speicher) |
+| Container Registry Basic | fix | 4,35 € |
+| Container Apps (Finder-Job, Review) | nach Nutzung | blieb bisher im kostenlosen Monatskontingent |
+| Log Analytics, Blob Storage, Metrik-Alarme | nach Nutzung | Cent-Beträge |
+| Sprachmodell und Websuche des Agenten | nach Nutzung | wenige Cent je Steckbrief, höchstens 1 € am Tag und 20 € im Monat (Standardgrenzen) |
+
+Der Server läuft derzeit über ein kostenloses Kontingent der Subscription;
+danach kommen die 15,55 € hinzu. Das Monatsbudget von 25 € in
+`infrastructure/monitoring.tf` deckt Registry und die Grenze des Agenten und
+muss dann auf gut 40 € steigen, sonst meldet es jeden Monat eine
+Überschreitung. Ein Budget warnt nur, es stoppt nichts; die harten Grenzen
+setzt der Kostenwächter des Agenten.
+
 ## Zugriffswege
 
 Die Container-Apps-Umgebung läuft im Consumption-Profil ohne VNet-Integration:
@@ -280,11 +300,16 @@ drei getrennten Identitäten (`infrastructure/cicd.tf`): Apply mit
 plus Schreibzugriff auf den `tfstate`-Container, Build nur mit `AcrPush` und
 `Reader` auf der Registry, Plan für Pull Requests nur lesend.
 
-**Warum kein VNet und keine Private Endpoints:** VNet-Integration im
-Consumption-Profil braucht eine feste ausgehende Adresse (NAT Gateway, ab etwa
-20 EUR im Monat), jeder Private Endpoint kostet zusätzlich, und Azure
-veröffentlicht für das Consumption-Profil keine IP-Bereiche, mit denen sich die
-Firewall enger fassen ließe. Für einen Nutzer ohne Daten Dritter und ohne
-Compliance-Vorgabe tragen TLS, RBAC und Passwort die Absicherung. Kämen mehrere
-Nutzer oder Bewerberdaten Dritter hinzu, wäre das der erste Punkt, der sich
-ändern sollte.
+**Warum kein VNet und keine Private Endpoints:** Technisch ginge es, denn die
+Workload-Profile-Umgebung unterstützt VNet-Integration auch im
+Consumption-Profil. Der Netzwerktyp lässt sich aber nur beim Anlegen einer
+Umgebung festlegen, der Umstieg wäre also ein Umzug in eine neue Umgebung. Ein
+Private Endpoint (etwa 6,30 € im Monat) ließe die Container dann privat auf die
+Datenbank zugreifen, und die Regel für alle Azure-Dienste könnte entfallen; der
+Zugriff vom eigenen Rechner bliebe über `local-review` möglich. Ein vollständig
+privater Server schlösse dagegen Hybrid-Lauf und Admin-Zugriff ohne VPN aus. Ein
+NAT Gateway (etwa 31 € im Monat samt öffentlicher IP) wäre nur für eine feste
+ausgehende Adresse nötig, etwa um die Firewall auf die Container zu begrenzen.
+Für einen Nutzer ohne Daten Dritter und ohne Compliance-Vorgabe tragen TLS, RBAC
+und das Passwort der App-Rolle die Absicherung. Kämen mehrere Nutzer oder
+Bewerberdaten Dritter hinzu, wäre das der erste Punkt, der sich ändern sollte.

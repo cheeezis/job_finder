@@ -91,6 +91,29 @@ class CostGuardTests(unittest.TestCase):
         cost = call_cost("gpt-5-mini", ROUND)
         self.assertEqual(self.record.call_args_list, [call("job:1", "gpt-5-mini", ROUND, cost)] * 7)
 
+    def test_a_given_ledger_replaces_the_shared_one(self):
+        class Ledger:
+            def __init__(self):
+                self.total, self.jobs = Decimal(0), []
+
+            def spent(self):
+                return self.total, self.total
+
+            def record(self, job_id, model, usage, cost):
+                self.total += cost
+                self.jobs.append(job_id)
+
+        ledger = Ledger()
+        settings = agent_settings({"agent": {"enabled": True, "job_max_cost_eur": 0.02, "daily_max_cost_eur": 0.03}})
+
+        outcome = run_fake_agent(CostGuard(settings, "gpt-5-mini", ledger), ["job:1", "job:2"])
+
+        # Three rounds of about 0.77 cent use up the job's 2 cents, the fourth the day's 3 cents.
+        self.assertEqual(outcome, [("job:1", "Stelle abgebrochen"), ("job:2", "Agent gestoppt")])
+        self.assertEqual(ledger.jobs, ["job:1"] * 3 + ["job:2"])
+        self.spent.assert_not_called()
+        self.record.assert_not_called()
+
     def test_missing_token_counts_book_the_job_maximum(self):
         guard = CostGuard(ENABLED, "gpt-5-mini")
         guard.start_job("job:1")

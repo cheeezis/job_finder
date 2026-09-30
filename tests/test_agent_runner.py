@@ -7,7 +7,7 @@ from unittest.mock import ANY, patch
 
 import httpx
 
-from job_finder.agent import cost_guard, runner
+from job_finder.agent import cost_guard, runner, tools
 from job_finder.agent.cost_guard import AgentStopped, CostGuard
 from job_finder.agent.fact_sheet import FIXED_LINES
 from job_finder.agent.pricing import Usage, call_cost
@@ -168,6 +168,31 @@ class AgentRunnerTests(unittest.TestCase):
             ["https://example.com/jobs/1", "https://firma.example/karriere/", "https://news.example/remote"],
         )
         self.assertEqual(model.requests[0]["include"], ["web_search_call.action.sources"])
+
+    def test_a_draft_comes_back_unstored_with_the_dropped_sources(self):
+        sheet = example_sheet()
+        sheet["quellen"] = ["https://example.com/jobs/1", "https://erfunden.example/handbuch"]
+        model = FakeModel(reply("resp_1", message(json.dumps(sheet))))
+        guard = CostGuard(SETTINGS, runner.MODEL)
+
+        draft, dropped = runner.draft_fact_sheet(JOB, "version: 5\n", guard, model.model, SETTINGS, date(2026, 9, 25))
+
+        self.assertEqual(draft["quellen"], ["https://example.com/jobs/1"])
+        self.assertEqual(dropped, ["https://erfunden.example/handbuch"])
+        self.saved.assert_not_called()
+        self.aborted.assert_not_called()
+        self.assertEqual(model.deleted, ["resp_1"])
+
+    def test_given_decisions_replace_the_stored_ones(self):
+        rows = [("job:9", "Python Developer", "Beispiel GmbH", "ignored", None, "Zu weit weg.", date(2026, 9, 1))]
+        model = FakeModel(reply("resp_1", decisions_call()), reply("resp_2", message(json.dumps(example_sheet()))))
+        guard = CostGuard(SETTINGS, runner.MODEL)
+
+        with patch.object(runner, "past_decisions", wraps=tools.past_decisions):
+            runner.draft_fact_sheet(JOB, "version: 5\n", guard, model.model, SETTINGS, date(2026, 9, 25), rows)
+
+        output = json.loads(model.requests[1]["input"][0]["output"])
+        self.assertEqual([entry["notiz"] for entry in output["entscheidungen"]], ["Zu weit weg."])
 
     def test_the_search_is_withdrawn_once_the_budget_is_used(self):
         model = FakeModel(

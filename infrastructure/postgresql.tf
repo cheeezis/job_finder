@@ -30,8 +30,11 @@ resource "azurerm_postgresql_flexible_server" "jobfinder" {
 
   # Azure wählt die verfügbare Zone bei der Erstellung. Diese Wahl beibehalten,
   # statt beim nächsten Plan eine Änderung auf einen leeren Wert zu verlangen.
+  # Einen Plan, der den Server löschen oder neu anlegen würde, bricht Terraform
+  # ab (docs/operations.md).
   lifecycle {
-    ignore_changes = [zone]
+    ignore_changes  = [zone]
+    prevent_destroy = true
   }
 
   tags = azurerm_resource_group.jobfinder.tags
@@ -73,6 +76,10 @@ resource "azurerm_postgresql_flexible_server_database" "jobfinder" {
   server_id = azurerm_postgresql_flexible_server.jobfinder.id
   charset   = "UTF8"
   collation = "en_US.utf8"
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 # Löschsperre für den Server mit den Review-Entscheidungen: Die Serverbackups

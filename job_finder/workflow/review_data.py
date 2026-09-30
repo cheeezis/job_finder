@@ -11,7 +11,7 @@ from job_finder.persistence.database import snapshot
 from job_finder.persistence.fact_sheets import fact_sheets
 from job_finder.persistence.storage import dataset_name, read_json
 from job_finder.workflow.applications import is_application
-from job_finder.workflow.memory import load_memory, memory_source_links, preferred_memory_id
+from job_finder.workflow.memory import load_memory, memory_id_finder, memory_source_links, preferred_memory_id
 from job_finder.workflow.reporting import is_international_listing
 
 PERSISTED_REVIEW_STATUSES = {WorkflowStatus.INTERESTING.value, WorkflowStatus.INQUIRY.value}
@@ -131,28 +131,3 @@ def remembered_review_job(job_id, entry):
     }
     job["international"] = is_international_listing(job)
     return job
-
-
-def memory_id_finder(memory):
-    """Find each recommendation's memory rows, in memory order, via one per-request URL index."""
-    index = {}
-    for memory_id, entry in memory.items():
-        for url in entry.get("source_urls", []):
-            index.setdefault(url, []).append(memory_id)
-    positions = {memory_id: position for position, memory_id in enumerate(memory)}
-
-    def find(job):
-        found = {memory_id for url in job_urls(job) for memory_id in index.get(url, [])}
-        if job["id"] in memory:
-            found.add(job["id"])
-        return sorted(found, key=positions.__getitem__)
-
-    return find
-
-
-def job_urls(job):
-    """Return the listing URLs a recommendation can be matched by."""
-    urls = {link.get("url") for link in job.get("source_links", []) if isinstance(link, dict) and link.get("url")}
-    if job.get("url"):
-        urls.add(job["url"])
-    return urls

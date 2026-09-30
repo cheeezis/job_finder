@@ -19,6 +19,7 @@ class WorkflowStatus(str, Enum):
     REJECTED = "rejected"
     NO_RESPONSE = "no_response"
     OFFER = "offer"
+    WITHDRAWN = "withdrawn"
     CLOSED = "closed"
 
 
@@ -29,6 +30,7 @@ APPLICATION_STATUSES = (
     WorkflowStatus.REJECTED.value,
     WorkflowStatus.NO_RESPONSE.value,
     WorkflowStatus.OFFER.value,
+    WorkflowStatus.WITHDRAWN.value,
     WorkflowStatus.CLOSED.value,
 )
 

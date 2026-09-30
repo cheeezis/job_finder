@@ -14,10 +14,10 @@ Blob Storage), ihre Metadaten und Zuordnung stehen in PostgreSQL.
 Aus dem Repository-Stamm in PowerShell:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe scripts/setup_postgres.py
+uv sync
+uv run python scripts/setup_postgres.py
 docker compose --env-file .env.postgres up -d --wait
-.\.venv\Scripts\python.exe -m job_finder.db init
+uv run python -m job_finder.db init
 ```
 
 Der Setup-Befehl erzeugt einmalig ein zufälliges Passwort in `.env.postgres`.

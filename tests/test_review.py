@@ -524,8 +524,12 @@ class ReviewTests(unittest.TestCase):
                     self.assertIn('src="/app.js"', page)
                     self.assertNotIn("<style", page)
                     self.assertNotIn("style=", page)
+                    self.assertNotIn("<script>", page)
                     self.assertEqual(response.headers["Cache-Control"], "no-store")
-                    self.assertIn("frame-ancestors 'none'", response.headers["Content-Security-Policy"])
+                    policy = response.headers["Content-Security-Policy"]
+                    self.assertIn("frame-ancestors 'none'", policy)
+                    self.assertIn("script-src 'self';", policy)
+                    self.assertNotIn("unsafe-inline", policy)
             with urlopen(base_url + "/review?job=job%3A1") as response:
                 targeted = response.read()
             self.assertEqual(targeted, (PACKAGE / "review.html").read_bytes())

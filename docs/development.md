@@ -5,34 +5,41 @@ stehen in [Bedienung](bedienung.md), der Betrieb in [Betrieb](operations.md).
 
 ## Arbeitsumgebung und Prüfungen
 
-Python 3.11 oder neuer wird benötigt. Die Befehle laufen im Repository-Stamm.
-Unter Windows muss die virtuelle Umgebung nicht aktiviert werden:
+Python 3.11 oder neuer und [uv](https://docs.astral.sh/uv/) werden benötigt.
+Die Befehle laufen im Repository-Stamm; `uv run` nutzt die `.venv`, ohne dass
+sie aktiviert werden muss:
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-.\.venv\Scripts\python.exe -m ruff check .
-.\.venv\Scripts\python.exe -m ruff format --check .
-.\.venv\Scripts\python.exe scripts/test_postgres.py
+uv sync
+uv run ruff check .
+uv run ruff format --check .
+uv run python scripts/test_postgres.py
 node --test tests/frontend.test.cjs
 ```
 
-Unter Linux/macOS lautet der Interpreterpfad `.venv/bin/python`. Node.js wird
-nur für die Frontend-Tests benötigt; die CI verwendet Node.js 24. Für den
-Python-Betrieb reicht `requirements.txt`. `requirements-dev.txt` installiert
-zusätzlich die festgelegte Ruff-Version, damit lokale Prüfung und CI dieselben
-Formatierungsregeln verwenden.
+Die Abhängigkeiten stehen mit Versionsbereichen in `pyproject.toml`, die exakten
+Versionen in `uv.lock`; CI und Image installieren genau diese. Nach einer
+Änderung an `pyproject.toml` aktualisiert `uv lock` das Lockfile, sonst scheitert
+die CI. Die Gruppe `dev` enthält die festgelegte Ruff-Version, damit lokale
+Prüfung und CI dieselben Formatierungsregeln verwenden. Node.js wird nur für die
+Frontend-Tests benötigt; die CI verwendet Node.js 24.
 
 Die Tests verwenden lokale Fixtures, temporäre Datenpfade, eine separate
 PostgreSQL-Testdatenbank ([Betrieb](operations.md#lokale-datenbank)) und
 ersetzte Netzwerkzugriffe; ein vollständiger Finder-Lauf gehört nicht dazu.
 
 Der [GitHub-Workflow](../.github/workflows/checks.yml) testet Python 3.11 und
-3.13 auf Linux mit PostgreSQL, prüft Stil und Frontend und zeigt bei Pull
-Requests einen `terraform plan` gegen den gespeicherten State
-(`-refresh=false`). Nach einem Merge auf `main` baut er das Image, pusht es in
-die Registry, wendet nach manueller Freigabe im Environment `production`
-Terraform an und rollt das Image auf Worker und Review aus. Ein neuerer Deploy
+3.13 auf Linux mit PostgreSQL, prüft Stil, Frontend und ob `uv.lock` zu
+`pyproject.toml` passt. Bei Pull Requests baut er außerdem das Image, startet es
+kurz als eingeschränkter Benutzer und prüft es mit Trivy auf bekannte Lücken;
+tflint und Trivy prüfen den Terraform-Code, und ein `terraform plan` gegen den
+gespeicherten State (`-refresh=false`) zeigt die Folgen für Azure (nicht für
+Forks und Dependabot, die keinen Azure-Zugang haben). CodeQL analysiert Python,
+JavaScript und die Workflows ([codeql.yml](../.github/workflows/codeql.yml)),
+Dependabot schlägt wöchentlich Updates vor, und alle Actions sind auf
+Commit-SHAs festgelegt. Nach einem Merge auf `main` baut er das Image, prüft es
+erneut, pusht es in die Registry, wendet nach manueller Freigabe im Environment
+`production` Terraform an und rollt das Image auf Worker und Review aus. Ein neuerer Deploy
 bricht einen älteren, noch wartenden ab, und nach der Freigabe rollt er nur aus,
 wenn sein Commit noch der aktuelle `main` ist. Terraform verwaltet die
 Image-Version nicht; ein lokales `terraform apply` setzt die App also nie
@@ -358,9 +365,9 @@ Konfiguration steht in [pyproject.toml](../pyproject.toml).
 Automatisch formatieren und anschließend prüfen:
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check --select I --fix .
-.\.venv\Scripts\python.exe -m ruff format .
-.\.venv\Scripts\python.exe -m ruff check .
+uv run ruff check --select I --fix .
+uv run ruff format .
+uv run ruff check .
 ```
 
 Der Linter prüft Form und häufige Fehler. Ob ein Docstring das tatsächliche

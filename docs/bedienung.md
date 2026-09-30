@@ -52,13 +52,14 @@ lässt den bisherigen Stand unverändert.
 ## Einrichtung
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+uv sync
 Copy-Item user_settings.example.yaml user_settings.local.yaml
 ```
 
-Benötigt werden Python 3.11 oder neuer und PostgreSQL
-([Einrichtung der Datenbank](operations.md#lokale-datenbank)).
+Benötigt werden Python 3.11 oder neuer, [uv](https://docs.astral.sh/uv/) (etwa
+per `python -m pip install --user uv`) und PostgreSQL
+([Einrichtung der Datenbank](operations.md#lokale-datenbank)). `uv sync` legt
+`.venv` an und installiert genau die Versionen aus `uv.lock`.
 
 `user_settings.local.yaml` (von Git ignoriert) enthält Suchort, Radius,
 Pendlerorte, fachliche Stichwörter und die Grenzen des Agenten. Ohne die Datei
@@ -213,9 +214,9 @@ Den Ablauf eines Laufs beschreibt die
 ## Tests und Entwicklung
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-.\.venv\Scripts\python.exe scripts/test_postgres.py
-.\.venv\Scripts\python.exe -m ruff check .
+uv sync
+uv run python scripts/test_postgres.py
+uv run ruff check .
 node --test tests/frontend.test.cjs
 ```
 

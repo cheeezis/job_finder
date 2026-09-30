@@ -35,37 +35,74 @@ jobs:
       JOBFINDER_DATABASE_URL: postgresql://jobfinder:ci-test-only@127.0.0.1:5432/jobfinder
       JOBFINDER_TEST_DATABASE_URL: postgresql://jobfinder:ci-test-only@127.0.0.1:5432/jobfinder_test
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          version: "0.12.21"
           python-version: ${{ matrix.python }}
-      - run: python -m pip install -r requirements.txt
-      - run: python scripts/test_postgres.py
+      # Genau die Versionen aus uv.lock; --frozen ändert das Lockfile nie.
+      - run: uv sync --frozen
+      - run: uv run --frozen python scripts/test_postgres.py
 
   style-and-frontend:
     name: Python style and frontend tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          version: "0.12.21"
           python-version: "3.13"
-      - run: python -m pip install -r requirements-dev.txt
-      - run: python -m ruff check .
-      - run: python -m ruff format --check .
-      - uses: actions/setup-node@v7
+      # Scheitert, wenn pyproject.toml ohne passendes uv.lock geändert wurde.
+      - run: uv lock --check
+      - run: uv sync --frozen
+      - run: uv run --frozen ruff check .
+      - run: uv run --frozen ruff format --check .
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24"
           package-manager-cache: false
       - run: node --test tests/frontend.test.cjs
 
+  # Prüft den Terraform-Code ohne Azure-Zugang: tflint auf Fehler, Trivy auf
+  # unsichere Einstellungen. Bewusste Abwägungen (docs/operations.md, etwa der
+  # öffentliche Datenbank-Endpunkt) stehen im Bericht, brechen aber nicht ab.
+  infrastructure-checks:
+    name: Infrastructure checks
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: infrastructure
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: terraform-linters/setup-tflint@6ffdbaa3be476b3431f7275c26966ef32ff60337 # v6.3.2
+        with:
+          tflint_version: v0.64.0
+      - run: tflint --init
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - run: tflint --format compact --minimum-failure-severity=error
+      - name: Unsichere Einstellungen melden
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: config
+          scan-ref: infrastructure
+          exit-code: "0"
+
   # Nur bei Pull Requests: zeigt, was ein Merge an der Infrastruktur ändern
   # würde. Rein lesend, kein apply - unabhängig vom Testergebnis interessant.
+  # Pull Requests aus Forks und von Dependabot haben keinen Azure-Zugang; für
+  # sie entfällt der Plan, das Apply nach dem Merge plant ohnehin vollständig.
   terraform-plan:
     name: Terraform plan
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: >-
+      github.event_name == 'pull_request'
+      && github.event.pull_request.head.repo.full_name == github.repository
+      && github.event.pull_request.user.login != 'dependabot[bot]'
     timeout-minutes: 10
     permissions:
       contents: read
@@ -74,8 +111,8 @@ jobs:
       run:
         working-directory: infrastructure
     steps:
-      - uses: actions/checkout@v7
-      - uses: hashicorp/setup-terraform@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
           terraform_version: "1.16.2"
       # Eigene Identität, die nur lesen darf. Ohne Sperre (-lock=false), weil
@@ -83,7 +120,7 @@ jobs:
       # Nachladen aus Azure (-refresh=false): azurerm liest die Container Apps
       # per listSecrets, und das liefert die echten Geheimniswerte. Der Plan
       # vergleicht Code mit dem State; das Apply lädt weiterhin vollständig nach.
-      - uses: azure/login@v3
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID_PLAN }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
@@ -98,6 +135,35 @@ jobs:
           TF_VAR_postgres_client_ipv4: ${{ secrets.POSTGRES_CLIENT_IPV4 }}
           TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
           TF_VAR_review_fqdn: ${{ secrets.REVIEW_FQDN }}
+
+  # Baut das Image schon im Pull Request, startet es kurz als Probe und prüft
+  # es auf bekannte Lücken; ein kaputtes Dockerfile fällt so vor dem Merge auf.
+  container:
+    name: Container image
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: docker build -t jobfinder:check .
+      - name: Probestart als eingeschränkter Benutzer
+        run: >-
+          docker run --rm --entrypoint sh jobfinder:check -c
+          'test "$(id -u)" != 0 && touch data/probe && python -c "import run_finder, job_finder.review"'
+      - name: Lücken melden (hoch und kritisch)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: jobfinder:check
+          severity: HIGH,CRITICAL
+          exit-code: "0"
+      - name: Bei behebbaren kritischen Lücken abbrechen
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: jobfinder:check
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          skip-setup-trivy: true
 
   # Baut und pusht nur, wenn die Tests auf main erfolgreich waren.
   # Tag = Commit-SHA statt manueller Versionsnummer: eindeutig, kein
@@ -114,19 +180,29 @@ jobs:
     outputs:
       image_tag: ${{ steps.tag.outputs.tag }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: tag
         run: echo "tag=sha-${GITHUB_SHA:0:12}" >> "$GITHUB_OUTPUT"
       # Eigene Identität, die nur Images hochladen darf - nicht die des Applys.
-      - uses: azure/login@v3
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID_BUILD }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       - run: az acr login --name acrjobfinder
-      - run: |
-          docker build -t acrjobfinder.azurecr.io/jobfinder:${{ steps.tag.outputs.tag }} .
-          docker push acrjobfinder.azurecr.io/jobfinder:${{ steps.tag.outputs.tag }}
+      - run: docker build -t acrjobfinder.azurecr.io/jobfinder:${{ steps.tag.outputs.tag }} .
+      - name: Probestart als eingeschränkter Benutzer
+        run: >-
+          docker run --rm --entrypoint sh acrjobfinder.azurecr.io/jobfinder:${{ steps.tag.outputs.tag }} -c
+          'test "$(id -u)" != 0 && touch data/probe && python -c "import run_finder, job_finder.review"'
+      - name: Bei behebbaren kritischen Lücken abbrechen
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: acrjobfinder.azurecr.io/jobfinder:${{ steps.tag.outputs.tag }}
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - run: docker push acrjobfinder.azurecr.io/jobfinder:${{ steps.tag.outputs.tag }}
 
   # Aktualisiert Worker und Review-App auf das neue Image. Läuft im
   # production-Environment: GitHub hält hier an, bis der hinterlegte
@@ -150,7 +226,7 @@ jobs:
       run:
         working-directory: infrastructure
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Die Concurrency-Gruppe ordnet nach Ankunft, nicht nach Commit: Ein
       # älterer Lauf, dessen Image später fertig wird, käme nach dem neueren
       # an. Geprüft wird nach der Freigabe, direkt vor dem Ausrollen.
@@ -161,10 +237,10 @@ jobs:
             echo "::error::Veralteter Stand ${GITHUB_SHA::12}, main steht auf ${latest::12}. Deploy abgebrochen."
             exit 1
           fi
-      - uses: hashicorp/setup-terraform@v4
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
           terraform_version: "1.16.2"
-      - uses: azure/login@v3
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}

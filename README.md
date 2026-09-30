@@ -29,6 +29,10 @@ serves a job search in Germany. This page is the English overview.
   GitHub Actions sign in to Azure with OIDC, using separate identities for plan,
   build and apply; production deploys wait for manual approval and roll out only
   the current `main`.
+- **Supply chain:** builds install the exact versions from `uv.lock`, actions are
+  pinned to commit SHAs, and the image runs as a non-root user. CI scans the image
+  and the Terraform code with Trivy, analyses the code with CodeQL, and Dependabot
+  proposes updates every week.
 - **Careful data handling:** PostgreSQL with advisory locks and consistent
   snapshot reads; a source that fails never wipes the listings it found before.
 - **Tests:** 460+ Python tests that run in CI against a real PostgreSQL, plus
@@ -89,31 +93,32 @@ the review app.
 
 | Area | Technology |
 | --- | --- |
-| Language | Python 3.11+ (CI tests 3.11 and 3.13) |
+| Language | Python 3.11+ (CI tests 3.11 and 3.13), dependencies locked with uv |
 | AI agent | LangGraph, LangChain (`langchain-openai`), Azure OpenAI `gpt-5-mini` |
 | Data | PostgreSQL 18 with psycopg 3, Azure Blob Storage |
 | Web app | Python standard-library HTTP server, vanilla JavaScript |
 | Cloud | Azure Container Apps (job and app), Database for PostgreSQL Flexible Server, Key Vault, Container Registry, Monitor |
 | Infrastructure | Terraform (`azurerm`, `azapi`), Docker |
 | CI/CD | GitHub Actions with OIDC and environment approval |
-| Quality | `unittest` against PostgreSQL, `node:test`, Ruff |
+| Quality | `unittest` against PostgreSQL, `node:test`, Ruff, CodeQL, Trivy, tflint, Dependabot |
 
 ## Quickstart (local)
 
-Requirements: Python 3.11 or newer and Docker; Node.js 18 or newer only for the
-frontend tests. From the repository root in PowerShell:
+Requirements: Python 3.11 or newer, [uv](https://docs.astral.sh/uv/) (for example
+`python -m pip install --user uv`) and Docker; Node.js 18 or newer only for the
+frontend tests. From the repository root:
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe scripts/setup_postgres.py
+uv sync
+uv run python scripts/setup_postgres.py
 docker compose --env-file .env.postgres up -d --wait
-.\.venv\Scripts\python.exe -m job_finder.db init
-.\.venv\Scripts\python.exe run_finder.py
-.\.venv\Scripts\python.exe -m job_finder.review
+uv run python -m job_finder.db init
+uv run python run_finder.py
+uv run python -m job_finder.review
 ```
 
-The review opens at `http://127.0.0.1:8765`. Without `user_settings.local.yaml`
+`uv sync` installs exactly the versions in `uv.lock` into `.venv`. The review
+opens at `http://127.0.0.1:8765`. Without `user_settings.local.yaml`
 the anonymised example settings apply. The agent stays off until
 `agent.enabled: true` is set and an Azure OpenAI endpoint and a profile are
 configured.

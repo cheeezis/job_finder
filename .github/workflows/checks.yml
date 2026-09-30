@@ -35,8 +35,8 @@ jobs:
       JOBFINDER_DATABASE_URL: postgresql://jobfinder:ci-test-only@127.0.0.1:5432/jobfinder
       JOBFINDER_TEST_DATABASE_URL: postgresql://jobfinder:ci-test-only@127.0.0.1:5432/jobfinder_test
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           version: "0.12.21"
           python-version: ${{ matrix.python }}
@@ -49,8 +49,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           version: "0.12.21"
           python-version: "3.13"
@@ -59,7 +59,7 @@ jobs:
       - run: uv sync --frozen
       - run: uv run --frozen ruff check .
       - run: uv run --frozen ruff format --check .
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24"
           package-manager-cache: false
@@ -77,8 +77,8 @@ jobs:
       run:
         working-directory: infrastructure
     steps:
-      - uses: actions/checkout@v7
-      - uses: terraform-linters/setup-tflint@v6.3.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: terraform-linters/setup-tflint@6ffdbaa3be476b3431f7275c26966ef32ff60337 # v6.3.2
         with:
           tflint_version: v0.64.0
       - run: tflint --init
@@ -86,7 +86,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
       - run: tflint --format compact --minimum-failure-severity=error
       - name: Unsichere Einstellungen melden
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: config
           scan-ref: infrastructure
@@ -111,8 +111,8 @@ jobs:
       run:
         working-directory: infrastructure
     steps:
-      - uses: actions/checkout@v7
-      - uses: hashicorp/setup-terraform@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
           terraform_version: "1.16.2"
       # Eigene Identität, die nur lesen darf. Ohne Sperre (-lock=false), weil
@@ -120,7 +120,7 @@ jobs:
       # Nachladen aus Azure (-refresh=false): azurerm liest die Container Apps
       # per listSecrets, und das liefert die echten Geheimniswerte. Der Plan
       # vergleicht Code mit dem State; das Apply lädt weiterhin vollständig nach.
-      - uses: azure/login@v3
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID_PLAN }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
@@ -144,20 +144,20 @@ jobs:
     if: github.event_name == 'pull_request'
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: docker build -t jobfinder:check .
       - name: Probestart als eingeschränkter Benutzer
         run: >-
           docker run --rm --entrypoint sh jobfinder:check -c
           'test "$(id -u)" != 0 && touch data/probe && python -c "import run_finder, job_finder.review"'
       - name: Lücken melden (hoch und kritisch)
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: jobfinder:check
           severity: HIGH,CRITICAL
           exit-code: "0"
       - name: Bei behebbaren kritischen Lücken abbrechen
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: jobfinder:check
           severity: CRITICAL
@@ -180,11 +180,11 @@ jobs:
     outputs:
       image_tag: ${{ steps.tag.outputs.tag }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: tag
         run: echo "tag=sha-${GITHUB_SHA:0:12}" >> "$GITHUB_OUTPUT"
       # Eigene Identität, die nur Images hochladen darf - nicht die des Applys.
-      - uses: azure/login@v3
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID_BUILD }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
@@ -196,7 +196,7 @@ jobs:
           docker run --rm --entrypoint sh acrjobfinder.azurecr.io/jobfinder:${{ steps.tag.outputs.tag }} -c
           'test "$(id -u)" != 0 && touch data/probe && python -c "import run_finder, job_finder.review"'
       - name: Bei behebbaren kritischen Lücken abbrechen
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: acrjobfinder.azurecr.io/jobfinder:${{ steps.tag.outputs.tag }}
           severity: CRITICAL
@@ -226,7 +226,7 @@ jobs:
       run:
         working-directory: infrastructure
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Die Concurrency-Gruppe ordnet nach Ankunft, nicht nach Commit: Ein
       # älterer Lauf, dessen Image später fertig wird, käme nach dem neueren
       # an. Geprüft wird nach der Freigabe, direkt vor dem Ausrollen.
@@ -237,10 +237,10 @@ jobs:
             echo "::error::Veralteter Stand ${GITHUB_SHA::12}, main steht auf ${latest::12}. Deploy abgebrochen."
             exit 1
           fi
-      - uses: hashicorp/setup-terraform@v4
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
           terraform_version: "1.16.2"
-      - uses: azure/login@v3
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}

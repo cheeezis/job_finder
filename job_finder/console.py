@@ -21,7 +21,8 @@ def log_event(event, *, run_id, level="info", **fields):
 
     Alongside the human-readable progress output, so Azure Log Analytics
     receives a parseable JSON string in Log_s instead of only free text;
-    query it with e.g. `Log_s | extend e = parse_json(Log_s)`.
+    query it with e.g. `Log_s | extend e = parse_json(Log_s)`. A run log
+    (operations.RunLog) writes the line without its timestamp prefix.
     """
     entry = {
         "timestamp": datetime.now(UTC).isoformat(timespec="seconds"),
@@ -30,7 +31,12 @@ def log_event(event, *, run_id, level="info", **fields):
         "level": level,
         **fields,
     }
-    print(json.dumps(entry, ensure_ascii=False))
+    line = json.dumps(entry, ensure_ascii=False)
+    writer = getattr(sys.stdout, "write_event", None)
+    if writer is not None:
+        writer(line)
+    else:
+        print(line)
 
 
 def configure_utf8_output():

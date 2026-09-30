@@ -1,11 +1,12 @@
 """Tests for readable console progress output."""
 
 import io
+import json
 import unittest
 from contextlib import redirect_stdout
 from unittest.mock import patch
 
-from job_finder.console import print_phase, print_progress, progress_line
+from job_finder.console import log_event, print_phase, print_progress, progress_line
 from job_finder.operations import TeeStream
 
 
@@ -80,3 +81,25 @@ class ConsoleProgressTests(unittest.TestCase):
         lines = output.getvalue().splitlines()
         self.assertRegex(lines[0], r"^\d{4}-\d{2}-\d{2}T.* Message continued$")
         self.assertRegex(lines[1], r"^\d{4}-\d{2}-\d{2}T.* next$")
+
+    def test_structured_events_stay_parseable_json_lines_in_a_run_log(self):
+        output, log = io.StringIO(), io.StringIO()
+        stream = TeeStream(output, log)
+        stream.write("Quellen werden geladen")
+        with redirect_stdout(stream):
+            log_event("run_finished", run_id="abc123", duration_seconds=4.2)
+
+        for text in (output.getvalue(), log.getvalue()):
+            first, event = text.splitlines()
+            self.assertRegex(first, r"^\d{4}-\d{2}-\d{2}T.* Quellen werden geladen$")
+            self.assertEqual(json.loads(event)["event"], "run_finished")
+
+    def test_structured_events_clear_an_active_progress_line(self):
+        terminal, log = FakeTerminal(), io.StringIO()
+        stream = TeeStream(terminal, log)
+        stream.write_progress("[##--] StepStone")
+        with redirect_stdout(stream):
+            log_event("source_completed", run_id="abc123")
+
+        self.assertRegex(terminal.getvalue(), r"\r +\r\{")
+        self.assertEqual(json.loads(log.getvalue())["event"], "source_completed")

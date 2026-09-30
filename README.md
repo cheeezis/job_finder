@@ -100,20 +100,21 @@ the review app.
 
 ## Quickstart (local)
 
-Requirements: Python 3.11 or newer and Docker; Node.js 18 or newer only for the
-frontend tests. From the repository root in PowerShell:
+Requirements: Python 3.11 or newer, [uv](https://docs.astral.sh/uv/) (for example
+`python -m pip install --user uv`) and Docker; Node.js 18 or newer only for the
+frontend tests. From the repository root:
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe scripts/setup_postgres.py
+uv sync
+uv run python scripts/setup_postgres.py
 docker compose --env-file .env.postgres up -d --wait
-.\.venv\Scripts\python.exe -m job_finder.db init
-.\.venv\Scripts\python.exe run_finder.py
-.\.venv\Scripts\python.exe -m job_finder.review
+uv run python -m job_finder.db init
+uv run python run_finder.py
+uv run python -m job_finder.review
 ```
 
-The review opens at `http://127.0.0.1:8765`. Without `user_settings.local.yaml`
+`uv sync` installs exactly the versions in `uv.lock` into `.venv`. The review
+opens at `http://127.0.0.1:8765`. Without `user_settings.local.yaml`
 the anonymised example settings apply. The agent stays off until
 `agent.enabled: true` is set and an Azure OpenAI endpoint and a profile are
 configured.

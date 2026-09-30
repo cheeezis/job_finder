@@ -5,23 +5,24 @@ stehen in [Bedienung](bedienung.md), der Betrieb in [Betrieb](operations.md).
 
 ## Arbeitsumgebung und Prüfungen
 
-Python 3.11 oder neuer wird benötigt. Die Befehle laufen im Repository-Stamm.
-Unter Windows muss die virtuelle Umgebung nicht aktiviert werden:
+Python 3.11 oder neuer und [uv](https://docs.astral.sh/uv/) werden benötigt.
+Die Befehle laufen im Repository-Stamm; `uv run` nutzt die `.venv`, ohne dass
+sie aktiviert werden muss:
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-.\.venv\Scripts\python.exe -m ruff check .
-.\.venv\Scripts\python.exe -m ruff format --check .
-.\.venv\Scripts\python.exe scripts/test_postgres.py
+uv sync
+uv run ruff check .
+uv run ruff format --check .
+uv run python scripts/test_postgres.py
 node --test tests/frontend.test.cjs
 ```
 
-Unter Linux/macOS lautet der Interpreterpfad `.venv/bin/python`. Node.js wird
-nur für die Frontend-Tests benötigt; die CI verwendet Node.js 24. Für den
-Python-Betrieb reicht `requirements.txt`. `requirements-dev.txt` installiert
-zusätzlich die festgelegte Ruff-Version, damit lokale Prüfung und CI dieselben
-Formatierungsregeln verwenden.
+Die Abhängigkeiten stehen mit Versionsbereichen in `pyproject.toml`, die exakten
+Versionen in `uv.lock`; CI und Image installieren genau diese. Nach einer
+Änderung an `pyproject.toml` aktualisiert `uv lock` das Lockfile, sonst scheitert
+die CI. Die Gruppe `dev` enthält die festgelegte Ruff-Version, damit lokale
+Prüfung und CI dieselben Formatierungsregeln verwenden. Node.js wird nur für die
+Frontend-Tests benötigt; die CI verwendet Node.js 24.
 
 Die Tests verwenden lokale Fixtures, temporäre Datenpfade, eine separate
 PostgreSQL-Testdatenbank ([Betrieb](operations.md#lokale-datenbank)) und
@@ -358,9 +359,9 @@ Konfiguration steht in [pyproject.toml](../pyproject.toml).
 Automatisch formatieren und anschließend prüfen:
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check --select I --fix .
-.\.venv\Scripts\python.exe -m ruff format .
-.\.venv\Scripts\python.exe -m ruff check .
+uv run ruff check --select I --fix .
+uv run ruff format .
+uv run ruff check .
 ```
 
 Der Linter prüft Form und häufige Fehler. Ob ein Docstring das tatsächliche

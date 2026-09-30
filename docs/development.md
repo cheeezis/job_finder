@@ -1,7 +1,7 @@
 # Entwicklung am Job Finder
 
 Diese Anleitung beschreibt Aufbau und Entwicklung. Einrichtung und Bedienung
-stehen in der [README](../README.md), der Betrieb in [Betrieb](operations.md).
+stehen in [Bedienung](bedienung.md), der Betrieb in [Betrieb](operations.md).
 
 ## Arbeitsumgebung und Prüfungen
 
@@ -220,7 +220,7 @@ Beim Ergänzen einer Quelle:
 4. Parser und Quellenausfälle mit kleinen Fixtures testen: reguläre Anzeige,
    fehlende optionale Felder, Teilfehler und Cache-/Schließungsfälle. Keine
    kompletten fremden Webseiten mit Trackingdaten als Fixtures übernehmen.
-5. Quelle und besondere Einschränkungen in der README ergänzen.
+5. Quelle und besondere Einschränkungen in [Bedienung](bedienung.md) ergänzen.
 
 Adapter erhalten weder Datenbankverantwortung noch persönliche
 Workflow-Entscheidungen. Sie liefern Anzeigen und ihre Herkunft; Filter und

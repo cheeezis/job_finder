@@ -1,4 +1,8 @@
-# Job Finder
+# Bedienung, Regeln und Betrieb
+
+Die deutsche Anleitung zum Job Finder. Eine englische Übersicht mit Architektur
+steht in der [README](../README.md), Betrieb und Entwicklung beschreiben
+[Betrieb](operations.md) und die [Entwickleranleitung](development.md).
 
 Ein Python-Job-Finder für IT-Einstiegsstellen. Er sammelt Anzeigen aus mehreren
 Quellen, führt gleiche Stellen zusammen, filtert klare Fehlgriffe regelbasiert
@@ -54,7 +58,7 @@ Copy-Item user_settings.example.yaml user_settings.local.yaml
 ```
 
 Benötigt werden Python 3.11 oder neuer und PostgreSQL
-([Einrichtung der Datenbank](docs/operations.md#lokale-datenbank)).
+([Einrichtung der Datenbank](operations.md#lokale-datenbank)).
 
 `user_settings.local.yaml` (von Git ignoriert) enthält Suchort, Radius,
 Pendlerorte, fachliche Stichwörter und die Grenzen des Agenten. Ohne die Datei
@@ -127,7 +131,7 @@ Geänderte Bewertungsregeln wirken ab dem nächsten Finder-Lauf.
   schreibt ein Log und meldet Fehlschläge in Discord.
 
 Einrichtung, Backups, Azure und Zugriffswege beschreibt der
-[Betrieb](docs/operations.md).
+[Betrieb](operations.md).
 
 ## KI-Agent und Kostenschutz
 
@@ -181,7 +185,7 @@ jeweils mit einer Rolle, die an der Bereitstellung nichts ändern kann.
 ## Regeln im Überblick
 
 Den Ablauf eines Laufs beschreibt die
-[Entwickleranleitung](docs/development.md#datenfluss-eines-finder-laufs).
+[Entwickleranleitung](development.md#datenfluss-eines-finder-laufs).
 
 - **Alter:** Automatisch gefundene Anzeigen, deren bekanntes
   Veröffentlichungsdatum mehr als 60 Tage zurückliegt, fallen heraus; ein
@@ -216,8 +220,8 @@ node --test tests/frontend.test.cjs
 ```
 
 Die Python-Tests brauchen eine eigene Testdatenbank
-([Betrieb](docs/operations.md#lokale-datenbank)), Node.js ab Version 18 nur
-die Frontend-Tests. Die [Entwickleranleitung](docs/development.md) erklärt
+([Betrieb](operations.md#lokale-datenbank)), Node.js ab Version 18 nur
+die Frontend-Tests. Die [Entwickleranleitung](development.md) erklärt
 Aufbau, Datenfluss, neue Quellen und Stilregeln. GitHub Actions prüfen jeden
 Pull Request; nach einem Merge auf `main` rollen sie Infrastruktur und Image
 erst nach manueller Freigabe aus.
@@ -228,7 +232,7 @@ job_finder/sources/    Quellenadapter
 job_finder/agent/      KI-Agent mit Kostenschutz
 scripts/               Einrichtung, Tests und lokaler Hybrid-Lauf
 infrastructure/        Terraform für Azure
-docs/                  Entwickler- und Betriebsdoku
+docs/                  Bedienung, Betrieb und Entwicklung (deutsch)
 tests/                 automatisierte Tests
 run_finder.py          Einstieg für einen Finder-Lauf
 review_jobs.bat        Start der lokalen Oberfläche
@@ -237,4 +241,4 @@ data/                  lokale Laufdaten (nicht versioniert)
 
 ## Lizenz
 
-MIT, siehe `LICENSE`.
+MIT, siehe [LICENSE](../LICENSE).

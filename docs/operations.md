@@ -1,7 +1,7 @@
 # Betrieb
 
 Einrichtung der Datenbank, Backups, Azure, der lokale Hybrid-Lauf und die
-Zugriffswege. Bedienung steht in der [README](../README.md), Aufbau und
+Zugriffswege. Bedienung steht in [Bedienung](bedienung.md), Aufbau und
 Entwicklung in der [Entwickleranleitung](development.md).
 
 PostgreSQL ist der einzige Laufzeitspeicher für Stellenbestand, Entscheidungen,

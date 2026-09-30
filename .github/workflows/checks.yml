@@ -65,12 +65,44 @@ jobs:
           package-manager-cache: false
       - run: node --test tests/frontend.test.cjs
 
+  # Prüft den Terraform-Code ohne Azure-Zugang: tflint auf Fehler, Trivy auf
+  # unsichere Einstellungen. Bewusste Abwägungen (docs/operations.md, etwa der
+  # öffentliche Datenbank-Endpunkt) stehen im Bericht, brechen aber nicht ab.
+  infrastructure-checks:
+    name: Infrastructure checks
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: infrastructure
+    steps:
+      - uses: actions/checkout@v7
+      - uses: terraform-linters/setup-tflint@v6.3.2
+        with:
+          tflint_version: v0.64.0
+      - run: tflint --init
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - run: tflint --format compact --minimum-failure-severity=error
+      - name: Unsichere Einstellungen melden
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: config
+          scan-ref: infrastructure
+          exit-code: "0"
+
   # Nur bei Pull Requests: zeigt, was ein Merge an der Infrastruktur ändern
   # würde. Rein lesend, kein apply - unabhängig vom Testergebnis interessant.
+  # Pull Requests aus Forks und von Dependabot haben keinen Azure-Zugang; für
+  # sie entfällt der Plan, das Apply nach dem Merge plant ohnehin vollständig.
   terraform-plan:
     name: Terraform plan
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: >-
+      github.event_name == 'pull_request'
+      && github.event.pull_request.head.repo.full_name == github.repository
+      && github.event.pull_request.user.login != 'dependabot[bot]'
     timeout-minutes: 10
     permissions:
       contents: read

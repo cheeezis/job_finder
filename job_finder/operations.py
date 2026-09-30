@@ -26,10 +26,8 @@ class TeeStream:
 
     def write(self, text):
         """Write text to both streams, timestamping logs and nonterminal output."""
-        if self.progress_active and text:
-            self.original.write("\r" + (" " * self.progress_width) + "\r")
-            self.progress_active = False
-            self.progress_width = 0
+        if text:
+            self.clear_progress()
         terminal = bool(getattr(self.original, "isatty", lambda: False)())
         for part in text.splitlines(keepends=True):
             prefix = (
@@ -43,6 +41,26 @@ class TeeStream:
         self.original.flush()
         self.log_file.flush()
         return len(text)
+
+    def write_event(self, line):
+        """Write one structured log line unchanged, on a line of its own.
+
+        Log queries parse such a line as JSON, which a timestamp prefix would
+        break; the line carries its own timestamp.
+        """
+        self.clear_progress()
+        text = ("" if self.line_start else "\n") + line + "\n"
+        self.original.write(text)
+        self.log_file.write(text)
+        self.line_start = True
+        self.flush()
+
+    def clear_progress(self):
+        """Remove an active progress line from the terminal before other output."""
+        if self.progress_active:
+            self.original.write("\r" + (" " * self.progress_width) + "\r")
+            self.progress_active = False
+            self.progress_width = 0
 
     def write_progress(self, text, complete=False):
         """Update one terminal line while keeping logs free of redraws."""

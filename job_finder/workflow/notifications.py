@@ -17,6 +17,7 @@ MAX_EMBEDS = 10
 MAX_EMBED_CHARACTERS = 6000
 HEALTH_LABELS = {"partial": "teilweise", "empty": "ohne Treffer", "failed": "fehlgeschlagen"}
 STATE_VERSION = 3
+WARNING_COLOR = 0xD99A2B
 
 
 class NotificationError(RuntimeError):
@@ -159,7 +160,7 @@ def run_summary_payload(summary):
     source_warnings = exceptional_source_text(sources)
     detail_warnings = detail_failure_text(summary.get("detail_failures", []))
     color = (
-        0xD99A2B
+        WARNING_COLOR
         if failed or detail_warnings or any(source["status"] in {"failed", "partial"} for source in sources)
         else 0x2E8B57
     )
@@ -188,6 +189,26 @@ def run_summary_payload(summary):
         "embeds": [{"title": "Job Finder · Lauf abgeschlossen", "description": "\n".join(lines), "color": color}],
         "allowed_mentions": {"parse": []},
     }
+
+
+def send_warning(title, text, *, webhook_url, client=None):
+    """Send one short warning about a part of the run that did not finish normally.
+
+    Return None when it was sent, otherwise the reason as text for the log.
+    """
+    if client is None:
+        if not webhook_url:
+            return "DISCORD_WEBHOOK_URL ist nicht gesetzt"
+        client = DiscordWebhookClient(webhook_url)
+    payload = {
+        "embeds": [{"title": title, "description": text, "color": WARNING_COLOR}],
+        "allowed_mentions": {"parse": []},
+    }
+    try:
+        client.send(payload)
+    except NotificationError as error:
+        return str(error)
+    return None
 
 
 def is_notifiable(job):

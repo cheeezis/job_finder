@@ -19,8 +19,9 @@ RUN --mount=from=uv,source=/uv,target=/usr/local/bin/uv \
     uv sync --frozen --no-dev --no-cache
 
 # Nothing runs pip, and its vendored copies of msgpack and setuptools are old
-# enough for image scans to report them.
-RUN python -m pip uninstall --yes pip
+# enough for image scans to report them. PATH already starts with the venv,
+# which has no pip, so this calls the base image's interpreter directly.
+RUN /usr/local/bin/python -m pip uninstall --yes pip
 
 # Only what the finder and the review run; tests, docs and scripts stay out.
 COPY job_finder ./job_finder

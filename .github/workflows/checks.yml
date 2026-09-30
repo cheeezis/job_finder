@@ -104,6 +104,35 @@ jobs:
           TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
           TF_VAR_review_fqdn: ${{ secrets.REVIEW_FQDN }}
 
+  # Baut das Image schon im Pull Request, startet es kurz als Probe und prüft
+  # es auf bekannte Lücken; ein kaputtes Dockerfile fällt so vor dem Merge auf.
+  container:
+    name: Container image
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker build -t jobfinder:check .
+      - name: Probestart als eingeschränkter Benutzer
+        run: >-
+          docker run --rm --entrypoint sh jobfinder:check -c
+          'test "$(id -u)" != 0 && touch data/probe && python -c "import run_finder, job_finder.review"'
+      - name: Lücken melden (hoch und kritisch)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: jobfinder:check
+          severity: HIGH,CRITICAL
+          exit-code: "0"
+      - name: Bei behebbaren kritischen Lücken abbrechen
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: jobfinder:check
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          skip-setup-trivy: true
+
   # Baut und pusht nur, wenn die Tests auf main erfolgreich waren.
   # Tag = Commit-SHA statt manueller Versionsnummer: eindeutig, kein
   # Koordinationsaufwand, direkt auf den erzeugenden Commit rückführbar.
@@ -129,9 +158,19 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       - run: az acr login --name acrjobfinder
-      - run: |
-          docker build -t acrjobfinder.azurecr.io/jobfinder:${{ steps.tag.outputs.tag }} .
-          docker push acrjobfinder.azurecr.io/jobfinder:${{ steps.tag.outputs.tag }}
+      - run: docker build -t acrjobfinder.azurecr.io/jobfinder:${{ steps.tag.outputs.tag }} .
+      - name: Probestart als eingeschränkter Benutzer
+        run: >-
+          docker run --rm --entrypoint sh acrjobfinder.azurecr.io/jobfinder:${{ steps.tag.outputs.tag }} -c
+          'test "$(id -u)" != 0 && touch data/probe && python -c "import run_finder, job_finder.review"'
+      - name: Bei behebbaren kritischen Lücken abbrechen
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: acrjobfinder.azurecr.io/jobfinder:${{ steps.tag.outputs.tag }}
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - run: docker push acrjobfinder.azurecr.io/jobfinder:${{ steps.tag.outputs.tag }}
 
   # Aktualisiert Worker und Review-App auf das neue Image. Läuft im
   # production-Environment: GitHub hält hier an, bis der hinterlegte

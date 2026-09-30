@@ -63,7 +63,7 @@ eigenen Bewerbungen, keine Zahlen aus dem eigenen Bestand und keine Azure-Namen.
 | `job_finder/app.js`, `landing.js`, `review.js`, `applications.js` und zugehörige HTML-Dateien | Gemeinsame Browser-Helfer, Seitenskripte und Arbeitsansichten |
 | `job_finder/workflow/reporting.py`, `notifications.py` | Review-Ausgabe und Discord-Warteschlange |
 | `job_finder/matching/user_settings.py`, `config.py`; `job_finder/paths.py` | Konfiguration, Suche und lokale Dateipfade |
-| `job_finder/agent/`; `job_finder/persistence/agent_usage.py`, `fact_sheets.py`, `decisions.py` | KI-Agent: Schalter und Grenzen, Profil, Preise und Kostenwächter, Anweisungen, Werkzeuge, Steckbrief-Struktur, Schleife je Stelle und Einbindung in den Lauf; Kostenbuch, Steckbriefe und frühere Entscheidungen in PostgreSQL |
+| `job_finder/agent/`; `job_finder/persistence/agent_usage.py`, `fact_sheets.py`, `decisions.py` | KI-Agent: Schalter und Grenzen, Profil, Preise und Kostenwächter, Anweisungen, Werkzeuge, Steckbrief-Struktur, LangGraph-Graph je Stelle und Einbindung in den Lauf; Kostenbuch, Steckbriefe und frühere Entscheidungen in PostgreSQL |
 
 ### Datenfluss eines Finder-Laufs
 
@@ -134,6 +134,31 @@ sie die Seite vor jeder Sperre und schreibt danach manuelle Quelle, Gedächtnis,
 Job-Snapshot und Empfehlungen in einer gemeinsamen PostgreSQL-Transaktion.
 Mit ausdrücklich anderen Dateipfaden, etwa in Tests, laufen diese
 Schreibvorgänge nacheinander ohne gemeinsame Transaktion.
+
+### KI-Agent
+
+Der Steckbrief einer Stelle entsteht in einem LangGraph-Graphen
+(`job_finder/agent/runner.py`). Der Knoten `model` prüft den Kostenwächter,
+ruft das Modell über `ChatOpenAI` (LangChain, Responses-API des eigenen Azure
+OpenAI) und bucht die Kosten; fordert das Modell Werkzeuge an, führt `tools` sie
+aus und gibt die Ergebnisse zurück. Antwortet das Modell ohne Werkzeugaufruf,
+ist das der Steckbrief; er wird geprüft, seine Quellen werden gegen die
+tatsächlich gesehenen Links abgeglichen und dann gespeichert.
+
+```mermaid
+graph TD
+    start([Stelle]) --> model[model: Kostenwächter, Modellaufruf, Kosten buchen]
+    model -- Werkzeugaufrufe --> tools[tools: past_decisions]
+    tools --> model
+    model -- Steckbrief --> ende([prüfen, Quellen abgleichen, speichern])
+```
+
+Die Bing-Suche läuft als eingebautes Werkzeug im Modellaufruf selbst. Die
+abgerechnete Zahl der Suchen reicht LangChain nicht weiter; `agent_model` liest
+sie deshalb aus der HTTP-Antwort mit. Die Tests schicken das echte
+LangChain-Modell gegen einen simulierten Endpunkt (`httpx.MockTransport`).
+LangSmith-Tracing ist nicht eingerichtet; ohne gesetzte `LANGSMITH_*`-Variablen
+verlässt nichts den eigenen Rechner beziehungsweise Azure.
 
 ## Eine Quelle ergänzen
 

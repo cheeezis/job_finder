@@ -1,0 +1,35 @@
+# Wöchentliche Update-PRs, je Ökosystem gebündelt: Die festen Versionen aus
+# uv.lock, die SHA-Pins der Actions und die Image-Digests bleiben so aktuell.
+version: 2
+updates:
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      python:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      images:
+        patterns: ["*"]
+
+  - package-ecosystem: terraform
+    directory: /infrastructure
+    schedule:
+      interval: weekly
+    groups:
+      terraform:
+        patterns: ["*"]

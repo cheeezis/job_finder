@@ -29,6 +29,10 @@ serves a job search in Germany. This page is the English overview.
   GitHub Actions sign in to Azure with OIDC, using separate identities for plan,
   build and apply; production deploys wait for manual approval and roll out only
   the current `main`.
+- **Supply chain:** builds install the exact versions from `uv.lock`, actions are
+  pinned to commit SHAs, and the image runs as a non-root user. CI scans the image
+  and the Terraform code with Trivy, analyses the code with CodeQL, and Dependabot
+  proposes updates every week.
 - **Careful data handling:** PostgreSQL with advisory locks and consistent
   snapshot reads; a source that fails never wipes the listings it found before.
 - **Tests:** 460+ Python tests that run in CI against a real PostgreSQL, plus
@@ -89,14 +93,14 @@ the review app.
 
 | Area | Technology |
 | --- | --- |
-| Language | Python 3.11+ (CI tests 3.11 and 3.13) |
+| Language | Python 3.11+ (CI tests 3.11 and 3.13), dependencies locked with uv |
 | AI agent | LangGraph, LangChain (`langchain-openai`), Azure OpenAI `gpt-5-mini` |
 | Data | PostgreSQL 18 with psycopg 3, Azure Blob Storage |
 | Web app | Python standard-library HTTP server, vanilla JavaScript |
 | Cloud | Azure Container Apps (job and app), Database for PostgreSQL Flexible Server, Key Vault, Container Registry, Monitor |
 | Infrastructure | Terraform (`azurerm`, `azapi`), Docker |
 | CI/CD | GitHub Actions with OIDC and environment approval |
-| Quality | `unittest` against PostgreSQL, `node:test`, Ruff |
+| Quality | `unittest` against PostgreSQL, `node:test`, Ruff, CodeQL, Trivy, tflint, Dependabot |
 
 ## Quickstart (local)
 

@@ -29,11 +29,17 @@ PostgreSQL-Testdatenbank ([Betrieb](operations.md#lokale-datenbank)) und
 ersetzte Netzwerkzugriffe; ein vollständiger Finder-Lauf gehört nicht dazu.
 
 Der [GitHub-Workflow](../.github/workflows/checks.yml) testet Python 3.11 und
-3.13 auf Linux mit PostgreSQL, prüft Stil und Frontend und zeigt bei Pull
-Requests einen `terraform plan` gegen den gespeicherten State
-(`-refresh=false`). Nach einem Merge auf `main` baut er das Image, pusht es in
-die Registry, wendet nach manueller Freigabe im Environment `production`
-Terraform an und rollt das Image auf Worker und Review aus. Ein neuerer Deploy
+3.13 auf Linux mit PostgreSQL, prüft Stil, Frontend und ob `uv.lock` zu
+`pyproject.toml` passt. Bei Pull Requests baut er außerdem das Image, startet es
+kurz als eingeschränkter Benutzer und prüft es mit Trivy auf bekannte Lücken;
+tflint und Trivy prüfen den Terraform-Code, und ein `terraform plan` gegen den
+gespeicherten State (`-refresh=false`) zeigt die Folgen für Azure (nicht für
+Forks und Dependabot, die keinen Azure-Zugang haben). CodeQL analysiert Python,
+JavaScript und die Workflows ([codeql.yml](../.github/workflows/codeql.yml)),
+Dependabot schlägt wöchentlich Updates vor, und alle Actions sind auf
+Commit-SHAs festgelegt. Nach einem Merge auf `main` baut er das Image, prüft es
+erneut, pusht es in die Registry, wendet nach manueller Freigabe im Environment
+`production` Terraform an und rollt das Image auf Worker und Review aus. Ein neuerer Deploy
 bricht einen älteren, noch wartenden ab, und nach der Freigabe rollt er nur aus,
 wenn sein Commit noch der aktuelle `main` ist. Terraform verwaltet die
 Image-Version nicht; ein lokales `terraform apply` setzt die App also nie

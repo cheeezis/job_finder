@@ -194,11 +194,15 @@ Löschen, auch per `terraform destroy`, scheitert, bis die Sperre bewusst lokal
 mit Owner-Rechten entfernt wurde. `terraform destroy` betrifft die gesamte
 Infrastruktur im Ordner und braucht vorher eine geprüfte Datensicherung.
 
-Die Review-App und ihre Anmeldekonfiguration schützt Terraform zusätzlich mit
-`prevent_destroy`: Ein Plan, der eine von beiden löschen oder neu anlegen würde,
-bricht ab, auch `terraform destroy`. Eine neu angelegte Review ist zunächst nur
-intern erreichbar; öffentlich schaltet sie erst `review_public`, nachdem die
-Anmeldung steht. Für einen bewussten Neuaufbau `prevent_destroy` lokal
+Was Daten oder den Zugangsschutz trägt, schützt Terraform zusätzlich mit
+`prevent_destroy`: Server und Datenbank, Storage-Account und Dokumente-Container,
+den Key Vault sowie die Review-App und ihre Anmeldekonfiguration. Ein Plan, der
+eines davon löschen oder neu anlegen würde, bricht vor dem Apply ab, auch
+`terraform destroy`; ein bewusster Abbau braucht erst eine Codeänderung.
+
+Eine neu angelegte Review ist zunächst nur intern erreichbar; öffentlich
+schaltet sie erst `review_public`, nachdem die Anmeldung steht. Für einen
+bewussten Neuaufbau `prevent_destroy` an App und Anmeldekonfiguration lokal
 entfernen und die drei Teile zusammen ersetzen, mit denselben lokalen Werten
 wie oben:
 

@@ -30,8 +30,11 @@ resource "azurerm_postgresql_flexible_server" "jobfinder" {
 
   # Azure wählt die verfügbare Zone bei der Erstellung. Diese Wahl beibehalten,
   # statt beim nächsten Plan eine Änderung auf einen leeren Wert zu verlangen.
+  # Einen Plan, der den Server löschen oder neu anlegen würde, bricht Terraform
+  # ab (docs/operations.md).
   lifecycle {
-    ignore_changes = [zone]
+    ignore_changes  = [zone]
+    prevent_destroy = true
   }
 
   tags = azurerm_resource_group.jobfinder.tags
@@ -67,12 +70,39 @@ resource "azurerm_postgresql_flexible_server_configuration" "require_tls" {
   value     = "on"
 }
 
+# Mindestens TLS 1.2, Anmeldeversuche und Checkpoints ins Serverlog: Das ist
+# heute schon Azures Voreinstellung. Festgeschrieben gilt es auch nach einer
+# geänderten Voreinstellung, und die Scans sehen es. Alle drei greifen ohne
+# Neustart. Lesbar wird das Serverlog erst mit Log-Download oder einer
+# Diagnoseeinstellung; beides ist derzeit aus.
+resource "azurerm_postgresql_flexible_server_configuration" "min_tls_version" {
+  name      = "ssl_min_protocol_version"
+  server_id = azurerm_postgresql_flexible_server.jobfinder.id
+  value     = "TLSv1.2"
+}
+
+resource "azurerm_postgresql_flexible_server_configuration" "log_connections" {
+  name      = "log_connections"
+  server_id = azurerm_postgresql_flexible_server.jobfinder.id
+  value     = "on"
+}
+
+resource "azurerm_postgresql_flexible_server_configuration" "log_checkpoints" {
+  name      = "log_checkpoints"
+  server_id = azurerm_postgresql_flexible_server.jobfinder.id
+  value     = "on"
+}
+
 # Der Server ist der verwaltete Dienst; darin liegt die eigentliche Jobfinder-DB.
 resource "azurerm_postgresql_flexible_server_database" "jobfinder" {
   name      = "jobfinder"
   server_id = azurerm_postgresql_flexible_server.jobfinder.id
   charset   = "UTF8"
   collation = "en_US.utf8"
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 # Löschsperre für den Server mit den Review-Entscheidungen: Die Serverbackups

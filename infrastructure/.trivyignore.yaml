@@ -1,0 +1,81 @@
+# Bewusste Abwägungen aus dem Trivy-Scan des Terraform-Codes, jede mit Grund.
+# Die CI liest diese Datei (.github/workflows/checks.yml); lokal im Ordner
+# infrastructure: trivy config --ignorefile .trivyignore.yaml .
+# Netz und Kosten im Detail: docs/operations.md.
+misconfigurations:
+  - id: AZU-0012
+    paths: ["**/storage.tf"]
+    statement: >-
+      Keine Netzregeln: Worker und Review in Container Apps sowie die
+      GitHub-Pipeline (Terraform-State) haben keine feste ausgehende IP, und
+      privater Zugang über VNet, Private Endpoint oder NAT kostet laufend.
+      Zugriff nur über Entra ID mit eng gefassten Rollen; Kontoschlüssel und
+      anonymer Lesezugriff sind aus.
+
+  - id: AZU-0013
+    paths: ["**/keyvault.tf"]
+    statement: >-
+      Keine Netzregeln, gleiche Abwägung wie beim Storage. Zugriff nur über
+      Entra ID und RBAC: Die Worker-Identität darf Secrets nur lesen, schreiben
+      darf nur der Owner.
+
+  - id: AZU-0016
+    paths: ["**/keyvault.tf"]
+    statement: >-
+      Soft Delete ist immer aktiv und hält gelöschte Secrets 90 Tage
+      wiederherstellbar, prevent_destroy verhindert versehentliches Löschen per
+      Terraform. Purge Protection lässt sich nie wieder abschalten und würde
+      den Vault-Namen nach einem bewussten Abbau 90 Tage blockieren.
+
+  - id: AZU-0021
+    paths: ["**/postgresql.tf"]
+    statement: >-
+      Die Prüfung sucht den Parameter connection_throttling des eingestellten
+      Single Servers. Flexible Server kennt ihn nicht (geprüft am 30.09.2026
+      mit az postgres flexible-server parameter list).
+
+  - id: AZU-0022
+    paths: ["**/postgresql.tf"]
+    statement: >-
+      Öffentlicher Endpunkt mit Firewall: eine Client-IP und Azure-Dienste. TLS
+      ist Pflicht, Clients prüfen mit verify-full, Worker und Review nutzen eine
+      eingeschränkte Rolle. Privater Zugang bräuchte eine VNet-integrierte
+      Container-Apps-Umgebung.
+
+  - id: AZU-0026
+    paths: ["**/postgresql.tf"]
+    statement: >-
+      Der Server verlangt TLS 1.2 oder neuer (ssl_min_protocol_version und
+      require_secure_transport in postgresql.tf). Trivy 0.70 liest bei Flexible
+      Servern nur den MySQL-Parameter tls_version und meldet deshalb jeden
+      PostgreSQL Flexible Server.
+
+  - id: AZU-0057
+    paths: ["**/storage.tf"]
+    statement: >-
+      Die Prüfung verlangt das klassische Logging des Queue-Dienstes; der
+      Account nutzt keine Queues. Blob-Zugriffe laufen nur über Entra ID mit eng
+      gefassten Rollen.
+
+  - id: AZU-0058
+    paths: ["**/storage.tf"]
+    statement: >-
+      LRS statt Geo-Redundanz: Wie bei der Datenbank (kein Geo-Backup) bleiben
+      die Daten in einer Region; einen regionalen Totalausfall nimmt das
+      Projekt in Kauf. Gegen Fehlbedienung schützen Versionierung, 14 Tage Soft
+      Delete und die Löschsperre.
+
+  - id: AZU-0060
+    paths: ["**/storage.tf"]
+    statement: >-
+      Verschlüsselt mit von Microsoft verwalteten Schlüsseln. Eigene Schlüssel
+      bräuchten einen Key Vault mit Purge Protection (siehe AZU-0016) und eine
+      Schlüsselrotation; der Gewinn, Schlüssel selbst sperren zu können,
+      rechtfertigt das für ein Ein-Personen-Projekt nicht.
+
+  - id: AZU-0061
+    paths: ["**/storage.tf"]
+    statement: >-
+      Die zweite Verschlüsselungsschicht lässt sich nur beim Anlegen setzen;
+      der Account mit Dokumenten und Terraform-State müsste neu entstehen. Die
+      Standardverschlüsselung (AES-256) ist aktiv.

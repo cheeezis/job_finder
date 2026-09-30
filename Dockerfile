@@ -1,5 +1,6 @@
-# uv installs exactly the versions in uv.lock; only its binary is copied over.
-# Both images are pinned by digest; Dependabot proposes updates.
+# uv installs exactly the versions in uv.lock. It is only mounted for that step
+# and stays out of the image. Both images are pinned by digest; Dependabot
+# proposes updates.
 FROM ghcr.io/astral-sh/uv:0.12.21@sha256:a7aed3216253ee804de3e2d8afa5073baa1a177335345d43845cd4165e43b711 AS uv
 
 FROM python:3.13-slim@sha256:7c61056e61ac89e852de05f3dc6fa51a6dd2181797bceed46aa725dd7cb2cd3b
@@ -13,9 +14,14 @@ ENV TZ=Europe/Berlin \
     UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy
 
-COPY --from=uv /uv /usr/local/bin/uv
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-cache
+RUN --mount=from=uv,source=/uv,target=/usr/local/bin/uv \
+    uv sync --frozen --no-dev --no-cache
+
+# Nothing runs pip, and its vendored copies of msgpack and setuptools are old
+# enough for image scans to report them. PATH already starts with the venv,
+# which has no pip, so this calls the base image's interpreter directly.
+RUN /usr/local/bin/python -m pip uninstall --yes pip
 
 # Only what the finder and the review run; tests, docs and scripts stay out.
 COPY job_finder ./job_finder

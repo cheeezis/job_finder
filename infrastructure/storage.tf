@@ -33,6 +33,12 @@ resource "azurerm_storage_account" "jobfinder" {
   }
 
   tags = azurerm_resource_group.jobfinder.tags
+
+  # Zusätzlich zur Löschsperre unten: Einen Plan, der den Account löschen oder
+  # neu anlegen würde, bricht Terraform schon vor dem Apply ab.
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 # Ohne Aufräumen sammelt sich bei jedem Terraform-Apply eine State-Version an.
@@ -74,6 +80,10 @@ resource "azurerm_storage_container" "application_documents" {
   name                  = "application-documents"
   storage_account_id    = azurerm_storage_account.jobfinder.id
   container_access_type = "private"
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 # Dieselbe Identität, die der Worker schon fürs ACR-Image-Pull nutzt, bekommt

@@ -17,6 +17,12 @@ resource "azurerm_key_vault" "jobfinder" {
   purge_protection_enabled = false
 
   tags = azurerm_resource_group.jobfinder.tags
+
+  # Ein bewusstes Löschen bleibt möglich, aber nur nach einer Codeänderung:
+  # Einen Plan, der den Vault löschen oder neu anlegen würde, bricht Terraform ab.
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 # Worker-Identität darf Secret-Werte lesen, aber nicht anlegen/ändern/löschen.

@@ -336,3 +336,28 @@ def memory_source_links(entry, *, validate_names=False):
         for index, url in enumerate(urls)
         if isinstance(url, str) and url
     ]
+
+
+def memory_id_finder(memory):
+    """Find each recommendation's memory rows, in memory order, via one per-request URL index."""
+    index = {}
+    for memory_id, entry in memory.items():
+        for url in entry.get("source_urls", []):
+            index.setdefault(url, []).append(memory_id)
+    positions = {memory_id: position for position, memory_id in enumerate(memory)}
+
+    def find(job):
+        found = {memory_id for url in job_urls(job) for memory_id in index.get(url, [])}
+        if job["id"] in memory:
+            found.add(job["id"])
+        return sorted(found, key=positions.__getitem__)
+
+    return find
+
+
+def job_urls(job):
+    """Return the listing URLs a recommendation can be matched by."""
+    urls = {link.get("url") for link in job.get("source_links", []) if isinstance(link, dict) and link.get("url")}
+    if job.get("url"):
+        urls.add(job["url"])
+    return urls

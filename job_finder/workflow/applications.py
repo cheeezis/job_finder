@@ -1,11 +1,19 @@
 """Local application history and derived workflow statistics."""
 
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
 from job_finder.models import APPLICATION_STATUSES, WorkflowStatus
-from job_finder.paths import MEMORY_FILE
+from job_finder.paths import MEMORY_FILE, RECOMMENDATIONS_JSON
 from job_finder.persistence.application_documents import public_documents
-from job_finder.workflow.memory import has_application_state as is_application, load_memory, memory_source_links
+from job_finder.persistence.storage import read_json
+from job_finder.workflow.memory import (
+    has_application_state as is_application,
+    load_memory,
+    memory_id_finder,
+    memory_source_links,
+    preferred_memory_id,
+)
 
 OPEN_APPLICATION_STATUSES = {
     WorkflowStatus.APPLIED.value,
@@ -71,12 +79,15 @@ def validated_date(value):
         raise ValueError("Ungueltiges Datum; erwartet wird YYYY-MM-DD") from error
 
 
-def load_application_overview(memory_path=MEMORY_FILE, as_of=None):
+def load_application_overview(memory_path=MEMORY_FILE, as_of=None, recommendations_path=RECOMMENDATIONS_JSON):
     """Return open and completed applications plus statistics for all."""
     memory = load_memory(memory_path)
     reference_date = as_of or date.today()
+    links = review_links(memory, recommendations_path)
     all_applications = [
-        application_row(job_id, entry, reference_date) for job_id, entry in memory.items() if is_application(entry)
+        application_row(job_id, entry, reference_date, links.get(job_id, ()))
+        for job_id, entry in memory.items()
+        if is_application(entry)
     ]
     all_applications.sort(key=lambda item: item["applied_on"] or item["last_event_on"] or "", reverse=True)
     applications = [item for item in all_applications if item["workflow_status"] in OPEN_APPLICATION_STATUSES]
@@ -156,8 +167,19 @@ def synchronize_current_status(entry):
     return status
 
 
-def application_row(job_id, entry, as_of=None):
-    """Build one compact row with its complete manual timeline."""
+def review_links(memory, recommendations_path):
+    """Return the listing links of current recommendations per memory id, joined as the review joins them."""
+    find_memory_ids = memory_id_finder(memory)
+    links = {}
+    for recommendation in read_json(Path(recommendations_path), {}).get("recommendations", []):
+        if candidates := find_memory_ids(recommendation):
+            memory_id = preferred_memory_id(candidates, memory, recommendation["id"])
+            links.setdefault(memory_id, []).extend(recommendation.get("source_links") or [])
+    return links
+
+
+def application_row(job_id, entry, as_of=None, listing_links=()):
+    """Build one compact row with its complete manual timeline and every known listing link."""
     history = valid_history(entry.get("workflow_history", []))
     applied_on = first_event_date(history, {WorkflowStatus.APPLIED.value})
     response_on = first_event_date(history, RESPONSE_STATUSES, not_before=applied_on)
@@ -175,6 +197,11 @@ def application_row(job_id, entry, as_of=None):
         if difference.days >= 0:
             days_to_response = difference.days
     source_links = memory_source_links(entry, validate_names=True)
+    known = {link["url"] for link in source_links}
+    for link in listing_links:
+        if link.get("url") and link["url"] not in known:
+            known.add(link["url"])
+            source_links.append({"source": link.get("source") or "listing", "url": link["url"]})
     return {
         "id": job_id,
         "title": entry.get("title", "Unbekannte Stelle"),
@@ -208,6 +235,7 @@ def application_row(job_id, entry, as_of=None):
             or (current_status == WorkflowStatus.CLOSED.value and WorkflowStatus.NO_RESPONSE.value in statuses)
         ),
         "has_offer": WorkflowStatus.OFFER.value in statuses,
+        "has_withdrawal": WorkflowStatus.WITHDRAWN.value in statuses,
     }
 
 
@@ -342,6 +370,7 @@ def application_statistics(applications):
         "rejections": sum(item["has_rejection"] for item in applications),
         "no_responses": sum(item["has_no_response"] for item in applications),
         "offers": sum(item["has_offer"] for item in applications),
+        "withdrawals": sum(item["has_withdrawal"] for item in applications),
         "response_rate_percent": (round(completed_responses / len(completed) * 100) if completed else 0),
         "average_response_days": (round(sum(response_days) / len(response_days), 1) if response_days else None),
         "response_time_samples": len(response_days),

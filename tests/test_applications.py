@@ -1,5 +1,6 @@
 """Tests for local application history and derived statistics."""
 
+import json
 import tempfile
 import unittest
 from datetime import date, timedelta
@@ -241,6 +242,7 @@ class ApplicationTrackingTests(unittest.TestCase):
                 "rejections": 1,
                 "no_responses": 0,
                 "offers": 1,
+                "withdrawals": 0,
                 "response_rate_percent": 100,
                 "average_response_days": 3.5,
                 "response_time_samples": 2,
@@ -444,6 +446,55 @@ class ApplicationTrackingTests(unittest.TestCase):
         self.assertEqual((past["next_interview_at"], past["last_interview_at"]), (None, "2026-08-07T10:00"))
         self.assertEqual((upcoming["next_interview_at"], upcoming["last_interview_at"]), ("2099-08-07T10:00", None))
         self.assertIsNone(answered["last_interview_at"])
+
+    def test_the_card_shows_every_listing_the_review_joins_to_it(self):
+        self.save_job(
+            {
+                "workflow_status": "applied",
+                "source_urls": ["https://a.test/1"],
+                "source_names": ["arbeitnow"],
+                "workflow_history": [{"status": "applied", "occurred_on": "2026-08-01"}],
+            }
+        )
+        recommendations = Path(self.temporary_directory.name) / "recommendations.json"
+        other = {"source": "stepstone", "url": "https://b.test/1"}
+        recommendations.write_text(
+            json.dumps(
+                {
+                    "recommendations": [
+                        {"id": "other:1", "source_links": [other, {"source": "arbeitnow", "url": "https://a.test/1"}]},
+                        {"id": "unrelated", "source_links": [{"source": "remotely", "url": "https://c.test/1"}]},
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        overview = load_application_overview(self.memory_path, date(2026, 8, 2), recommendations)
+
+        self.assertEqual(
+            overview["applications"][0]["source_links"], [{"source": "arbeitnow", "url": "https://a.test/1"}, other]
+        )
+
+    def test_a_cancelled_interview_ends_the_application_without_counting_as_rejection(self):
+        self.save_job(
+            {
+                "workflow_status": "interview",
+                "workflow_history": [
+                    {"status": "applied", "occurred_on": "2026-08-01"},
+                    {"status": "interview", "occurred_on": "2026-08-03", "scheduled_for": "2026-08-10T10:00"},
+                ],
+            }
+        )
+
+        update_workflow_status("job:1", "withdrawn", self.memory_path, "2026-08-05")
+        overview = load_application_overview(self.memory_path, as_of=date(2026, 8, 6))
+
+        self.assertEqual(overview["applications"], [])
+        self.assertEqual(overview["completed_applications"][0]["workflow_status"], "withdrawn")
+        self.assertIn("withdrawn", overview["application_statuses"])
+        statistics = overview["statistics"]
+        self.assertEqual((statistics["withdrawals"], statistics["rejections"], statistics["no_responses"]), (1, 0, 0))
 
     def test_upcoming_interview_keeps_the_application_open(self):
         self.save_job(

@@ -97,7 +97,11 @@ Geänderte Bewertungsregeln wirken ab dem nächsten Finder-Lauf.
   eine Entscheidung gilt für alle. Eine schon entschiedene Stelle übernimmt eine
   neue Anzeige nur ohne neuen Ort oder wenn beide komplett remote sind.
 - **Gespräche:** Die Karte hebt das nächste Gespräch hervor; ist es vorbei,
-  zeigt sie „Letztes Gespräch“, bis ein neues Ereignis eingetragen wird.
+  zeigt sie „Letztes Gespräch“, bis ein neues Ereignis eingetragen wird. Mit
+  „Gespräch absagen“ endet die Bewerbung als „Selbst abgesagt“; das zählt weder
+  als Absage noch als „Keine Rückmeldung“.
+- **Links:** Die Karte zeigt alle Anzeigen, die die Review derselben Stelle
+  zuordnet, auch von anderen Portalen.
 - **Keine Rückmeldung:** Kommt 14 Tage nach Bewerbung, Rückmeldung oder letztem
   Gesprächstermin nichts Neues, zeigt die Übersicht „Keine Rückmeldung“; ein
   späteres Ereignis öffnet die Bewerbung wieder. Der Status lässt sich auch

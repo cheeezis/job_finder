@@ -5,7 +5,7 @@ const JobFinder = (() => {
     new: "Neu", review: "Prüfen", interesting: "Interessant", inquiry: "Rückfrage offen",
     ignored: "Nicht interessant", applied: "Beworben", response: "Antwort erhalten",
     interview: "Interview", rejected: "Absage", no_response: "Keine Rückmeldung",
-    offer: "Angebot", closed: "Abgeschlossen"
+    offer: "Angebot", withdrawn: "Selbst abgesagt", closed: "Abgeschlossen"
   };
   const sourceLabels = {
     stepstone: "StepStone", get_in_it: "get-in-IT", studysmarter: "StudySmarter",

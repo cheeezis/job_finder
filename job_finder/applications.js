@@ -1,5 +1,5 @@
   const statusLabels = {...JobFinder.statusLabels, interview: "Gespräch", offer: "Zusage"};
-  const terminalStatuses = new Set(["rejected", "no_response", "offer"]);
+  const terminalStatuses = new Set(["rejected", "no_response", "offer", "withdrawn"]);
 
   const {element, make, addOptions, appendSourceLinks, postJson, showError} = JobFinder;
 
@@ -49,6 +49,7 @@
       ["offers", "Zusagen"],
       ["rejections", "Absagen"],
       ["no_responses", "Ohne Rückmeldung"],
+      ["withdrawals", "Selbst abgesagt"],
       ["response_rate_percent", `Antwortquote · ${stats.completed} abgeschlossen`, "%"],
       ["average_response_days", `Ø Tage bis Antwort (${stats.response_time_samples} Fälle)`]
     ];
@@ -225,6 +226,19 @@
     return item;
   }
 
+  // Cancelling an interview ends the application on the user's side, dated today.
+  function withdrawButton(application) {
+    const button = make("button", "Gespräch absagen", "withdraw");
+    button.type = "button";
+    button.addEventListener("click", async () => {
+      if (!window.confirm("Gespräch absagen und die Bewerbung als selbst abgesagt abschließen?")) return;
+      await saveChange([button], "/api/status",
+        {job_id: application.id, workflow_status: "withdrawn", occurred_on: localIsoDate(), scheduled_for: null},
+        "Absage konnte nicht gespeichert werden");
+    });
+    return button;
+  }
+
   function salaryEditor(application) {
     const details = make("details");
     details.append(make("summary", "Gehaltsvorstellung bearbeiten"));
@@ -284,6 +298,7 @@
       else if (application.last_interview_at) meta.append(make("span", `Letztes Gespräch: ${formatDateTime(application.last_interview_at)}`, "appointment"));
       appendSourceLinks(meta, application);
       card.append(meta);
+      if (application.workflow_status === "interview") card.append(withdrawButton(application));
       if (application.review_note) card.append(make("p", application.review_note, "note"));
       const salaryExpectation = formatSalaryExpectation(application.salary_expectation_eur);
       if (salaryExpectation) {

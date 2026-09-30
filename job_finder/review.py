@@ -114,7 +114,7 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
             )
             return
         if request_path == "/api/applications":
-            self.send_json(load_application_overview(self.memory_path))
+            self.send_json(load_application_overview(self.memory_path, recommendations_path=self.recommendations_path))
             return
         if request_path == "/api/application-document":
             self.send_application_document()

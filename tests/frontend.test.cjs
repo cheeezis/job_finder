@@ -303,6 +303,24 @@ test("editing an event with an unknown date keeps it unknown and sends the previ
   }]]);
 });
 
+test("only interview cards offer cancelling, which records a self-cancelled status", async () => {
+  const posts = [];
+  const view = applicationsPage(posts);
+  await new Promise(setImmediate);
+  const card = status => ({id: `job:${status}`, title: "T", company: "C", active: true, workflow_status: status, workflow_history: []});
+  view.context.renderApplications([card("interview"), card("applied")], "applications");
+  const buttons = view.elements.get("applications").children
+    .map(item => item.children.find(child => child.textContent === "Gespräch absagen"));
+  assert.equal(buttons[1], undefined);
+  await buttons[0].emit("click");
+  assert.equal(posts.length, 1);
+  const [route, payload] = plain(posts)[0];
+  assert.equal(route, "/api/status");
+  assert.equal(payload.job_id, "job:interview");
+  assert.equal(payload.workflow_status, "withdrawn");
+  assert.equal(payload.scheduled_for, null);
+});
+
 test("appointments are offered and sent only for interviews", async () => {
   const posts = [];
   const view = applicationsPage(posts);

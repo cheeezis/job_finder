@@ -322,6 +322,7 @@ dialog::backdrop { background: rgba(25, 24, 23, .58); }
 .new-event-title { margin: 18px 0 0; font-weight: 650; }
 .empty-history { color: var(--muted); }
 .appointment { color: var(--positive); font-weight: 700; }
+.withdraw { margin: 0 0 18px; }
 .form-actions { display: flex; gap: 7px; }
 details.source-menu { border: 0; margin: 0; padding: 0; }
 .note { border-left: 3px solid var(--line-strong); background: var(--paper); }

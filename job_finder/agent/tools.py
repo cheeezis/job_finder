@@ -19,6 +19,7 @@ DECISION_LABELS = {
     "rejected": "Absage",
     "no_response": "Keine Rückmeldung",
     "offer": "Angebot",
+    "withdrawn": "Selbst abgesagt",
     "closed": "Abgeschlossen",
 }
 

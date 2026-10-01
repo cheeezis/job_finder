@@ -192,6 +192,7 @@ label { display: grid; gap: 6px; color: var(--muted); font-size: .79rem; font-we
 
 .card h2 { margin-top: 24px; font-size: clamp(1.75rem, 3vw, 2.55rem); line-height: 1.08; }
 .company { color: var(--muted); }
+.company-applications { margin: 10px 0 0; padding: 8px 12px; border-left: 3px solid var(--warning); background: var(--warning-soft); color: #6d460d; }
 .meta { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 18px 0; color: var(--muted); font-size: .92rem; }
 .meta span { position: relative; }
 
@@ -235,6 +236,8 @@ label { display: grid; gap: 6px; color: var(--muted); font-size: .79rem; font-we
 #job-links { display: flex; }
 button.inquiry { border-color: #9b6d24; background: transparent; color: #714b10; }
 button.inquiry:hover { background: var(--warning); color: white; }
+button.waiting { border-color: var(--line-strong); background: transparent; color: var(--ink); }
+button.waiting:hover { background: var(--paper-deep); }
 button.ignore { border-color: var(--line-strong); color: var(--danger); }
 
 .navigation { display: flex; justify-content: space-between; margin-top: 12px; }

@@ -3,7 +3,7 @@
     ...JobFinder.sourceLabels, original: "Originalanzeige",
     german_tech_jobs: "GermanTechJobs", manual: "Manuell hinzugefügt"
   };
-  const reviewStatuses = new Set(["review", "interesting", "inquiry", "ignored"]);
+  const reviewStatuses = new Set(["review", "interesting", "inquiry", "waiting", "ignored"]);
   let jobs = [];
   let visibleJobs = [];
   let currentIndex = 0;
@@ -132,6 +132,24 @@
 
   // Leaving the card by paging or filtering saves a changed note first;
   // if that fails, the card and the note stay.
+  // Another position at the same company: name the applications still running,
+  // or tell a waiting card that the one it waited for has finished.
+  function renderCompanyApplications(job) {
+    const applications = job.company_applications || [];
+    const running = applications.filter(application => application.open);
+    const named = list => list.map(application =>
+      `${application.title} (${statusLabels[application.workflow_status] || application.workflow_status})`).join(", ");
+    let text = "";
+    if (running.length) {
+      text = `Bei ${job.company} läuft schon deine Bewerbung als ${named(running)}.`;
+    } else if (job.workflow_status === "waiting" && applications.length) {
+      text = `Deine Bewerbung bei ${job.company} ist abgeschlossen: ${named(applications)} – jetzt entscheiden.`;
+    }
+    const hint = element("company-applications");
+    hint.hidden = !text;
+    hint.textContent = text;
+  }
+
   function leaveCard(action) {
     return saveNote().then(action).catch(showError);
   }
@@ -181,6 +199,7 @@
     element("new-badge").hidden = job.workflow_status !== "new";
     setText("title", job.title);
     setText("company", job.company);
+    renderCompanyApplications(job);
     setText("location", `Ort: ${(job.locations || []).join(", ") || "unbekannt"}`);
     const remote = job.remote_percentage != null
       ? `${job.remote_percentage}%`
@@ -203,7 +222,7 @@
     renderFactSheet(job);
     renderNote(job);
     const applicationTracked = Boolean(job.application_tracked);
-    for (const id of ["mark-interesting", "mark-inquiry", "mark-ignored", "mark-applied"]) {
+    for (const id of ["mark-interesting", "mark-inquiry", "mark-waiting", "mark-ignored", "mark-applied"]) {
       element(id).hidden = applicationTracked;
     }
     element("application-link").hidden = !applicationTracked;
@@ -358,7 +377,7 @@
   window.addEventListener("beforeunload", event => {
     if (noteChanged()) event.preventDefault();
   });
-  for (const status of ["interesting", "inquiry", "ignored"]) {
+  for (const status of ["interesting", "inquiry", "waiting", "ignored"]) {
     element(`mark-${status}`).addEventListener("click", () => changeStatus(status).catch(showError));
   }
   element("undo-ignored").addEventListener("click", () => undoIgnored().catch(showError));

@@ -5,16 +5,21 @@ from pathlib import Path
 
 from psycopg import errors
 
+from job_finder.matching.deduplication import companies_match, normalize_company
 from job_finder.models import WorkflowStatus
 from job_finder.paths import MEMORY_FILE, RECOMMENDATIONS_JSON
 from job_finder.persistence.database import snapshot
 from job_finder.persistence.fact_sheets import fact_sheets
 from job_finder.persistence.storage import dataset_name, read_json
-from job_finder.workflow.applications import is_application
+from job_finder.workflow.applications import OPEN_APPLICATION_STATUSES, application_row, is_application
 from job_finder.workflow.memory import load_memory, memory_id_finder, memory_source_links, preferred_memory_id
 from job_finder.workflow.reporting import is_international_listing
 
-PERSISTED_REVIEW_STATUSES = {WorkflowStatus.INTERESTING.value, WorkflowStatus.INQUIRY.value}
+PERSISTED_REVIEW_STATUSES = {
+    WorkflowStatus.INTERESTING.value,
+    WorkflowStatus.INQUIRY.value,
+    WorkflowStatus.WAITING.value,
+}
 
 
 def load_review_jobs(recommendations_path=RECOMMENDATIONS_JSON, memory_path=MEMORY_FILE):
@@ -55,7 +60,36 @@ def load_review_jobs(recommendations_path=RECOMMENDATIONS_JSON, memory_path=MEMO
         ):
             continue
         review_jobs.append(remembered_review_job(job_id, entry))
-    return one_card_per_job(review_jobs)
+    cards = one_card_per_job(review_jobs)
+    applications = company_applications(memory)
+    for card in cards:
+        card["company_applications"] = same_company_applications(card, applications)
+    return cards
+
+
+def company_applications(memory, as_of=None):
+    """List the user's applications by normalized company, with the status the applications page shows."""
+    rows = []
+    for job_id, entry in memory.items():
+        company = normalize_company(entry.get("company") or "")
+        if company and is_application(entry):
+            rows.append(
+                (job_id, company, entry.get("title") or "", application_row(job_id, entry, as_of)["workflow_status"])
+            )
+    return rows
+
+
+def same_company_applications(job, applications):
+    """Return the applications at the job's company, open ones first, for the review's hint."""
+    company = normalize_company(job.get("company") or "")
+    if not company:
+        return []
+    found = [
+        {"title": title, "workflow_status": status, "open": status in OPEN_APPLICATION_STATUSES}
+        for job_id, other, title, status in applications
+        if job_id != job["id"] and companies_match(company, other)
+    ]
+    return sorted(found, key=lambda item: not item["open"])
 
 
 def one_card_per_job(review_jobs):

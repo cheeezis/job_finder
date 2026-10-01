@@ -3,7 +3,7 @@ const JobFinder = (() => {
   const element = id => document.getElementById(id);
   const statusLabels = {
     new: "Neu", review: "Prüfen", interesting: "Interessant", inquiry: "Rückfrage offen",
-    ignored: "Nicht interessant", applied: "Beworben", response: "Antwort erhalten",
+    waiting: "Warteliste", ignored: "Nicht interessant", applied: "Beworben", response: "Antwort erhalten",
     interview: "Interview", rejected: "Absage", no_response: "Keine Rückmeldung",
     offer: "Angebot", withdrawn: "Selbst abgesagt", closed: "Abgeschlossen"
   };

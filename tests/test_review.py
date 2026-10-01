@@ -30,6 +30,7 @@ from job_finder.review import (
     update_workflow_status,
 )
 from job_finder.workflow.memory import load_memory, save_memory
+from job_finder.workflow.review_data import company_applications, same_company_applications
 
 
 def json_request(url, payload):
@@ -457,11 +458,13 @@ class ReviewTests(unittest.TestCase):
         with self.assertRaisesRegex(KeyError, "Unbekannte Job-ID"):
             start_application("job:unknown", self.memory_path)
 
-    def test_inquiry_is_persisted_as_review_decision(self):
-        result = update_review_decision("job:1", "inquiry", self.memory_path)
+    def test_inquiry_and_waiting_are_persisted_as_review_decisions(self):
+        for status in ("inquiry", "waiting"):
+            with self.subTest(status=status):
+                result = update_review_decision("job:1", status, self.memory_path)
 
-        self.assertEqual(result["workflow_status"], "inquiry")
-        self.assertEqual(load_memory(self.memory_path)["job:1"]["workflow_status"], "inquiry")
+                self.assertEqual(result["workflow_status"], status)
+                self.assertEqual(load_memory(self.memory_path)["job:1"]["workflow_status"], status)
 
     def test_review_note_is_saved_trimmed_shown_and_removable(self):
         result = update_review_note("job:1", "  Java-Pflicht, will ich nicht  ", self.memory_path)
@@ -520,7 +523,7 @@ class ReviewTests(unittest.TestCase):
                 with self.subTest(route=route), urlopen(base_url + route) as response:
                     page = response.read().decode("utf-8")
                     self.assertIn(marker, page)
-                    self.assertIn('href="/app.css?v=5"', page)
+                    self.assertIn('href="/app.css?v=6"', page)
                     self.assertIn('src="/app.js"', page)
                     self.assertNotIn("<style", page)
                     self.assertNotIn("style=", page)
@@ -756,3 +759,41 @@ class ReviewTests(unittest.TestCase):
             start_application("job:1", self.memory_path, [upload("resume", "CV.pdf", b"test document")], root)
         self.assertEqual(load_memory(self.memory_path), before)
         self.assertEqual([p for p in root.rglob("*") if p.is_file()], [])
+
+
+class CompanyApplicationTests(unittest.TestCase):
+    """The review's hint on applications at the same company, without a database."""
+
+    def test_the_review_names_applications_at_the_same_company(self):
+        memory = {
+            "job:applied": {
+                "title": "Cloud Engineer",
+                "company": "Nordlicht Systems GmbH",
+                "workflow_status": "applied",
+                "workflow_history": [{"status": "applied", "occurred_on": "2026-09-28"}],
+            },
+            "job:silent": {
+                "title": "DevOps Engineer",
+                "company": "Nordlicht Systems",
+                "workflow_status": "applied",
+                "workflow_history": [{"status": "applied", "occurred_on": "2026-09-01"}],
+            },
+            "job:other": {"title": "Data Engineer", "company": "Datenweber GmbH", "workflow_status": "interview"},
+            "job:unnamed": {"title": "Admin", "workflow_status": "applied"},
+        }
+        applications = company_applications(memory, as_of=date(2026, 10, 1))
+
+        found = same_company_applications({"id": "job:new", "company": "Nordlicht Systems AG"}, applications)
+
+        # Open first; a quiet application counts as no response after 14 days, as on the applications page.
+        self.assertEqual(
+            found,
+            [
+                {"title": "Cloud Engineer", "workflow_status": "applied", "open": True},
+                {"title": "DevOps Engineer", "workflow_status": "no_response", "open": False},
+            ],
+        )
+        self.assertEqual(
+            same_company_applications({"id": "job:applied", "company": "Datenweber"}, applications)[0]["open"], True
+        )
+        self.assertEqual(same_company_applications({"id": "job:new", "company": ""}, applications), [])

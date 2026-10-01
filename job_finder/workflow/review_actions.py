@@ -25,7 +25,12 @@ def update_workflow_status(job_id, workflow_status, memory_path=MEMORY_FILE, occ
 def update_review_decision(job_id, workflow_status, memory_path=MEMORY_FILE):
     """Persist a review decision without changing an existing application."""
     status = WorkflowStatus(workflow_status)
-    if status not in {WorkflowStatus.INTERESTING, WorkflowStatus.INQUIRY, WorkflowStatus.IGNORED}:
+    if status not in {
+        WorkflowStatus.INTERESTING,
+        WorkflowStatus.INQUIRY,
+        WorkflowStatus.WAITING,
+        WorkflowStatus.IGNORED,
+    }:
         raise ValueError("Ungueltiger Review-Status")
     with edit_job(job_id, memory_path) as entry:
         if is_application(entry):

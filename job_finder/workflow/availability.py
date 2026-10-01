@@ -25,6 +25,9 @@ CLOSED_MESSAGE = re.compile(
     r"|es werden keine bewerbungen mehr angenommen)[.!\s]*$",
     re.IGNORECASE,
 )
+# Decisions that keep a job on the user's list; once a run no longer finds such
+# a job, its links are checked and a confirmed closure sets it to ignored.
+SHORTLISTED_STATUSES = {WorkflowStatus.INTERESTING.value, WorkflowStatus.WAITING.value}
 
 
 class MissingPageHeadingParser(HTMLParser):
@@ -185,7 +188,7 @@ def _plan_checks(jobs, snapshot, successful_sources, run_sources, now):
     due = {}
     for job_id, entry in snapshot.items():
         status = entry.get("workflow_status")
-        if status != "interesting" or has_application_state(entry):
+        if status not in SHORTLISTED_STATUSES or has_application_state(entry):
             continue
         if job_id in present_ids:
             continue

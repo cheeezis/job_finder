@@ -110,6 +110,26 @@ test("review decisions update the backing jobs and preserve navigation", () => {
   }
 });
 
+test("a card names applications at the same company and tells a waiting job when to decide", () => {
+  assert.match(reviewHtml, /<button id="mark-waiting" class="waiting">Warteliste<\/button>/);
+  const view = page("review");
+  const hint = view.elements.get("company-applications");
+  const shown = job => {
+    view.context.testJob = job;
+    view.run("renderCompanyApplications(testJob);");
+    return hint.hidden ? null : hint.textContent;
+  };
+  const running = {title: "Cloud Engineer", workflow_status: "interview", open: true};
+  const finished = {title: "DevOps Engineer", workflow_status: "rejected", open: false};
+
+  assert.equal(shown({company: "Nordlicht", workflow_status: "new", company_applications: [running, finished]}),
+    "Bei Nordlicht läuft schon deine Bewerbung als Cloud Engineer (Interview).");
+  assert.equal(shown({company: "Nordlicht", workflow_status: "waiting", company_applications: [finished]}),
+    "Deine Bewerbung bei Nordlicht ist abgeschlossen: DevOps Engineer (Absage) – jetzt entscheiden.");
+  assert.equal(shown({company: "Nordlicht", workflow_status: "new", company_applications: [finished]}), null);
+  assert.equal(shown({company: "Nordlicht", workflow_status: "waiting", company_applications: []}), null);
+});
+
 test("review decisions retain updates for cards sharing a persisted job ID", () => {
   const view = page("review");
   const jobs = [0, 1].map(() => ({id: "merged:1", workflow_status: "new", is_new: true}));

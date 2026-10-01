@@ -170,7 +170,7 @@ class AvailabilityTests(unittest.TestCase):
             ("missing", ["feed", "other"], {"feed", "other"}, True),
             ("missing", [], {"job"}, True),
         ]
-        for status in ("new", "interesting", "review", "inquiry", "ignored", "applied"):
+        for status in ("new", "interesting", "review", "inquiry", "waiting", "ignored", "applied"):
             for presence, sources, complete, expected in cases:
                 with (
                     self.subTest(status=status, presence=presence, sources=sources, complete=complete),
@@ -199,7 +199,8 @@ class AvailabilityTests(unittest.TestCase):
                     )
                     with patch("job_finder.workflow.availability.listing_is_closed", return_value=True) as check:
                         result = ignore_closed_listings(jobs, path, successful_sources=complete)
-                    should_check = expected and status == "interesting"
+                    # A waiting job is shortlisted like an interesting one.
+                    should_check = expected and status in {"interesting", "waiting"}
                     self.assertEqual(result, {"job:1"} if should_check else set())
                     if should_check:
                         check.assert_called_once_with("https://example.test/a")

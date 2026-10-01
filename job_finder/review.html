@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Stellen prüfen</title>
-  <link rel="stylesheet" href="/app.css?v=5">
+  <link rel="stylesheet" href="/app.css?v=6">
 </head>
 <body class="review-page">
 <main>
@@ -59,6 +59,7 @@
     </div>
     <h2 id="title"></h2>
     <p id="company" class="company"></p>
+    <p id="company-applications" class="company-applications" hidden></p>
     <div class="meta">
       <span id="location"></span>
       <span id="remote"></span>
@@ -94,6 +95,7 @@
       <div class="decision-actions">
         <button id="mark-interesting" class="primary">Interessant</button>
         <button id="mark-inquiry" class="inquiry">Rückfrage nötig</button>
+        <button id="mark-waiting" class="waiting">Warteliste</button>
         <button id="mark-ignored" class="ignore">Nicht interessant</button>
       </div>
       <div class="utility-actions">

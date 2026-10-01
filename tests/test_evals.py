@@ -13,7 +13,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-from evals import __main__ as cli, harness
+from evals import __main__ as cli, harness, private_cases
 from evals.grading import grade, summarize
 from job_finder.agent import runner
 from job_finder.agent.fact_sheet import FIXED_LIGHTS, FIXED_LINES, VERDICTS
@@ -63,11 +63,17 @@ class FakeEndpoint:
             self.deleted.append(request.url.path.rsplit("/", 1)[-1])
             return httpx.Response(200, json={"id": self.deleted[-1], "object": "response", "deleted": True})
         self.requests.append(json.loads(request.content))
+        output = self.outputs.pop(0)
+        if isinstance(output, httpx.Response):
+            return output
         number = len(self.requests)
         body = {"id": f"resp_{number}", "object": "response", "created_at": 1790000000, "model": runner.MODEL}
-        return httpx.Response(
-            200, json={**body, "status": "completed", "output": [self.outputs.pop(0)], "usage": TOKENS}
-        )
+        return httpx.Response(200, json={**body, "status": "completed", "output": [output], "usage": TOKENS})
+
+
+def content_filter():
+    """What Azure answers when its content filter rejects a request before the model sees it."""
+    return httpx.Response(400, json={"error": {"message": "gefiltert", "code": "content_filter"}})
 
 
 def answer(content):
@@ -209,6 +215,37 @@ class RunTests(unittest.TestCase):
         self.assertIn("Steckbrief unbrauchbar", first["grund"])
         self.assertEqual(second["status"], "fertig")
 
+    def test_a_filter_block_counts_as_defended_only_where_the_case_allows_it(self):
+        fake = FakeEndpoint(content_filter(), content_filter())
+        dataset = self.dataset(case("angriff", ("streichen",), blockade_ok=True), case("echte-stelle"))
+
+        run = harness.run_evals(dataset, ("einzelaufruf",), fake.model, Decimal("1"), "medium")
+
+        attack, real = run["ergebnisse"]
+        self.assertEqual((attack["status"], attack["pruefungen"]), ("blockiert", {"urteil": True}))
+        self.assertEqual((real["status"], real["pruefungen"]), ("blockiert", {"urteil": False}))
+        entry = summarize(run["ergebnisse"])["varianten"]["einzelaufruf"]
+        self.assertEqual((entry["blockiert"], entry["abgebrochen"], entry["urteil"]), (2, 0, [1, 2]))
+
+    def test_a_case_sees_only_the_decisions_made_before_its_own(self):
+        rows = [
+            ("a", "Python Developer", "Datenweber GmbH", "ignored", None, "alt", date(2026, 9, 1)),
+            ("b", "Python Developer", "Datenweber GmbH", "applied", None, "neu", date(2026, 9, 20)),
+            ("c", "Python Developer", "Datenweber GmbH", "ignored", None, None, None),
+        ]
+
+        self.assertEqual(harness.decisions_before(rows, date(2026, 9, 20)), rows[:1])
+        self.assertEqual(harness.decisions_before(rows, None), rows)
+
+    def test_the_agent_searches_only_when_the_run_allows_it(self):
+        fake = FakeEndpoint(answer(sheet()))
+
+        run = harness.run_evals(self.dataset(case()), ("agent",), fake.model, Decimal("1"), "medium", searches=2)
+
+        self.assertIn(runner.WEB_SEARCH_TOOL, fake.requests[0]["tools"])
+        self.assertEqual(fake.requests[0]["max_tool_calls"], 2)
+        self.assertEqual(run["websuchen"], 2)
+
     def test_the_report_names_data_rules_and_results(self):
         fake = FakeEndpoint(answer(sheet()))
         dataset = self.dataset(case())
@@ -229,11 +266,42 @@ class RunTests(unittest.TestCase):
         self.assertIn("| fall-1 | bewerben | bewerben ✓ |", text)
 
 
+class PrivateCasesTests(unittest.TestCase):
+    AD = {"title": "Cloud Engineer", "company": "Firma", "description_clean": "Text.", "salary_min_eur": None}
+
+    def test_a_decision_becomes_the_expected_side(self):
+        towards = private_cases.case_of(
+            {"id": "m1"}, self.AD, ("m1", "Cloud Engineer", "Firma", "applied", 5, "Spannend.", date(2026, 9, 3))
+        )
+        away = private_cases.case_of(
+            {"id": "m2"}, self.AD, ("m2", "Cloud Engineer", "Firma", "ignored", None, None, date(2026, 9, 4))
+        )
+
+        self.assertEqual(towards["expected"]["fazit"], ["bewerben", "erst_klaeren"])
+        self.assertEqual(towards["why"], "Deine Entscheidung: Beworben – Spannend.")
+        self.assertNotIn("salary_min_eur", towards["job"])
+        self.assertEqual(
+            (away["expected"]["fazit"], away["decided_on"]), (["eher_streichen", "streichen"], date(2026, 9, 4))
+        )
+
+    def test_a_limited_choice_is_balanced_and_repeatable(self):
+        towards = [{"id": f"f{number}", "category": "dafür"} for number in range(5)]
+        away = [{"id": f"g{number}", "category": "dagegen"} for number in range(20)]
+
+        chosen = private_cases.balanced(towards + away, 8, seed=1)
+        few_towards = private_cases.balanced(towards[:2] + away, 8, seed=1)
+
+        self.assertEqual((len(chosen), sum(item["category"] == "dafür" for item in chosen)), (8, 4))
+        self.assertEqual(chosen, private_cases.balanced(towards + away, 8, seed=1))
+        self.assertEqual((len(few_towards), sum(item["category"] == "dafür" for item in few_towards)), (8, 2))
+
+
 class CommandLineTests(unittest.TestCase):
-    def test_a_run_needs_the_endpoint_and_a_sensible_budget(self):
+    def test_a_run_needs_the_endpoint_and_sensible_limits(self):
         for argv, environ, message in (
             ([], {}, "JOBFINDER_OPENAI_ENDPOINT fehlt"),
             (["--budget", "50"], {"JOBFINDER_OPENAI_ENDPOINT": "https://example.test"}, "zwischen"),
+            (["--searches", "5"], {"JOBFINDER_OPENAI_ENDPOINT": "https://example.test"}, "--searches"),
             (["--only", "gibt-es-nicht"], {"JOBFINDER_OPENAI_ENDPOINT": "https://example.test"}, "Unbekannte Fälle"),
         ):
             with self.subTest(argv=argv), contextlib.redirect_stderr(io.StringIO()) as errors:

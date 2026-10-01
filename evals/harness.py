@@ -77,19 +77,26 @@ def load_cases(path=DEFAULT_CASES):
     return dataset
 
 
-def eval_settings(budget, effort):
-    """Use the production limits per job, no paid web search, and the run budget as day and month limit."""
-    limits = AgentLimits(job_max_web_searches=0, daily_max_cost_eur=budget, monthly_max_cost_eur=budget)
+def eval_settings(budget, effort, searches=0):
+    """Use the production limits per job, the given web searches, and the run budget as day and month limit."""
+    limits = AgentLimits(job_max_web_searches=searches, daily_max_cost_eur=budget, monthly_max_cost_eur=budget)
     return AgentSettings(True, limits, reasoning_effort=effort)
 
 
-def agent_variant(job, dataset, guard, model, settings):
+def agent_variant(case, job, dataset, guard, model, settings):
     """Run the production graph with its tools; past_decisions searches the case file's decisions."""
-    profile = dataset["profile_text"]
-    return draft_fact_sheet(job, profile, guard, model, settings, dataset["today"], dataset["decision_rows"])
+    decisions = decisions_before(dataset["decision_rows"], case.get("decided_on"))
+    return draft_fact_sheet(job, dataset["profile_text"], guard, model, settings, dataset["today"], decisions)
 
 
-def single_call_variant(job, dataset, guard, model, settings):
+def decisions_before(rows, decided_on):
+    """Keep the decisions made before the case's own, so a real case cannot see its answer."""
+    if decided_on is None:
+        return rows
+    return [row for row in rows if row[6] is not None and row[6] < decided_on]
+
+
+def single_call_variant(case, job, dataset, guard, model, settings):
     """Ask once with the same rules, profile and ad, without graph and tools: the baseline."""
     guard.start_job(job["id"])
     guard.before_model_call()
@@ -120,11 +127,19 @@ def run_case(case, variant, dataset, guard, model, settings, clock=time.monotoni
     started = clock()
     sheet, dropped, status, reason = None, [], "fertig", ""
     try:
-        sheet, dropped = VARIANT_RUNNERS[variant](job, dataset, guard, model, settings)
+        sheet, dropped = VARIANT_RUNNERS[variant](case, job, dataset, guard, model, settings)
     except JobLimitReached as stop:
-        status, reason = "abgebrochen", str(stop)
+        # Azure's content filter rejects a request before the model sees it.
+        status, reason = "blockiert" if "content_filter" in str(stop) else "abgebrochen", str(stop)
     except ValueError as error:
         status, reason = "abgebrochen", f"Steckbrief unbrauchbar: {error}"
+    if sheet:
+        checks = grade(case, sheet)
+    elif status == "blockiert":
+        # Only cases built to be blocked count it as defended; a blocked real ad is a loss.
+        checks = {"urteil": bool(case["expected"].get("blockade_ok"))}
+    else:
+        checks = {}
     return {
         "fall": case["id"],
         "kategorie": case["category"],
@@ -132,7 +147,7 @@ def run_case(case, variant, dataset, guard, model, settings, clock=time.monotoni
         "status": status,
         "grund": reason,
         "urteil": sheet["fazit"]["stufe"] if sheet else None,
-        "pruefungen": grade(case, sheet) if sheet else {},
+        "pruefungen": checks,
         "verworfene_quellen": dropped,
         "kosten_eur": str(guard.job_cost),
         "modellaufrufe": guard.model_calls,
@@ -142,13 +157,14 @@ def run_case(case, variant, dataset, guard, model, settings, clock=time.monotoni
     }
 
 
-def run_evals(dataset, variants, model, budget, effort, repeat=1, progress=None, clock=time.monotonic):
+def run_evals(dataset, variants, model, budget, effort, repeat=1, searches=0, progress=None, clock=time.monotonic):
     """Run every case with every variant, case by case, until all are done or the budget is used up.
 
     The variants alternate per case, so an early stop leaves comparable results.
+    searches is the agent's web search budget per job; the baseline never searches.
     """
     ledger = RunLedger()
-    settings = eval_settings(budget, effort)
+    settings = eval_settings(budget, effort, searches)
     guard = CostGuard(settings, MODEL, ledger)
     results, stop = [], ""
     try:
@@ -165,7 +181,7 @@ def run_evals(dataset, variants, model, budget, effort, repeat=1, progress=None,
     except AgentStopped as error:
         spent_up = ledger.total >= budget
         stop = f"Budget des Laufs erreicht: {euro(ledger.total)} von {euro(budget)}" if spent_up else str(error)
-    return {"ergebnisse": results, "stopp": stop, "kosten_eur": ledger.total}
+    return {"ergebnisse": results, "stopp": stop, "kosten_eur": ledger.total, "websuchen": searches}
 
 
 def write_report(dataset, run, variants, budget, effort, repeat, out_dir=RESULTS_DIR, now=None):
@@ -184,7 +200,7 @@ def write_report(dataset, run, variants, budget, effort, repeat, out_dir=RESULTS
         "profil_sha256": short_hash(dataset["profile_text"]),
         "modell": MODEL,
         "denkaufwand": effort,
-        "websuche": "aus",
+        "websuche": f"Agent bis {run['websuchen']} je Stelle" if run.get("websuchen") else "aus",
         "varianten": list(variants),
         "durchgaenge": repeat,
         "budget_eur": str(budget),
@@ -220,9 +236,9 @@ def markdown(dataset, meta, summary, results, variants):
         "",
         "## Je Variante",
         "",
-        "| Variante | Urteil | Richtung | Ampeln | Ohne erfundene Beträge | Abbrüche | Verworfene Links "
-        "| Werkzeugaufrufe | Kosten je Fall | Sekunden je Fall |",
-        "|---|---|---|---|---|---|---|---|---|---|",
+        "| Variante | Urteil | Richtung | Ampeln | Ohne erfundene Beträge | Abbrüche | Filter-Blockaden "
+        "| Verworfene Links | Werkzeugaufrufe | Kosten je Fall | Sekunden je Fall |",
+        "|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for variant in variants:
         entry = summary["varianten"].get(variant)
@@ -231,8 +247,9 @@ def markdown(dataset, meta, summary, results, variants):
         runs = entry["laeufe"]
         lines.append(
             f"| {variant} | {ratio(entry['urteil'])} | {ratio(entry['richtung'])} | {ratio(entry['ampeln'])} "
-            f"| {ratio(entry['keine_erfundene_zahl'])} | {entry['abgebrochen']} | {entry['verworfene_links']} "
-            f"| {entry['werkzeugaufrufe']} | {euro(entry['kosten_eur'] / runs, 3)} | {entry['sekunden'] / runs:.0f} |"
+            f"| {ratio(entry['keine_erfundene_zahl'])} | {entry['abgebrochen']} | {entry['blockiert']} "
+            f"| {entry['verworfene_links']} | {entry['werkzeugaufrufe']} | {euro(entry['kosten_eur'] / runs, 3)} "
+            f"| {entry['sekunden'] / runs:.0f} |"
         )
     lines += [
         "",
@@ -251,7 +268,8 @@ def markdown(dataset, meta, summary, results, variants):
         "",
         "Urteil: Fazit unter den erlaubten Stufen. Richtung: auf der richtigen Seite (bewerben/erst klären "
         "gegenüber eher streichen/streichen). Ampeln: die erwarteten Ampeln der Fälle. Ein Abbruch zählt "
-        "als falsches Urteil. Methode und Datensatz: docs/development.md, Abschnitt Evals.",
+        "als falsches Urteil; eine Blockade durch Azures Inhaltsfilter nur in Fällen, die darauf angelegt "
+        "sind, als abgewehrt. Methode und Datensatz: docs/development.md, Abschnitt Evals.",
         "",
     ]
     return "\n".join(lines)
@@ -268,7 +286,7 @@ def verdicts(results, case_id, variant):
     for result in results:
         if result["fall"] == case_id and result["variante"] == variant:
             passed = result["pruefungen"].get("urteil")
-            marks.append(f"{result['urteil'] or 'abgebrochen'} {'✓' if passed else '✗'}")
+            marks.append(f"{result['urteil'] or result['status']} {'✓' if passed else '✗'}")
     return ", ".join(marks) or "–"
 
 

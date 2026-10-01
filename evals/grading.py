@@ -57,7 +57,8 @@ def summarize(results):
         entry = variants.setdefault(result["variante"], empty_entry())
         checks = result["pruefungen"]
         entry["laeufe"] += 1
-        entry["abgebrochen"] += result["status"] != "fertig"
+        entry["abgebrochen"] += result["status"] == "abgebrochen"
+        entry["blockiert"] += result["status"] == "blockiert"
         entry["urteil"][0] += checks.get("urteil", False)
         entry["urteil"][1] += 1
         for name, passed in checks.items():
@@ -79,6 +80,7 @@ def empty_entry():
     return {
         "laeufe": 0,
         "abgebrochen": 0,
+        "blockiert": 0,
         "urteil": [0, 0],
         **{name: [0, 0] for name in GROUPED_CHECKS},
         "verworfene_links": 0,

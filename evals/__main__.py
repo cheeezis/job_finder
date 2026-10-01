@@ -40,6 +40,9 @@ def parser():
     parser.add_argument("--repeat", type=int, default=1, choices=range(1, 6), metavar="1-5", help="Durchgänge")
     parser.add_argument("--budget", type=budget, default=Decimal("1.00"), help="hartes Limit in Euro (Standard 1,00)")
     parser.add_argument("--effort", choices=REASONING_EFFORTS, default="medium", help="Denkaufwand des Modells")
+    parser.add_argument(
+        "--searches", type=int, default=0, choices=range(4), metavar="0-3", help="Websuchen des Agenten je Stelle"
+    )
     parser.add_argument("--out", default=str(RESULTS_DIR), help="Ordner für Bericht und Rohdaten")
     return parser
 
@@ -61,9 +64,8 @@ def main(argv=None, environ=os.environ):
         f"{len(dataset['cases'])} Fälle × {len(variants)} Varianten × {args.repeat} Durchgang/Durchgänge, "
         f"höchstens {euro(args.budget)}"
     )
-    run = run_evals(
-        dataset, variants, model_client(endpoint, environ), args.budget, args.effort, args.repeat, progress=show
-    )
+    model = model_client(endpoint, environ)
+    run = run_evals(dataset, variants, model, args.budget, args.effort, args.repeat, args.searches, progress=show)
     _json_path, markdown_path = write_report(
         dataset, run, variants, args.budget, args.effort, args.repeat, Path(args.out)
     )

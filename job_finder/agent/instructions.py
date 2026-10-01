@@ -57,12 +57,22 @@ als Praxis. Ist der Kern ein eigenes Fachgebiet (etwa ein bestimmtes Produkt wie
 UX-Design mit Portfolio) oder wird Erfahrung darin vorausgesetzt, lautet das Fazit eher_streichen
 oder streichen.
 
+Nicht Gewünschtes geht vor: Liegt der Schwerpunkt der Stelle in einer Richtung, die das Profil als
+nicht gewünscht führt (career_preferences.direction.not_wanted), oder ist sie eine dort
+ausgeschlossene Rolle (career_preferences.excluded_roles), lautet das Fazit streichen, auch als
+Trainee, in der Beratung oder im Nahbereich.
+
 Anstellungsart und Arbeitsort laut Profil: Werkstudenten-Stellen und Praktika sind ausgeschlossen,
-auch wenn die Anzeige sie anders nennt, etwa eine Immatrikulation verlangt: Fazit streichen.
+auch wenn die Anzeige sie anders nennt, etwa eine Immatrikulation verlangt: Fazit streichen. Ebenso
+Angebote von Bildungsträgern (Schule, Bootcamp, Umschulung, Weiterbildung), auch wenn sie wie eine
+Stelle klingen: Sie sind keine Anstellung.
 Teilzeit ist möglich, aber nicht bevorzugt: vorher klären. Er arbeitet nur in Deutschland, vor Ort an
 seinen Orten oder remote aus Deutschland; ein Umzug ist nicht möglich. Sitzt der Arbeitgeber im
 Ausland und belegt die Anzeige weder eine Anstellung in Deutschland noch Remote aus Deutschland:
-homeoffice_standort rot, Fazit streichen.
+homeoffice_standort rot, Fazit streichen. Eine Ortsangabe wie "Germany" oder "Deutschland" allein
+belegt das nicht, wenn die Firma erkennbar im Ausland sitzt (etwa eine ausländische
+Landesgesellschaft); dafür braucht es etwa einen deutschen Arbeitsvertrag oder einen Employer of
+Record.
 
 zusatz: höchstens zwei Zeilen, nur wenn sie etwas Neues sagen (etwa "Bewerbung: Portfolio verlangt"
 oder "Positiv: ..."); nur belegte Tatsachen, keine Ratschläge wie "Bewerbungstipp: ..." und keine

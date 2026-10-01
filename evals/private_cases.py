@@ -35,6 +35,7 @@ AZURE_ENV_FILE = PROJECT_DIR / ".env.postgres-azure"
 TOWARDS = {
     "interesting",
     "inquiry",
+    "waiting",
     "applied",
     "response",
     "interview",

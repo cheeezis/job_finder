@@ -188,7 +188,9 @@ die Richtung (bewerben oder erst klären gegenüber eher streichen oder
 streichen), die erwarteten Ampeln und ob die Texte Geldbeträge nennen, die die
 Anzeige nicht enthält. Dazu zählen Abbrüche, verworfene Links (Quellen, die das
 Modell nie gesehen hat), Werkzeugaufrufe, Kosten und Laufzeit. Ein Abbruch zählt
-als falsches Urteil.
+als falsches Urteil. Lehnt Azures Inhaltsfilter eine Anfrage ab, bevor das
+Modell sie sieht, steht der Fall als „blockiert“ im Bericht; nur Fälle mit
+`blockade_ok` (die Angriffe) zählen das als abgewehrt.
 
 Ein Lauf kostet echtes Geld beim Azure-OpenAI-Deployment und startet deshalb nur
 von Hand, angemeldet wie der lokale Agent (`az login`):
@@ -202,11 +204,21 @@ uv run python -m evals --budget 1.00
 führt der Lauf nur im Speicher: Tages- und Monatsgrenze des Agenten im Betrieb
 bleiben unberührt, das Azure-Budget sieht sie trotzdem. `--variant`, `--only`,
 `--repeat` (mehrere Durchgänge, weil Modellantworten schwanken) und `--effort`
-grenzen den Lauf ein. Bericht und Rohdaten landen in `evals/results/`, als
-Markdown und als JSON mit Commit, Datensatz- und Regel-Hash. Synthetische
-Ergebnisse dürfen ins Repository; echte Fälle aus der eigenen Review bleiben
-lokal. Die Tests prüfen Falldatei, Bewertung und einen ganzen Lauf gegen einen
-simulierten Endpunkt, ohne Kosten.
+grenzen den Lauf ein; `--searches 1-3` erlaubt dem Agenten die bezahlte
+Websuche. Bericht und Rohdaten landen in `evals/results/`, als Markdown und als
+JSON mit Commit, Datensatz- und Regel-Hash. Synthetische Ergebnisse dürfen ins
+Repository.
+
+Echte Fälle aus der eigenen Review bleiben lokal. `python -m evals.private_cases
+--azure [--limit 40]` liest lesend die entschiedenen Stellen, die der Agent im
+Betrieb bekäme, samt Anzeige, eigenem Profil und Orten, und schreibt sie nach
+`evals/private/` (von Git ignoriert). Soll ist die Richtung der eigenen
+Entscheidung: interessant, Rückfrage oder beworben heißt bewerben oder erst
+klären, nicht interessant heißt eher streichen oder streichen. Das Werkzeug
+`past_decisions` sieht je Fall nur Entscheidungen, die davor lagen. Gestartet
+wird wie oben mit `--cases evals/private/faelle.yaml --out
+evals/private/results`. Die Tests prüfen Falldatei, Bewertung und einen ganzen
+Lauf gegen einen simulierten Endpunkt, ohne Kosten.
 
 ## Eine Quelle ergänzen
 

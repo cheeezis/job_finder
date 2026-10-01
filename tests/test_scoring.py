@@ -522,6 +522,18 @@ class ScoringTests(unittest.TestCase):
                 result = score_job(make_job(title=title, description=description))
                 self.assertEqual(result["filter_status"], "included")
 
+    def test_platform_and_infrastructure_titles_are_devops_roles(self):
+        for title in (
+            "Junior Platform Engineer (m/w/d)",
+            "Systems Engineer (m/w/d)",
+            "Azure Infrastructure Engineer (m/w/d)",
+            "Linux Engineer (m/w/d)",
+            "Kubernetes Engineer (m/w/d)",
+        ):
+            with self.subTest(title=title):
+                result = score_job(make_job(title=title, description="Azure, Terraform und Python."))
+                self.assertEqual((result["filter_status"], result["role_group"]), ("included", "infrastructure"))
+
     def test_rpa_is_allowed_with_lower_role_score(self):
         result = score_job(
             make_job(title="Junior Automation Engineer", description="RPA-Loesungen mit UiPath und Power Automate.")

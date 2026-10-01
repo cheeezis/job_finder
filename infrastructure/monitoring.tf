@@ -128,3 +128,31 @@ resource "azurerm_consumption_budget_resource_group" "jobfinder" {
     contact_groups = [azurerm_monitor_action_group.jobfinder_alerts.id]
   }
 }
+
+# Traces des KI-Agenten (job_finder/telemetry.py): je Lauf ein Baum aus Lauf,
+# Stellen, Modell- und Werkzeugaufrufen, nur mit IDs, Zahlen und Fazit-Stufe.
+# Die Daten landen im bestehenden Log-Analytics-Workspace. Das Tageslimit liegt
+# weit über dem erwarteten Bedarf von wenigen Kilobyte je Lauf und kappt nur
+# Ausreißer; danach fehlen die Traces bis zum nächsten Tag.
+resource "azurerm_application_insights" "jobfinder" {
+  name                 = "appi-jobfinder"
+  resource_group_name  = azurerm_resource_group.jobfinder.name
+  location             = azurerm_resource_group.jobfinder.location
+  workspace_id         = azurerm_log_analytics_workspace.jobfinder.id
+  application_type     = "other"
+  retention_in_days    = 30
+  daily_data_cap_in_gb = 0.1
+  # Nur Entra-ID-Anmeldung: Die Verbindungszeichenfolge allein darf nichts
+  # senden, deshalb steht sie als normaler Wert im Job statt im Key Vault.
+  local_authentication_enabled = false
+
+  tags = azurerm_resource_group.jobfinder.tags
+}
+
+# Erlaubt dem Worker, mit seiner Managed Identity Traces zu senden.
+resource "azurerm_role_assignment" "monitoring_publisher_worker" {
+  scope                = azurerm_application_insights.jobfinder.id
+  role_definition_name = "Monitoring Metrics Publisher"
+  principal_id         = azurerm_user_assigned_identity.jobfinder.principal_id
+  principal_type       = "ServicePrincipal"
+}

@@ -208,6 +208,11 @@ resource "azurerm_container_app_job" "finder" {
         name  = "JOBFINDER_OPENAI_ENDPOINT"
         value = azurerm_cognitive_account.openai.endpoint
       }
+      # Ziel der Agent-Traces; ohne diesen Wert schreibt der Agent keine.
+      env {
+        name  = "APPLICATIONINSIGHTS_CONNECTION_STRING"
+        value = azurerm_application_insights.jobfinder.connection_string
+      }
 
       env {
         name        = "DISCORD_WEBHOOK_URL"

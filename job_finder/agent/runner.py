@@ -18,7 +18,9 @@ from job_finder.agent.fact_sheet import RESPONSE_FORMAT, parse_fact_sheet
 from job_finder.agent.instructions import instructions, job_prompt
 from job_finder.agent.pricing import Usage
 from job_finder.agent.tools import PAST_DECISIONS_TOOL, past_decisions
+from job_finder.console import log_event
 from job_finder.persistence.fact_sheets import save_aborted, save_fact_sheet
+from job_finder.telemetry import annotate, span
 
 # Deployment name in Azure and key of the price table at the same time.
 MODEL = "gpt-5-mini"
@@ -39,6 +41,8 @@ RATE_LIMIT_RETRIES = 3
 RATE_LIMIT_WAIT_SECONDS = 60
 # Each round is two graph steps; the cost guard ends a job long before this.
 RECURSION_LIMIT = 50
+# How a model call appears in traces (OpenTelemetry's names for generative AI).
+MODEL_CALL = {"gen_ai.operation.name": "chat", "gen_ai.provider.name": "azure.ai.openai", "gen_ai.request.model": MODEL}
 
 
 @dataclass
@@ -85,23 +89,57 @@ class JobState(TypedDict):
     messages: Annotated[list, add_messages]
 
 
-def write_fact_sheet(job, profile_text, guard, model, settings, today):
+def write_fact_sheet(job, profile_text, guard, model, settings, today, run_id=None):
     """Write and store the fact sheet of one job; return "fertig" or "abgebrochen".
 
     A limit, a rejected request or an unusable answer ends only this job, and
     its reason is stored. AgentStopped propagates: money used up, ledger
-    unusable or model unreachable end the whole run.
+    unusable or model unreachable end the whole run. Every job leaves one
+    agent_job log line and span with ids, counts and the verdict.
     """
+    started, result = time.monotonic(), {"outcome": "fehler"}
+    with span("agent_job", **{"jobfinder.run_id": run_id, "jobfinder.job_id": job["id"]}) as current:
+        try:
+            result = draft_and_store(job, profile_text, guard, model, settings, today)
+        except AgentStopped:
+            result = {"outcome": "gestoppt", "reason": "run_stopped"}
+            raise
+        finally:
+            report_job(current, job["id"], run_id, guard, result, time.monotonic() - started)
+    return result["outcome"]
+
+
+def draft_and_store(job, profile_text, guard, model, settings, today):
+    """Store the fact sheet or why this job ended; return the outcome, its reason or verdict."""
     try:
         sheet, _dropped = draft_fact_sheet(job, profile_text, guard, model, settings, today)
     except JobLimitReached as stop:
         save_aborted(job["id"], MODEL, str(stop), guard.job_cost)
-        return "abgebrochen"
+        return {"outcome": "abgebrochen", "reason": stop.reason}
     except ValueError as error:
         save_aborted(job["id"], MODEL, f"Steckbrief unbrauchbar: {error}", guard.job_cost)
-        return "abgebrochen"
+        return {"outcome": "abgebrochen", "reason": "unusable"}
     save_fact_sheet(job["id"], MODEL, sheet, guard.job_cost)
-    return "fertig"
+    return {"outcome": "fertig", "verdict": sheet["fazit"]["stufe"]}
+
+
+def report_job(current, job_id, run_id, guard, result, seconds):
+    """Log one line and annotate the span: ids, counts and the verdict, never text from the job."""
+    fields = {"job_id": job_id, **result, "seconds": round(seconds, 1)}
+    # Only when start_job ran for this job do the guard's counters belong to it.
+    if guard.job_id == job_id:
+        fields.update(
+            model_calls=guard.model_calls,
+            tool_calls=guard.tool_calls,
+            web_searches=guard.web_searches,
+            input_tokens=guard.input_tokens,
+            output_tokens=guard.output_tokens,
+            cost_eur=float(guard.job_cost),
+        )
+    annotate(current, **{f"jobfinder.{key}": value for key, value in fields.items()})
+    if "cost_eur" in fields:
+        fields["cost_eur"] = str(guard.job_cost)
+    log_event("agent_job", run_id=run_id, **fields)
 
 
 def draft_fact_sheet(job, profile_text, guard, model, settings, today, decisions=None):
@@ -129,13 +167,28 @@ def job_graph(job_id, rules, guard, model, settings, seen, response_ids, decisio
 
     def call_model(state):
         guard.before_model_call()
-        answer = ask_model(model, rules, state["messages"], guard, settings)
-        response_ids.append(answer.response_metadata.get("id"))
-        guard.after_model_call(usage_of(answer, model.billed_searches))
-        seen.update(urls_found(answer))
-        if answer.response_metadata.get("status") != "completed":
-            reason = (answer.response_metadata.get("incomplete_details") or {}).get("reason")
-            raise JobLimitReached(f"Stelle abgebrochen: Antwort unvollständig ({reason or 'unbekannt'})")
+        with span("model_call", **MODEL_CALL) as current:
+            answer = ask_model(model, rules, state["messages"], guard, settings)
+            response_ids.append(answer.response_metadata.get("id"))
+            usage = usage_of(answer, model.billed_searches)
+            if usage:
+                annotate(
+                    current,
+                    **{
+                        "gen_ai.usage.input_tokens": usage.input_tokens,
+                        "gen_ai.usage.output_tokens": usage.output_tokens,
+                        "jobfinder.cached_input_tokens": usage.cached_input_tokens,
+                        "jobfinder.reasoning_tokens": usage.reasoning_tokens,
+                        "jobfinder.web_searches": usage.web_searches,
+                    },
+                )
+            guard.after_model_call(usage)
+            seen.update(urls_found(answer))
+            if answer.response_metadata.get("status") != "completed":
+                reason = (answer.response_metadata.get("incomplete_details") or {}).get("reason")
+                raise JobLimitReached(
+                    f"Stelle abgebrochen: Antwort unvollständig ({reason or 'unbekannt'})", "incomplete"
+                )
         return {"messages": [answer]}
 
     def call_tools(state):
@@ -182,7 +235,7 @@ def invoke(bound, messages):
                 time.sleep(retry_after(error))
         except openai.BadRequestError as error:
             reason = error.code or error.status_code
-            raise JobLimitReached(f"Stelle abgebrochen: Anfrage abgelehnt ({reason})") from error
+            raise JobLimitReached(f"Stelle abgebrochen: Anfrage abgelehnt ({reason})", "rejected") from error
         except openai.APIError as error:
             raise AgentStopped(f"Modell nicht erreichbar ({type(error).__name__})") from error
     raise AgentStopped("Modell gedrosselt, auch nach Wartezeit") from throttled
@@ -271,11 +324,14 @@ def requested_tools(answer):
 def tool_result(call, job_id, guard, decisions=None):
     """Run one requested tool; the answer goes back to the model as text."""
     guard.before_tool_call()
-    if call.get("name") == PAST_DECISIONS_TOOL["name"]:
-        arguments = call.get("args")
-        output = past_decisions(arguments if isinstance(arguments, dict) else None, job_id, decisions)
-    else:
-        output = json.dumps({"fehler": f"Unbekanntes Werkzeug {call.get('name')}"})
+    known = call.get("name") == PAST_DECISIONS_TOOL["name"]
+    # The model names the tool, so only a known name goes into the trace.
+    with span("tool_call", **{"gen_ai.tool.name": call.get("name") if known else "unbekannt"}):
+        if known:
+            arguments = call.get("args")
+            output = past_decisions(arguments if isinstance(arguments, dict) else None, job_id, decisions)
+        else:
+            output = json.dumps({"fehler": f"Unbekanntes Werkzeug {call.get('name')}"})
     return ToolMessage(output, tool_call_id=call.get("id"))
 
 

@@ -23,6 +23,7 @@ from job_finder.persistence.agent_usage import spent_today_and_this_month
 from job_finder.persistence.fact_sheets import fact_sheets
 from job_finder.persistence.postgres_store import read_jobs
 from job_finder.persistence.storage import dataset_name
+from job_finder.telemetry import annotate, configure_tracing, span
 from job_finder.workflow.notifications import send_warning
 from job_finder.workflow.review_data import load_review_jobs
 
@@ -51,14 +52,19 @@ def agent_phase(run_id=None, values=USER_SETTINGS, environ=os.environ):
     # The profile refers to the search settings for the places; the agent needs them itself.
     profile_text = profile_with_places(profile_text, values)
     print(f"  Profil: {source} · Denkaufwand: {settings.reasoning_effort}")
+    tracing = start_tracing(environ)
     try:
-        stats = run_agent(settings, profile_text, model_client(endpoint, environ))
+        stats = run_agent(settings, profile_text, model_client(endpoint, environ), run_id=run_id)
     except Exception as error:
         # The finder's results are saved already; only the agent's part fails.
         print(f"  Agent abgebrochen: {type(error).__name__}")
         log_event("agent_failed", run_id=run_id, level="error", error=type(error).__name__)
         warn(f"Agent abgebrochen: {type(error).__name__}", environ)
         return None
+    finally:
+        if tracing is not None:
+            # The container ends with the run: send the spans now, not in the background.
+            tracing.shutdown()
     print(
         f"  {stats['fertig']} fertig · {stats['abgebrochen']} abgebrochen · "
         f"{stats['offen']} offen · heute {euro(stats['heute_eur'])} von "
@@ -75,6 +81,18 @@ def agent_phase(run_id=None, values=USER_SETTINGS, environ=os.environ):
     return stats
 
 
+def start_tracing(environ):
+    """Turn on traces when Application Insights is configured; a failure only costs the traces."""
+    try:
+        tracing = configure_tracing(environ)
+    except Exception as error:
+        print(f"  Traces aus: {type(error).__name__}")
+        return None
+    if tracing is not None:
+        print("  Traces: Application Insights")
+    return tracing
+
+
 def warn(text, environ):
     """Report in Discord that the agent did not finish normally.
 
@@ -85,30 +103,41 @@ def warn(text, environ):
         print(f"  Discord-Warnung: {error}")
 
 
-def run_agent(settings, profile_text, client, clock=time.monotonic, today=None):
+def run_agent(settings, profile_text, client, clock=time.monotonic, today=None, run_id=None):
     """Write fact sheets for the best waiting jobs until money, time or jobs run out."""
     guard = CostGuard(settings, MODEL)
     started = clock()
     stats = {"fertig": 0, "abgebrochen": 0, "offen": 0, "stopp": ""}
-    waiting = waiting_jobs()
-    ads = read_jobs(dataset_name(JOBS_FILE), [job["recommendation_id"] for job in waiting])
-    for position, job in enumerate(waiting):
-        ad = ads.get(job["recommendation_id"])
-        if ad is None:
-            continue  # still recommended, but its details are gone
-        try:
-            if clock() - started > RUN_SECONDS:
-                raise AgentStopped("Zeitbudget des Laufs erreicht")
-            # Stored under the review's id, so the review finds the sheet.
-            outcome = write_fact_sheet(
-                {**ad, "id": job["id"]}, profile_text, guard, client, settings, today or date.today()
-            )
-        except AgentStopped as stop:
-            stats["stopp"] = str(stop)
-            stats["offen"] = len(waiting) - position
-            break
-        stats[outcome] += 1
-    stats["heute_eur"], stats["monat_eur"] = spent_today_and_this_month()
+    with span("agent_run", **{"jobfinder.run_id": run_id}) as current:
+        waiting = waiting_jobs()
+        ads = read_jobs(dataset_name(JOBS_FILE), [job["recommendation_id"] for job in waiting])
+        for position, job in enumerate(waiting):
+            ad = ads.get(job["recommendation_id"])
+            if ad is None:
+                continue  # still recommended, but its details are gone
+            try:
+                if clock() - started > RUN_SECONDS:
+                    raise AgentStopped("Zeitbudget des Laufs erreicht")
+                # Stored under the review's id, so the review finds the sheet.
+                outcome = write_fact_sheet(
+                    {**ad, "id": job["id"]}, profile_text, guard, client, settings, today or date.today(), run_id
+                )
+            except AgentStopped as stop:
+                stats["stopp"] = str(stop)
+                stats["offen"] = len(waiting) - position
+                break
+            stats[outcome] += 1
+        stats["heute_eur"], stats["monat_eur"] = spent_today_and_this_month()
+        annotate(
+            current,
+            **{
+                "jobfinder.waiting": len(waiting),
+                "jobfinder.fertig": stats["fertig"],
+                "jobfinder.abgebrochen": stats["abgebrochen"],
+                "jobfinder.offen": stats["offen"],
+                "jobfinder.stopped": bool(stats["stopp"]),
+            },
+        )
     return stats
 
 

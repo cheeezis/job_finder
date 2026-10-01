@@ -1,11 +1,17 @@
 """Tests for the agent graph of one job: the real LangChain model talks to a fake HTTP endpoint."""
 
+import io
 import json
 import unittest
+from contextlib import redirect_stdout
 from datetime import date
 from unittest.mock import ANY, patch
 
 import httpx
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from job_finder.agent import cost_guard, runner, tools
 from job_finder.agent.cost_guard import AgentStopped, CostGuard
@@ -271,6 +277,107 @@ class AgentRunnerTests(unittest.TestCase):
             self.run_job(model)
         self.assertEqual(model.deleted, ["resp_1"])
         self.saved.assert_not_called()
+
+
+# Marks every text that must stay out of logs and traces.
+SECRET = "GEHEIM"
+
+
+class AgentTraceTests(unittest.TestCase):
+    """Logs and traces of a job carry ids, counts and the verdict, never text from profile, ad or answer."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.spans = InMemorySpanExporter()
+        provider = trace.get_tracer_provider()
+        if not isinstance(provider, TracerProvider):
+            provider = TracerProvider()
+            trace.set_tracer_provider(provider)
+        provider.add_span_processor(SimpleSpanProcessor(cls.spans))
+
+    def setUp(self):
+        self.spans.clear()
+        self.enterContext(patch.object(cost_guard, "spent_today_and_this_month", return_value=(0, 0)))
+        self.enterContext(patch.object(cost_guard, "record_model_call"))
+        self.enterContext(patch.object(runner, "save_fact_sheet"))
+        self.enterContext(patch.object(runner, "save_aborted"))
+        notes = json.dumps({"entscheidungen": [{"note": f"{SECRET}-NOTIZ aus dem Gespräch"}]})
+        self.enterContext(patch.object(runner, "past_decisions", return_value=notes))
+
+    def run_job(self, *replies):
+        """Run one job full of secret text; return (outcome or exception, log lines, spans by name)."""
+        sheet = example_sheet()
+        sheet["kurzgrund"] = f"{SECRET}-KURZGRUND"
+        job = {**JOB, "title": f"{SECRET} Developer", "description_clean": f"{SECRET}-ANZEIGE"}
+        model = FakeModel(*[answer(sheet) if callable(answer) else answer for answer in replies])
+        output = io.StringIO()
+        with redirect_stdout(output):
+            try:
+                result = runner.write_fact_sheet(
+                    job,
+                    f"name: {SECRET}-PROFIL",
+                    CostGuard(SETTINGS, runner.MODEL),
+                    model.model,
+                    SETTINGS,
+                    date(2026, 9, 25),
+                    run_id="run1",
+                )
+            except AgentStopped as stop:
+                result = stop
+        lines = [json.loads(line) for line in output.getvalue().splitlines()]
+        return result, lines, {span.name: span for span in self.spans.get_finished_spans()}
+
+    def assert_no_text(self, lines, spans):
+        recorded = json.dumps(lines, ensure_ascii=False) + "".join(
+            f"{span.name}{dict(span.attributes)}{span.status.description}{span.events}" for span in spans.values()
+        )
+        self.assertNotIn(SECRET, recorded)
+        self.assertNotIn("Beispiel GmbH", recorded)
+
+    def test_a_finished_job_reports_counts_and_verdict(self):
+        outcome, lines, spans = self.run_job(
+            reply("resp_1", decisions_call(), searches=1), lambda sheet: reply("resp_2", message(json.dumps(sheet)))
+        )
+
+        self.assertEqual(outcome, "fertig")
+        (line,) = lines
+        self.assertEqual(line["event"], "agent_job")
+        self.assertEqual(line["run_id"], "run1")
+        self.assertEqual(
+            {key: line[key] for key in ("job_id", "outcome", "verdict", "model_calls", "tool_calls", "web_searches")},
+            {
+                "job_id": "job:1",
+                "outcome": "fertig",
+                "verdict": "bewerben",
+                "model_calls": 2,
+                "tool_calls": 1,
+                "web_searches": 1,
+            },
+        )
+        self.assertEqual((line["input_tokens"], line["output_tokens"]), (18000, 1600))
+        self.assertEqual(set(spans), {"agent_job", "model_call", "tool_call"})
+        job_span = spans["agent_job"]
+        self.assertEqual(spans["model_call"].parent.span_id, job_span.context.span_id)
+        self.assertEqual(job_span.attributes["jobfinder.verdict"], "bewerben")
+        self.assertEqual(spans["tool_call"].attributes["gen_ai.tool.name"], "past_decisions")
+        self.assertEqual(spans["model_call"].attributes["gen_ai.usage.output_tokens"], 800)
+        self.assert_no_text(lines, spans)
+
+    def test_an_aborted_job_names_a_fixed_reason(self):
+        outcome, lines, spans = self.run_job(reply("resp_1", status="incomplete"))
+
+        self.assertEqual(outcome, "abgebrochen")
+        self.assertEqual((lines[0]["outcome"], lines[0]["reason"]), ("abgebrochen", "incomplete"))
+        self.assertEqual(spans["model_call"].status.description, "JobLimitReached")
+        self.assert_no_text(lines, spans)
+
+    def test_a_stopped_run_still_reports_the_job(self):
+        stop, lines, spans = self.run_job(api_error("connection"))
+
+        self.assertIsInstance(stop, AgentStopped)
+        self.assertEqual((lines[0]["outcome"], lines[0]["reason"]), ("gestoppt", "run_stopped"))
+        self.assertEqual(spans["agent_job"].status.description, "AgentStopped")
+        self.assert_no_text(lines, spans)
 
 
 if __name__ == "__main__":

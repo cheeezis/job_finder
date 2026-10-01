@@ -23,7 +23,11 @@ def euro(value, digits=2):
 
 
 class JobLimitReached(Exception):
-    pass
+    """Ends one job; reason is a fixed word for logs and traces, the message is for the review."""
+
+    def __init__(self, message, reason="limit"):
+        super().__init__(message)
+        self.reason = reason
 
 
 class AgentStopped(Exception):
@@ -57,6 +61,8 @@ class CostGuard:
         self.model_calls = 0
         self.tool_calls = 0
         self.web_searches = 0
+        self.input_tokens = 0
+        self.output_tokens = 0
         self.job_cost = Decimal(0)
 
     def check_run(self):
@@ -79,10 +85,13 @@ class CostGuard:
             raise RuntimeError("start_job muss vor dem ersten Modellaufruf laufen")
         self.check_run()
         if self.model_calls >= self.limits.job_max_model_calls:
-            raise JobLimitReached(f"Stelle abgebrochen: {self.limits.job_max_model_calls} Modellaufrufe erreicht")
+            raise JobLimitReached(
+                f"Stelle abgebrochen: {self.limits.job_max_model_calls} Modellaufrufe erreicht", "model_calls"
+            )
         if self.job_cost >= self.limits.job_max_cost_eur:
             raise JobLimitReached(
-                f"Stelle abgebrochen: {euro(self.job_cost, 3)} von {euro(self.limits.job_max_cost_eur)} verbraucht"
+                f"Stelle abgebrochen: {euro(self.job_cost, 3)} von {euro(self.limits.job_max_cost_eur)} verbraucht",
+                "job_cost",
             )
         self.model_calls += 1
 
@@ -94,7 +103,8 @@ class CostGuard:
             cost = self.limits.job_max_cost_eur
             self.book(Usage(0, 0, 0), cost)
             raise JobLimitReached(
-                f"Stelle abgebrochen: Token-Angaben fehlen oder sind ungültig, vorsichtshalber {euro(cost)} gebucht"
+                f"Stelle abgebrochen: Token-Angaben fehlen oder sind ungültig, vorsichtshalber {euro(cost)} gebucht",
+                "usage_missing",
             ) from error
         self.book(usage, cost)
 
@@ -105,6 +115,8 @@ class CostGuard:
             raise AgentStopped(f"Kostenbuch nicht beschreibbar ({type(error).__name__})") from error
         self.job_cost += cost
         self.web_searches += usage.web_searches
+        self.input_tokens += usage.input_tokens
+        self.output_tokens += usage.output_tokens
 
     def search_allowed(self):
         """Whether the next model call may still offer the paid web search."""
@@ -112,5 +124,7 @@ class CostGuard:
 
     def before_tool_call(self):
         if self.tool_calls >= self.limits.job_max_tool_calls:
-            raise JobLimitReached(f"Stelle abgebrochen: {self.limits.job_max_tool_calls} Werkzeugaufrufe erreicht")
+            raise JobLimitReached(
+                f"Stelle abgebrochen: {self.limits.job_max_tool_calls} Werkzeugaufrufe erreicht", "tool_calls"
+            )
         self.tool_calls += 1

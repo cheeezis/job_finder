@@ -55,7 +55,7 @@ class RemotelyHttpClient:
 def fetch_jobs(cache_path=CACHE_FILE, client=None, now=None):
     """Fetch only listings published within the rolling lookback window."""
     client = client or RemotelyHttpClient()
-    reference_date = (now.date() if hasattr(now, "date") else now) or date.today()
+    reference_date = (now.date() if isinstance(now, datetime) else now) or date.today()
     links = collect_links(client, today=reference_date)
     return fetch_cached_details(
         links,

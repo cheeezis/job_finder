@@ -98,7 +98,11 @@ class Job:
         salary_values = [self.salary_min_eur, self.salary_max_eur]
         if any(value is not None and value < 0 for value in salary_values):
             raise ValueError("salary values cannot be negative")
-        if None not in salary_values and self.salary_min_eur > self.salary_max_eur:
+        if (
+            self.salary_min_eur is not None
+            and self.salary_max_eur is not None
+            and self.salary_min_eur > self.salary_max_eur
+        ):
             raise ValueError("salary_min_eur cannot exceed salary_max_eur")
 
     @property

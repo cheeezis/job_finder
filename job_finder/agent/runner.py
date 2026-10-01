@@ -226,6 +226,7 @@ def ask_model(model, rules, messages, guard, settings):
 
 def invoke(bound, messages):
     """Call the bound model; wait out throttling, turn API errors into the guard's stops."""
+    throttled = None
     for attempt in range(RATE_LIMIT_RETRIES + 1):
         try:
             return bound.invoke(messages)

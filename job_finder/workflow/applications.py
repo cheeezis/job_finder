@@ -6,7 +6,7 @@ from pathlib import Path
 from job_finder.models import APPLICATION_STATUSES, WorkflowStatus
 from job_finder.paths import MEMORY_FILE, RECOMMENDATIONS_JSON
 from job_finder.persistence.application_documents import public_documents
-from job_finder.persistence.storage import read_json
+from job_finder.persistence.storage import read_object
 from job_finder.workflow.memory import (
     has_application_state as is_application,
     load_memory,
@@ -171,7 +171,7 @@ def review_links(memory, recommendations_path):
     """Return the listing links of current recommendations per memory id, joined as the review joins them."""
     find_memory_ids = memory_id_finder(memory)
     links = {}
-    for recommendation in read_json(Path(recommendations_path), {}).get("recommendations", []):
+    for recommendation in read_object(Path(recommendations_path), {}).get("recommendations", []):
         if candidates := find_memory_ids(recommendation):
             memory_id = preferred_memory_id(candidates, memory, recommendation["id"])
             links.setdefault(memory_id, []).extend(recommendation.get("source_links") or [])

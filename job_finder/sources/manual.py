@@ -222,12 +222,12 @@ class VisibleJobParser(HTMLParser):
             if name and content:
                 self.metadata[name.casefold()] = content.strip()
         if (
-            tag in {"main", "article"} or attributes.get("role", "").casefold() == "main"
+            tag in {"main", "article"} or (attributes.get("role") or "").casefold() == "main"
         ) and self.fragment_start is None:
             self._in_main = True
             self._main_stack = [tag]
             line, column = self.getpos()
-            self.fragment_start = (line, column + len(self.get_starttag_text()))
+            self.fragment_start = (line, column + len(self.get_starttag_text() or ""))
             return
         if not self._in_main:
             return

@@ -81,7 +81,7 @@ def score_for_pipeline(job):
 
 def load_jobs(path):
     """Load jobs from the stored jobs dataset or an explicit JSON import file."""
-    values = read_json(path, [])
+    values = read_json(path, []) or []
     try:
         return [Job.from_dict(job) for job in values]
     except KeyError as error:

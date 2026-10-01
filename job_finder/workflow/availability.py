@@ -155,7 +155,7 @@ def ignore_closed_listings(
     now = now or datetime.now(UTC)
     snapshot = load_memory(memory_path)
     candidates, due = _plan_checks(jobs, snapshot, successful_sources, run_sources, now)
-    selected = sorted(due, key=due.get)[: max(0, max_urls)]
+    selected = sorted(due, key=lambda url: due[url])[: max(0, max_urls)]
     all_urls = {url for _, urls, _ in candidates.values() for url in urls}
     print(
         f"  Offline: {len(due)} URLs fällig · {len(all_urls) - len(due)} im Prüfintervall · "
@@ -240,7 +240,7 @@ def _save_checks(candidates, checked_urls, memory_path, now):
                 continue
             entry = memory.get(job_id)
             # A concurrent user decision or worker update takes precedence.
-            if entry != previous:
+            if entry is None or entry != previous:
                 continue
             updated = {url: checked_urls.get(url, checks.get(url, {})) for url in urls}
             entry["availability_checks"] = updated

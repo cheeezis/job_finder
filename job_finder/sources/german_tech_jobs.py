@@ -8,7 +8,7 @@ from job_finder.http import fetch_text
 from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource
 from job_finder.paths import cache_file
-from job_finder.persistence.storage import read_json, write_versioned
+from job_finder.persistence.storage import read_object, write_versioned
 from job_finder.sources.common import (
     as_utc,
     normalize_employment_type,
@@ -147,7 +147,7 @@ def save_feed_cache(path, jobs, fetched_at):
 def load_feed_cache(path, now=None):
     """Restore a recent successful feed snapshot as a marked fallback."""
     try:
-        document = read_json(path, {})
+        document = read_object(path, {})
         if document.get("version") != CACHE_VERSION:
             return []
         fetched_at = as_utc(datetime.fromisoformat(document["fetched_at"]))

@@ -128,7 +128,7 @@ def fetch_cached_details(
     for link_index, url in enumerate(links, 1):
         cache_key = canonical_detail_url(url)
         cached_job = cache.get(cache_key)
-        if detail_is_fresh(cached_job, now, max_age=max_age):
+        if cached_job is not None and detail_is_fresh(cached_job, now, max_age=max_age):
             if normalize_cached:
                 cache_changed = normalize_cached(cached_job, url) or cache_changed
             cached_job.cache_stale = False

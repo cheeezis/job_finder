@@ -10,7 +10,7 @@ from job_finder.models import WorkflowStatus
 from job_finder.paths import MEMORY_FILE, RECOMMENDATIONS_JSON
 from job_finder.persistence.database import snapshot
 from job_finder.persistence.fact_sheets import fact_sheets
-from job_finder.persistence.storage import dataset_name, read_json
+from job_finder.persistence.storage import dataset_name, read_object
 from job_finder.workflow.applications import OPEN_APPLICATION_STATUSES, application_row, is_application
 from job_finder.workflow.memory import load_memory, memory_id_finder, memory_source_links, preferred_memory_id
 from job_finder.workflow.reporting import is_international_listing
@@ -26,7 +26,7 @@ def load_review_jobs(recommendations_path=RECOMMENDATIONS_JSON, memory_path=MEMO
     """Combine compact review jobs with their persisted workflow status."""
     path = Path(recommendations_path)
     with snapshot() if dataset_name(path) else nullcontext():
-        document = read_json(path, {})
+        document = read_object(path, {})
         memory = load_memory(memory_path)
     recommendations = document.get("recommendations", [])
     find_memory_ids = memory_id_finder(memory)

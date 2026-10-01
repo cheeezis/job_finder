@@ -23,7 +23,13 @@ der eigenen Azure-Subscription und dessen Suchanfragen an die Bing-Suche.
 - regelbasierter Vorfilter für Standort, Remote-Anteil, Erfahrung,
   Beschäftigungsart, Reisetätigkeit und IT-Eignung; Junior-Hybrid-Sonderfälle
   und internationale Stellen lassen sich im Review zuschalten
-- Review mit Interessant, Rückfrage, Ignorieren und Bewerben sowie eigener Notiz
+- Review mit Interessant, Rückfrage, Warteliste, Ignorieren und Bewerben sowie
+  eigener Notiz; läuft bei derselben Firma schon eine Bewerbung, nennt die Karte
+  sie mit Status
+- Warteliste für Stellen bei einer Firma, bei der eine andere Bewerbung noch
+  offen ist: Die Stelle bleibt im Statusfilter „Warteliste“ sichtbar, und sobald
+  jene Bewerbung abgeschlossen ist (Absage, keine Rückmeldung, selbst abgesagt),
+  heißt es auf der Karte „jetzt entscheiden“
 - optionaler KI-Agent (LangGraph und LangChain auf Azure OpenAI), der
   vorgefilterten Stellen einen Steckbrief mit Ampeln, Fazit und Kurzgrund
   schreibt, begrenzt durch einen mehrstufigen Kostenschutz
@@ -194,8 +200,8 @@ Den Ablauf eines Laufs beschreibt die
   Warnung prüfbar.
 - **Benachrichtigungen:** Neue Stellen können an Discord gehen. Spätere
   Textänderungen lösen weder eine neue Nachricht noch ein erneutes „Neu“ aus.
-- **Offline-Prüfung:** Interessante Stellen bleiben auch ohne Suchtreffer
-  vorgemerkt. Fehlen sie in einem Lauf, dessen Quellen alle vollständig waren,
+- **Offline-Prüfung:** Interessante und wartende Stellen bleiben auch ohne
+  Suchtreffer vorgemerkt. Fehlen sie in einem Lauf, dessen Quellen alle vollständig waren,
   prüft der Lauf ihre URLs. Erst wenn alle eindeutig geschlossen sind (HTTP
   404/410 oder Schließungshinweis), wechselt die Stelle mit Datum und Grund auf
   „Nicht interessant“; Bewerbungen bleiben unberührt.

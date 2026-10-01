@@ -261,6 +261,49 @@ Danach die Objekt-ID des Service Principals (`az ad sp show --id <appId> --query
 als `local_docker_sp_object_id` in `infrastructure/variables.tf` eintragen und
 die Rollenzuweisungen anwenden.
 
+## Logs und Traces des Agenten
+
+Jeder Lauf schreibt JSON-Zeilen mit derselben `run_id` (`job_finder/console.py`);
+im Log-Analytics-Workspace stehen sie in `ContainerAppConsoleLogs_CL`, Spalte
+`Log_s`. Der Agent ergänzt je Stelle eine Zeile `agent_job`: Stellen-ID,
+Ergebnis (`fertig`, `abgebrochen`, `gestoppt`), Abbruchgrund als festes Wort
+(etwa `job_cost`, `incomplete`, `rejected`), Fazit-Stufe, Modell- und
+Werkzeugaufrufe, Websuchen, Tokens, Kosten und Sekunden. Teuerste Stellen und
+Abbruchgründe der letzten sieben Tage:
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(7d) and Log_s startswith "{"
+| extend e = parse_json(Log_s)
+| where e.event == "agent_job"
+| summarize Stellen = count(), Kosten = sum(todouble(e.cost_eur)), Websuchen = sum(toint(e.web_searches))
+    by Ergebnis = tostring(e.outcome), Grund = tostring(e.reason), Fazit = tostring(e.verdict)
+| order by Kosten desc
+```
+
+Dieselben Zahlen gehen als Traces nach Application Insights
+(`appi-jobfinder`, `job_finder/telemetry.py`): ein Baum aus `agent_run`, je
+Stelle `agent_job` und darunter `model_call` und `tool_call` mit Dauer. Die
+Attribute der Modellaufrufe folgen den OpenTelemetry-Namen für generative KI
+(`gen_ai.usage.input_tokens` usw.). Im Portal zeigt „Transaktionssuche“ den Baum
+eines Laufs; im Workspace liegen die Spans in `AppDependencies`:
+
+```kusto
+AppDependencies
+| where TimeGenerated > ago(7d) and Name == "model_call"
+| summarize Aufrufe = count(), Median_ms = percentile(DurationMs, 50), P95_ms = percentile(DurationMs, 95),
+    Ausgabe = sum(toint(Properties["gen_ai.usage.output_tokens"])) by bin(TimeGenerated, 1d)
+```
+
+Was erfasst wird, legt `span()` in `job_finder/telemetry.py` fest: nur Zahlen,
+Wahrheitswerte und kurze feste Wörter; bei einem Fehler nur der Typname der
+Ausnahme. Profil, Prompt, Anzeigentext, Notizen, Titel, Firma und Antworten des
+Modells fehlen; ein Test in `tests/test_agent_runner.py` prüft das. Application
+Insights nimmt nur Daten mit Entra-ID-Anmeldung an (die Managed Identity des
+Workers), bewahrt sie 30 Tage auf und nimmt höchstens 0,1 GB am Tag an. Ohne
+`APPLICATIONINSIGHTS_CONNECTION_STRING`, also lokal, in Tests und Evals, sendet
+nichts.
+
 ## Kosten
 
 Listenpreise in Frankreich Mitte, ohne Steuern, laut Azure Retail Prices API am
@@ -271,7 +314,7 @@ Listenpreise in Frankreich Mitte, ohne Steuern, laut Azure Retail Prices API am
 | PostgreSQL Flexible Server B1ms mit 32 GiB | fix | 15,55 € (11,90 € Rechenleistung, 3,65 € Speicher) |
 | Container Registry Basic | fix | 4,35 € |
 | Container Apps (Finder-Job, Review) | nach Nutzung | blieb bisher im kostenlosen Monatskontingent |
-| Log Analytics, Blob Storage, Metrik-Alarme | nach Nutzung | Cent-Beträge |
+| Log Analytics, Application Insights, Blob Storage, Metrik-Alarme | nach Nutzung | Cent-Beträge |
 | Sprachmodell und Websuche des Agenten | nach Nutzung | wenige Cent je Steckbrief, höchstens 1 € am Tag und 20 € im Monat (Standardgrenzen) |
 
 Der Server läuft derzeit über ein kostenloses Kontingent der Subscription;

@@ -218,6 +218,15 @@ Websuche. Bericht und Rohdaten landen in `evals/results/`, als Markdown und als
 JSON mit Commit, Datensatz- und Regel-Hash. Ins Repository kommt nur der Bericht
 synthetischer Läufe; die Rohdaten mit allen Steckbriefen bleiben lokal.
 
+Bekannte Schwächen (Lauf v3 vom 01.10.2026): Zwei Fälle scheitern in beiden
+Varianten und allen Durchgängen. Bei `ausgeschlossene-rolle-vertrieb` wertet das
+Modell Vertrieb als lernbare Lücke statt als ausgeschlossene Rolle; „Engineer“
+und „Cloud“ im Titel und die Regel zum Nahbereich ziehen zu „Bewerben –
+Stretch“. Bei `auslaendische-firma-germany` reicht ihm „Location: Germany
+(remote)“ für grün; den Firmensitz im Ausland nennt es nur als Punkt zum Klären.
+Beide Fälle behalten ihr strenges Soll, damit ein späterer Regel- oder
+Modellwechsel zeigt, ob sich das bessert.
+
 Echte Fälle aus der eigenen Review bleiben lokal. `python -m evals.private_cases
 --azure [--limit 40]` liest lesend die entschiedenen Stellen, die der Agent im
 Betrieb bekäme, samt Anzeige, eigenem Profil und Orten, und schreibt sie nach

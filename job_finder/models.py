@@ -12,6 +12,8 @@ class WorkflowStatus(str, Enum):
     REVIEW = "review"
     INTERESTING = "interesting"
     INQUIRY = "inquiry"
+    # Interesting, but an application at the same company is still open.
+    WAITING = "waiting"
     IGNORED = "ignored"
     APPLIED = "applied"
     RESPONSE = "response"

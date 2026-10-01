@@ -12,6 +12,7 @@ MAX_NOTE_CHARS = 300
 DECISION_LABELS = {
     "interesting": "Interessant",
     "inquiry": "Rückfrage offen",
+    "waiting": "Warteliste",
     "ignored": "Nicht interessant",
     "applied": "Beworben",
     "response": "Antwort erhalten",

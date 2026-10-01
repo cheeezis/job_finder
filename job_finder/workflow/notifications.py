@@ -12,7 +12,7 @@ from job_finder.paths import NOTIFICATION_STATE_FILE
 from job_finder.persistence.storage import read_json, write_json_atomic
 from job_finder.workflow.reporting import format_role_group, is_visible_in_default_review, primary_url
 
-NOTIFIABLE_STATUSES = {"new", "review", "interesting", "inquiry"}
+NOTIFIABLE_STATUSES = {"new", "review", "interesting", "inquiry", "waiting"}
 MAX_EMBEDS = 10
 MAX_EMBED_CHARACTERS = 6000
 HEALTH_LABELS = {"partial": "teilweise", "empty": "ohne Treffer", "failed": "fehlgeschlagen"}

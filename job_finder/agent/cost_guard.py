@@ -30,11 +30,24 @@ class AgentStopped(Exception):
     pass
 
 
+class SharedLedger:
+    """The cost ledger in PostgreSQL that every run of the agent books into."""
+
+    def spent(self):
+        """Return what today and this month have cost so far."""
+        return spent_today_and_this_month()
+
+    def record(self, job_id, model, usage, cost):
+        record_model_call(job_id, model, usage, cost)
+
+
 class CostGuard:
-    def __init__(self, settings, model):
+    def __init__(self, settings, model, ledger=None):
         self.settings = settings
         self.limits = settings.limits
         self.model = model
+        # The evals bring their own ledger, so their runs stay out of the shared one.
+        self.ledger = ledger or SharedLedger()
         self.job_id = None
 
     def start_job(self, job_id):
@@ -52,7 +65,7 @@ class CostGuard:
         if self.model not in PRICES:
             raise AgentStopped(f"Kein Preis für Modell {self.model} hinterlegt")
         try:
-            today, month = spent_today_and_this_month()
+            today, month = self.ledger.spent()
         except Exception as error:
             raise AgentStopped(f"Kostenbuch nicht lesbar ({type(error).__name__})") from error
         if today >= self.limits.daily_max_cost_eur:
@@ -87,7 +100,7 @@ class CostGuard:
 
     def book(self, usage, cost):
         try:
-            record_model_call(self.job_id, self.model, usage, cost)
+            self.ledger.record(self.job_id, self.model, usage, cost)
         except Exception as error:
             raise AgentStopped(f"Kostenbuch nicht beschreibbar ({type(error).__name__})") from error
         self.job_cost += cost

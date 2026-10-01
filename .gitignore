@@ -18,6 +18,10 @@ profile.yaml
 # Laufzeitdaten, lokale Datenbanken, Logs und temporäre Auswertungen
 data/
 tmp/
+# Eval-Fälle und -Ergebnisse aus der eigenen Review: Profil, Notizen, echte Anzeigen
+evals/private/
+# Rohdaten der Eval-Läufe mit allen Steckbriefen; lesbar ist der Markdown-Bericht.
+evals/results/*.json
 *.log
 *.sqlite
 *.sqlite3

@@ -92,28 +92,39 @@ def write_fact_sheet(job, profile_text, guard, model, settings, today):
     its reason is stored. AgentStopped propagates: money used up, ledger
     unusable or model unreachable end the whole run.
     """
-    job_id = job["id"]
-    guard.start_job(job_id)
+    try:
+        sheet, _dropped = draft_fact_sheet(job, profile_text, guard, model, settings, today)
+    except JobLimitReached as stop:
+        save_aborted(job["id"], MODEL, str(stop), guard.job_cost)
+        return "abgebrochen"
+    except ValueError as error:
+        save_aborted(job["id"], MODEL, f"Steckbrief unbrauchbar: {error}", guard.job_cost)
+        return "abgebrochen"
+    save_fact_sheet(job["id"], MODEL, sheet, guard.job_cost)
+    return "fertig"
+
+
+def draft_fact_sheet(job, profile_text, guard, model, settings, today, decisions=None):
+    """Let the graph write the fact sheet of one job; return it checked, and the dropped sources.
+
+    Nothing is stored, so the evals can call it as well. Raises
+    JobLimitReached or ValueError when only this job fails and AgentStopped
+    when the run must end. decisions replaces the stored decisions that the
+    past_decisions tool searches (rows as decided_jobs returns them).
+    """
+    guard.start_job(job["id"])
     seen, response_ids = urls_in_ad(job), []
-    graph = job_graph(job_id, instructions(profile_text), guard, model, settings, seen, response_ids)
+    graph = job_graph(job["id"], instructions(profile_text), guard, model, settings, seen, response_ids, decisions)
     prompt = job_prompt(job, today, settings.limits.job_max_web_searches)
     try:
         state = graph.invoke({"messages": [HumanMessage(prompt)]}, {"recursion_limit": RECURSION_LIMIT})
         sheet = parse_fact_sheet(state["messages"][-1].text)
-        sheet["quellen"] = verified_sources(sheet["quellen"], seen)
-        save_fact_sheet(job_id, MODEL, sheet, guard.job_cost)
-        return "fertig"
-    except JobLimitReached as stop:
-        save_aborted(job_id, MODEL, str(stop), guard.job_cost)
-        return "abgebrochen"
-    except ValueError as error:
-        save_aborted(job_id, MODEL, f"Steckbrief unbrauchbar: {error}", guard.job_cost)
-        return "abgebrochen"
     finally:
         forget(model, response_ids)
+    return sheet, keep_seen_sources(sheet, seen)
 
 
-def job_graph(job_id, rules, guard, model, settings, seen, response_ids):
+def job_graph(job_id, rules, guard, model, settings, seen, response_ids, decisions=None):
     """Model node and tool node: the model asks for tools until it answers with the fact sheet."""
 
     def call_model(state):
@@ -129,7 +140,7 @@ def job_graph(job_id, rules, guard, model, settings, seen, response_ids):
 
     def call_tools(state):
         answer = state["messages"][-1]
-        return {"messages": [tool_result(call, job_id, guard) for call in requested_tools(answer)]}
+        return {"messages": [tool_result(call, job_id, guard, decisions) for call in requested_tools(answer)]}
 
     def after_model(state):
         return "tools" if requested_tools(state["messages"][-1]) else END
@@ -157,6 +168,11 @@ def ask_model(model, rules, messages, guard, settings):
         max_output_tokens=MAX_OUTPUT_TOKENS,
         **options,
     )
+    return invoke(bound, messages)
+
+
+def invoke(bound, messages):
+    """Call the bound model; wait out throttling, turn API errors into the guard's stops."""
     for attempt in range(RATE_LIMIT_RETRIES + 1):
         try:
             return bound.invoke(messages)
@@ -228,6 +244,14 @@ def urls_found(answer):
     return {comparable(url) for url in urls if url}
 
 
+def keep_seen_sources(sheet, seen):
+    """Reduce the sheet's sources to links the model saw; return what was dropped."""
+    kept = verified_sources(sheet["quellen"], seen)
+    dropped = [source for source in sheet["quellen"] if source.strip() not in kept]
+    sheet["quellen"] = kept
+    return dropped
+
+
 def verified_sources(sources, seen):
     """Keep only links the agent actually saw; drop invented links and plain text."""
     urls = (source.strip() for source in sources)
@@ -244,12 +268,12 @@ def requested_tools(answer):
     return [*answer.tool_calls, *getattr(answer, "invalid_tool_calls", [])]
 
 
-def tool_result(call, job_id, guard):
+def tool_result(call, job_id, guard, decisions=None):
     """Run one requested tool; the answer goes back to the model as text."""
     guard.before_tool_call()
     if call.get("name") == PAST_DECISIONS_TOOL["name"]:
         arguments = call.get("args")
-        output = past_decisions(arguments if isinstance(arguments, dict) else None, job_id)
+        output = past_decisions(arguments if isinstance(arguments, dict) else None, job_id, decisions)
     else:
         output = json.dumps({"fehler": f"Unbekanntes Werkzeug {call.get('name')}"})
     return ToolMessage(output, tool_call_id=call.get("id"))

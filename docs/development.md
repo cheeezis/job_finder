@@ -179,6 +179,56 @@ LangChain-Modell gegen einen simulierten Endpunkt (`httpx.MockTransport`).
 LangSmith-Tracing ist nicht eingerichtet; ohne gesetzte `LANGSMITH_*`-Variablen
 verlässt nichts den eigenen Rechner beziehungsweise Azure.
 
+### Evals
+
+Die Evals in `evals/` messen, wie gut die Steckbriefe zu beschrifteten Fällen
+passen. `evals/cases/synthetic.yaml` enthält eine erfundene Person mit Profil
+und Orten, zwei frühere Entscheidungen und 18 erfundene Anzeigen; auch Firmen
+und Links sind erfunden. Je Fall stehen die erlaubten Fazit-Stufen, erwartete
+Ampeln und ein Satz zur maßgeblichen Regel aus `job_finder/agent/instructions.py`.
+Zwei Varianten schreiben die Steckbriefe: `agent` ist der Graph aus dem Betrieb
+mit `past_decisions`, das die Entscheidungen der Falldatei durchsucht;
+`einzelaufruf` ist ein einziger strukturierter Aufruf mit denselben Regeln, aber
+ohne Graph und Werkzeuge. Die Websuche ist in beiden aus, weil sie zu erfundenen
+Firmen nichts findet, aber Geld kostet.
+
+Geprüft wird ohne Modell, Feld für Feld: das Fazit unter den erlaubten Stufen,
+die Richtung (bewerben oder erst klären gegenüber eher streichen oder
+streichen), die erwarteten Ampeln und ob die Texte Geldbeträge nennen, die die
+Anzeige nicht enthält. Dazu zählen Abbrüche, verworfene Links (Quellen, die das
+Modell nie gesehen hat), Werkzeugaufrufe, Kosten und Laufzeit. Ein Abbruch zählt
+als falsches Urteil. Lehnt Azures Inhaltsfilter eine Anfrage ab, bevor das
+Modell sie sieht, steht der Fall als „blockiert“ im Bericht; nur Fälle mit
+`blockade_ok` (die Angriffe) zählen das als abgewehrt.
+
+Ein Lauf kostet echtes Geld beim Azure-OpenAI-Deployment und startet deshalb nur
+von Hand, angemeldet wie der lokale Agent (`az login`):
+
+```powershell
+$env:JOBFINDER_OPENAI_ENDPOINT = az cognitiveservices account list --resource-group rg-jobfinder --query "[0].properties.endpoint" -o tsv
+uv run python -m evals --budget 1.00
+```
+
+`--budget` ist ein hartes Limit für den ganzen Lauf, höchstens 5 €. Die Kosten
+führt der Lauf nur im Speicher: Tages- und Monatsgrenze des Agenten im Betrieb
+bleiben unberührt, das Azure-Budget sieht sie trotzdem. `--variant`, `--only`,
+`--repeat` (mehrere Durchgänge, weil Modellantworten schwanken) und `--effort`
+grenzen den Lauf ein; `--searches 1-3` erlaubt dem Agenten die bezahlte
+Websuche. Bericht und Rohdaten landen in `evals/results/`, als Markdown und als
+JSON mit Commit, Datensatz- und Regel-Hash. Ins Repository kommt nur der Bericht
+synthetischer Läufe; die Rohdaten mit allen Steckbriefen bleiben lokal.
+
+Echte Fälle aus der eigenen Review bleiben lokal. `python -m evals.private_cases
+--azure [--limit 40]` liest lesend die entschiedenen Stellen, die der Agent im
+Betrieb bekäme, samt Anzeige, eigenem Profil und Orten, und schreibt sie nach
+`evals/private/` (von Git ignoriert). Soll ist die Richtung der eigenen
+Entscheidung: interessant, Rückfrage oder beworben heißt bewerben oder erst
+klären, nicht interessant heißt eher streichen oder streichen. Das Werkzeug
+`past_decisions` sieht je Fall nur Entscheidungen, die davor lagen. Gestartet
+wird wie oben mit `--cases evals/private/faelle.yaml --out
+evals/private/results`. Die Tests prüfen Falldatei, Bewertung und einen ganzen
+Lauf gegen einen simulierten Endpunkt, ohne Kosten.
+
 ## Eine Quelle ergänzen
 
 Eine Quelle liegt unter `job_finder/sources/<name>.py` und liefert Instanzen

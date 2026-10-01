@@ -1,6 +1,7 @@
 """Tests for the local recommendation review workflow."""
 
 import base64
+import http.client
 import json
 import socket
 import tempfile
@@ -17,6 +18,7 @@ from urllib.request import Request, urlopen
 
 from job_finder.matching.config import LOCAL_SEARCH_LOCATION, LOCAL_SEARCH_POSTAL_CODE
 from job_finder.review import (
+    MAX_REQUEST_BYTES,
     PACKAGE,
     LocalReviewServer,
     ReviewRequestHandler,
@@ -595,6 +597,41 @@ class ReviewTests(unittest.TestCase):
 
         self.assertEqual(content, b"%PDF resume")
         self.assertIn("Lebenslauf.pdf", disposition)
+
+    def test_a_document_is_served_only_for_its_own_job(self):
+        documents_directory = self.directory / "application_documents"
+        start_application(
+            "job:1", self.memory_path, [upload("resume", "Lebenslauf.pdf", b"%PDF resume")], documents_directory
+        )
+        memory = load_memory(self.memory_path)
+        memory["job:2"] = {"title": "Cloud Engineer", "company": "Andere GmbH", "workflow_status": "applied"}
+        save_memory(memory, self.memory_path)
+        document_id = memory["job:1"]["application_documents"][0]["id"]
+
+        with self.server_context(application_documents_dir=documents_directory) as base_url:
+            for job_id, wanted in (("job:2", document_id), ("job:1", "unbekannt"), ("job:9", document_id)):
+                query = urlencode({"job_id": job_id, "document_id": wanted})
+                with self.subTest(job_id=job_id), self.assertRaises(HTTPError) as caught:
+                    urlopen(f"{base_url}/api/application-document?{query}")
+                self.assertEqual(caught.exception.code, 404)
+                caught.exception.close()
+
+    def test_an_oversized_request_is_refused_before_its_body_is_read(self):
+        before = load_memory(self.memory_path)
+        with self.server_context() as base_url:
+            connection = http.client.HTTPConnection("127.0.0.1", int(base_url.rsplit(":", 1)[1]), timeout=5)
+            # Only the announced size counts: the server must answer without waiting for 46 MB.
+            connection.putrequest("POST", "/api/review-status")
+            connection.putheader("Content-Type", "application/json")
+            connection.putheader("Content-Length", str(MAX_REQUEST_BYTES + 1))
+            connection.endheaders()
+            response = connection.getresponse()
+            body = json.loads(response.read())
+            connection.close()
+
+        self.assertEqual(response.status, 400)
+        self.assertIn("zu groß", body["error"])
+        self.assertEqual(load_memory(self.memory_path), before)
 
     def test_monthly_salary_and_edits_preserve_application_history(self):
         start_application("job:1", self.memory_path, salary_expectation_eur=4500, salary_period="month")

@@ -46,6 +46,16 @@ serves a job search in Germany. This page is the English overview.
   sheet ([report](evals/results/2026-10-01-0916-synthetisch.md)). A second run
   against the owner's own decisions stays local.
 
+## Screenshots
+
+The review app with the made-up [demo data](#demo-with-made-up-data); the
+interface is German.
+
+| Reviewing a job | Waiting list | Applications |
+| --- | --- | --- |
+| ![A job card with the prefilter score, the agent's fact sheet and the decision buttons](docs/images/review.png) | ![A second job at a company with an open application, on the waiting list](docs/images/waiting-list.png) | ![Open applications with key figures](docs/images/applications.png) |
+| Prefilter score, the agent's fact sheet with traffic lights, verdict and sources, and the decision. | A second job at a company with an open application: the card names it, and the job can wait. | Open and closed applications, their history and key figures. |
+
 ## Architecture
 
 ```mermaid
@@ -130,6 +140,22 @@ opens at `http://127.0.0.1:8765`. Without `user_settings.local.yaml`
 the anonymised example settings apply. The agent stays off until
 `agent.enabled: true` is set and an Azure OpenAI endpoint and a profile are
 configured.
+
+## Demo with made-up data
+
+The screenshots come from a demo you can run yourself, after the first three
+commands of the quickstart:
+
+```powershell
+uv run python scripts/demo_data.py --serve
+```
+
+The script fills a separate local database `jobfinder_demo` with the fictional
+job ads from the eval cases, a few decisions and applications and three fact
+sheets the agent wrote for them, then opens the review at
+`http://127.0.0.1:8770`. The real prefilter rates the ads; nothing calls the
+model. Each run empties the demo database first, and the script refuses any
+database server that is not local.
 
 ## Documentation (German)
 

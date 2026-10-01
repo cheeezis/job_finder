@@ -23,7 +23,12 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["ruff==0.16.9"]
+dev = [
+    "pyright==1.1.414",
+    "pytest==9.1.1",
+    "pytest-cov==7.1.0",
+    "ruff==0.16.9",
+]
 
 [tool.uv]
 # The code runs from the checkout (run_finder.py, python -m job_finder.review),
@@ -32,6 +37,29 @@ package = false
 
 [tool.setuptools.package-data]
 job_finder = ["*.html", "*.css", "*.js"]
+
+[tool.pytest.ini_options]
+# pytest runs the unittest test classes as they are. scripts/test_postgres.py
+# starts it against the separate test database, which most tests need.
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.coverage.run]
+source = ["job_finder"]
+branch = true
+
+[tool.coverage.report]
+# Shows where tests are missing; it is a finding aid, not a target number.
+skip_covered = true
+show_missing = true
+sort = "Cover"
+
+[tool.pyright]
+# Type checks start with the database layer; more packages follow step by step.
+include = ["job_finder/persistence"]
+pythonVersion = "3.11"
+venvPath = "."
+venv = ".venv"
 
 [tool.ruff]
 target-version = "py311"

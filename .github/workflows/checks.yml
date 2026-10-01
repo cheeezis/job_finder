@@ -71,6 +71,34 @@ jobs:
           package-manager-cache: false
       - run: node --test tests/frontend.test.cjs
 
+  # Führt "Quickstart (local)" und "Demo" aus dem README auf einem frischen
+  # Runner aus, damit die Anleitung nicht unbemerkt veraltet. Der Finder läuft
+  # nur mit der Quelle manual, die ohne Internet auskommt: Fremde Jobbörsen
+  # sollen diese Prüfung nicht kippen. Ohne DISCORD_WEBHOOK_URL sendet nichts.
+  quickstart:
+    name: Quickstart from the README
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.21"
+          python-version: "3.13"
+      - run: uv sync --frozen
+      - run: uv run --frozen python scripts/setup_postgres.py
+      - run: docker compose --env-file .env.postgres up -d --wait
+      - run: uv run --frozen python -m job_finder.db init
+      - run: uv run --frozen python run_finder.py --only-sources manual
+      - name: Review antwortet
+        run: |
+          uv run --frozen python -m job_finder.review --no-browser &
+          curl --retry 15 --retry-connrefused --retry-delay 1 -fsS -o /dev/null http://127.0.0.1:8765/
+      - name: Demo antwortet
+        run: |
+          uv run --frozen python scripts/demo_data.py --serve &
+          curl --retry 30 --retry-connrefused --retry-delay 1 -fsS -o /dev/null http://127.0.0.1:8770/
+
   # Prüft den Terraform-Code ohne Azure-Zugang: tflint auf Fehler und
   # Warnungen, Trivy auf unsichere Einstellungen; jeder neue Befund bricht ab.
   # Bewusste Abwägungen stehen mit Begründung in infrastructure/.trivyignore.yaml.
@@ -184,7 +212,7 @@ jobs:
   docker-build-push:
     name: Build and push image
     runs-on: ubuntu-latest
-    needs: [python, style-and-frontend]
+    needs: [python, style-and-frontend, quickstart]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     timeout-minutes: 15
     permissions:

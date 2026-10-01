@@ -108,6 +108,42 @@ A finder run works in five steps:
 5. The agent writes fact sheets for undecided jobs that are entry level or score
    above 50, best first, until a limit is reached.
 
+### How the agent writes a fact sheet
+
+```mermaid
+flowchart TD
+    PICK["Undecided jobs, entry level or score above 50<br/>best first"]
+    RUN{"Money left today and this month,<br/>run under 35 minutes?"}
+    MODEL["Model node: gpt-5-mini<br/>web search only while the job's search budget lasts"]
+    LEDGER[("Cost ledger<br/>PostgreSQL")]
+    TOOLS["Tool node: past_decisions<br/>earlier decisions on similar jobs"]
+    CHECK["Check the answer<br/>schema, drop links the model never saw"]
+    SAVE[("Fact sheet<br/>shown in the review")]
+    ABORT[("Aborted job with its reason<br/>shown in the review")]
+    STOP["Run stops<br/>Discord warning"]
+    DONE["Delete the stored responses in Azure<br/>log line and trace: ids, counts, verdict"]
+
+    PICK --> RUN
+    RUN -- yes --> MODEL
+    RUN -- no --> STOP
+    MODEL -- "books every call" --> LEDGER
+    MODEL -- "asks for a tool" --> TOOLS
+    TOOLS --> MODEL
+    MODEL -- "answers" --> CHECK
+    MODEL -- "job limit: calls, cost or tool calls;<br/>answer incomplete or rejected" --> ABORT
+    CHECK -- valid --> SAVE
+    CHECK -- invalid --> ABORT
+    SAVE --> DONE
+    ABORT --> DONE
+    DONE -- "next job" --> RUN
+```
+
+Model and tool node form a LangGraph graph per job (`job_finder/agent/runner.py`).
+Before every model or tool call the cost guard checks the limits; a limit of one
+job ends only that job, while a used-up day or month, an unusable ledger or an
+unreachable model stops the run. The decision stays with the user: the sheet
+suggests a verdict with traffic lights and sources, but no score.
+
 Two sources run in a daily local job in Docker, with the same image and against
 the same database. Every push to `main` runs the tests, builds the image and,
 after approval, applies Terraform and rolls the image out to the finder job and

@@ -46,7 +46,6 @@
       ["completed", "Abgeschlossen"],
       ["responses", "Antworten"],
       ["interviews", "Gespräche"],
-      ["offers", "Zusagen"],
       ["rejections", "Absagen"],
       ["no_responses", "Ohne Rückmeldung"],
       ["withdrawals", "Selbst abgesagt"],

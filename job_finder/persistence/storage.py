@@ -28,6 +28,12 @@ def read_json(path, default=None):
     return json.loads(target.read_text(encoding="utf-8"))
 
 
+def read_object(path, default):
+    """Read a document that must be a JSON object; anything else counts as missing."""
+    document = read_json(path, default)
+    return document if isinstance(document, dict) else default
+
+
 def write_json_atomic(path, value):
     """Commit runtime data to PostgreSQL, or atomically export an explicit file."""
     name = dataset_name(path)
@@ -44,7 +50,7 @@ def write_json_atomic(path, value):
 def read_versioned(path, version):
     """Return a stored cache document of this format version, else {}."""
     try:
-        document = read_json(path, {})
+        document = read_object(path, {})
     except (json.JSONDecodeError, OSError):
         return {}
     return document if document.get("version") == version else {}
@@ -96,15 +102,16 @@ def publish_results(jobs, results, *, jobs_path, writer, exclude_sources=frozens
     """
     values = [job.to_dict() for job in jobs]
     managed = dataset_name(jobs_path) is not None
+    previous = []
     with transaction() if managed else nullcontext() as connection:
         if managed:
             lock(connection, "finder-publication")
             values = _with_skipped_listings(values, read_json(jobs_path, []), "sources", exclude_sources)
-            previous = read_json(RECOMMENDATIONS_JSON, {}).get("recommendations", [])
+            previous = read_object(RECOMMENDATIONS_JSON, {}).get("recommendations", [])
         write_json_atomic(jobs_path, values)
         writer(results)
         if managed:
-            updated = read_json(RECOMMENDATIONS_JSON, {"recommendations": []})
+            updated = read_object(RECOMMENDATIONS_JSON, {"recommendations": []})
             updated["recommendations"] = _with_skipped_listings(
                 updated["recommendations"], previous, "source_links", exclude_sources
             )

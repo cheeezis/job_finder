@@ -1,12 +1,15 @@
-"""Run the suite against an explicitly separate, disposable PostgreSQL database."""
+"""Run the suite against an explicitly separate, disposable PostgreSQL database.
+
+Extra arguments go to pytest, for example --cov for the coverage report in CI.
+"""
 
 import os
 import sys
-import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import pytest
 from psycopg.conninfo import conninfo_to_dict
 
 from job_finder.persistence.database import database_url, initialize, transaction
@@ -29,9 +32,8 @@ def main():
     initialize()
     with transaction() as connection:
         connection.execute("TRUNCATE job_state,datasets CASCADE")
-    suite = unittest.defaultTestLoader.discover("tests")
-    result = unittest.TextTestRunner(verbosity=1).run(suite)
-    raise SystemExit(0 if result.wasSuccessful() else 1)
+    # pytest runs the unittest test classes unchanged.
+    raise SystemExit(pytest.main(["-q", *sys.argv[1:]]))
 
 
 if __name__ == "__main__":

@@ -36,6 +36,10 @@ serves a job search in Germany. This page is the English overview.
   CodeQL analyses the code, and Dependabot proposes updates every week.
 - **Careful data handling:** PostgreSQL with advisory locks and consistent
   snapshot reads; a source that fails never wipes the listings it found before.
+- **Observable agent:** every job leaves a JSON log line and an OpenTelemetry
+  trace in Application Insights (run → job → model and tool calls) with ids,
+  tokens, cost and the verdict, but never profile, prompt or ad text; a test
+  checks that. Ingestion needs Entra ID, keeps 30 days and is capped per day.
 - **Tests:** 460+ Python tests that run in CI against a real PostgreSQL with a
   coverage report, Pyright type checks (starting with the database layer),
   frontend tests and Ruff for lint and formatting.

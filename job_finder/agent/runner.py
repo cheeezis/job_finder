@@ -121,10 +121,7 @@ def draft_fact_sheet(job, profile_text, guard, model, settings, today, decisions
         sheet = parse_fact_sheet(state["messages"][-1].text)
     finally:
         forget(model, response_ids)
-    kept = verified_sources(sheet["quellen"], seen)
-    dropped = [source for source in sheet["quellen"] if source.strip() not in kept]
-    sheet["quellen"] = kept
-    return sheet, dropped
+    return sheet, keep_seen_sources(sheet, seen)
 
 
 def job_graph(job_id, rules, guard, model, settings, seen, response_ids, decisions=None):
@@ -245,6 +242,14 @@ def urls_found(answer):
             urls.update(source.get("url") or "" for source in action.get("sources") or [])
             urls.add(action.get("url") or "")
     return {comparable(url) for url in urls if url}
+
+
+def keep_seen_sources(sheet, seen):
+    """Reduce the sheet's sources to links the model saw; return what was dropped."""
+    kept = verified_sources(sheet["quellen"], seen)
+    dropped = [source for source in sheet["quellen"] if source.strip() not in kept]
+    sheet["quellen"] = kept
+    return dropped
 
 
 def verified_sources(sources, seen):

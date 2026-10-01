@@ -5,6 +5,7 @@ import json
 import zipfile
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
+from typing import LiteralString
 
 from psycopg import sql
 
@@ -16,7 +17,7 @@ from job_finder.persistence.postgres_store import read_dataset, read_memory, wri
 
 # The agent's cost ledger and fact sheets with their sort keys. PostgreSQL renders them as JSON and parses them
 # back itself, so amounts and time stamps stay exact.
-AGENT_TABLES = {"agent_usage": "id", "agent_fact_sheets": "scope, job_id"}
+AGENT_TABLES: dict[str, LiteralString] = {"agent_usage": "id", "agent_fact_sheets": "scope, job_id"}
 
 
 def create_postgres_backup(backup_dir=BACKUP_DIR, documents_dir=APPLICATION_DOCUMENTS_DIR):
@@ -42,8 +43,8 @@ def create_postgres_backup(backup_dir=BACKUP_DIR, documents_dir=APPLICATION_DOCU
                 add("datasets/" + name, json.dumps(read_dataset(name), ensure_ascii=False).encode())
             for table, order in AGENT_TABLES.items():
                 query = sql.SQL("SELECT coalesce(json_agg(t ORDER BY {}), '[]')::text FROM {} t")
-                rows = connection.execute(query.format(sql.SQL(order), sql.Identifier(table))).fetchone()[0]
-                add(f"agent/{table}.json", rows.encode())
+                rows = connection.execute(query.format(sql.SQL(order), sql.Identifier(table))).fetchone()
+                add(f"agent/{table}.json", (rows[0] if rows else "[]").encode())
             for name, expected in documents.items():
                 content = document_store.read(name, documents_dir)
                 if hashlib.sha256(content).hexdigest() != expected:

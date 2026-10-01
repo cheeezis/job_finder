@@ -36,7 +36,8 @@ serves a job search in Germany. This page is the English overview.
   CodeQL analyses the code, and Dependabot proposes updates every week.
 - **Careful data handling:** PostgreSQL with advisory locks and consistent
   snapshot reads; a source that fails never wipes the listings it found before.
-- **Tests:** 460+ Python tests that run in CI against a real PostgreSQL, plus
+- **Tests:** 460+ Python tests that run in CI against a real PostgreSQL with a
+  coverage report, Pyright type checks (starting with the database layer),
   frontend tests and Ruff for lint and formatting.
 
 ## Architecture
@@ -101,7 +102,7 @@ the review app.
 | Cloud | Azure Container Apps (job and app), Database for PostgreSQL Flexible Server, Key Vault, Container Registry, Monitor |
 | Infrastructure | Terraform (`azurerm`, `azapi`), Docker |
 | CI/CD | GitHub Actions with OIDC and environment approval |
-| Quality | `unittest` against PostgreSQL, `node:test`, Ruff, CodeQL, Trivy, tflint, Dependabot |
+| Quality | pytest with coverage against PostgreSQL, Pyright, `node:test`, Ruff, CodeQL, Trivy, tflint, Dependabot |
 
 ## Quickstart (local)
 

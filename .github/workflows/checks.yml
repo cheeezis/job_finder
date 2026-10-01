@@ -42,7 +42,11 @@ jobs:
           python-version: ${{ matrix.python }}
       # Genau die Versionen aus uv.lock; --frozen ändert das Lockfile nie.
       - run: uv sync --frozen
-      - run: uv run --frozen python scripts/test_postgres.py
+      # pytest gegen die Test-Datenbank; die Abdeckung je Datei steht in der
+      # Zusammenfassung des Laufs und dient zum Finden von Lücken, nicht als Ziel.
+      - run: >-
+          uv run --frozen python scripts/test_postgres.py
+          --cov --cov-report=term --cov-report=markdown-append:$GITHUB_STEP_SUMMARY
 
   style-and-frontend:
     name: Python style and frontend tests
@@ -59,6 +63,8 @@ jobs:
       - run: uv sync --frozen
       - run: uv run --frozen ruff check .
       - run: uv run --frozen ruff format --check .
+      # Typprüfung; welche Pakete sie schon abdeckt, steht in pyproject.toml.
+      - run: uv run --frozen pyright
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24"

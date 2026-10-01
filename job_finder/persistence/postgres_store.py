@@ -60,6 +60,11 @@ def unpack(row, fields):
     return result
 
 
+def identifiers(names):
+    """Join internal column names as quoted SQL identifiers."""
+    return sql.SQL(",").join(map(sql.Identifier, names))
+
+
 def upsert_records(connection, table, keys, fields, records):
     """All identifiers are internal constants; values always use parameters."""
     if not records:
@@ -67,9 +72,9 @@ def upsert_records(connection, table, keys, fields, records):
     columns = (*keys, *fields, "present", "extra")
     statement = sql.SQL("INSERT INTO {} ({}) VALUES ({}) ON CONFLICT ({}) DO UPDATE SET {}").format(
         sql.Identifier(table),
-        sql.SQL(",").join(map(sql.Identifier, columns)),
+        identifiers(columns),
         sql.SQL(",").join(sql.Placeholder() for _ in columns),
-        sql.SQL(",").join(map(sql.Identifier, keys)),
+        identifiers(keys),
         sql.SQL(",").join(
             sql.SQL("{}=EXCLUDED.{}").format(sql.Identifier(c), sql.Identifier(c)) for c in columns[len(keys) :]
         ),
@@ -130,7 +135,9 @@ def read_jobs(name, job_ids):
     fields = SNAPSHOT_FIELDS["jobs"]
     with snapshot() as connection:
         rows = connection.execute(
-            f"SELECT job_id,{','.join(fields)},present,extra FROM jobs WHERE dataset=%s AND job_id = ANY(%s)",
+            sql.SQL("SELECT job_id,{},present,extra FROM jobs WHERE dataset=%s AND job_id = ANY(%s)").format(
+                identifiers(fields)
+            ),
             (name, list(job_ids)),
         )
         return {row[0]: {"id": row[0], **unpack(row[1:], fields)} for row in rows}
@@ -150,7 +157,9 @@ def read_dataset(name, default=None):
             values = [
                 {"id": row[0], **unpack(row[1:], fields)}
                 for row in connection.execute(
-                    f"SELECT job_id,{','.join(fields)},present,extra FROM {kind} WHERE dataset=%s ORDER BY position",
+                    sql.SQL("SELECT job_id,{},present,extra FROM {} WHERE dataset=%s ORDER BY position").format(
+                        identifiers(fields), sql.Identifier(kind)
+                    ),
                     (name,),
                 )
             ]
@@ -167,7 +176,10 @@ def read_dataset(name, default=None):
         elif kind in {"cache", "manual"}:
             table, key = CACHE_TABLES[kind]
             values = connection.execute(
-                f"SELECT {key},payload FROM {table} WHERE dataset=%s ORDER BY position", (name,)
+                sql.SQL("SELECT {},payload FROM {} WHERE dataset=%s ORDER BY position").format(
+                    sql.Identifier(key), sql.Identifier(table)
+                ),
+                (name,),
             ).fetchall()
             result[info["field"]] = [row[1] for row in values] if info["list"] else dict(values)
         return result
@@ -177,6 +189,8 @@ def write_dataset(name, value):
     """Store one dataset atomically; nested callers can group related datasets."""
     with transaction() as connection:
         lock(connection, "dataset:" + name)
+        # Only cache datasets keep their entries under one field ("jobs" or "checks").
+        field = None
         if name.endswith("/jobs.json"):
             kind, header = "jobs", {}
         elif name.endswith("/recommendations.json"):
@@ -227,14 +241,19 @@ def write_dataset(name, value):
             rows = [(name, str(key), position, Jsonb(item)) for position, (key, item) in enumerate(entries)]
             if kind != "manual":
                 connection.execute(
-                    f"DELETE FROM {table} WHERE dataset=%s AND NOT ({key_column}=ANY(%s))",
+                    sql.SQL("DELETE FROM {} WHERE dataset=%s AND NOT ({}=ANY(%s))").format(
+                        sql.Identifier(table), sql.Identifier(key_column)
+                    ),
                     (name, [row[1] for row in rows]),
                 )
+            statement = sql.SQL(
+                "INSERT INTO {table}(dataset,{key},position,payload) VALUES (%s,%s,%s,%s) "
+                "ON CONFLICT(dataset,{key}) DO UPDATE SET payload=EXCLUDED.payload,position=EXCLUDED.position{stored} "
+                "WHERE {table}.payload IS DISTINCT FROM EXCLUDED.payload OR {table}.position != EXCLUDED.position"
+            ).format(
+                table=sql.Identifier(table),
+                key=sql.Identifier(key_column),
+                stored=sql.SQL(",stored_at=now()" if kind == "cache" else ""),
+            )
             with connection.cursor() as cursor:
-                cursor.executemany(
-                    f"INSERT INTO {table}(dataset,{key_column},position,payload) VALUES (%s,%s,%s,%s) "
-                    f"ON CONFLICT(dataset,{key_column}) DO UPDATE SET payload=EXCLUDED.payload,position=EXCLUDED.position"
-                    + (",stored_at=now()" if kind == "cache" else "")
-                    + f" WHERE {table}.payload IS DISTINCT FROM EXCLUDED.payload OR {table}.position != EXCLUDED.position",
-                    rows,
-                )
+                cursor.executemany(statement, rows)

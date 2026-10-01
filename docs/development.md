@@ -215,8 +215,8 @@ bleiben unberührt, das Azure-Budget sieht sie trotzdem. `--variant`, `--only`,
 `--repeat` (mehrere Durchgänge, weil Modellantworten schwanken) und `--effort`
 grenzen den Lauf ein; `--searches 1-3` erlaubt dem Agenten die bezahlte
 Websuche. Bericht und Rohdaten landen in `evals/results/`, als Markdown und als
-JSON mit Commit, Datensatz- und Regel-Hash. Synthetische Ergebnisse dürfen ins
-Repository.
+JSON mit Commit, Datensatz- und Regel-Hash. Ins Repository kommt nur der Bericht
+synthetischer Läufe; die Rohdaten mit allen Steckbriefen bleiben lokal.
 
 Echte Fälle aus der eigenen Review bleiben lokal. `python -m evals.private_cases
 --azure [--limit 40]` liest lesend die entschiedenen Stellen, die der Agent im

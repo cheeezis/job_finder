@@ -26,6 +26,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "playwright==1.63.0",
     "pyright==1.1.414",
     "pytest==9.1.1",
     "pytest-cov==7.1.0",
@@ -57,8 +58,8 @@ show_missing = true
 sort = "Cover"
 
 [tool.pyright]
-# Type checks start with the database layer; more packages follow step by step.
-include = ["job_finder/persistence"]
+# Type checks cover the whole application package; tests, scripts and evals are not checked yet.
+include = ["job_finder"]
 pythonVersion = "3.11"
 venvPath = "."
 venv = ".venv"

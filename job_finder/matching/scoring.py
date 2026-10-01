@@ -79,7 +79,8 @@ def score_job(job: Job, today=None):
         career_levels=job.career_levels,
         required_years=required_years,
     )
-    if filter_reason:
+    # hard_filter_reason already rejects a job without a role; "role is None" tells the type checker.
+    if filter_reason or role is None:
         return excluded_result(filter_reason)
 
     location_score = analyze_location_for_role(title, location, remote, description)

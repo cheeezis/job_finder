@@ -40,9 +40,11 @@ serves a job search in Germany. This page is the English overview.
   trace in Application Insights (run → job → model and tool calls) with ids,
   tokens, cost and the verdict, but never profile, prompt or ad text; a test
   checks that. Ingestion needs Entra ID, keeps 30 days and is capped per day.
-- **Tests:** 460+ Python tests that run in CI against a real PostgreSQL with a
-  coverage report, Pyright type checks (starting with the database layer),
-  frontend tests and Ruff for lint and formatting.
+- **Tests:** 500+ Python tests that run in CI against a real PostgreSQL with a
+  coverage report, including boundary tests for the app role's database rights
+  and the worker lock; Playwright browser tests click through the review on the
+  demo data; Pyright checks the whole application package; frontend tests and
+  Ruff for lint and formatting.
 - **Measured quality:** an eval harness (`python -m evals`) runs the agent and a
   one-call baseline on 24 synthetic job ads with known verdicts, including two
   prompt-injection cases. Latest run, two passes: 44/48 correct verdicts for the
@@ -160,7 +162,7 @@ the review app.
 | Cloud | Azure Container Apps (job and app), Database for PostgreSQL Flexible Server, Key Vault, Container Registry, Monitor |
 | Infrastructure | Terraform (`azurerm`, `azapi`), Docker |
 | CI/CD | GitHub Actions with OIDC and environment approval |
-| Quality | pytest with coverage against PostgreSQL, Pyright, `node:test`, Ruff, CodeQL, Trivy, tflint, Dependabot |
+| Quality | pytest with coverage against PostgreSQL, Playwright, Pyright, `node:test`, Ruff, CodeQL, Trivy, tflint, Dependabot |
 
 ## Quickstart (local)
 

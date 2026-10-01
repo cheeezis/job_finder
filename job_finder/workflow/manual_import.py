@@ -5,7 +5,7 @@ from contextlib import nullcontext
 from job_finder.matching.deduplication import deduplicate_jobs, merge_jobs
 from job_finder.paths import JOBS_FILE, MEMORY_FILE, RECOMMENDATIONS_JSON
 from job_finder.persistence.database import lock, transaction
-from job_finder.persistence.storage import dataset_name, read_json, write_json_atomic
+from job_finder.persistence.storage import dataset_name, read_object, write_json_atomic
 from job_finder.sources import manual
 from job_finder.sources.common import canonical_detail_url
 from job_finder.workflow.main import load_jobs, score_for_pipeline
@@ -91,7 +91,7 @@ def replace_or_add_job(jobs, imported):
 
 def save_recommendation(job, path):
     """Replace only the imported card and preserve all other review results."""
-    document = read_json(path, {"recommendations": []})
+    document = read_object(path, {"recommendations": []})
     recommendation = recommendation_for_job(job)
     urls = {link["url"] for link in recommendation.get("source_links", []) if link.get("url")}
     retained = [

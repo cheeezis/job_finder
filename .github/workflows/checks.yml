@@ -71,6 +71,40 @@ jobs:
           package-manager-cache: false
       - run: node --test tests/frontend.test.cjs
 
+  # Klickt die Kernabläufe der Review in Chromium durch, auf frisch befüllten
+  # Demo-Daten: Steckbrief, Entscheidung mit Notiz, Warteliste, Rückgängig,
+  # Bewerbung mit Dokument (tests/test_review_browser.py).
+  browser:
+    name: Browser tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18.6-bookworm
+        env:
+          POSTGRES_USER: jobfinder
+          POSTGRES_PASSWORD: ci-test-only
+          POSTGRES_DB: jobfinder_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U jobfinder -d jobfinder_test"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      JOBFINDER_DATABASE_URL: postgresql://jobfinder:ci-test-only@127.0.0.1:5432/jobfinder
+      JOBFINDER_TEST_DATABASE_URL: postgresql://jobfinder:ci-test-only@127.0.0.1:5432/jobfinder_test
+      JOBFINDER_BROWSER_TESTS: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.21"
+          python-version: "3.13"
+      - run: uv sync --frozen
+      # Der zur Playwright-Version aus uv.lock passende Chromium samt Systembibliotheken.
+      - run: uv run --frozen playwright install --with-deps chromium
+      - run: uv run --frozen python scripts/test_postgres.py tests/test_review_browser.py
+
   # Führt "Quickstart (local)" und "Demo" aus dem README auf einem frischen
   # Runner aus, damit die Anleitung nicht unbemerkt veraltet. Der Finder läuft
   # nur mit der Quelle manual, die ohne Internet auskommt: Fremde Jobbörsen
@@ -212,7 +246,7 @@ jobs:
   docker-build-push:
     name: Build and push image
     runs-on: ubuntu-latest
-    needs: [python, style-and-frontend, quickstart]
+    needs: [python, style-and-frontend, quickstart, browser]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     timeout-minutes: 15
     permissions:

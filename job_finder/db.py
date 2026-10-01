@@ -35,7 +35,7 @@ def main():
     else:
         with transaction() as connection:
             result = {
-                table: connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+                table: connection.execute(f"SELECT count(*) FROM {table}").fetchall()[0][0]
                 for table in (
                     "job_state",
                     "workflow_history",

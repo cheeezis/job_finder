@@ -28,6 +28,7 @@ def spent_today_and_this_month(at=None):
 
     The database computes both boundaries with its own clock and time zone
     data, the same clock that stamps the calls; at replaces now() in tests.
+    Sums without GROUP BY always return exactly one row.
     """
     with transaction() as connection:
         return connection.execute(
@@ -42,4 +43,4 @@ def spent_today_and_this_month(at=None):
             FROM agent_usage, (SELECT coalesce(%s::timestamptz, now()) AS moment) AS reference
             """,
             (at,),
-        ).fetchone()
+        ).fetchall()[0]

@@ -22,7 +22,7 @@ Die Abhängigkeiten stehen mit Versionsbereichen in `pyproject.toml`, die exakte
 Versionen in `uv.lock`; CI und Image installieren genau diese. Nach einer
 Änderung an `pyproject.toml` aktualisiert `uv lock` das Lockfile, sonst scheitert
 die CI. Die Gruppe `dev` enthält festgelegte Versionen von Ruff, pytest,
-pytest-cov und Pyright, damit lokale Prüfung und CI dieselben Regeln verwenden.
+pytest-cov, Pyright und Playwright, damit lokale Prüfung und CI dieselben Regeln verwenden.
 Node.js wird für die Frontend-Tests und für Pyright benötigt; die CI verwendet
 Node.js 24.
 
@@ -33,13 +33,30 @@ ersetzte Netzwerkzugriffe; ein vollständiger Finder-Lauf gehört nicht dazu.
 die `unittest`-Klassen unverändert ausführt; weitere Argumente gehen an pytest.
 `--cov` misst, welche Zeilen und Verzweigungen in `job_finder/` die Tests
 erreichen. Die Zahl hilft, ungetestete Stellen zu finden, und ist kein Ziel für
-sich. Pyright prüft die Typen, zunächst für die Datenbankschicht
-(`job_finder/persistence`); weitere Pakete kommen schrittweise dazu
-(`[tool.pyright]` in `pyproject.toml`).
+sich. Pyright prüft die Typen des ganzen Anwendungspakets `job_finder`; Tests,
+Skripte und Evals noch nicht (`[tool.pyright]` in `pyproject.toml`).
+
+Grenztests prüfen Zusagen, die sonst niemand bemerkt, gegen die echte
+Testdatenbank: Die App-Rolle liest und schreibt Zeilen, ändert aber nie das
+Schema und sieht `schema_version` nicht (eine eigene Test-Rolle, damit eine
+echte `jobfinder_app` auf demselben Server unberührt bleibt), und ein zweiter
+gleichzeitiger Finder-Lauf wird abgewiesen (`tests/test_database_boundaries.py`).
+
+Die Browser-Tests (`tests/test_review_browser.py`) klicken die Review in
+Chromium auf frisch befüllten Demo-Daten durch: Steckbrief, Entscheidung mit
+Notiz, Warteliste, Rückgängig und Bewerbung mit Dokument. Jeder Test startet
+seine eigene Demo-Review. Ohne `JOBFINDER_BROWSER_TESTS=1` werden sie
+übersprungen; lokal einmal Chromium laden, dann wie in der CI:
+
+```powershell
+uv run playwright install chromium
+$env:JOBFINDER_BROWSER_TESTS = "1"; uv run python scripts/test_postgres.py tests/test_review_browser.py
+```
 
 Der [GitHub-Workflow](../.github/workflows/checks.yml) testet Python 3.11 und
 3.13 auf Linux mit PostgreSQL und zeigt die Abdeckung in der Zusammenfassung des
-Laufs, prüft Stil, Typen, Frontend und ob `uv.lock` zu `pyproject.toml` passt. Bei Pull Requests baut er außerdem das Image, startet es
+Laufs, prüft Stil, Typen, Frontend und ob `uv.lock` zu `pyproject.toml` passt; je ein
+eigener Job führt die Browser-Tests und den Quickstart aus dem README aus. Bei Pull Requests baut er außerdem das Image, startet es
 kurz als eingeschränkter Benutzer und prüft es mit Trivy auf bekannte Lücken;
 tflint und Trivy prüfen den Terraform-Code und brechen bei jedem neuen Befund
 ab (bewusste Abwägungen stehen mit Begründung in

@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 from job_finder.paths import MEMORY_FILE, PROJECT_DIR
 
 SCHEMA_VERSION = 2
-_connection = ContextVar("jobfinder_connection", default=None)
+_connection: ContextVar[psycopg.Connection | None] = ContextVar("jobfinder_connection", default=None)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (version integer PRIMARY KEY);
@@ -211,8 +211,8 @@ def worker_lock():
     """Allow one worker run at a time; a crashed connection releases its lock."""
     key = int.from_bytes(hashlib.sha256(b"jobfinder-worker").digest()[:8], "big", signed=True)
     with psycopg.connect(database_url(), autocommit=True, connect_timeout=10) as connection:
-        acquired = connection.execute("SELECT pg_try_advisory_lock(%s)", (key,)).fetchone()[0]
-        if not acquired:
+        acquired = connection.execute("SELECT pg_try_advisory_lock(%s)", (key,)).fetchone()
+        if not (acquired and acquired[0]):
             raise RuntimeError("Ein anderer Finder-Lauf ist bereits aktiv.")
         try:
             yield

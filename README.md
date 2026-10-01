@@ -39,6 +39,12 @@ serves a job search in Germany. This page is the English overview.
 - **Tests:** 460+ Python tests that run in CI against a real PostgreSQL with a
   coverage report, Pyright type checks (starting with the database layer),
   frontend tests and Ruff for lint and formatting.
+- **Measured quality:** an eval harness (`python -m evals`) runs the agent and a
+  one-call baseline on 19 synthetic job ads with known verdicts, including two
+  prompt-injection cases. Latest run: 37/38 correct verdicts for the agent and
+  38/38 for the baseline, no invented money or links, about half a cent per fact
+  sheet ([report](evals/results/2026-10-01-0916-synthetisch.md)). A second run
+  against the owner's own decisions stays local.
 
 ## Architecture
 

@@ -1,0 +1,170 @@
+# Demo-Daten für die lokale Review. Alles ist erfunden wie in evals/cases/synthetic.yaml,
+# aus der die Anzeigen stammen. scripts/demo_data.py schreibt sie in eine eigene Datenbank
+# jobfinder_demo; echte Daten bleiben unberührt.
+
+# Sucheinstellungen der erfundenen Person, mit denen der Vorfilter die Anzeigen bewertet.
+settings:
+  search:
+    local_location: Münster
+    local_postal_code: "48143"
+    local_radius_km: 25
+  matching:
+    preferred_location_label: Münster
+    local_places: [münster, greven, telgte]
+    commuter_locations:
+      - search_location: Dortmund
+        aliases: [dortmund]
+        excluded_aliases: []
+        minimum_remote_percentage: 60
+    profile_domain_keywords: [azure, terraform, python]
+    salary_target_eur: null
+    salary_minimum_eur: null
+
+# Eine zweite Stelle bei der Firma, bei der eine Bewerbung läuft: zeigt die Warteliste.
+extra_jobs:
+  - id: zweite-stelle-nordlicht
+    job:
+      title: Junior DevOps Engineer (m/w/d)
+      company: Nordlicht Systems GmbH
+      locations: [Münster]
+      work_mode: hybrid
+      remote_percentage: 40
+      employment_type: Vollzeit
+      published_at: "2026-09-29"
+      sources:
+        - source: beispielboerse
+          url: https://jobs.example.org/nordlicht-systems/junior-devops-engineer
+      description_clean: |
+        Für unser Platform-Team in Münster suchen wir Verstärkung: Du betreibst Kubernetes-Cluster in
+        Azure, baust interne Werkzeuge in Python und betreust die CI/CD-Pipelines unserer Produktteams.
+        Erste Erfahrungen aus Studium oder Projekten genügen. Zwei Tage Homeoffice pro Woche.
+
+# Entscheidungen und Bewerbungen je Fall: Status mit Tagen vor heute, damit die Demo
+# immer aktuell aussieht. Nach 14 Tagen ohne Antwort gilt eine Bewerbung als ohne Rückmeldung.
+history:
+  lokal-junior-cloud: [[applied, 16], [interview, 7]]
+  remote-junior-backend: [[applied, 20]]
+  ausland-remote-de: [[applied, 12], [response, 8], [rejected, 3]]
+  lernbare-luecke: [[applied, 2]]
+  zweite-stelle-nordlicht: [[waiting, 1]]
+  spanne-junior: [[interesting, 2]]
+  teilzeit: [[inquiry, 3]]
+  senior-fuenf-jahre: [[ignored, 4]]
+
+# Steckbriefe, die der Agent im Eval-Lauf vom 01.10.2026 zu diesen Fällen geschrieben hat.
+fact_sheets:
+  drei-jahre-lokal:
+    status:
+      ampel: gruen
+      text: 'offen und aktuell – Anzeige vom 25.09.2026 auf jobs.example.org nennt Greven als Einsatzort und ist noch aktuell (Quelle: Anzeige).'
+    berufseinstieg:
+      ampel: rot
+      text: 'nicht passend – Anzeige verlangt mindestens 3 Jahre Berufserfahrung mit Kubernetes und CI/CD im produktiven Betrieb; Dein Profil weist keine Entwickler‑Berufserfahrung, nur Abschlussarbeit, Projekte
+        und einen Werkstudentenjob im IT‑Support aus (Quelle: Anzeige + Dein Profil).'
+    fachlicher_fit:
+      ampel: orange
+      text: 'teilweise passend – Du bringst Docker-, Azure‑Grundlagen, Terraform und Python‑Projekte mit (Profil), das passt grundsätzlich zur Cloud/DevOps‑Richtung; die Anzeige verlangt jedoch produktive
+        Erfahrung mit Kubernetes, GitLab‑CI und Prometheus, die Du nicht ausweist (Quelle: Anzeige + Dein Profil).'
+    luecken:
+      ampel: rot
+      text: 'Kernlücken – Muss: 3+ Jahre produktive Kubernetes‑ und CI/CD‑Erfahrung, Prometheus‑Monitoring und Bereitschaft zur Rufbereitschaft; Optionales/Vorteil: spezifische GitLab‑Erfahrung. Dein Profil
+        liefert nur Grundlagen/Projekte, keine nachgewiesene Produktionserfahrung (Quelle: Anzeige + Dein Profil).'
+    homeoffice_standort:
+      ampel: gruen
+      text: 'passt vor Ort – Anzeige: Arbeitsort Greven mit zwei Tagen Homeoffice/Woche; Dein Profil nennt Greven/Münster-Umgebung als Nahbereich, vor Ort gut erreichbar (Quelle: Anzeige + Dein Profil).'
+    reiseanteil:
+      ampel: unbekannt
+      text: 'keine Angabe – Anzeige nennt keine Reisetätigkeit; erwähnt wird lediglich Bereitschaft zur Rufbereitschaft (Quelle: Anzeige).'
+    gehalt:
+      ampel: unbekannt
+      text: 'keine Angabe – Anzeige enthält keine Gehaltsinformation (Quelle: Anzeige).'
+    zusatz:
+    - thema: Rufbereitschaft
+      ampel: hinweis
+      text: 'Bereitschaft zur Rufbereitschaft gefordert – kann Einsätze außerhalb der regulären Arbeitszeit bedeuten (Quelle: Anzeige).'
+    - thema: Arbeitsmodell
+      ampel: gruen
+      text: 'Hybrid, 2 Tage Homeoffice/Woche (≈40% remote) genannt – entspricht Deiner Präferenz für Vor‑Ort im Nahbereich (Quelle: Anzeige + Dein Profil).'
+    fazit:
+      stufe: eher_streichen
+      text: Eher streichen – Standort und Richtung passen, aber die geforderten 3+ Jahre produktive Kubernetes/CI/CD‑Erfahrung fehlen und sind entscheidend.
+    kurzgrund: 'Plus: Greven liegt in Deinem Nahbereich und die Aufgaben sind in Deiner gewünschten Cloud/DevOps‑Richtung. Haken: Die Anzeige fordert ausdrücklich 3+ Jahre produktive Kubernetes‑ und CI/CD‑Erfahrung
+      sowie Prometheus und Rufbereitschaft, die Du laut Profil nicht nachweist. Entscheidend offen: Ob der Arbeitgeber Bewerber mit starkem Projekt-/Lernhintergrund akzeptiert.'
+    quellen:
+    - https://jobs.example.org/emsdeich/devops-engineer
+  ohne-angaben:
+    status:
+      ampel: unbekannt
+      text: 'Anzeige gelistet auf einer Jobbörse – Bewerbungsweg über die Karriereseite genannt, kein Veröffentlichungsdatum oder Status in der Anzeige (Anzeige: beispielboerse; Profil: Alex Beispiel).'
+    berufseinstieg:
+      ampel: orange
+      text: 'Keine Angabe zur Seniorität oder Jahren – für einen Einsteiger mit Abschluss 08/2026 und ohne Entwickler-Berufserfahrung ist das ein Stretch, aber bewerbbar (Anzeige: Stellenbeschreibung; Profil:
+        kein Entwicklerjob, Abschluss 08/2026).'
+    fachlicher_fit:
+      ampel: gruen
+      text: 'Gute fachliche Übereinstimmung – Anzeige nennt Azure und Terraform; beides ist Teil deiner Projekte und Abschlussarbeit (Anzeige: Azure & Terraform; Profil: eigenes Azure-Projekt, Terraform-Grundlagen,
+        AZ-900).'
+    luecken:
+      ampel: orange
+      text: 'Wesentliche Lücken vorhanden (kein Entwickler-Job / keine Produktionsverantwortung, kein Kubernetes nachgewiesen) vs. keine expliziten Anforderungen in Anzeige; daher Stretch/klären (Anzeige:
+        sehr knapp, nur Azure & Terraform genannt; Profil: keine Berufserfahrung als Entwickler, kein Kubernetes).'
+    homeoffice_standort:
+      ampel: unbekannt
+      text: 'Arbeitsort und Remote-/Homeoffice-Regel nicht angegeben – für deine Einschränkung auf Deutschland und konkrete Orte entscheidend zu klären (Anzeige: Ort/Modell fehlt; Profil: Arbeiten nur in
+        D, Nahbereich Münster etc.).'
+    reiseanteil:
+      ampel: gruen
+      text: 'Keine Reisetätigkeit erwähnt – wahrscheinlich gering, aber nicht explizit angegeben (Anzeige: kein Hinweis auf Reisen; Profil: Präferiert keine Reisen).'
+    gehalt:
+      ampel: unbekannt
+      text: 'Kein Gehalt in der Anzeige genannt und keine weiteren Quellen vorliegen (Anzeige: kein Gehalt; Profil: Gehaltsregel: nur belegte Angaben).'
+    zusatz:
+    - thema: Bewerbungsweg
+      ampel: hinweis
+      text: 'Bewerbung ausdrücklich über die Karriereseite des Unternehmens angegeben (Anzeige: Karriereseite genannt).'
+    fazit:
+      stufe: erst_klaeren
+      text: Homeoffice/Ort und Einstiegslevel klären – danach bewerben
+    kurzgrund: 'Plus: Direkter Match für Azure und Terraform durch deine Projekte. Haken: keine Entwickler-Berufserfahrung und keine Angaben zu Arbeitsort/Remote. Entscheidende offene Frage: Ist die Stelle
+      als Einstiegsrolle remote aus Deutschland oder vor Ort erreichbar?'
+    quellen:
+    - https://jobs.example.org/kleinhafen/cloud-engineer
+    - https://karriere.kleinhafen-digital.example/jobs/cloud
+  lokal-andere-richtung:
+    status:
+      ampel: gruen
+      text: 'offen und aktuell – Anzeige auf Jobs.example.org vom 27.09.2026; gelistet dort (Quelle: Anzeige).'
+    berufseinstieg:
+      ampel: gruen
+      text: 'gut passend für Berufseinsteiger – Anzeige schreibt ''Berufseinsteiger:innen sind willkommen'' und du hast gerade B.Sc. (08/2026) abgeschlossen (Quelle: Anzeige, Profil).'
+    fachlicher_fit:
+      ampel: gelb
+      text: 'teilweise passend – du bringst IT‑Support‑Praxis und Grundlagen in Netzwerken/Servern aus Studium und Projekten mit, aber im Profil fehlen konkrete Nachweise zu Microsoft 365 und Windows‑Server‑Administration
+        (Quelle: Anzeige, Profil).'
+    luecken:
+      ampel: orange
+      text: 'Muss vs. Vorteil getrennt – Muss: praktische Erfahrung mit Microsoft 365 und Windows‑Server (Aufgabe laut Anzeige) fehlt in deinem Profil; Netzwerktechnik ist eher durch Studium und Support belegt
+        (lernbar). Vorteil: Azure‑Grundlagen und AZ‑900 sind vorhanden (Quelle: Anzeige, Profil).'
+    homeoffice_standort:
+      ampel: gruen
+      text: 'vor Ort gut erreichbar – Arbeitsort Telgte liegt in deinem Nahbereich; Homeoffice ''nach Absprache'' passt zu deiner Ortsbeschränkung (Quelle: Anzeige, Suchorte im Profil).'
+    reiseanteil:
+      ampel: unbekannt
+      text: 'Anzeige nennt keine Reisetätigkeit (Quelle: Anzeige).'
+    gehalt:
+      ampel: unbekannt
+      text: 'Anzeige enthält keine Gehaltsangabe (Quelle: Anzeige).'
+    zusatz:
+    - thema: Einstiegsmöglichkeiten
+      ampel: gruen
+      text: 'Anzeige nennt explizit ''Berufseinsteiger:innen sind willkommen'', das unterstützt deinen Berufseinstieg (Quelle: Anzeige, Profil).'
+    - thema: Gehalt
+      ampel: hinweis
+      text: 'kein Gehalt in der Anzeige angegeben; das solltest du vorab klären (Quelle: Anzeige).'
+    fazit:
+      stufe: bewerben
+      text: Bewerben – mittlere Priorität / Stretch
+    kurzgrund: 'Plus: Telgte liegt in deinem Nahbereich und die Stelle begrüßt Berufseinsteiger, daher gute Chance auf Einstieg. Haken: Du hast keine nachgewiesene Microsoft‑365- oder Windows‑Server‑Praxis,
+      das ist Kern der Rolle. Offen: Umfang des Homeoffice und Erwartung an M365/Server‑Praxis klären.'
+    quellen:
+    - https://jobs.example.org/emsauen/it-administrator

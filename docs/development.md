@@ -229,6 +229,18 @@ wird wie oben mit `--cases evals/private/faelle.yaml --out
 evals/private/results`. Die Tests prüfen Falldatei, Bewertung und einen ganzen
 Lauf gegen einen simulierten Endpunkt, ohne Kosten.
 
+### Demo-Daten
+
+`scripts/demo_data.py` füllt eine eigene lokale Datenbank `jobfinder_demo` mit
+den erfundenen Anzeigen aus `evals/cases/synthetic.yaml` und den Angaben aus
+`demo/demo.yaml`: Sucheinstellungen der erfundenen Person, eine zweite Stelle
+für die Warteliste, Entscheidungen und Bewerbungen (in Tagen vor heute, damit
+die Demo nicht altert) und drei Steckbriefe aus einem Eval-Lauf. Den Vorfilter
+durchlaufen die Anzeigen wie im Betrieb; das Modell wird nicht aufgerufen.
+`--serve` startet danach die Review unter `http://127.0.0.1:8770`. Das Skript
+leert die Demo-Datenbank bei jedem Lauf und verweigert jeden Datenbankserver,
+der nicht lokal läuft. Die Bilder in `docs/images/` stammen aus dieser Demo.
+
 ## Eine Quelle ergänzen
 
 Eine Quelle liegt unter `job_finder/sources/<name>.py` und liefert Instanzen

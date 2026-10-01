@@ -13,24 +13,33 @@ sie aktiviert werden muss:
 uv sync
 uv run ruff check .
 uv run ruff format --check .
-uv run python scripts/test_postgres.py
+uv run pyright
+uv run python scripts/test_postgres.py --cov
 node --test tests/frontend.test.cjs
 ```
 
 Die Abhängigkeiten stehen mit Versionsbereichen in `pyproject.toml`, die exakten
 Versionen in `uv.lock`; CI und Image installieren genau diese. Nach einer
 Änderung an `pyproject.toml` aktualisiert `uv lock` das Lockfile, sonst scheitert
-die CI. Die Gruppe `dev` enthält die festgelegte Ruff-Version, damit lokale
-Prüfung und CI dieselben Formatierungsregeln verwenden. Node.js wird nur für die
-Frontend-Tests benötigt; die CI verwendet Node.js 24.
+die CI. Die Gruppe `dev` enthält festgelegte Versionen von Ruff, pytest,
+pytest-cov und Pyright, damit lokale Prüfung und CI dieselben Regeln verwenden.
+Node.js wird für die Frontend-Tests und für Pyright benötigt; die CI verwendet
+Node.js 24.
 
 Die Tests verwenden lokale Fixtures, temporäre Datenpfade, eine separate
 PostgreSQL-Testdatenbank ([Betrieb](operations.md#lokale-datenbank)) und
 ersetzte Netzwerkzugriffe; ein vollständiger Finder-Lauf gehört nicht dazu.
+`scripts/test_postgres.py` prüft die Testdatenbank und startet dann pytest, das
+die `unittest`-Klassen unverändert ausführt; weitere Argumente gehen an pytest.
+`--cov` misst, welche Zeilen und Verzweigungen in `job_finder/` die Tests
+erreichen. Die Zahl hilft, ungetestete Stellen zu finden, und ist kein Ziel für
+sich. Pyright prüft die Typen, zunächst für die Datenbankschicht
+(`job_finder/persistence`); weitere Pakete kommen schrittweise dazu
+(`[tool.pyright]` in `pyproject.toml`).
 
 Der [GitHub-Workflow](../.github/workflows/checks.yml) testet Python 3.11 und
-3.13 auf Linux mit PostgreSQL, prüft Stil, Frontend und ob `uv.lock` zu
-`pyproject.toml` passt. Bei Pull Requests baut er außerdem das Image, startet es
+3.13 auf Linux mit PostgreSQL und zeigt die Abdeckung in der Zusammenfassung des
+Laufs, prüft Stil, Typen, Frontend und ob `uv.lock` zu `pyproject.toml` passt. Bei Pull Requests baut er außerdem das Image, startet es
 kurz als eingeschränkter Benutzer und prüft es mit Trivy auf bekannte Lücken;
 tflint und Trivy prüfen den Terraform-Code und brechen bei jedem neuen Befund
 ab (bewusste Abwägungen stehen mit Begründung in

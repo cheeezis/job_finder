@@ -183,7 +183,7 @@ verlässt nichts den eigenen Rechner beziehungsweise Azure.
 
 Die Evals in `evals/` messen, wie gut die Steckbriefe zu beschrifteten Fällen
 passen. `evals/cases/synthetic.yaml` enthält eine erfundene Person mit Profil
-und Orten, zwei frühere Entscheidungen und 18 erfundene Anzeigen; auch Firmen
+und Orten, zwei frühere Entscheidungen und 24 erfundene Anzeigen; auch Firmen
 und Links sind erfunden. Je Fall stehen die erlaubten Fazit-Stufen, erwartete
 Ampeln und ein Satz zur maßgeblichen Regel aus `job_finder/agent/instructions.py`.
 Zwei Varianten schreiben die Steckbriefe: `agent` ist der Graph aus dem Betrieb

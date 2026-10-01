@@ -72,8 +72,10 @@ class LocalReviewServer(ThreadingHTTPServer):
 
     def server_bind(self):
         """Bind the server with exclusive address use when the platform supports it."""
-        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
-            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        # Windows only; getattr instead of hasattr, so type checks pass on every platform.
+        option = getattr(socket, "SO_EXCLUSIVEADDRUSE", None)
+        if option is not None:
+            self.socket.setsockopt(socket.SOL_SOCKET, option, 1)
         super().server_bind()
 
 

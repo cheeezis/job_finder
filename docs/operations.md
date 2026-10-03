@@ -33,7 +33,7 @@ löschen und gehört nicht zum normalen Ablauf.
 
 Worker und Review verbinden sich nicht mit dem Admin-Benutzer `jobfinder`,
 sondern über die Rolle `jobfinder_app` mit eingeschränkten Rechten (kein Zugriff
-auf `schema_version`). Einmalig einrichten:
+auf `schema_version` oder `alembic_version`). Einmalig einrichten:
 
 ```powershell
 .\.venv\Scripts\python.exe scripts/create_app_role.py
@@ -159,19 +159,43 @@ Die App-Rolle in Azure einrichten beziehungsweise aktualisieren:
 .\.venv\Scripts\python.exe scripts/create_app_role.py --azure
 ```
 
-Neue Tabellen und Spalten legt ausschließlich `job_finder.db init` an; die
-Anwendung selbst ändert das Schema nie. Nach einer Schemaerweiterung läuft der
-Befehl einmal gegen Azure, mit den Verbindungsdaten aus `.env.postgres-azure`,
-die nur für diesen Aufruf gesetzt werden. `init` legt nur Fehlendes an; `check`
-zählt danach als App-Rolle die Zeilen und zeigt so, dass sie die neuen Tabellen
-lesen darf:
+Neue Tabellen und Spalten werden ausschließlich mit expliziten Alembic-Migrationen
+über `job_finder.db migrate` angelegt; `init` ist ein kompatibler Alias für denselben
+Pfad. Worker und Review ändern das Schema nie. Eine leere Datenbank erhält das Schema
+über die Baseline-Revision `0001_baseline`. Eine bestehende Datenbank ohne Alembic-Stand
+wird erst nach Prüfung der vollständigen Baseline-Struktur und des bisherigen
+Versionsmarkers übernommen. Abweichungen führen zum Abbruch; fehlende Tabellen oder
+Spalten werden bei der Übernahme nicht automatisch repariert.
+Die bekannte alte Import-Protokolltabelle `migration_runs` darf mit ihrer ursprünglichen,
+ebenfalls geprüften Struktur vorhanden sein. Sie und ihre Daten bleiben erhalten;
+frische Datenbanken bekommen sie seit der abgeschlossenen Datenübernahme nicht mehr.
+
+`schema-status` prüft Struktur und Migrationsstand mit dem Admin-Zugang, technisch
+schreibgeschützt. Es zeigt `empty`, `legacy`, `current` oder `outdated`, den aktuellen
+Stand und das Ziel `head`, ohne Zeilenzahlen oder Verbindungsdaten. `migrate` übernimmt
+Prüfung, Baseline-Markierung, Upgrade und Schutz der Versionstabellen in einer
+Transaktion unter der bisherigen Schema-Sperre. Auch ererbte Tabellenrechte werden
+für die Versionstabellen entzogen; Anwendungstabellen behalten ihre Rechte.
+
+Vor einer Produktionsmigration Bestand sichern und `schema-status` prüfen. Bei einer
+Abweichung Ursache und tatsächlichen Bestand untersuchen; kein ungeprüftes `alembic
+stamp`. Die Baseline erhält die bisherige `schema_version = 2` und alle vorhandenen
+Daten. Ein Rollback auf das vorherige App-Image benötigt keinen Schema-Downgrade;
+ein Baseline-Downgrade wird bewusst abgelehnt, weil er den gesamten Bestand löschen
+würde. Neue Revisionen brauchen einen eigenen Kompatibilitäts- und Rückkehrplan.
+Die Einbindung eines automatischen Migrationsschritts in den Deploy folgt in F13.
+
+Nach einer freigegebenen Schemaänderung läuft der Befehl einmal gegen Azure, mit
+den nur für diesen Aufruf gesetzten Verbindungsdaten aus `.env.postgres-azure`.
+`check` zählt danach als App-Rolle die Zeilen und prüft damit den Datenzugriff:
 
 ```powershell
 $azure = Get-Content .env.postgres-azure -Raw | ConvertFrom-StringData
 try {
     $env:JOBFINDER_ADMIN_DATABASE_URL = $azure.JOBFINDER_ADMIN_DATABASE_URL
     $env:JOBFINDER_DATABASE_URL = $azure.JOBFINDER_DATABASE_URL
-    .\.venv\Scripts\python.exe -m job_finder.db init
+    .\.venv\Scripts\python.exe -m job_finder.db schema-status
+    .\.venv\Scripts\python.exe -m job_finder.db migrate
     .\.venv\Scripts\python.exe -m job_finder.db check
 } finally {
     Remove-Item Env:JOBFINDER_ADMIN_DATABASE_URL, Env:JOBFINDER_DATABASE_URL -ErrorAction SilentlyContinue

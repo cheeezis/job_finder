@@ -157,7 +157,7 @@ the review app.
 | --- | --- |
 | Language | Python 3.11+ (CI tests 3.11 and 3.13), dependencies locked with uv |
 | AI agent | LangGraph, LangChain (`langchain-openai`), Azure OpenAI `gpt-5-mini` |
-| Data | PostgreSQL 18 with psycopg 3, Azure Blob Storage |
+| Data | PostgreSQL 18 with psycopg 3, validated Alembic migrations, Azure Blob Storage |
 | Web app | Python standard-library HTTP server, vanilla JavaScript |
 | Cloud | Azure Container Apps (job and app), Database for PostgreSQL Flexible Server, Key Vault, Container Registry, Monitor |
 | Infrastructure | Terraform (`azurerm`, `azapi`), Docker |

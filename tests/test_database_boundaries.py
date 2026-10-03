@@ -71,6 +71,8 @@ class AppRoleRightsTests(unittest.TestCase):
             "TRUNCATE job_state",
             "SELECT * FROM schema_version",
             "INSERT INTO schema_version VALUES (999)",
+            "SELECT * FROM alembic_version",
+            "UPDATE alembic_version SET version_num = version_num",
         ):
             with self.subTest(statement=statement), self.assertRaises(errors.InsufficientPrivilege):
                 self.run_as_app(statement)

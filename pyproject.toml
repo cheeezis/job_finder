@@ -14,6 +14,8 @@ keywords = ["job-search", "job-tracker", "llm-agent", "langgraph", "azure", "pos
 dependencies = [
     "PyYAML>=6.0,<7",
     "psycopg[binary]>=3.2,<4",
+    "alembic>=1.18,<2",
+    "SQLAlchemy>=2.0,<2.1",
     "python-dotenv>=1.0,<2",
     "azure-storage-blob>=12.24,<13",
     "azure-identity>=1.19,<2",
@@ -40,6 +42,7 @@ package = false
 
 [tool.setuptools.package-data]
 job_finder = ["*.html", "*.css", "*.js"]
+"job_finder.persistence.migrations" = ["script.py.mako"]
 
 [tool.pytest.ini_options]
 # pytest runs the unittest test classes as they are. scripts/test_postgres.py

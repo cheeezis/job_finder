@@ -7,6 +7,7 @@ from job_finder.paths import APPLICATION_DOCUMENTS_DIR
 from job_finder.persistence.database import initialize, transaction
 from job_finder.persistence.postgres_backup import create_postgres_backup, restore_backup
 from job_finder.persistence.postgres_store import prune_cache
+from job_finder.persistence.schema_migrations import migrate, schema_status
 
 
 def main():
@@ -14,6 +15,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("init")
+    commands.add_parser("migrate", help="Leere DB anlegen, geprüfte Alt-DB übernehmen oder auf head migrieren.")
+    commands.add_parser("schema-status", help="Struktur und Migrationsstand ausschließlich lesend prüfen.")
     commands.add_parser("check")
     cleanup = commands.add_parser("prune-cache")
     cleanup.add_argument("--days", type=int, default=30)
@@ -26,6 +29,10 @@ def main():
     if args.command == "init":
         initialize()
         result = {"initialized": True}
+    elif args.command == "migrate":
+        result = migrate()
+    elif args.command == "schema-status":
+        result = schema_status()
     elif args.command == "backup":
         result = {"backup": str(create_postgres_backup(documents_dir=args.documents_dir))}
     elif args.command == "restore":

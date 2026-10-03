@@ -1,7 +1,7 @@
 """Create or refresh the least-privilege jobfinder_app role for worker and review.
 
 Grants only SELECT/INSERT/UPDATE/DELETE on application tables, never on
-schema_version (which stays admin-only; only initialize() touches it).
+schema_version or alembic_version (which stay admin-only; explicit migrations maintain them).
 Safe to rerun: an already-configured target is left untouched except for
 reapplying the grants, which are themselves idempotent. Passwords are never
 printed.
@@ -115,9 +115,10 @@ def _apply_grants(connection, database, admin_role):
     grant("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO {}", APP_ROLE)
     # Schema may not be initialized yet (job_finder.db init runs independently
     # of this script); skip the revoke rather than fail on a missing table.
-    schema_version_exists = connection.execute("SELECT to_regclass('public.schema_version')").fetchone()[0]
-    if schema_version_exists:
-        grant("REVOKE ALL ON schema_version FROM {}", APP_ROLE)
+    for table in ("schema_version", "alembic_version"):
+        exists = connection.execute("SELECT to_regclass(%s)", (f"public.{table}",)).fetchone()[0]
+        if exists:
+            grant("REVOKE ALL ON {} FROM {}", table, APP_ROLE)
     grant(
         "ALTER DEFAULT PRIVILEGES FOR ROLE {} IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO {}",
         admin_role,

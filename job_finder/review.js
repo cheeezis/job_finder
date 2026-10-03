@@ -198,7 +198,7 @@
       : job.role_label || "Allgemeine IT");
     element("new-badge").hidden = job.workflow_status !== "new";
     setText("title", job.title);
-    setText("company", job.company);
+    setText("company", job.company || "Arbeitgeber unbekannt");
     renderCompanyApplications(job);
     setText("location", `Ort: ${(job.locations || []).join(", ") || "unbekannt"}`);
     const remote = job.remote_percentage != null

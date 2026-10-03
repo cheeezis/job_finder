@@ -109,7 +109,9 @@ def normalize_location(value):
 
 
 def companies_match(first, second):
-    """Return whether normalized names identify the same company."""
+    """Return whether normalized names identify the same company; an unknown company matches none."""
+    if not first or not second:
+        return False
     if first == second:
         return True
     shorter, longer = sorted([first, second], key=len)

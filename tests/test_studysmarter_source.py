@@ -128,6 +128,17 @@ class StudySmarterTests(unittest.TestCase):
                 job = studysmarter.summary_job_from_record({"id": 1, "link": self.JOB_URL, "title": title})
                 self.assertEqual(job.title, clean)
 
+    def test_a_board_named_in_place_of_the_employer_leaves_the_company_unknown(self):
+        for company, expected in (
+            ("JOIN", ""),
+            ("Arbeitsagentur", ""),
+            ("Remotely", ""),
+            ("Example GmbH", "Example GmbH"),
+        ):
+            with self.subTest(company=company):
+                record = {"id": 1, "link": self.JOB_URL, "title": "Junior Developer", "company_name": company}
+                self.assertEqual(studysmarter.summary_job_from_record(record).company, expected)
+
     def test_job_import_uses_remote_flag_and_ignores_predicted_salary(self):
         record = {
             "id": 12345678,

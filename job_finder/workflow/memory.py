@@ -98,7 +98,9 @@ def update_memory(jobs, memory, successful_sources=None, run_sources=None):
             job.workflow_status = WorkflowStatus(entry["workflow_status"])
             entry["last_seen_at"] = now.isoformat()
             entry["title"] = job.title
-            entry["company"] = job.company
+            # A listing without employer keeps the company another listing named.
+            entry["company"] = job.company or entry.get("company") or ""
+            job.company = entry["company"]
             entry["locations"] = unique_values(entry.get("locations") or [], job.locations)
             entry["source_urls"] = unique_values(entry.get("source_urls", []), [source.url for source in job.sources])
             entry["source_names"] = unique_values(entry.get("source_names", []), job.source_names)
@@ -200,8 +202,10 @@ def same_job_ids(job, memory, index):
     """
     title = normalize_title(job.title)
     company = normalize_company(job.company)
-    if not title or not company:
+    if not title:
         return []
+    if not company:
+        return applications_with_same_title_and_place(job, title, memory, index)
     listing = {"locations": job.locations, "fully_remote": remote_job(job)}
     return [
         job_id
@@ -212,6 +216,25 @@ def same_job_ids(job, memory, index):
         and companies_match(company, normalize_company(memory[job_id].get("company") or ""))
         and (memory[job_id].get("active", True) or repost_decision_is_reusable(memory[job_id]))
         and may_share_decision(listing, memory[job_id])
+    ]
+
+
+def applications_with_same_title_and_place(job, title, memory, index):
+    """Return applications a listing without employer belongs to: same title, every place known.
+
+    Some portals name the board they took an ad from instead of the employer.
+    Such a listing joins only an application, where a second job with the same
+    title in the same city is unlikely; being remote is not enough here.
+    """
+    places = [place for place in job.locations if normalize_location(place)]
+    return [
+        job_id
+        for job_id in index["titles"].get(title, [])
+        if job_id in memory
+        and normalize_title(memory[job_id].get("title") or "") == title
+        and has_application_state(memory[job_id])
+        and places
+        and all(locations_match([place], memory[job_id].get("locations") or []) for place in places)
     ]
 
 

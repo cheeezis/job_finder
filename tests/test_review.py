@@ -8,6 +8,7 @@ import tempfile
 import threading
 import unittest
 from contextlib import contextmanager
+from copy import deepcopy
 from datetime import date
 from http.server import HTTPServer
 from pathlib import Path
@@ -179,6 +180,55 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(jobs[0]["workflow_status"], "interesting")
         self.assertFalse(jobs[0]["application_tracked"])
         self.assertFalse(jobs[0]["international"])
+
+    def test_cached_board_names_do_not_create_a_false_same_company_hint(self):
+        for company in ("Arbeitsagentur", "JOIN", "Remotely"):
+            with self.subTest(company=company):
+                memory = {
+                    "studysmarter:cached": {
+                        "title": "Junior Developer",
+                        "company": company,
+                        "workflow_status": "new",
+                        "source_names": ["studysmarter"],
+                    },
+                    "studysmarter:applied": {
+                        "title": "Junior Administrator",
+                        "company": company,
+                        "workflow_status": "interview",
+                        "source_names": ["studysmarter"],
+                        "workflow_history": [{"status": "interview", "occurred_on": "2026-10-01"}],
+                    },
+                }
+                save_memory(memory, self.memory_path)
+                self.edit_recommendation(id="studysmarter:cached", company=company)
+                before = deepcopy(load_memory(self.memory_path))
+
+                jobs = load_review_jobs(self.recommendations_path, self.memory_path)
+
+                self.assertEqual(jobs[0]["company"], "")
+                self.assertEqual(jobs[0]["company_applications"], [])
+                self.assertEqual(jobs[0]["workflow_status"], "new")
+                self.assertEqual(load_memory(self.memory_path), before)
+
+    def test_cached_board_name_is_replaced_by_a_known_employer(self):
+        memory = load_memory(self.memory_path)
+        memory["job:1"].update(source_names=["studysmarter"])
+        save_memory(memory, self.memory_path)
+        self.edit_recommendation(company="JOIN")
+
+        jobs = load_review_jobs(self.recommendations_path, self.memory_path)
+
+        self.assertEqual(jobs[0]["company"], "Example GmbH")
+
+    def test_the_review_keeps_same_named_employers_from_other_sources(self):
+        memory = load_memory(self.memory_path)
+        memory["job:1"].update(company="JOIN", source_names=["arbeitnow"])
+        save_memory(memory, self.memory_path)
+        self.edit_recommendation(company="JOIN")
+
+        jobs = load_review_jobs(self.recommendations_path, self.memory_path)
+
+        self.assertEqual(jobs[0]["company"], "JOIN")
 
     def test_reviewed_new_job_does_not_reappear_after_reload(self):
         self.edit_recommendation(is_new=True)

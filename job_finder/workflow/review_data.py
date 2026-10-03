@@ -12,7 +12,14 @@ from job_finder.persistence.database import snapshot
 from job_finder.persistence.fact_sheets import fact_sheets
 from job_finder.persistence.storage import dataset_name, read_object
 from job_finder.workflow.applications import OPEN_APPLICATION_STATUSES, application_row, is_application
-from job_finder.workflow.memory import load_memory, memory_id_finder, memory_source_links, preferred_memory_id
+from job_finder.workflow.memory import (
+    clear_studysmarter_board_companies,
+    load_memory,
+    memory_id_finder,
+    memory_source_links,
+    preferred_memory_id,
+    studysmarter_board_company,
+)
 from job_finder.workflow.reporting import is_international_listing
 
 PERSISTED_REVIEW_STATUSES = {
@@ -28,6 +35,8 @@ def load_review_jobs(recommendations_path=RECOMMENDATIONS_JSON, memory_path=MEMO
     with snapshot() if dataset_name(path) else nullcontext():
         document = read_object(path, {})
         memory = load_memory(memory_path)
+    # Normalize the in-memory view only; the next worker run persists cleanup.
+    clear_studysmarter_board_companies(memory)
     recommendations = document.get("recommendations", [])
     find_memory_ids = memory_id_finder(memory)
     review_jobs = []
@@ -42,6 +51,10 @@ def load_review_jobs(recommendations_path=RECOMMENDATIONS_JSON, memory_path=MEMO
         # The listing's own id finds its details in the jobs dataset.
         job["recommendation_id"] = job["id"]
         job["id"] = memory_id
+        if studysmarter_board_company(
+            job["recommendation_id"], {"company": job.get("company"), "source_names": entry.get("source_names")}
+        ):
+            job["company"] = entry.get("company") or ""
         job["workflow_status"] = entry.get("workflow_status", WorkflowStatus.NEW.value)
         # ``is_new`` describes the collection run, while a persisted workflow
         # status records that the user has already decided on the job. Never

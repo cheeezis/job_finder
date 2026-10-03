@@ -6,6 +6,7 @@ from urllib.parse import urlencode, urlsplit
 
 from job_finder.http import fetch_json, fetch_text
 from job_finder.matching.config import LOCAL_SEARCH_RADIUS_KM, STUDYSMARTER_LOCAL_SEARCH_LOCATION
+from job_finder.matching.deduplication import BOARD_NAMES
 from job_finder.models import Job, JobSource, WorkMode
 from job_finder.paths import cache_file
 from job_finder.sources.common import (
@@ -39,8 +40,6 @@ REQUEST_PAUSE_SECONDS = 0.2
 # Some ads append employment type, place and categories to the title:
 # "Junior SAP Data Analyst Inhouse (m/w/d) Vollzeit | Fulda | Hybrides Arbeiten möglich …".
 APPENDED_DETAILS = re.compile(r"^(.*?\((?:m/w/d|w/m/d|m/f/d|f/m/d|d/m/w|gn)\))\s+(?:Vollzeit|Teilzeit)\s*\|.*$", re.I)
-# For ads taken over from other boards StudySmarter names that board, not the employer.
-BOARD_NAMES = {"arbeitsagentur", "join", "remotely"}
 REMOTE_MODES = {"completely": (WorkMode.REMOTE, 100), "partly": (WorkMode.HYBRID, None), "no": (WorkMode.ONSITE, 0)}
 
 

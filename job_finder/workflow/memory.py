@@ -6,6 +6,7 @@ from copy import deepcopy
 from datetime import UTC, date, datetime
 
 from job_finder.matching.deduplication import (
+    BOARD_NAMES,
     companies_match,
     fully_remote,
     locations_match,
@@ -83,6 +84,7 @@ def update_memory(jobs, memory, successful_sources=None, run_sources=None):
     now = datetime.now(UTC)
     counts = dict.fromkeys(("new", "known", "inactive", "reactivated"), 0)
     current_ids = set()
+    clear_studysmarter_board_companies(memory)
     memory_index = build_memory_index(memory)
 
     for job in jobs:
@@ -148,6 +150,23 @@ def update_memory(jobs, memory, successful_sources=None, run_sources=None):
                 counts["inactive"] += 1
 
     return counts
+
+
+def clear_studysmarter_board_companies(memory):
+    """Remove legacy board placeholders, including listings absent from this run.
+
+    Share the source adapter's names and restrict cleanup to StudySmarter
+    provenance. Other employers and all workflow fields stay untouched.
+    """
+    for job_id, entry in memory.items():
+        if studysmarter_board_company(job_id, entry):
+            entry["company"] = ""
+
+
+def studysmarter_board_company(job_id, entry):
+    """Recognize the source adapter's employer placeholders using saved provenance."""
+    sources = entry.get("source_names") or inferred_sources(job_id)
+    return "studysmarter" in sources and str(entry.get("company") or "").strip().casefold() in BOARD_NAMES
 
 
 def resolve_memory_id(job, memory, memory_index=None):

@@ -39,6 +39,8 @@ REQUEST_PAUSE_SECONDS = 0.2
 # Some ads append employment type, place and categories to the title:
 # "Junior SAP Data Analyst Inhouse (m/w/d) Vollzeit | Fulda | Hybrides Arbeiten möglich …".
 APPENDED_DETAILS = re.compile(r"^(.*?\((?:m/w/d|w/m/d|m/f/d|f/m/d|d/m/w|gn)\))\s+(?:Vollzeit|Teilzeit)\s*\|.*$", re.I)
+# For ads taken over from other boards StudySmarter names that board, not the employer.
+BOARD_NAMES = {"arbeitsagentur", "join", "remotely"}
 REMOTE_MODES = {"completely": (WorkMode.REMOTE, 100), "partly": (WorkMode.HYBRID, None), "no": (WorkMode.ONSITE, 0)}
 
 
@@ -162,6 +164,12 @@ def clean_title(title):
     return appended.group(1) if appended else title
 
 
+def employer(record):
+    """Return the company of a record, or "" when StudySmarter names the board it took the ad from."""
+    company = str(record.get("company_name") or "").strip()
+    return "" if company.casefold() in BOARD_NAMES else company
+
+
 def summary_job_from_record(record):
     """Create a lightweight Job from one API search record."""
     url = detail_url(record.get("link", ""))
@@ -175,7 +183,7 @@ def summary_job_from_record(record):
     return Job(
         id=source_job_id(SOURCE_NAME, identifier, url),
         title=clean_title(str(record.get("title") or "")),
-        company=str(record.get("company_name") or "").strip(),
+        company=employer(record),
         locations=[str(location).strip() for location in record.get("locations") or [] if str(location).strip()]
         or ["unbekannt"],
         sources=[JobSource(source=SOURCE_NAME, source_id=identifier, url=url)],

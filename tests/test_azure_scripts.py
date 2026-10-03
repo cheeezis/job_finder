@@ -79,8 +79,10 @@ class AppRoleSqlTests(unittest.TestCase):
                 'GRANT CONNECT ON DATABASE "jobfinder" TO "jobfinder_app"',
                 'GRANT USAGE ON SCHEMA public TO "jobfinder_app"',
                 'GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO "jobfinder_app"',
-                "SELECT to_regclass('public.schema_version')",
-                'REVOKE ALL ON schema_version FROM "jobfinder_app"',
+                "SELECT to_regclass(%s)",
+                'REVOKE ALL ON "schema_version" FROM "jobfinder_app"',
+                "SELECT to_regclass(%s)",
+                'REVOKE ALL ON "alembic_version" FROM "jobfinder_app"',
                 'ALTER DEFAULT PRIVILEGES FOR ROLE "jobfinder_admin" IN SCHEMA public '
                 'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO "jobfinder_app"',
             ],
@@ -89,8 +91,8 @@ class AppRoleSqlTests(unittest.TestCase):
     def test_grants_skip_the_revoke_before_the_schema_exists(self):
         _, statements = self.statements("_apply_grants", "jobfinder", "jobfinder_admin", row=(None,))
 
-        self.assertNotIn('REVOKE ALL ON schema_version FROM "jobfinder_app"', statements)
-        self.assertEqual(len(statements), 5)
+        self.assertFalse(any(statement.startswith("REVOKE") for statement in statements))
+        self.assertEqual(len(statements), 6)
 
     def test_role_password_is_reset_or_the_role_created(self):
         for row, expected in (

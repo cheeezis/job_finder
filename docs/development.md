@@ -38,9 +38,19 @@ Skripte und Evals noch nicht (`[tool.pyright]` in `pyproject.toml`).
 
 Grenztests prüfen Zusagen, die sonst niemand bemerkt, gegen die echte
 Testdatenbank: Die App-Rolle liest und schreibt Zeilen, ändert aber nie das
-Schema und sieht `schema_version` nicht (eine eigene Test-Rolle, damit eine
+Schema und sieht weder `schema_version` noch `alembic_version` (eine eigene Test-Rolle, damit eine
 echte `jobfinder_app` auf demselben Server unberührt bleibt), und ein zweiter
 gleichzeitiger Finder-Lauf wird abgewiesen (`tests/test_database_boundaries.py`).
+
+`tests/test_schema_migrations.py` erzeugt eigene temporäre `_test`-Datenbanken auf
+der bereits isolierten Testinstanz und entfernt sie nach jedem Test. Der Testzugang
+braucht dafür `CREATEDB` und für die Rollenprüfung `CREATEROLE` (die lokale und die
+CI-Testinstanz verwenden einen Superuser). Frisch migrierte und übernommene Datenbanken
+werden anhand der PostgreSQL-Kataloge verglichen. Eine unabhängige historische DDL-Fixture
+prüft die Übernahme einschließlich unveränderter Entscheidungen, Dokumentreferenzen,
+Benachrichtigungen und Kostenbuch. Strukturabweichungen, unbekannte Versionen, ererbte
+App-Rechte und Abbrüche nach DDL oder Baseline-Markierung sind eigene Regressionen.
+Diese Tests laufen in der normalen PostgreSQL-Suite und damit auch in CI.
 
 Die Browser-Tests (`tests/test_review_browser.py`) klicken die Review in
 Chromium auf frisch befüllten Demo-Daten durch: Steckbrief, Entscheidung mit
@@ -80,6 +90,27 @@ auf `docs/...`, `fix/...` oder `feat/...`. Inhaltliche und große rein mechanisc
 beschreibt Titel und Beschreibung. Das Repository ist öffentlich: Commit- und
 PR-Texte bleiben kurz und nennen keine persönlichen Daten, keine Firmen aus
 eigenen Bewerbungen, keine Zahlen aus dem eigenen Bestand und keine Azure-Namen.
+
+## Datenbankmigrationen
+
+Die Revisionen liegen in `job_finder/persistence/migrations/versions/`. Die Baseline
+und ihr eingefrorenes Schema in `migrations/baseline.py` bleiben unverändert;
+Schemaänderungen bekommen eine neue Revision. Die Datenzugriffe bleiben bei psycopg;
+SQLAlchemy wird für Migrationen und Strukturprüfung verwendet.
+
+```powershell
+uv run python -m job_finder.db schema-status
+uv run python -m job_finder.db migrate
+uv run alembic history
+uv run alembic revision -m "describe schema change"
+```
+
+Neue Revisionen manuell ausarbeiten und Upgrade, Bestandserhalt, App-Rechte und
+Kompatibilität testen. `migrate` ist der einzige unterstützte Ausführungspfad:
+ein direktes `alembic upgrade` oder `stamp` ohne geprüfte Admin-Transaktion wird
+abgewiesen. Verbindungsdaten stammen aus `JOBFINDER_ADMIN_DATABASE_URL`, nie aus
+`alembic.ini`; Azure-TLS-Optionen bleiben erhalten. Auch `init`, Demo und Restore
+verwenden denselben Migrationspfad. Es gibt keine automatische Migration beim App-Start.
 
 ## Orientierung im Code
 

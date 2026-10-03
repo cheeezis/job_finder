@@ -760,6 +760,8 @@ class DeduplicationTests(unittest.TestCase):
             ("Siemens Energy", "Siemens Healthineers", False),
             ("EDAG Group", "Edeka Group", False),
             ("IT Group", "IT Services", False),
+            # An unknown employer matches none.
+            ("", "", False),
         ):
             with self.subTest(first=first, second=second):
                 self.assertEqual(companies_match(normalize_company(first), normalize_company(second)), same)

@@ -114,6 +114,9 @@ eigenen Bewerbungen, keine Zahlen aus dem eigenen Bestand und keine Azure-Namen.
 3. Die angereicherten Jobs werden endgültig bewertet. Diese Ergebnisse
    bleiben mit den Job-Objekten verbunden, während das Gedächtnis anschließend
    IDs, Erstfund-Merkmale und bestehende Workflow-Entscheidungen zuordnet.
+   Alte Portalnamen im Arbeitgeberfeld von StudySmarter-Einträgen werden dabei
+   entfernt, auch wenn die Anzeige in diesem Lauf nicht erneut gefunden wurde.
+   Tatsächliche Arbeitgebernamen und manuelle Entscheidungen bleiben erhalten.
    Anzeigen mit gleichem Titel und passender Firma erhalten dabei dieselbe ID,
    auch über Portale und Läufe hinweg; eine schon entschiedene Stelle nur ohne
    neuen Ort oder wenn beide komplett remote sind. Danach werden sie zu einer

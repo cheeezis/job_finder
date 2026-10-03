@@ -8,6 +8,8 @@ from job_finder.models import Job, WorkMode
 from job_finder.text import normalize_text
 
 LEGAL_FORMS = ["gmbh", "mbh", "ag", "se", "kg", "ohg", "ug", "co", "ltd", "inc"]
+# StudySmarter sometimes names the board an ad came from instead of its employer.
+BOARD_NAMES = {"arbeitsagentur", "join", "remotely"}
 # Words that only name a part of a group: "EDAG Engineering Group" and "EDAG Group"
 # are one employer as long as the first word, the actual name, is the same.
 GROUP_WORDS = {

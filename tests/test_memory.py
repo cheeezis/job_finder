@@ -1,5 +1,6 @@
 """Tests for lifecycle metadata in the job memory."""
 
+import copy
 import tempfile
 import threading
 import unittest
@@ -61,6 +62,74 @@ def remembered(status, place, *, active=True, remote=False):
 
 
 class MemoryTests(unittest.TestCase):
+    def test_old_board_names_are_cleared_even_when_the_listing_is_absent(self):
+        for company in ("Arbeitsagentur", " join ", "REMOTELY"):
+            for status in ("new", "interesting", "applied", "rejected"):
+                with self.subTest(company=company, status=status):
+                    entry = remembered(status, "Fulda")
+                    entry.update(
+                        company=company,
+                        source_names=["studysmarter"],
+                        review_note="Keep my note",
+                        application_documents=[{"id": "document:1", "name": "CV.pdf"}],
+                    )
+                    before = copy.deepcopy(entry)
+                    memory = {"studysmarter:old": entry}
+
+                    update_memory([], memory)
+
+                    self.assertEqual(memory, {"studysmarter:old": {**before, "company": ""}})
+
+    def test_an_unnamed_returning_listing_does_not_restore_its_old_board_name(self):
+        job = self.unknown_employer_listing()
+        entry = remembered("interesting", "Berlin")
+        entry.update(title=job.title, company="JOIN", source_names=["studysmarter"], source_urls=[job.primary_url])
+        memory = {job.id: entry}
+        history = copy.deepcopy(entry["workflow_history"])
+
+        update_memory([job], memory)
+
+        self.assertEqual(job.company, "")
+        self.assertEqual(entry["company"], "")
+        self.assertEqual(job.workflow_status, WorkflowStatus.INTERESTING)
+        self.assertEqual(entry["workflow_history"], history)
+
+    def test_board_cleanup_preserves_real_employers_and_names_from_other_sources(self):
+        for job_id, company, names in (
+            ("studysmarter:real", "Example GmbH", ["studysmarter"]),
+            ("arbeitnow:real", "JOIN", ["arbeitnow"]),
+            ("arbeitsagentur:real", "Arbeitsagentur", ["arbeitsagentur"]),
+            ("remotely:real", "Remotely", ["remotely"]),
+        ):
+            with self.subTest(job_id=job_id):
+                entry = remembered("applied", "Fulda")
+                entry.update(company=company, source_names=names)
+                before = copy.deepcopy(entry)
+                memory = {job_id: entry}
+
+                update_memory([], memory)
+
+                self.assertEqual(memory, {job_id: before})
+
+    def test_board_cleanup_recovers_the_source_from_legacy_ids(self):
+        memory = {"studysmarter:legacy": {"company": "JOIN", "workflow_status": "ignored"}}
+
+        update_memory([], memory)
+
+        self.assertEqual(memory["studysmarter:legacy"], {"company": "", "workflow_status": "ignored"})
+
+    def test_a_returning_listing_can_supply_the_actual_employer_after_cleanup(self):
+        job = self.unknown_employer_listing()
+        job.company = "Example GmbH"
+        entry = remembered("interesting", "Berlin")
+        entry.update(title=job.title, company="JOIN", source_names=["studysmarter"], source_urls=[job.primary_url])
+        memory = {job.id: entry}
+
+        update_memory([job], memory)
+
+        self.assertEqual(job.company, "Example GmbH")
+        self.assertEqual(entry["company"], "Example GmbH")
+
     def test_new_job_receives_first_and_last_seen_timestamps(self):
         memory = {}
         job = make_job()

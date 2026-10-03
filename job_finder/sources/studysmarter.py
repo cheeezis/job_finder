@@ -1,5 +1,6 @@
 """StudySmarter source adapter using its public read-only jobs API."""
 
+import re
 import time
 from urllib.parse import urlencode, urlsplit
 
@@ -35,6 +36,9 @@ IT_CATEGORIES = (
 REMOTE_ENTRY_TERMS = ("Junior", "Graduate", "Berufseinsteiger", "Einstieg")
 MAX_PAGES_PER_SEARCH = 20
 REQUEST_PAUSE_SECONDS = 0.2
+# Some ads append employment type, place and categories to the title:
+# "Junior SAP Data Analyst Inhouse (m/w/d) Vollzeit | Fulda | Hybrides Arbeiten möglich …".
+APPENDED_DETAILS = re.compile(r"^(.*?\((?:m/w/d|w/m/d|m/f/d|f/m/d|d/m/w|gn)\))\s+(?:Vollzeit|Teilzeit)\s*\|.*$", re.I)
 REMOTE_MODES = {"completely": (WorkMode.REMOTE, 100), "partly": (WorkMode.HYBRID, None), "no": (WorkMode.ONSITE, 0)}
 
 
@@ -151,6 +155,13 @@ def detail_url(link):
     return parts._replace(path=path).geturl()
 
 
+def clean_title(title):
+    """Drop the employment type, place and categories some ads append after the gender label."""
+    title = title.strip()
+    appended = APPENDED_DETAILS.match(title)
+    return appended.group(1) if appended else title
+
+
 def summary_job_from_record(record):
     """Create a lightweight Job from one API search record."""
     url = detail_url(record.get("link", ""))
@@ -163,7 +174,7 @@ def summary_job_from_record(record):
     ]
     return Job(
         id=source_job_id(SOURCE_NAME, identifier, url),
-        title=str(record.get("title") or "").strip(),
+        title=clean_title(str(record.get("title") or "")),
         company=str(record.get("company_name") or "").strip(),
         locations=[str(location).strip() for location in record.get("locations") or [] if str(location).strip()]
         or ["unbekannt"],

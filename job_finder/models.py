@@ -35,6 +35,12 @@ APPLICATION_STATUSES = (
     WorkflowStatus.WITHDRAWN.value,
     WorkflowStatus.CLOSED.value,
 )
+OPEN_APPLICATION_STATUSES = {
+    WorkflowStatus.APPLIED.value,
+    WorkflowStatus.RESPONSE.value,
+    WorkflowStatus.INTERVIEW.value,
+}
+COMPLETED_APPLICATION_STATUSES = set(APPLICATION_STATUSES) - OPEN_APPLICATION_STATUSES
 
 
 class WorkMode(str, Enum):

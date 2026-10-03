@@ -331,6 +331,61 @@ class MemoryTests(unittest.TestCase):
         self.assertEqual(job.id, "studysmarter:old")
         self.assertEqual(job.workflow_status, WorkflowStatus.APPLIED)
 
+    def unknown_employer_listing(self):
+        """A StudySmarter listing that named the board instead of the employer."""
+        return Job(
+            id="studysmarter:45022765",
+            title="Junior Full-Stack Developer Next.js",
+            company="",
+            locations=["Berlin"],
+            sources=[JobSource(source="studysmarter", source_id="45022765", url="https://studysmarter.test/45022765")],
+            description_raw="Next.js",
+            description_clean="Next.js",
+            remote_percentage=100,
+        )
+
+    def application(self, status="interview", place="Berlin"):
+        return {
+            "arbeitnow:next": {
+                "title": "Junior Full-Stack Developer Next.js",
+                "company": "Linear Service GmbH",
+                "locations": [place],
+                "fully_remote": True,
+                "first_seen_at": "2026-09-28T08:00:00+00:00",
+                "last_seen_at": "2026-10-02T08:00:00+00:00",
+                "workflow_status": status,
+                "workflow_history": [{"status": status, "occurred_on": "2026-09-30"}] if status != "new" else [],
+                "source_urls": ["https://arbeitnow.test/next"],
+                "source_names": ["arbeitnow"],
+                "missed_runs": 0,
+                "active": True,
+            }
+        }
+
+    def test_a_listing_without_employer_joins_the_application_with_its_title_and_place(self):
+        job = self.unknown_employer_listing()
+        memory = self.application()
+
+        stats = update_memory([job], memory)
+
+        self.assertEqual(stats["new"], 0)
+        self.assertEqual(job.id, "arbeitnow:next")
+        self.assertEqual(job.workflow_status, WorkflowStatus.INTERVIEW)
+        # The employer the other listing named stays.
+        self.assertEqual(memory["arbeitnow:next"]["company"], "Linear Service GmbH")
+        self.assertEqual(job.company, "Linear Service GmbH")
+
+    def test_a_listing_without_employer_stays_apart_from_other_places_and_undecided_jobs(self):
+        # Being remote is not enough without an employer: the city must be one the application knows.
+        for memory in (self.application(place="Hamburg"), self.application(status="new")):
+            with self.subTest(memory=memory):
+                job = self.unknown_employer_listing()
+
+                stats = update_memory([job], memory)
+
+                self.assertEqual(stats["new"], 1)
+                self.assertEqual(job.id, "studysmarter:45022765")
+
     def test_existing_manual_decision_is_not_replaced_by_repost_matching(self):
         job = make_job()
         memory = {

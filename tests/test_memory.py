@@ -3,6 +3,8 @@
 import tempfile
 import threading
 import unittest
+from copy import deepcopy
+from datetime import date
 from pathlib import Path
 
 from job_finder.models import Job, JobSource, WorkflowStatus
@@ -259,7 +261,7 @@ class MemoryTests(unittest.TestCase):
         self.assertEqual(job.workflow_status, WorkflowStatus.IGNORED)
         self.assertEqual(memory[old_id]["source_urls"], ["https://stepstone.test/jobs/old", job.primary_url])
 
-    def test_existing_new_repost_is_folded_into_earlier_application(self):
+    def test_existing_new_repost_within_thirty_days_is_folded_into_earlier_application(self):
         job = make_job()
         memory = {
             "stepstone:applied": {
@@ -281,8 +283,8 @@ class MemoryTests(unittest.TestCase):
             job.id: {
                 "title": job.title,
                 "company": job.company,
-                "first_seen_at": "2026-08-20T08:00:00+00:00",
-                "last_seen_at": "2026-08-20T08:00:00+00:00",
+                "first_seen_at": "2026-07-20T08:00:00+00:00",
+                "last_seen_at": "2026-07-20T08:00:00+00:00",
                 "workflow_status": "new",
                 "source_urls": [job.primary_url],
                 "source_names": ["test"],
@@ -385,6 +387,118 @@ class MemoryTests(unittest.TestCase):
 
                 self.assertEqual(stats["new"], 1)
                 self.assertEqual(job.id, "studysmarter:45022765")
+
+    def test_completed_applications_merge_at_thirty_days_but_not_thirty_one(self):
+        for company in ("", "Example GmbH"):
+            for status in ("rejected", "no_response", "offer", "withdrawn", "closed"):
+                for published, merged in ((date(2026, 8, 31), True), (date(2026, 9, 1), False)):
+                    with self.subTest(company=company, status=status, published=published):
+                        job = self.unknown_employer_listing()
+                        job.company = company
+                        job.published_at = published
+                        memory = self.application(status=status)
+                        previous = memory["arbeitnow:next"]
+                        previous["company"] = "Example GmbH"
+                        previous["first_seen_at"] = "2026-08-01T08:00:00+00:00"
+                        original_history = deepcopy(previous["workflow_history"])
+
+                        update_memory([job], memory)
+
+                        self.assertEqual(job.id, "arbeitnow:next" if merged else "studysmarter:45022765")
+                        self.assertEqual(job.workflow_status.value, status if merged else "new")
+                        self.assertEqual(previous["workflow_history"], original_history)
+                        if not merged:
+                            self.assertEqual(previous["workflow_status"], status)
+                            self.assertEqual(len(memory), 2)
+
+    def test_open_applications_still_take_distant_listings(self):
+        for company in ("", "Example GmbH"):
+            for status in ("applied", "response", "interview"):
+                with self.subTest(company=company, status=status):
+                    job = self.unknown_employer_listing()
+                    job.company = company
+                    job.published_at = date(2026, 10, 1)
+                    memory = self.application(status=status)
+                    memory["arbeitnow:next"]["company"] = "Example GmbH"
+                    memory["arbeitnow:next"]["first_seen_at"] = "2026-08-01T08:00:00+00:00"
+
+                    update_memory([job], memory)
+
+                    self.assertEqual(job.id, "arbeitnow:next")
+                    self.assertEqual(job.workflow_status.value, status)
+
+    def test_same_id_or_url_keeps_an_old_completed_application(self):
+        for matching in ("id", "url"):
+            with self.subTest(matching=matching):
+                job = self.unknown_employer_listing()
+                job.published_at = date(2026, 10, 1)
+                memory = self.application(status="rejected")
+                memory["arbeitnow:next"]["first_seen_at"] = "2026-08-01T08:00:00+00:00"
+                if matching == "id":
+                    job.id = "arbeitnow:next"
+                else:
+                    job.sources[0].url = memory["arbeitnow:next"]["source_urls"][0]
+
+                update_memory([job], memory)
+
+                self.assertEqual(job.id, "arbeitnow:next")
+                self.assertEqual(job.workflow_status, WorkflowStatus.REJECTED)
+
+    def test_completed_application_uses_publication_before_discovery_or_recent_crawl(self):
+        job = self.unknown_employer_listing()
+        job.published_at = date(2026, 10, 1)
+        memory = self.application(status="rejected")
+        memory["arbeitnow:next"]["published_at"] = "2026-08-01"
+
+        update_memory([job], memory)
+
+        self.assertEqual(job.id, "studysmarter:45022765")
+        self.assertEqual(job.workflow_status, WorkflowStatus.NEW)
+
+    def test_existing_new_listing_uses_its_first_discovery_when_publication_is_missing(self):
+        job = self.unknown_employer_listing()
+        memory = self.application(status="rejected")
+        memory["arbeitnow:next"]["first_seen_at"] = "2026-08-01T08:00:00+00:00"
+        memory[job.id] = {
+            "title": job.title,
+            "company": job.company,
+            "locations": list(job.locations),
+            "workflow_status": "new",
+            "first_seen_at": "2026-09-01T08:00:00+00:00",
+            "source_urls": [job.primary_url],
+            "source_names": job.source_names,
+        }
+
+        update_memory([job], memory)
+
+        self.assertEqual(job.id, "studysmarter:45022765")
+        self.assertEqual(job.workflow_status, WorkflowStatus.NEW)
+        self.assertIn("arbeitnow:next", memory)
+
+    def test_completed_application_without_a_usable_date_stays_separate(self):
+        for first_seen in (None, "invalid-date"):
+            with self.subTest(first_seen=first_seen):
+                job = self.unknown_employer_listing()
+                job.published_at = date(2026, 10, 1)
+                memory = self.application(status="rejected")
+                memory["arbeitnow:next"]["first_seen_at"] = first_seen
+
+                update_memory([job], memory)
+
+                self.assertEqual(job.id, "studysmarter:45022765")
+                self.assertEqual(job.workflow_status, WorkflowStatus.NEW)
+
+    def test_original_publication_is_persisted_without_being_reset_by_later_crawls(self):
+        job = make_job()
+        job.published_at = date(2026, 8, 1)
+        memory = {}
+        update_memory([job], memory)
+        self.assertEqual(memory[job.id]["published_at"], "2026-08-01")
+
+        job.published_at = date(2026, 10, 1)
+        update_memory([job], memory)
+
+        self.assertEqual(memory[job.id]["published_at"], "2026-08-01")
 
     def test_existing_manual_decision_is_not_replaced_by_repost_matching(self):
         job = make_job()

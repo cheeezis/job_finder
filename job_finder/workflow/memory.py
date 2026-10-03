@@ -3,7 +3,7 @@
 from collections import defaultdict
 from contextlib import contextmanager
 from copy import deepcopy
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from job_finder.matching.deduplication import (
     companies_match,
@@ -13,12 +13,13 @@ from job_finder.matching.deduplication import (
     normalize_location,
     normalize_title,
 )
-from job_finder.models import APPLICATION_STATUSES, WorkflowStatus
+from job_finder.models import APPLICATION_STATUSES, COMPLETED_APPLICATION_STATUSES, WorkflowStatus
 from job_finder.paths import MEMORY_FILE
 from job_finder.persistence.database import lock, memory_scope, snapshot, transaction
 from job_finder.persistence.postgres_store import read_memory, write_memory
 
 INACTIVE_AFTER_MISSED_RUNS = 3
+COMPLETED_APPLICATION_REPOST_DAYS = 30
 
 
 def load_memory(path=MEMORY_FILE):
@@ -128,6 +129,8 @@ def update_memory(jobs, memory, successful_sources=None, run_sources=None):
             "missed_runs": 0,
             "active": True,
         }
+        if job.published_at is not None:
+            memory[job.id]["published_at"] = job.published_at.isoformat()
         if remote_job(job):
             memory[job.id]["fully_remote"] = True
         add_memory_index_entry(memory_index, job.id, memory[job.id])
@@ -216,6 +219,7 @@ def same_job_ids(job, memory, index):
         and companies_match(company, normalize_company(memory[job_id].get("company") or ""))
         and (memory[job_id].get("active", True) or repost_decision_is_reusable(memory[job_id]))
         and may_share_decision(listing, memory[job_id])
+        and may_reuse_application(job, memory[job_id], memory)
     ]
 
 
@@ -233,9 +237,48 @@ def applications_with_same_title_and_place(job, title, memory, index):
         if job_id in memory
         and normalize_title(memory[job_id].get("title") or "") == title
         and has_application_state(memory[job_id])
+        and may_reuse_application(job, memory[job_id], memory)
         and places
         and all(locations_match([place], memory[job_id].get("locations") or []) for place in places)
     ]
+
+
+def may_reuse_application(job, entry, memory):
+    """Keep distant listings apart after an application has completed.
+
+    Only title-based matching calls this guard: an existing source ID or URL
+    still identifies the same listing. Missing dates cannot establish that a
+    completed application belongs to the same advertising period.
+    """
+    if entry.get("workflow_status") not in COMPLETED_APPLICATION_STATUSES:
+        return True
+    previous_date = listing_date(entry)
+    current_date = (
+        job.published_at
+        or listing_date(memory.get(job.id, {}))
+        or stored_date(job.first_seen_at)
+        or datetime.now(UTC).date()
+    )
+    return previous_date is not None and abs((current_date - previous_date).days) <= COMPLETED_APPLICATION_REPOST_DAYS
+
+
+def listing_date(entry):
+    """Prefer the original publication date, falling back to first discovery."""
+    return stored_date(entry.get("published_at")) or stored_date(entry.get("first_seen_at"))
+
+
+def stored_date(value):
+    """Read one persisted ISO date or timestamp without using the last crawl date."""
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if not isinstance(value, str):
+        return None
+    try:
+        return datetime.fromisoformat(value).date()
+    except ValueError:
+        return None
 
 
 def may_share_decision(entry, other):

@@ -118,6 +118,11 @@ eigenen Bewerbungen, keine Zahlen aus dem eigenen Bestand und keine Azure-Namen.
    auch über Portale und Läufe hinweg; eine schon entschiedene Stelle nur ohne
    neuen Ort oder wenn beide komplett remote sind. Danach werden sie zu einer
    Karte, angeführt von der bestbewerteten Anzeige.
+   Bei abgeschlossenen Bewerbungen werden andere Anzeigen nur übernommen,
+   wenn ihre Veröffentlichungsdaten höchstens 30 Tage auseinanderliegen.
+   Ältere gespeicherte Einträge verwenden ersatzweise das Erstfund-Datum;
+   das Datum des letzten Abrufs zählt nicht. Laufende Bewerbungen und
+   Zuordnungen über dieselbe Anzeigen-ID oder URL behalten ihre Zuordnung.
 4. Die Offline-Prüfung betrachtet fehlende interessante Stellen ohne
    Bewerbungsverlauf, und nur wenn alle bekannten Quellen der Stelle, die
    dieser Lauf abfragt, vollständig erfolgreich waren; ebenso zählt das

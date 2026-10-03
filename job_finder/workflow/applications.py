@@ -3,7 +3,7 @@
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from job_finder.models import APPLICATION_STATUSES, WorkflowStatus
+from job_finder.models import APPLICATION_STATUSES, OPEN_APPLICATION_STATUSES, WorkflowStatus
 from job_finder.paths import MEMORY_FILE, RECOMMENDATIONS_JSON
 from job_finder.persistence.application_documents import public_documents
 from job_finder.persistence.storage import read_object
@@ -15,11 +15,6 @@ from job_finder.workflow.memory import (
     preferred_memory_id,
 )
 
-OPEN_APPLICATION_STATUSES = {
-    WorkflowStatus.APPLIED.value,
-    WorkflowStatus.RESPONSE.value,
-    WorkflowStatus.INTERVIEW.value,
-}
 RESPONSE_STATUSES = {
     WorkflowStatus.RESPONSE.value,
     WorkflowStatus.INTERVIEW.value,

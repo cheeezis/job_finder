@@ -115,6 +115,19 @@ class StudySmarterTests(unittest.TestCase):
         self.assertEqual(fetch.call_count, 2)
         sleep.assert_called_once_with(studysmarter.REQUEST_PAUSE_SECONDS)
 
+    def test_appended_employment_place_and_categories_leave_the_title(self):
+        for title, clean in (
+            (
+                "Junior SAP Data Analyst Inhouse (m/w/d) Vollzeit | Fulda | Hybrides Arbeiten möglich Professionals",
+                "Junior SAP Data Analyst Inhouse (m/w/d)",
+            ),
+            ("SAP SD Consultant (m/w/d) | S/4HANA", "SAP SD Consultant (m/w/d) | S/4HANA"),
+            ("Senior ABAP Entwickler:in (m/w/d) | Vollzeit", "Senior ABAP Entwickler:in (m/w/d) | Vollzeit"),
+        ):
+            with self.subTest(title=title):
+                job = studysmarter.summary_job_from_record({"id": 1, "link": self.JOB_URL, "title": title})
+                self.assertEqual(job.title, clean)
+
     def test_job_import_uses_remote_flag_and_ignores_predicted_salary(self):
         record = {
             "id": 12345678,

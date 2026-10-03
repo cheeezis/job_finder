@@ -8,6 +8,21 @@ from job_finder.models import Job, WorkMode
 from job_finder.text import normalize_text
 
 LEGAL_FORMS = ["gmbh", "mbh", "ag", "se", "kg", "ohg", "ug", "co", "ltd", "inc"]
+# Words that only name a part of a group: "EDAG Engineering Group" and "EDAG Group"
+# are one employer as long as the first word, the actual name, is the same.
+GROUP_WORDS = {
+    "group",
+    "gruppe",
+    "engineering",
+    "holding",
+    "deutschland",
+    "germany",
+    "services",
+    "solutions",
+    "international",
+    "technologies",
+    "digital",
+}
 GENDER_LABEL = r"(?:m/w/d|w/m/d|m/f/d|f/m/d|all genders|alle geschlechter|gn)"
 
 WORK_MODE_TITLE_SUFFIX = re.compile(
@@ -98,7 +113,20 @@ def companies_match(first, second):
     if first == second:
         return True
     shorter, longer = sorted([first, second], key=len)
-    return len(shorter) >= 5 and (longer.startswith(shorter + " ") or shorter in longer.split())
+    if len(shorter) >= 5 and (longer.startswith(shorter + " ") or shorter in longer.split()):
+        return True
+    return same_name_apart_from_group_words(first.split(), second.split())
+
+
+def same_name_apart_from_group_words(first, second):
+    """Return whether both names start with the same word and add only group words."""
+    return (
+        bool(first and second)
+        and first[0] == second[0]
+        and len(first[0]) >= 3
+        and set(first[1:]) <= GROUP_WORDS
+        and set(second[1:]) <= GROUP_WORDS
+    )
 
 
 def normalize_company(company):

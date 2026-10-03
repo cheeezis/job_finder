@@ -298,6 +298,39 @@ class MemoryTests(unittest.TestCase):
         self.assertNotIn("test:123", memory)
         self.assertEqual(len(memory["stepstone:applied"]["workflow_history"]), 2)
 
+    def test_a_repost_under_a_group_name_joins_the_application(self):
+        # The same portal posted the ad again with a new number and a shorter company name.
+        job = Job(
+            id="studysmarter:new",
+            title="Junior SAP Data Analyst Inhouse (m/w/d)",
+            company="EDAG Group",
+            locations=["Fulda"],
+            sources=[JobSource(source="studysmarter", source_id="new", url="https://studysmarter.test/new")],
+            description_raw="SAP",
+            description_clean="SAP",
+        )
+        memory = {
+            "studysmarter:old": {
+                "title": job.title,
+                "company": "EDAG ENGINEERING GROUP",
+                "locations": ["Fulda"],
+                "first_seen_at": "2026-09-28T08:00:00+00:00",
+                "last_seen_at": "2026-10-02T08:00:00+00:00",
+                "workflow_status": "applied",
+                "workflow_history": [{"status": "applied", "occurred_on": "2026-09-29"}],
+                "source_urls": ["https://studysmarter.test/old"],
+                "source_names": ["studysmarter"],
+                "missed_runs": 0,
+                "active": True,
+            }
+        }
+
+        stats = update_memory([job], memory)
+
+        self.assertEqual(stats["new"], 0)
+        self.assertEqual(job.id, "studysmarter:old")
+        self.assertEqual(job.workflow_status, WorkflowStatus.APPLIED)
+
     def test_existing_manual_decision_is_not_replaced_by_repost_matching(self):
         job = make_job()
         memory = {

@@ -4,7 +4,7 @@ import unittest
 from datetime import date, timedelta
 from unittest.mock import patch
 
-from job_finder.matching.deduplication import deduplicate_jobs, unique_sources
+from job_finder.matching.deduplication import companies_match, deduplicate_jobs, normalize_company, unique_sources
 from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.matching.scoring import LOCAL_PLACES, analyze_experience, score_job
 from job_finder.models import Job, JobSource
@@ -751,6 +751,18 @@ class DeduplicationTests(unittest.TestCase):
         result = deduplicate_jobs([first, second])
         self.assertEqual(len(result), 1)
         self.assertEqual([source.source for source in result[0].sources], ["stepstone", "get_in_it"])
+
+    def test_group_words_after_the_same_name_mean_the_same_company(self):
+        for first, second, same in (
+            ("EDAG ENGINEERING GROUP", "EDAG Group", True),
+            ("EDAG Engineering GmbH", "EDAG Group", True),
+            ("SAP SE", "SAP Deutschland SE & Co. KG", True),
+            ("Siemens Energy", "Siemens Healthineers", False),
+            ("EDAG Group", "Edeka Group", False),
+            ("IT Group", "IT Services", False),
+        ):
+            with self.subTest(first=first, second=second):
+                self.assertEqual(companies_match(normalize_company(first), normalize_company(second)), same)
 
     def test_remote_duplicate_with_portal_company_prefix_is_merged(self):
         first = make_job(

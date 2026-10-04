@@ -2,15 +2,24 @@
 
 import json
 from collections import Counter
+from contextlib import contextmanager, nullcontext
+from copy import deepcopy
 from datetime import UTC, datetime
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qsl, urlencode, urlsplit
 from urllib.request import Request, urlopen
 
 from job_finder.models import format_remote
-from job_finder.paths import NOTIFICATION_STATE_FILE
-from job_finder.persistence.storage import read_json, write_json_atomic
-from job_finder.workflow.reporting import format_role_group, is_visible_in_default_review, primary_url
+from job_finder.paths import NOTIFICATION_STATE_FILE, RECOMMENDATIONS_JSON
+from job_finder.persistence.database import in_transaction, lock, session_lock, transaction
+from job_finder.persistence.storage import dataset_name, read_json, read_object, write_json_atomic
+from job_finder.workflow.memory import load_workflow_statuses
+from job_finder.workflow.reporting import (
+    format_role_group,
+    is_international_listing,
+    is_visible_in_default_review,
+    primary_url,
+)
 
 NOTIFIABLE_STATUSES = {"new", "review", "interesting", "inquiry", "waiting"}
 MAX_EMBEDS = 10
@@ -52,47 +61,142 @@ class DiscordWebhookClient:
 def process_notifications(
     results, *, send=False, webhook_url=None, review_host=None, state_path=NOTIFICATION_STATE_FILE, client=None
 ):
-    """Update the persistent queue and optionally send eligible Discord cards.
+    """Queue jobs, then optionally dispatch their committed notification orders.
 
-    results contains included and excluded job dictionaries from the
-    scoring pipeline. Even send=False writes queue changes to
-    state_path; it only prevents delivery. With send=True, use client
-    when supplied or construct a client from webhook_url.
-
-    Return queue, eligibility and delivery counters together with
-    configuration_error. Missing webhook configuration is reported in
-    that field. Delivery failures remain pending for a later run and
-    increment failed; filesystem and malformed-state errors propagate.
+    The finder uses queue_notifications inside its publication transaction
+    and deliver_notifications after commit. This wrapper also supports
+    explicitly selected JSON exports and isolated notification tests.
     """
-    timestamp = datetime.now(UTC).isoformat()
-    state = load_notification_state(state_path)
-    candidates, stats = _update_queue(results, state, timestamp)
-    save_notification_state(state, state_path)
-    if not send or not candidates:
+    if send and in_transaction():
+        raise RuntimeError("Discord-Versand ist erst nach dem Commit erlaubt.")
+    stats = queue_notifications(results, state_path=state_path)
+    if not send:
         return stats
-    if not webhook_url:
-        stats["configuration_error"] = "DISCORD_WEBHOOK_URL ist nicht gesetzt"
-        return stats
+    return deliver_notifications(
+        webhook_url=webhook_url, review_host=review_host, state_path=state_path, client=client, stats=stats
+    )
 
-    webhook_client = client or DiscordWebhookClient(webhook_url)
-    for chunk in notification_chunks(candidates, review_host=review_host):
-        keys = [key for key, _job in chunk]
-        try:
-            webhook_client.send(discord_payload([job for _key, job in chunk], review_host=review_host))
-        except NotificationError as error:
-            for key in keys:
-                entry = state["pending"][key]
-                entry["attempts"] += 1
-                entry["last_error"] = str(error)
-                entry["updated_at"] = timestamp
-            stats["failed"] += len(keys)
-        else:
-            for key in keys:
-                entry = state["pending"].pop(key)
-                state["sent"][key] = {"job_id": entry["job_id"], "sent_at": timestamp}
-            stats["sent"] += len(keys)
-        save_notification_state(state, state_path)
+
+@contextmanager
+def edit_notification_state(path=NOTIFICATION_STATE_FILE):
+    """Serialize read-modify-write operations and join a publication transaction."""
+    name = dataset_name(path)
+    with transaction() if name is not None else nullcontext() as connection:
+        if name is not None:
+            lock(connection, "dataset:" + name)
+        state = load_notification_state(path)
+        yield state
+        save_notification_state(state, path)
+
+
+def queue_notifications(results, *, state_path=NOTIFICATION_STATE_FILE):
+    """Persist stable job-ID orders with all card data, without external requests."""
+    with edit_notification_state(state_path) as state:
+        _candidates, stats = _update_queue(results, state, datetime.now(UTC).isoformat())
     return stats
+
+
+def deliver_notifications(
+    *, webhook_url=None, review_host=None, state_path=NOTIFICATION_STATE_FILE, client=None, stats=None
+):
+    """Retry durable orders independently of this run's source collection.
+
+    A session lock prevents parallel senders, while queue edits and delivery
+    acknowledgements use short transactions. A crash after Discord accepts a
+    message but before acknowledgement can cause a repeat on the next run.
+    """
+    if in_transaction():
+        raise RuntimeError("Discord-Versand ist erst nach dem Commit erlaubt.")
+    stats = dict(stats) if stats is not None else notification_stats()
+    name = dataset_name(state_path)
+    delivery_lock = (
+        session_lock("notification-delivery:" + name, busy_message="Ein anderer Discord-Versand ist bereits aktiv.")
+        if name is not None
+        else nullcontext()
+    )
+    with delivery_lock:
+        candidates = _delivery_candidates(state_path)
+        stats["ready"] = len(candidates)
+        if not candidates:
+            return stats
+        if not webhook_url:
+            stats["configuration_error"] = "DISCORD_WEBHOOK_URL ist nicht gesetzt"
+            return stats
+        webhook_client = client or DiscordWebhookClient(webhook_url)
+        for planned in notification_chunks(candidates, review_host=review_host):
+            # Re-read each chunk: publication or review may have cancelled an order
+            # while a previous Discord request was running.
+            current = dict(_delivery_candidates(state_path))
+            chunk = [(key, current[key]) for key, _job in planned if key in current]
+            if not chunk:
+                continue
+            timestamp = datetime.now(UTC).isoformat()
+            error_text = None
+            try:
+                webhook_client.send(discord_payload([job for _key, job in chunk], review_host=review_host))
+            except NotificationError as error:
+                error_text = str(error)
+                stats["failed"] += len(chunk)
+            else:
+                stats["sent"] += len(chunk)
+            with edit_notification_state(state_path) as state:
+                for key, _job in chunk:
+                    entry = state["pending"].get(key)
+                    if entry is None:
+                        continue
+                    if error_text is not None:
+                        entry["attempts"] = entry.get("attempts", 0) + 1
+                        entry["last_error"] = error_text
+                        entry["updated_at"] = timestamp
+                    else:
+                        state["pending"].pop(key)
+                        state["sent"][key] = {"job_id": entry["job_id"], "sent_at": timestamp}
+    return stats
+
+
+def _delivery_candidates(state_path):
+    """Refresh eligibility and recover pre-outbox entries without resending sent jobs."""
+    managed = dataset_name(state_path) is not None
+    with edit_notification_state(state_path) as state:
+        statuses = load_workflow_statuses(state["pending"]) if managed else {}
+        recommendations = (
+            {job["id"]: job for job in read_object(RECOMMENDATIONS_JSON, {}).get("recommendations", [])}
+            if managed
+            else {}
+        )
+        candidates = []
+        for key, entry in list(state["pending"].items()):
+            job = entry.get("payload")
+            if not job and key in recommendations:
+                # Old pending entries did not contain their card. Recover from the
+                # committed publication without interpreting the job as a new find.
+                old = recommendations[key]
+                job = notification_job({**old, "sources": old.get("source_links", [])})
+                entry["payload"] = job
+            if not job:
+                continue  # Keep unrecoverable legacy orders until the source returns.
+            status = statuses.get(key, job.get("workflow_status", "new"))
+            job = {**job, "workflow_status": status}
+            if not is_notifiable(job):
+                state["pending"].pop(key)
+                continue
+            candidates.append((key, job))
+        return candidates
+
+
+def notification_stats(**values):
+    """Create queue and delivery counters for one invocation."""
+    return {
+        "queued": 0,
+        "ready": 0,
+        "current_new": 0,
+        "eligible_new": 0,
+        "already_notified": 0,
+        "sent": 0,
+        "failed": 0,
+        "configuration_error": None,
+        **values,
+    }
 
 
 def _update_queue(results, state, timestamp):
@@ -121,20 +225,19 @@ def _update_queue(results, state, timestamp):
         if is_new_job and key not in state["sent"] and key not in state["pending"]:
             state["pending"][key] = pending_entry(job, timestamp)
             queued += 1
+        elif key in state["pending"]:
+            state["pending"][key]["payload"] = notification_job(job)
 
     candidates = [
         (key, jobs_by_key[key]) for key in state["pending"] if key in jobs_by_key and is_notifiable(jobs_by_key[key])
     ]
-    stats = {
-        "queued": queued,
-        "ready": len(candidates),
-        "current_new": current_new,
-        "eligible_new": eligible_new,
-        "already_notified": max(eligible_new - len(candidates), 0),
-        "sent": 0,
-        "failed": 0,
-        "configuration_error": None,
-    }
+    stats = notification_stats(
+        queued=queued,
+        ready=len(candidates),
+        current_new=current_new,
+        eligible_new=eligible_new,
+        already_notified=max(eligible_new - len(candidates), 0),
+    )
     return candidates, stats
 
 
@@ -217,7 +320,33 @@ def is_notifiable(job):
     Matches what the default review actually shows; a job hidden behind an
     extra filter (Junior-Hybrid, international remote) is never notified.
     """
-    return job.get("workflow_status", "new") in NOTIFIABLE_STATUSES and is_visible_in_default_review(job)
+    return (
+        job.get("workflow_status", "new") in NOTIFIABLE_STATUSES
+        and not job.get("international", False)
+        and is_visible_in_default_review(job)
+    )
+
+
+def notification_job(job):
+    """Keep only durable card facts and visibility; never store webhook credentials."""
+    fields = (
+        "id",
+        "title",
+        "company",
+        "locations",
+        "sources",
+        "work_mode",
+        "remote_percentage",
+        "match_percent",
+        "role_group",
+        "experience_level",
+        "location_precheck",
+        "workflow_status",
+    )
+    return {
+        **{key: deepcopy(job[key]) for key in fields if key in job},
+        "international": job.get("international", is_international_listing(job)),
+    }
 
 
 def pending_entry(job, timestamp):
@@ -229,6 +358,7 @@ def pending_entry(job, timestamp):
         "last_error": None,
         "created_at": timestamp,
         "updated_at": timestamp,
+        "payload": notification_job(job),
     }
 
 

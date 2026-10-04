@@ -30,6 +30,17 @@ def load_memory(path=MEMORY_FILE):
         return read_memory(connection, scope)
 
 
+def load_workflow_statuses(job_ids, path=MEMORY_FILE):
+    """Read only the current decisions needed to dispatch queued cards."""
+    with snapshot() as connection:
+        return dict(
+            connection.execute(
+                "SELECT job_id,workflow_status FROM job_state WHERE scope=%s AND job_id=ANY(%s)",
+                (memory_scope(path), list(job_ids)),
+            ).fetchall()
+        )
+
+
 def save_memory(memory, path=MEMORY_FILE):
     """Explicitly replace a scope; ordinary edits use edit_memory or edit_job."""
     with edit_memory(path) as current:

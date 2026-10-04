@@ -85,14 +85,24 @@ def memory_scope(path):
 
 
 @contextmanager
-def worker_lock():
-    """Allow one worker run at a time; a crashed connection releases its lock."""
-    key = int.from_bytes(hashlib.sha256(b"jobfinder-worker").digest()[:8], "big", signed=True)
+def session_lock(name, *, busy_message):
+    """Serialize external work without holding a database write transaction."""
+    key = int.from_bytes(hashlib.sha256(name.encode()).digest()[:8], "big", signed=True)
     with psycopg.connect(database_url(), autocommit=True, connect_timeout=10) as connection:
         acquired = connection.execute("SELECT pg_try_advisory_lock(%s)", (key,)).fetchone()
         if not (acquired and acquired[0]):
-            raise RuntimeError("Ein anderer Finder-Lauf ist bereits aktiv.")
+            raise RuntimeError(busy_message)
         try:
             yield
         finally:
             connection.execute("SELECT pg_advisory_unlock(%s)", (key,))
+
+
+def worker_lock():
+    """Allow one worker run at a time; a crashed connection releases its lock."""
+    return session_lock("jobfinder-worker", busy_message="Ein anderer Finder-Lauf ist bereits aktiv.")
+
+
+def in_transaction():
+    """Return whether a caller would reuse an uncommitted application transaction."""
+    return _connection.get() is not None

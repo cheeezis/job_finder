@@ -9,8 +9,11 @@ from pathlib import Path
 from job_finder.workflow.notifications import (
     NotificationError,
     decode_notification_state,
+    deliver_notifications,
     discord_embed,
+    load_notification_state,
     process_notifications,
+    queue_notifications,
     run_summary_payload,
     send_warning,
 )
@@ -58,6 +61,72 @@ def discord_limited_characters(payload):
 
 
 class NotificationTests(unittest.TestCase):
+    def test_committed_order_can_be_delivered_without_collecting_the_source_again(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.json"
+            queue_notifications({"included": [make_job()], "excluded": []}, state_path=path)
+            # A split schedule or failed source supplies no matching job on retry.
+            queue_notifications({"included": [], "excluded": []}, state_path=path)
+            client = FakeClient()
+            stats = deliver_notifications(state_path=path, webhook_url="https://discord.test/webhook", client=client)
+            state = load_notification_state(path)
+        self.assertEqual(stats["sent"], 1)
+        self.assertEqual(client.payloads[0]["embeds"][0]["url"], "https://example.test/job:1")
+        self.assertIn("job:1", state["sent"])
+        self.assertFalse(state["pending"])
+
+    def test_retry_preserves_attempts_and_never_creates_a_second_order(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.json"
+            results = {"included": [make_job()], "excluded": []}
+            failed = process_notifications(
+                results,
+                send=True,
+                state_path=path,
+                webhook_url="https://discord.test/webhook",
+                client=FakeClient(NotificationError("nicht erreichbar")),
+            )
+            job = make_job(is_new=False)
+            job["company"] = "Updated Example"
+            queued = queue_notifications({"included": [job], "excluded": []}, state_path=path)
+            state = load_notification_state(path)
+            client = FakeClient()
+            sent = deliver_notifications(state_path=path, webhook_url="https://discord.test/webhook", client=client)
+        self.assertEqual(failed["failed"], 1)
+        self.assertEqual(queued["queued"], 0)
+        self.assertEqual(state["pending"]["job:1"]["attempts"], 1)
+        self.assertIn("Updated Example", client.payloads[0]["embeds"][0]["description"])
+        self.assertEqual(sent["sent"], 1)
+
+    def test_source_return_recovers_an_old_order_without_payload(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.json"
+            path.write_text(
+                json.dumps({"version": 3, "sent": {}, "pending": {"job:1": {"job_id": "job:1", "attempts": 2}}})
+            )
+            self.assertEqual(deliver_notifications(state_path=path)["ready"], 0)
+            self.assertEqual(load_notification_state(path)["pending"]["job:1"]["attempts"], 2)
+            queue_notifications({"included": [make_job(is_new=False)], "excluded": []}, state_path=path)
+            self.assertIn("payload", load_notification_state(path)["pending"]["job:1"])
+
+    def test_excluded_or_reviewed_orders_are_cancelled_before_retry(self):
+        for updates in (
+            {"included": [], "excluded": [make_job()]},
+            {"included": [make_job(status="applied")], "excluded": []},
+        ):
+            with self.subTest(updates=updates), tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "state.json"
+                queue_notifications({"included": [make_job()], "excluded": []}, state_path=path)
+                queue_notifications(updates, state_path=path)
+                client = FakeClient()
+                self.assertEqual(
+                    deliver_notifications(state_path=path, webhook_url="https://discord.test/webhook", client=client)[
+                        "sent"
+                    ],
+                    0,
+                )
+                self.assertFalse(client.payloads)
+
     def test_only_new_prefiltered_jobs_are_queued(self):
         with tempfile.TemporaryDirectory() as directory:
             stats = process_notifications(

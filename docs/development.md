@@ -52,6 +52,16 @@ Benachrichtigungen und Kostenbuch. Strukturabweichungen, unbekannte Versionen, e
 App-Rechte und Abbrüche nach DDL oder Baseline-Markierung sind eigene Regressionen.
 Diese Tests laufen in der normalen PostgreSQL-Suite und damit auch in CI.
 
+`tests/test_runtime_permissions.py` prüft F09 mit jeweils eindeutigen lokalen
+Worker-/Review-/Hybrid-Rollen und Capability-Gruppen. Neben erlaubten tatsächlichen
+Review-Abläufen werden direkte Rechteverletzungen, indirektes Löschen über
+Datensatz-Kaskaden, `SET ROLE`, spätere Tabellen und unveränderte Passwörter geprüft.
+Die Tests entfernen ihre Rollen und stellen die Policy nach Abschluss wieder her.
+Die Terraform-Tests in `infrastructure/tests/runtime_access.tftest.hcl` prüfen
+`legacy`, `prepare`, verweigertes `split` und freigegebenes `split` mit vollständig
+simulierten Providern (`terraform test`). Sie erzeugen keine Azure-Ressourcen.
+Die notwendige spätere Cloud-Abnahme beschreibt [runtime-access.md](runtime-access.md).
+
 Die Browser-Tests (`tests/test_review_browser.py`) klicken die Review in
 Chromium auf frisch befüllten Demo-Daten durch: Steckbrief, Entscheidung mit
 Notiz, Warteliste, Rückgängig und Bewerbung mit Dokument. Jeder Test startet

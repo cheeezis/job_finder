@@ -8,11 +8,10 @@ code version. Docker instead of the local .venv also avoids stale reads
 seen from a native Windows psycopg connection to the Azure database
 (root cause still unexplained).
 
-The container has no Managed Identity or az-CLI session, so Blob access
-uses a scoped service principal: infrastructure/storage.tf
-(storage_blob_data_contributor_local_docker) and the gitignored
-.env.docker-local, a credential separate from every Azure-hosted
-identity.
+The container uses the separate service principal in .env.docker-local for
+optional model access. Like the cloud worker, it skips document backups and
+needs no Blob data access after F09's split. Document maintenance uses the
+owner's separately authenticated session.
 
 A Windows task starts this unattended, where a failure would leave no
 trace, so the script starts Docker Desktop when its engine does not
@@ -93,6 +92,15 @@ def read_dotenv(path):
 def container_environment():
     """Build the -e KEY=VALUE pairs the container needs, none of it inherited."""
     postgres = read_dotenv(PROJECT_DIR / ".env.postgres-azure")
+    runtime_file = PROJECT_DIR / ".env.runtime-azure"
+    if runtime_file.exists():
+        runtime = read_dotenv(runtime_file)
+        if runtime.get("JOBFINDER_RUNTIME_ACCESS", "legacy") == "split":
+            if runtime.get("JOBFINDER_RUNTIME_CREDENTIALS_READY") != "1" or not runtime.get(
+                "JOBFINDER_HYBRID_DATABASE_URL"
+            ):
+                raise RunFailed("Getrennter Hybrid-Zugang ist noch nicht geprüft")
+            postgres["JOBFINDER_DATABASE_URL"] = runtime["JOBFINDER_HYBRID_DATABASE_URL"]
     database_url = re.sub(
         r"sslrootcert=[^&]+", "sslrootcert=/etc/ssl/certs/ca-certificates.crt", postgres["JOBFINDER_DATABASE_URL"]
     )

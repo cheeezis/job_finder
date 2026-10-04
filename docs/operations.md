@@ -155,6 +155,10 @@ nichts verändert:
 
 Die App-Rolle in Azure einrichten beziehungsweise aktualisieren:
 
+Der bisherige gemeinsame Zugang bleibt in F09 zunächst erhalten. Getrennte
+Worker-/Review-/Hybrid-Zugänge, Rechte-Matrix und der Ablauf mit zwei Etappen
+stehen in [runtime-access.md](runtime-access.md). Nicht vor deren Abnahme umschalten.
+
 ```powershell
 .\.venv\Scripts\python.exe scripts/create_app_role.py --azure
 ```
@@ -162,7 +166,8 @@ Die App-Rolle in Azure einrichten beziehungsweise aktualisieren:
 Neue Tabellen und Spalten werden ausschließlich mit expliziten Alembic-Migrationen
 über `job_finder.db migrate` angelegt; `init` ist ein kompatibler Alias für denselben
 Pfad. Worker und Review ändern das Schema nie. Eine leere Datenbank erhält das Schema
-über die Baseline-Revision `0001_baseline`. Eine bestehende Datenbank ohne Alembic-Stand
+über die unveränderte Baseline-Revision `0001_baseline` und die folgenden Revisionen
+bis `head`. Eine bestehende Datenbank ohne Alembic-Stand
 wird erst nach Prüfung der vollständigen Baseline-Struktur und des bisherigen
 Versionsmarkers übernommen. Abweichungen führen zum Abbruch; fehlende Tabellen oder
 Spalten werden bei der Übernahme nicht automatisch repariert.

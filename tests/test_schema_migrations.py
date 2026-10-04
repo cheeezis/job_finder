@@ -124,7 +124,8 @@ class SchemaMigrationTests(unittest.TestCase):
         self.assertEqual(migrations.migrate()["action"], "unchanged")
         self.assertEqual(self.rows(), before)
         self.assertEqual(
-            migrations.schema_status(), {"state": "current", "revision": "0001_baseline", "head": "0001_baseline"}
+            migrations.schema_status(),
+            {"state": "current", "revision": "0002_runtime_boundaries", "head": "0002_runtime_boundaries"},
         )
 
     def test_existing_database_is_validated_then_stamped_without_changing_data(self):
@@ -135,6 +136,30 @@ class SchemaMigrationTests(unittest.TestCase):
         self.assertEqual(self.execute("SELECT to_regclass('public.alembic_version')"), [(None,)])
         self.assertEqual(migrations.migrate()["action"], "adopted")
         self.assertEqual(self.rows(), before)
+
+    def test_baseline_upgrade_adds_boundary_without_changing_data(self):
+        with migrations.admin_connection() as connection:
+            command.upgrade(migrations.migration_config(connection), "0001_baseline")
+        self.seed()
+        before = self.rows()
+        self.assertEqual(migrations.migrate()["action"], "upgraded")
+        self.assertEqual(self.rows(), before)
+
+    def test_boundary_drift_is_detected_readonly_without_repair(self):
+        for change in (
+            "ALTER TABLE datasets DISABLE ROW LEVEL SECURITY",
+            "ALTER POLICY runtime_datasets ON datasets USING (true)",
+            "CREATE POLICY unexpected ON datasets USING (true)",
+        ):
+            with self.subTest(change=change):
+                migrations.migrate()
+                self.execute(change)
+                with self.assertRaisesRegex(RuntimeError, "Datensatzgrenze"):
+                    migrations.schema_status()
+                with self.assertRaisesRegex(RuntimeError, "Datensatzgrenze"):
+                    migrations.migrate()
+                self.execute("DROP SCHEMA public CASCADE")
+                self.execute("CREATE SCHEMA public")
 
     def test_new_and_adopted_database_have_identical_structures(self):
         migrations.migrate()
@@ -230,10 +255,10 @@ class SchemaMigrationTests(unittest.TestCase):
         target = Path(directory.name)
         (target / "versions").mkdir()
         source = Path(migrations.__file__).with_name("migrations")
-        for relative in ("env.py", "versions/0001_baseline.py"):
+        for relative in ("env.py", "versions/0001_baseline.py", "versions/0002_runtime_boundaries.py"):
             (target / relative).write_text((source / relative).read_text(encoding="utf-8"), encoding="utf-8")
-        (target / "versions/0002_example.py").write_text(
-            'from alembic import op\nimport sqlalchemy as sa\nrevision="0002_example"\ndown_revision="0001_baseline"\n'
+        (target / "versions/0003_example.py").write_text(
+            'from alembic import op\nimport sqlalchemy as sa\nrevision="0003_example"\ndown_revision="0002_runtime_boundaries"\n'
             'def upgrade():\n    op.add_column("job_state", sa.Column("example_marker", sa.Text, nullable=True))\n'
             + ('    raise RuntimeError("injected revision failure")\n' if fail else ""),
             encoding="utf-8",
@@ -256,7 +281,7 @@ class SchemaMigrationTests(unittest.TestCase):
         self.future_revision()
         self.assertEqual(migrations.schema_status()["state"], "outdated")
         result = migrations.migrate()
-        self.assertEqual((result["action"], result["revision"]), ("upgraded", "0002_example"))
+        self.assertEqual((result["action"], result["revision"]), ("upgraded", "0003_example"))
         self.assertEqual(self.execute("SELECT workflow_status,extra FROM job_state"), before)
         self.assertEqual(self.execute("SELECT example_marker FROM job_state"), [(None,)])
 
@@ -268,7 +293,7 @@ class SchemaMigrationTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "injected revision failure"):
             migrations.migrate()
         self.assertEqual((self.signature(), self.rows()), before)
-        self.assertEqual(self.execute("SELECT version_num FROM alembic_version"), [("0001_baseline",)])
+        self.assertEqual(self.execute("SELECT version_num FROM alembic_version"), [("0002_runtime_boundaries",)])
 
     def test_failure_after_stamping_rolls_back_the_marker_and_preserves_data(self):
         self.legacy()
@@ -307,7 +332,10 @@ class SchemaMigrationTests(unittest.TestCase):
         migrations.migrate()
         self.seed()
         before = self.rows()
-        with self.assertRaisesRegex(RuntimeError, "nicht zurückgebaut"), migrations.admin_connection() as connection:
+        with (
+            self.assertRaisesRegex(RuntimeError, "kein automatischer Downgrade"),
+            migrations.admin_connection() as connection,
+        ):
             command.downgrade(migrations.migration_config(connection), "base")
         self.assertEqual(self.rows(), before)
         self.assertEqual(migrations.schema_status()["state"], "current")

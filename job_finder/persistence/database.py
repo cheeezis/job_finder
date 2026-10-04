@@ -10,6 +10,7 @@ import psycopg
 from dotenv import load_dotenv
 
 from job_finder.paths import MEMORY_FILE, PROJECT_DIR
+from job_finder.persistence.database_auth import connect_runtime
 
 _connection: ContextVar[psycopg.Connection | None] = ContextVar("jobfinder_connection", default=None)
 
@@ -41,8 +42,8 @@ def transaction(*, admin=False):
         with existing.transaction():
             yield existing
         return
-    url = admin_database_url() if admin else database_url()
-    with psycopg.connect(url, connect_timeout=10) as connection:
+    connection = psycopg.connect(admin_database_url(), connect_timeout=10) if admin else connect_runtime(database_url())
+    with connection:
         connection.execute("SET LOCAL lock_timeout = '30s'")
         token = _connection.set(connection)
         try:
@@ -88,7 +89,7 @@ def memory_scope(path):
 def session_lock(name, *, busy_message):
     """Serialize external work without holding a database write transaction."""
     key = int.from_bytes(hashlib.sha256(name.encode()).digest()[:8], "big", signed=True)
-    with psycopg.connect(database_url(), autocommit=True, connect_timeout=10) as connection:
+    with connect_runtime(database_url(), autocommit=True) as connection:
         acquired = connection.execute("SELECT pg_try_advisory_lock(%s)", (key,)).fetchone()
         if not (acquired and acquired[0]):
             raise RuntimeError(busy_message)

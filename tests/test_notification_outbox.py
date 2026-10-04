@@ -2,20 +2,24 @@
 
 import io
 import os
+import tempfile
 import threading
 import unittest
 from contextlib import contextmanager, redirect_stdout
 from copy import deepcopy
+from pathlib import Path
 from unittest.mock import patch
 
 import psycopg
 
 from job_finder.paths import JOBS_FILE, RECOMMENDATIONS_JSON
 from job_finder.persistence.database import database_url, in_transaction, transaction
+from job_finder.persistence.postgres_backup import create_postgres_backup, restore_backup
 from job_finder.persistence.postgres_store import write_dataset
 from job_finder.persistence.storage import read_json
 from job_finder.workflow.memory import load_memory, save_memory
 from job_finder.workflow.notifications import (
+    NotificationError,
     deliver_notifications,
     load_notification_state,
     queue_notifications,
@@ -31,9 +35,12 @@ class NotificationOutboxTests(unittest.TestCase):
     def setUp(self):
         if os.environ.get("JOBFINDER_TEST_MODE") != "1":
             self.skipTest("Use scripts/test_postgres.py with an isolated test database")
+        self.clear_database()
+
+    def clear_database(self):
         with transaction() as connection:
             self.assertTrue(connection.info.dbname.endswith("_test"))
-            connection.execute("TRUNCATE job_state,datasets CASCADE")
+            connection.execute("TRUNCATE job_state,datasets,agent_usage,agent_fact_sheets CASCADE")
 
     def queue(self, *jobs):
         memory = load_memory()
@@ -204,6 +211,23 @@ class NotificationOutboxTests(unittest.TestCase):
                 self.deliver(client)
         self.assertFalse(client.payloads)
         self.assertEqual(self.deliver(client)["sent"], 1)
+
+    def test_application_backup_restores_a_retryable_order_and_its_original_event(self):
+        self.queue(make_job())
+        self.assertEqual(self.deliver(FakeClient(NotificationError("offline")))["failed"], 1)
+        before = load_notification_state()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            archive = create_postgres_backup(root / "backups", root / "documents")
+            self.clear_database()
+            result = restore_backup(archive, root / "restored-documents")
+            self.assertTrue(result["verified"])
+        self.assertEqual(load_notification_state(), before)
+        self.assertEqual(before["pending"]["job:1"]["attempts"], 1)
+        self.assertEqual(before["pending"]["job:1"]["event_key"], "job-found:job:1")
+        client = FakeClient()
+        self.assertEqual(self.deliver(client)["sent"], 1)
+        self.assertEqual(len(client.payloads), 1)
 
     def test_old_pending_order_recovers_from_publication_and_sent_entries_stay_sent(self):
         save_memory({"job:1": {"workflow_status": "new"}})

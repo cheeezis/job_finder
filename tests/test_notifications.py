@@ -61,6 +61,30 @@ def discord_limited_characters(payload):
 
 
 class NotificationTests(unittest.TestCase):
+    def test_updated_pending_cards_are_sized_again_before_the_next_part_is_sent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.json"
+            queue_notifications(
+                {"included": [make_job(f"job:{i}") for i in range(20)], "excluded": []}, state_path=path
+            )
+
+            class UpdatingClient(FakeClient):
+                def send(self, payload):
+                    super().send(payload)
+                    if len(self.payloads) == 1:
+                        changed = [make_job(f"job:{i}", is_new=False) for i in range(10, 20)]
+                        for job in changed:
+                            job["company"] = "Long example employer " * 50
+                        queue_notifications({"included": changed, "excluded": []}, state_path=path)
+
+            client = UpdatingClient()
+            stats = deliver_notifications(state_path=path, webhook_url="https://discord.test/webhook", client=client)
+        self.assertEqual(stats["sent"], 20)
+        self.assertGreater(len(client.payloads), 2)
+        for payload in client.payloads:
+            self.assertLessEqual(discord_limited_characters(payload), 6000)
+            self.assertLessEqual(len(payload["embeds"]), 10)
+
     def test_a_merged_pending_id_retains_its_event_and_retry_history(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "state.json"

@@ -9,31 +9,31 @@ resource "azurerm_container_app" "review" {
 
   identity {
     type         = "UserAssigned"
-    identity_ids = [azurerm_user_assigned_identity.jobfinder.id]
+    identity_ids = local.review_identity_ids
   }
 
   registry {
     server   = azurerm_container_registry.jobfinder.login_server
-    identity = azurerm_user_assigned_identity.jobfinder.id
+    identity = local.review_identity
   }
 
   # Verweise auf Key-Vault-Adressen, nie auf die Werte selbst.
   secret {
     name                = "jobfinder-database-url"
-    key_vault_secret_id = "${azurerm_key_vault.jobfinder.vault_uri}secrets/JobfinderDatabaseUrl"
-    identity            = azurerm_user_assigned_identity.jobfinder.id
+    key_vault_secret_id = "${azurerm_key_vault.jobfinder.vault_uri}secrets/${local.review_database_secret}"
+    identity            = local.review_identity
   }
   secret {
     name                = "aad-client-secret"
     key_vault_secret_id = "${azurerm_key_vault.jobfinder.vault_uri}secrets/ReviewAadClientSecret"
-    identity            = azurerm_user_assigned_identity.jobfinder.id
+    identity            = local.review_identity
   }
   # Persönliche Sucheinstellungen (Inhalt von user_settings.local.yaml); sie
   # gehören weder ins öffentliche Repo noch ins Image.
   secret {
     name                = "jobfinder-user-settings"
     key_vault_secret_id = "${azurerm_key_vault.jobfinder.vault_uri}secrets/JobfinderUserSettings"
-    identity            = azurerm_user_assigned_identity.jobfinder.id
+    identity            = local.review_identity
   }
 
   # Beim Anlegen nur innerhalb der Umgebung erreichbar. Öffentlich (HTTPS,
@@ -94,7 +94,7 @@ resource "azurerm_container_app" "review" {
       }
       env {
         name  = "JOBFINDER_MANAGED_IDENTITY_CLIENT_ID"
-        value = azurerm_user_assigned_identity.jobfinder.client_id
+        value = local.review_client_id
       }
     }
   }
@@ -114,6 +114,9 @@ resource "azurerm_container_app" "review" {
   depends_on = [
     azurerm_role_assignment.acr_pull,
     azurerm_role_assignment.keyvault_secrets_user_worker,
+    azurerm_role_assignment.acr_pull_review,
+    azurerm_role_assignment.keyvault_review_secret,
+    azurerm_role_assignment.storage_blob_data_contributor_review,
   ]
 }
 

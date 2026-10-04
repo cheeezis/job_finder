@@ -121,7 +121,7 @@ resource "azurerm_container_app_job" "finder" {
   }
   secret {
     name                = "jobfinder-database-url"
-    key_vault_secret_id = "${azurerm_key_vault.jobfinder.vault_uri}secrets/JobfinderDatabaseUrl"
+    key_vault_secret_id = "${azurerm_key_vault.jobfinder.vault_uri}secrets/${local.worker_database_secret}"
     identity            = azurerm_user_assigned_identity.jobfinder.id
   }
   # Persönliche Sucheinstellungen (Inhalt von user_settings.local.yaml); sie
@@ -239,5 +239,6 @@ resource "azurerm_container_app_job" "finder" {
   depends_on = [
     azurerm_role_assignment.acr_pull,
     azurerm_role_assignment.keyvault_secrets_user_worker,
+    azurerm_role_assignment.keyvault_worker_secret,
   ]
 }

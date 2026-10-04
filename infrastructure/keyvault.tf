@@ -27,6 +27,7 @@ resource "azurerm_key_vault" "jobfinder" {
 
 # Worker-Identität darf Secret-Werte lesen, aber nicht anlegen/ändern/löschen.
 resource "azurerm_role_assignment" "keyvault_secrets_user_worker" {
+  count                = local.runtime_split ? 0 : 1
   scope                = azurerm_key_vault.jobfinder.id
   role_definition_name = "Key Vault Secrets User"
   principal_id         = azurerm_user_assigned_identity.jobfinder.principal_id

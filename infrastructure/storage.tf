@@ -86,12 +86,11 @@ resource "azurerm_storage_container" "application_documents" {
   }
 }
 
-# Dieselbe Identität, die der Worker schon fürs ACR-Image-Pull nutzt, bekommt
-# zusätzlich Lese-/Schreibzugriff auf die Dokumente. Eine Identität kann mehrere
-# Rollen auf unterschiedlichen Ressourcen halten; eine zweite ist nicht nötig.
-# Bewusst nur auf den Dokumente-Container: Im selben Account liegt auch der
-# Terraform-State, den die App weder lesen noch ändern darf.
+# Übergangsrecht der bisherigen gemeinsamen Identität. In split übernimmt die
+# Review den Dokumentzugriff. Beide geplanten Worker überspringen das ZIP-Backup
+# und benötigen deshalb keine Dokument-Bytes; Metadaten bleiben in PostgreSQL.
 resource "azurerm_role_assignment" "storage_blob_data_contributor" {
+  count                = local.runtime_split ? 0 : 1
   scope                = azurerm_storage_container.application_documents.id
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = azurerm_user_assigned_identity.jobfinder.principal_id
@@ -117,6 +116,7 @@ resource "azurerm_role_assignment" "storage_blob_data_contributor_dev" {
 # one role on the documents container - not the tfstate container in the same
 # account, since this principal's secret lives on a local disk.
 resource "azurerm_role_assignment" "storage_blob_data_contributor_local_docker" {
+  count                = local.runtime_split ? 0 : 1
   scope                = azurerm_storage_container.application_documents.id
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = var.local_docker_sp_object_id

@@ -74,7 +74,19 @@ werden gemeinsam gespeichert. Finder-Abgleiche sperren die Bestandsänderungen
 und schreiben nur veränderte Datensätze zurück; ein Lock verhindert zwei
 gleichzeitige Finder. Der manuelle Import schreibt
 Quellen, Gedächtnis und Ergebnisse in einer Transaktion, der HTTP-Abruf erfolgt
-davor. Die Veröffentlichung der beiden Ergebnisansichten ist atomar.
+davor. Der Finder schreibt Gedächtnis, bestätigte Schließungen, beide
+Ergebnisansichten und Discord-Aufträge gemeinsam in einer Transaktion. Versand
+und Quittierung folgen nach Commit. Die bestehende Tabelle `notifications`
+enthält die Kartendaten, einen stabilen Ereignisschlüssel und den Versandstatus;
+für diese Outbox ist keine Schemaänderung erforderlich.
+
+Offene Aufträge werden im nächsten erfolgreichen Finder-Lauf auch ohne erneuten
+Fund wiederholt. Quellen-Ausfälle und geteilte Zeitpläne entfernen sie nicht.
+Eine neu gesetzte Review-Entscheidung oder ein Vorfilterausschluss kann den
+Auftrag verwerfen. Erfolgreiche Teilversände werden einzeln gespeichert. Bei
+einem Abbruch nach Discord-Erfolg, aber vor Quittierung ist ein doppelter Hinweis
+möglich. Die Laufstatistik wird weiterhin unmittelbar gesendet. Einzelheiten
+und Abbruchtests: [Entwickler-Doku](development.md#veröffentlichung-und-discord-outbox).
 
 Dokumente liegen standardmäßig unter `data/internal/application_documents`;
 `JOBFINDER_DOCUMENTS_DIR` kann auf eine andere dauerhafte Ablage zeigen. Mit

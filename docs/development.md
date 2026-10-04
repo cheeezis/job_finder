@@ -202,6 +202,50 @@ eindeutige URLs, aber keine URLs oder Stelleninhalte. Die Review-Diagnose trennt
 erstmals gespeicherte und bekannte Treffer, passende und ausgeschlossene neue
 Treffer sowie den Status Neu vom Standardfilter Neu.
 
+### Veröffentlichung und Discord-Outbox
+
+Der Finder sammelt und bewertet zuerst alle Quellen und prüft fehlende
+interessante Anzeigen außerhalb von Schreibtransaktionen. Dabei ermittelt eine
+Kopie des Gedächtnisses die voraussichtlichen kanonischen IDs. Vor dem Speichern
+wird der aktuelle Bestand erneut gelesen: zwischenzeitliche Review-Entscheidungen
+und neue Links haben Vorrang vor älteren Prüfergebnissen.
+
+Danach werden Gedächtnis einschließlich bestätigter Schließungen, Job-Snapshot,
+Empfehlungen und Benachrichtigungsaufträge in einer PostgreSQL-Transaktion
+gespeichert. Die Sperrreihenfolge ist Veröffentlichung, Gedächtnis, Datensätze,
+wie beim manuellen Import. Jeder Auftrag enthält kompakte Kartendaten und einen
+stabilen `event_key` (`job-found:<ID des Erstfunds>`); bei einer Zusammenführung
+werden Auftrag und Versandstatus der kanonischen Stellen-ID zugeordnet. Bereits
+versendete Funde werden dabei nicht erneut eingeplant.
+
+Die bestehende Tabelle `notifications` speichert Kartendaten und Ereignisschlüssel
+in ihrem vorhandenen JSONB-Feld. Deshalb benötigt diese Änderung keine neue
+Tabelle oder Alembic-Revision. Das Backup-Format und Revision `0001_baseline`
+bleiben kompatibel; Anwendungs-Backups enthalten auch die vollständige Outbox.
+
+Erst nach Commit ruft `deliver_notifications` Discord auf. Eine Sitzungssperre
+verhindert parallele Sender; Netzaufrufe halten keine Schreibtransaktion offen.
+Vor jedem Teilversand werden aktuelle Entscheidungen geprüft und die Nachrichten
+erneut nach Discords Größenlimits aufgeteilt. Aufträge werden auch dann wiederholt,
+wenn der aktuelle Lauf ihre Quelle überspringt oder sie nicht erneut findet.
+Fehler behalten Versuchszähler und Fehlertext, erfolgreiche Teilversände werden
+einzeln quittiert. Alte offene Einträge ohne Kartendaten werden aus veröffentlichten
+Empfehlungen oder beim nächsten passenden Fund ergänzt. Statusentscheidungen und
+Ausschlüsse können einen noch offenen Auftrag verwerfen.
+
+Die Zustellung erfolgt mindestens einmal, solange der Auftrag weiterhin zulässig
+ist: Nach Discord-Erfolg und einem Abbruch vor Quittierung kann ein Hinweis doppelt
+erscheinen. Die kompakte Laufstatistik bleibt ein unmittelbarer Betriebsbericht.
+Ein Rollback auf ein früheres Image ist ohne Schema-Downgrade möglich, bietet aber
+nicht die neue Garantie gemeinsamer Veröffentlichung und wiederholbaren Versands.
+Ausdrückliche JSON-Exportpfade besitzen keine gemeinsame Transaktion mit PostgreSQL.
+
+`tests/test_notification_outbox.py` prüft Abbrüche vor/nach Commit und vor/nach
+Versand, Teilversände, parallele Sender, Review-Änderungen, kanonische IDs und die
+Sichtbarkeit für eine zweite Datenbankverbindung ausschließlich auf Testdaten.
+Auch die Wiederherstellung offener Aufträge aus einem Anwendungs-Backup und
+Größenänderungen von Karten zwischen zwei Teilversänden sind abgesichert.
+
 ### Manueller Import
 
 `manual_import.import_manual_url` verarbeitet genau die eingereichte URL und

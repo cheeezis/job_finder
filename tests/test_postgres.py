@@ -236,7 +236,6 @@ class PostgresTests(unittest.TestCase):
         with (
             patch("run_finder.create_backup"),
             patch("run_finder.enrich_candidate_jobs"),
-            patch("run_finder.ignore_closed_listings", return_value=[]),
             patch(
                 "run_finder.collect_jobs",
                 side_effect=lambda sources=None, run_id=None: (

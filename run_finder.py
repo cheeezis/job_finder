@@ -9,9 +9,10 @@ from job_finder.agent.run import agent_phase
 from job_finder.console import configure_utf8_output, log_event, print_phase, print_progress
 from job_finder.matching.deduplication import deduplicate_jobs
 from job_finder.matching.user_settings import SETTINGS_SOURCE
+from job_finder.models import WorkflowStatus
 from job_finder.operations import RunLog, create_backup, timed_step
 from job_finder.paths import JOBS_FILE, MEMORY_FILE
-from job_finder.persistence.database import worker_lock
+from job_finder.persistence.database import lock, transaction, worker_lock
 from job_finder.persistence.storage import publish_results
 from job_finder.sources import (
     arbeitnow,
@@ -31,10 +32,14 @@ from job_finder.sources import (
 from job_finder.sources.common import canonical_detail_url as canonical_url, fetch_diagnostics, reset_fetch_diagnostics
 from job_finder.sources.company_careers import BYTEWERK, CSS, NETHINKS, PROEMION, RHOENENERGIE
 from job_finder.sources.compose_it import COMPOSE_IT
-from job_finder.workflow.availability import ignore_closed_listings
+from job_finder.workflow.availability import (
+    apply_closed_listing_checks,
+    prepare_closed_listing_checks,
+    unchanged_check_ids,
+)
 from job_finder.workflow.main import build_score_results, combine_listings, evaluate_jobs, score_jobs
 from job_finder.workflow.memory import edit_memory, update_memory
-from job_finder.workflow.notifications import process_notifications, send_run_summary
+from job_finder.workflow.notifications import deliver_notifications, queue_notifications, send_run_summary
 from job_finder.workflow.reporting import is_visible_in_default_review, write_recommendations
 
 SOURCES = [
@@ -171,28 +176,35 @@ def run_pipeline(exclude_sources=frozenset(), run_id=None):
     complete_sources = {report["name"] for report in source_reports if report["status"] in {"success", "empty"}}
     # A split schedule's run answers for missing jobs only through its own sources.
     run_sources = {report["name"] for report in source_reports}
-    with timed_step("Gedächtnis speichern"), edit_memory(MEMORY_FILE) as memory:
-        memory_stats = update_memory(jobs, memory, successful_sources=complete_sources, run_sources=run_sources)
-    # Memory gave every listing of one job the same ID; from here on they are one card.
-    evaluated_jobs = combine_listings(evaluated_jobs)
-    jobs = [job for job, _result in evaluated_jobs]
-
     with timed_step("Offline-Prüfung"):
-        closed_ids = ignore_closed_listings(
+        availability_checks = prepare_closed_listing_checks(
             jobs,
             MEMORY_FILE,
             successful_sources=complete_sources,
             run_sources=run_sources,
             progress=print_availability_progress,
+            resolve_ids=True,
         )
 
-    if closed_ids:
-        print(f"Nicht mehr verfügbar: {len(closed_ids)} Stelle(n) auf Nicht interessant gesetzt")
-    results = build_score_results(evaluated_jobs)
-    print(f"{memory_stats['inactive']} neu inaktiv · {memory_stats['reactivated']} reaktiviert")
-    with timed_step("Ergebnisdateien schreiben"):
-        # A source that failed or answered only in part keeps its published
-        # listings, like a skipped one, until a complete run replaces them.
+    # Publication always locks before memory, matching manual imports and restore.
+    # No source, closure check or Discord request runs inside this transaction.
+    with timed_step("Bestand, Ergebnisse und Benachrichtigungsaufträge speichern"), transaction() as connection:
+        lock(connection, "finder-publication")
+        with edit_memory(MEMORY_FILE) as memory:
+            unchanged_ids = unchanged_check_ids(availability_checks, memory)
+            aliases = {}
+            memory_stats = update_memory(
+                jobs, memory, successful_sources=complete_sources, run_sources=run_sources, aliases=aliases
+            )
+            closed_ids = apply_closed_listing_checks(availability_checks, memory, unchanged_ids=unchanged_ids)
+            for job in jobs:
+                if job.id in closed_ids:
+                    job.workflow_status = WorkflowStatus.IGNORED
+                    job.is_new = False
+        # Canonical IDs are resolved under the lock: several listings become one card.
+        evaluated_jobs = combine_listings(evaluated_jobs)
+        jobs = [job for job, _result in evaluated_jobs]
+        results = build_score_results(evaluated_jobs)
         publish_results(
             jobs,
             results,
@@ -200,20 +212,24 @@ def run_pipeline(exclude_sources=frozenset(), run_id=None):
             writer=write_recommendations,
             exclude_sources=set(exclude_sources) | (run_sources - complete_sources),
         )
-        print(f"Vorfilter: {len(results['included'])} weiter · {len(results['excluded'])} ausgeschlossen")
-        log_event(
-            "prefilter_completed",
-            run_id=run_id,
-            jobs_total=len(jobs),
-            included=len(results["included"]),
-            excluded=len(results["excluded"]),
-        )
+        notification_stats = queue_notifications(results, aliases=aliases)
+
+    if closed_ids:
+        print(f"Nicht mehr verfügbar: {len(closed_ids)} Stelle(n) auf Nicht interessant gesetzt")
+    print(f"{memory_stats['inactive']} neu inaktiv · {memory_stats['reactivated']} reaktiviert")
+    print(f"Vorfilter: {len(results['included'])} weiter · {len(results['excluded'])} ausgeschlossen")
+    log_event(
+        "prefilter_completed",
+        run_id=run_id,
+        jobs_total=len(jobs),
+        included=len(results["included"]),
+        excluded=len(results["excluded"]),
+    )
 
     print_phase(4, 4, "Ausgabe und Benachrichtigungen")
     with timed_step("Benachrichtigungen"):
-        notification_stats = process_notifications(
-            results,
-            send=True,
+        notification_stats = deliver_notifications(
+            stats=notification_stats,
             webhook_url=os.getenv("DISCORD_WEBHOOK_URL"),
             review_host=os.getenv("JOBFINDER_REVIEW_HOST"),
         )

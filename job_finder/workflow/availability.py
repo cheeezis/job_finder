@@ -2,6 +2,8 @@
 
 import re
 import time
+from copy import deepcopy
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from html.parser import HTMLParser
 from urllib.error import HTTPError
@@ -13,7 +15,7 @@ from job_finder.sources.arbeitnow import application_page_is_missing
 from job_finder.sources.manual import VisibleJobParser, validate_public_url
 from job_finder.structured_data import extract_json_ld_job_posting
 from job_finder.workflow.applications import record_status_change
-from job_finder.workflow.memory import edit_memory, has_application_state, load_memory, sources_succeeded
+from job_finder.workflow.memory import edit_memory, has_application_state, load_memory, sources_succeeded, update_memory
 
 CLOSED_MESSAGE = re.compile(
     r"^(?:(?:diese|die) (?:stelle|stellenanzeige|position|ausschreibung) "
@@ -118,6 +120,15 @@ CHECK_BUDGET_SECONDS = 120
 CHECK_INTERVAL = timedelta(hours=24)
 
 
+@dataclass
+class AvailabilityChecks:
+    """Carry network evidence and its original state to a later commit."""
+
+    candidates: dict
+    checked_urls: dict
+    now: datetime
+
+
 def recent_check(check, now):
     """Treat malformed or future timestamps as due rather than trusting them."""
     try:
@@ -152,8 +163,48 @@ def ignore_closed_listings(
     recently confirmed closed. Return the IDs changed by this call.
     progress, if supplied, receives completed and planned URL counts.
     """
+    prepared = prepare_closed_listing_checks(
+        jobs,
+        memory_path,
+        successful_sources=successful_sources,
+        run_sources=run_sources,
+        progress=progress,
+        max_urls=max_urls,
+        budget_seconds=budget_seconds,
+        now=now,
+    )
+    with edit_memory(memory_path) as memory:
+        ignored = apply_closed_listing_checks(prepared, memory)
+    for job in jobs:
+        if job.id in ignored:
+            job.workflow_status = WorkflowStatus.IGNORED
+            job.is_new = False
+    return ignored
+
+
+def prepare_closed_listing_checks(
+    jobs,
+    memory_path,
+    *,
+    successful_sources,
+    run_sources=None,
+    progress=None,
+    max_urls=MAX_CHECK_URLS,
+    budget_seconds=CHECK_BUDGET_SECONDS,
+    now=None,
+    resolve_ids=False,
+):
+    """Collect closure evidence without persisting discovery or taking write locks.
+
+    The finder previews canonical IDs on copies so a live posting under a
+    second source ID is not mistaken for a missing shortlisted job. Actual
+    discovery and decisions are re-read under the final publication lock.
+    """
     now = now or datetime.now(UTC)
     snapshot = load_memory(memory_path)
+    if resolve_ids:
+        jobs = deepcopy(jobs)
+        update_memory(jobs, deepcopy(snapshot), successful_sources=successful_sources, run_sources=run_sources)
     candidates, due = _plan_checks(jobs, snapshot, successful_sources, run_sources, now)
     selected = sorted(due, key=lambda url: due[url])[: max(0, max_urls)]
     all_urls = {url for _, urls, _ in candidates.values() for url in urls}
@@ -170,14 +221,7 @@ def ignore_closed_listings(
         f"{len(due) - len(checked_urls)} zurückgestellt",
         flush=True,
     )
-    if not checked_urls:
-        return set()
-    ignored = _save_checks(candidates, checked_urls, memory_path, now)
-    for job in jobs:
-        if job.id in ignored:
-            job.workflow_status = WorkflowStatus.IGNORED
-            job.is_new = False
-    return ignored
+    return AvailabilityChecks(candidates, checked_urls, now)
 
 
 def _plan_checks(jobs, snapshot, successful_sources, run_sources, now):
@@ -231,24 +275,36 @@ def _check_urls(selected, now, budget_seconds, progress):
     return checked_urls
 
 
-def _save_checks(candidates, checked_urls, memory_path, now):
-    """Persist checks only for unchanged entries and return confirmed closures."""
+def unchanged_check_ids(prepared, memory):
+    """Identify evidence still valid before this run changes discovery timestamps."""
+    return {
+        job_id for job_id, (previous, _urls, _checks) in prepared.candidates.items() if memory.get(job_id) == previous
+    }
+
+
+def apply_closed_listing_checks(prepared, memory, *, unchanged_ids=None):
+    """Apply staged evidence to a locked memory, preserving intervening decisions."""
+    unchanged_ids = unchanged_check_ids(prepared, memory) if unchanged_ids is None else unchanged_ids
     ignored = set()
-    with edit_memory(memory_path) as memory:
-        for job_id, (previous, urls, checks) in candidates.items():
-            if not any(url in checked_urls for url in urls):
-                continue
-            entry = memory.get(job_id)
-            # A concurrent user decision or worker update takes precedence.
-            if entry is None or entry != previous:
-                continue
-            updated = {url: checked_urls.get(url, checks.get(url, {})) for url in urls}
-            entry["availability_checks"] = updated
-            if not all(recent_check(check, now) and check.get("closed") is True for check in updated.values()):
-                continue
-            record_status_change(entry, WorkflowStatus.IGNORED)
-            entry["workflow_history"][-1]["reason"] = "listing_unavailable"
-            entry["availability_checked_at"] = now.isoformat()
-            entry["active"] = False
-            ignored.add(job_id)
+    for job_id, (previous, urls, checks) in prepared.candidates.items():
+        if job_id not in unchanged_ids or not any(url in prepared.checked_urls for url in urls):
+            continue
+        entry = memory.get(job_id)
+        # Discovery may update timestamps, but a merge, new URL or changed
+        # decision makes this evidence unsuitable for the resulting entry.
+        if (
+            entry is None
+            or entry.get("workflow_status") != previous.get("workflow_status")
+            or entry.get("source_urls") != previous.get("source_urls")
+        ):
+            continue
+        updated = {url: prepared.checked_urls.get(url, checks.get(url, {})) for url in urls}
+        entry["availability_checks"] = updated
+        if not all(recent_check(check, prepared.now) and check.get("closed") is True for check in updated.values()):
+            continue
+        record_status_change(entry, WorkflowStatus.IGNORED)
+        entry["workflow_history"][-1]["reason"] = "listing_unavailable"
+        entry["availability_checked_at"] = prepared.now.isoformat()
+        entry["active"] = False
+        ignored.add(job_id)
     return ignored

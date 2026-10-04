@@ -61,6 +61,50 @@ def discord_limited_characters(payload):
 
 
 class NotificationTests(unittest.TestCase):
+    def test_a_merged_pending_id_retains_its_event_and_retry_history(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.json"
+            process_notifications(
+                {"included": [make_job("old:1")], "excluded": []},
+                send=True,
+                webhook_url="https://discord.test/webhook",
+                client=FakeClient(NotificationError("offline")),
+                state_path=path,
+            )
+            queue_notifications(
+                {"included": [make_job("canonical:1", is_new=False)], "excluded": []},
+                aliases={"old:1": "intermediate:1", "intermediate:1": "canonical:1"},
+                state_path=path,
+            )
+            state = load_notification_state(path)
+            entry = state["pending"]["canonical:1"]
+            self.assertEqual(set(state["pending"]), {"canonical:1"})
+            self.assertEqual(entry["event_key"], "job-found:old:1")
+            self.assertEqual(entry["attempts"], 1)
+            self.assertEqual(entry["payload"]["id"], "canonical:1")
+            deliver_notifications(state_path=path, webhook_url="https://discord.test/webhook", client=FakeClient())
+            self.assertEqual(load_notification_state(path)["sent"]["canonical:1"]["event_key"], "job-found:old:1")
+
+    def test_merging_an_already_sent_find_discards_its_duplicate_pending_order(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.json"
+            process_notifications(
+                {"included": [make_job("old:1")], "excluded": []},
+                send=True,
+                webhook_url="https://discord.test/webhook",
+                client=FakeClient(),
+                state_path=path,
+            )
+            queue_notifications({"included": [make_job("canonical:1")], "excluded": []}, state_path=path)
+            stats = queue_notifications(
+                {"included": [make_job("canonical:1", is_new=False)], "excluded": []},
+                state_path=path,
+                aliases={"old:1": "canonical:1"},
+            )
+            self.assertEqual(stats["queued"], 0)
+            self.assertFalse(load_notification_state(path)["pending"])
+            self.assertEqual(set(load_notification_state(path)["sent"]), {"old:1", "canonical:1"})
+
     def test_committed_order_can_be_delivered_without_collecting_the_source_again(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "state.json"

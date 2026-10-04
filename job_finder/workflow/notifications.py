@@ -85,13 +85,16 @@ def edit_notification_state(path=NOTIFICATION_STATE_FILE):
         if name is not None:
             lock(connection, "dataset:" + name)
         state = load_notification_state(path)
+        original = deepcopy(state)
         yield state
-        save_notification_state(state, path)
+        if state != original:
+            save_notification_state(state, path)
 
 
-def queue_notifications(results, *, state_path=NOTIFICATION_STATE_FILE):
+def queue_notifications(results, *, state_path=NOTIFICATION_STATE_FILE, aliases=None):
     """Persist stable job-ID orders with all card data, without external requests."""
     with edit_notification_state(state_path) as state:
+        _merge_notification_ids(state, aliases or {})
         _candidates, stats = _update_queue(results, state, datetime.now(UTC).isoformat())
     return stats
 
@@ -123,13 +126,17 @@ def deliver_notifications(
             stats["configuration_error"] = "DISCORD_WEBHOOK_URL ist nicht gesetzt"
             return stats
         webhook_client = client or DiscordWebhookClient(webhook_url)
-        for planned in notification_chunks(candidates, review_host=review_host):
-            # Re-read each chunk: publication or review may have cancelled an order
-            # while a previous Discord request was running.
+        remaining = [key for key, _job in candidates]
+        while remaining:
+            # Re-read and size the next chunk: publication or review may have
+            # updated or cancelled orders during the previous Discord request.
             current = dict(_delivery_candidates(state_path))
-            chunk = [(key, current[key]) for key, _job in planned if key in current]
-            if not chunk:
-                continue
+            refreshed = [(key, current[key]) for key in remaining if key in current]
+            if not refreshed:
+                break
+            chunk = notification_chunks(refreshed, review_host=review_host)[0]
+            attempted = {key for key, _job in chunk}
+            remaining = [key for key in remaining if key not in attempted]
             timestamp = datetime.now(UTC).isoformat()
             error_text = None
             try:
@@ -142,15 +149,19 @@ def deliver_notifications(
             with edit_notification_state(state_path) as state:
                 for key, _job in chunk:
                     entry = state["pending"].get(key)
-                    if entry is None:
-                        continue
                     if error_text is not None:
+                        if entry is None:
+                            continue
                         entry["attempts"] = entry.get("attempts", 0) + 1
                         entry["last_error"] = error_text
                         entry["updated_at"] = timestamp
                     else:
-                        state["pending"].pop(key)
-                        state["sent"][key] = {"job_id": entry["job_id"], "sent_at": timestamp}
+                        state["pending"].pop(key, None)
+                        state["sent"][key] = {
+                            "job_id": key,
+                            "sent_at": timestamp,
+                            "event_key": (entry or {}).get("event_key", f"job-found:{key}"),
+                        }
     return stats
 
 
@@ -161,11 +172,16 @@ def _delivery_candidates(state_path):
         statuses = load_workflow_statuses(state["pending"]) if managed else {}
         recommendations = (
             {job["id"]: job for job in read_object(RECOMMENDATIONS_JSON, {}).get("recommendations", [])}
-            if managed
+            if managed and any(not entry.get("payload") for entry in state["pending"].values())
             else {}
         )
         candidates = []
         for key, entry in list(state["pending"].items()):
+            # The finder saves memory and the order together. An absent memory
+            # ID has since been merged/deleted; its obsolete card must not send.
+            if managed and (key not in statuses or statuses[key] not in NOTIFIABLE_STATUSES):
+                state["pending"].pop(key)
+                continue
             job = entry.get("payload")
             if not job and key in recommendations:
                 # Old pending entries did not contain their card. Recover from the
@@ -197,6 +213,30 @@ def notification_stats(**values):
         "configuration_error": None,
         **values,
     }
+
+
+def _merge_notification_ids(state, aliases):
+    """Carry a finding's event and delivery state over to its canonical job ID."""
+    for delivery_state in ("sent", "pending"):
+        for old, target in aliases.items():
+            seen = {old}
+            while target in aliases and target not in seen:
+                seen.add(target)
+                target = aliases[target]
+            if target == old or old not in state[delivery_state]:
+                continue
+            entry = state[delivery_state][old]
+            if delivery_state == "pending":
+                state["pending"].pop(old)
+            # Keep sent old IDs as well: an already notified source ID must not
+            # start a second event if it is encountered again in a later run.
+            if delivery_state == "sent" or target not in state["sent"]:
+                canonical = {**entry, "job_id": target, "event_key": entry.get("event_key", f"job-found:{old}")}
+                if canonical.get("payload"):
+                    canonical["payload"] = {**canonical["payload"], "id": target}
+                state[delivery_state].setdefault(target, canonical)
+            if target in state["sent"]:
+                state["pending"].pop(target, None)
 
 
 def _update_queue(results, state, timestamp):
@@ -353,6 +393,7 @@ def pending_entry(job, timestamp):
     """Create auditable retry state for one unsent job."""
     return {
         "job_id": job["id"],
+        "event_key": f"job-found:{job['id']}",
         "title": job["title"],
         "attempts": 0,
         "last_error": None,

@@ -76,12 +76,13 @@ def edit_job(job_id, path=MEMORY_FILE):
         write_memory(connection, scope, original, memory)
 
 
-def update_memory(jobs, memory, successful_sources=None, run_sources=None):
+def update_memory(jobs, memory, successful_sources=None, run_sources=None, *, aliases=None):
     """Update job identity and discovery state, without saving it.
 
     Mutate memory and the Job objects: resolve canonical IDs, restore
     workflow status and update discovery timestamps and is_new; return
-    counts keyed by new, known, inactive and reactivated. Every listing
+    counts keyed by new, known, inactive and reactivated. If supplied,
+    aliases collects merged old IDs for related durable records. Every listing
     of one job gets the same ID, also across portals and runs (see
     resolve_memory_id), so several jobs may share one; a known entry
     collects the places and URLs of all of them.
@@ -99,7 +100,7 @@ def update_memory(jobs, memory, successful_sources=None, run_sources=None):
     memory_index = build_memory_index(memory)
 
     for job in jobs:
-        job.id = resolve_memory_id(job, memory, memory_index)
+        job.id = resolve_memory_id(job, memory, memory_index, aliases=aliases)
         current_ids.add(job.id)
         if job.id in memory:
             counts["known"] += 1
@@ -180,7 +181,7 @@ def studysmarter_board_company(job_id, entry):
     return "studysmarter" in sources and str(entry.get("company") or "").strip().casefold() in BOARD_NAMES
 
 
-def resolve_memory_id(job, memory, memory_index=None):
+def resolve_memory_id(job, memory, memory_index=None, *, aliases=None):
     """Reuse a known canonical ID for the same URL or another listing of the same job.
 
     Entries found by URL are this listing's own; entries found by title
@@ -219,6 +220,8 @@ def resolve_memory_id(job, memory, memory_index=None):
         canonical["locations"] = unique_values(canonical.get("locations") or [], candidate.get("locations") or [])
         if candidate.get("fully_remote"):
             canonical["fully_remote"] = True
+        if aliases is not None:
+            aliases[candidate_id] = canonical_id
         del memory[candidate_id]
     return canonical_id
 

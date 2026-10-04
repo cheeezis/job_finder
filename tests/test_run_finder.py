@@ -42,6 +42,11 @@ def make_job(job_id):
 
 
 class RunFinderTests(unittest.TestCase):
+    def setUp(self):
+        queue = patch("run_finder.queue_notifications", return_value={})
+        self.queue = queue.start()
+        self.addCleanup(queue.stop)
+
     def test_every_source_can_offer_optional_candidate_enrichment(self):
         calls = []
         plain_source = SimpleNamespace(SOURCE_NAME="plain")
@@ -104,7 +109,7 @@ class RunFinderTests(unittest.TestCase):
                 ),
                 patch("run_finder.write_recommendations") as recommendations,
                 patch(
-                    "run_finder.process_notifications",
+                    "run_finder.deliver_notifications",
                     return_value={"ready": 0, "sent": 0, "failed": 0, "configuration_error": None},
                 ),
                 redirect_stdout(io.StringIO()),
@@ -138,7 +143,7 @@ class RunFinderTests(unittest.TestCase):
                 patch("run_finder.collect_jobs", return_value=([fulda, berlin], reports)),
                 patch("run_finder.write_recommendations") as recommendations,
                 patch(
-                    "run_finder.process_notifications",
+                    "run_finder.deliver_notifications",
                     return_value={"ready": 0, "sent": 0, "failed": 0, "configuration_error": None},
                 ),
                 redirect_stdout(io.StringIO()),
@@ -170,7 +175,7 @@ class RunFinderTests(unittest.TestCase):
             patch("run_finder.collect_jobs", return_value=([make_job("stepstone:1")], reports)),
             patch("run_finder.publish_results") as publish,
             patch(
-                "run_finder.process_notifications",
+                "run_finder.deliver_notifications",
                 return_value={"ready": 0, "sent": 0, "failed": 0, "configuration_error": None},
             ),
             redirect_stdout(io.StringIO()),
@@ -197,7 +202,7 @@ class RunFinderTests(unittest.TestCase):
             patch("run_finder.collect_jobs", return_value=([job], [{"name": "kept", "status": "success", "jobs": 1}])),
             patch("run_finder.write_recommendations"),
             patch(
-                "run_finder.process_notifications",
+                "run_finder.deliver_notifications",
                 return_value={"ready": 0, "sent": 0, "failed": 0, "configuration_error": None},
             ),
             redirect_stdout(io.StringIO()),
@@ -251,7 +256,7 @@ class RunFinderTests(unittest.TestCase):
             patch("run_finder.edit_memory") as edit_memory,
             patch("run_finder.publish_results") as write_jobs,
             patch("run_finder.write_recommendations") as write_recommendations,
-            patch("run_finder.process_notifications") as notifications,
+            patch("run_finder.deliver_notifications") as notifications,
             self.assertRaises(IncompleteSourceSnapshotError),
         ):
             run_pipeline()
@@ -416,7 +421,7 @@ class RunFinderTests(unittest.TestCase):
             patch("run_finder.collect_jobs", side_effect=fake_collect_jobs),
             patch("run_finder.write_recommendations"),
             patch(
-                "run_finder.process_notifications",
+                "run_finder.deliver_notifications",
                 return_value={"ready": 0, "sent": 0, "failed": 0, "configuration_error": None},
             ),
             redirect_stdout(io.StringIO()),

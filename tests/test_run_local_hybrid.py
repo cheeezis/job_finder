@@ -11,6 +11,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+from psycopg.conninfo import conninfo_to_dict
+
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "run_local_hybrid.py"
 
 
@@ -171,6 +173,72 @@ class LocalHybridRunTests(unittest.TestCase):
                 activated = self.script.container_environment()
                 self.assertIn("hybrid@", activated["JOBFINDER_DATABASE_URL"])
                 self.assertIn("sslrootcert=/etc/ssl/certs/ca-certificates.crt", activated["JOBFINDER_DATABASE_URL"])
+
+    def test_entra_hybrid_requires_acceptance_and_matching_password_free_target(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            (project / ".env.postgres-azure").write_text(
+                "JOBFINDER_DATABASE_URL=postgresql://legacy:old@db.test/jobfinder\n", encoding="utf-8"
+            )
+            (project / ".env.docker-local").write_text(
+                "AZURE_CLIENT_ID=hybrid-client\nAZURE_TENANT_ID=tenant\nAZURE_CLIENT_SECRET=synthetic-secret\n",
+                encoding="utf-8",
+            )
+            values = {
+                "JOBFINDER_RUNTIME_ACCESS": "split",
+                "JOBFINDER_RUNTIME_CREDENTIALS_READY": "1",
+                "JOBFINDER_HYBRID_DATABASE_URL": "postgresql://jobfinder_hybrid:old@db.test:5432/jobfinder?sslmode=verify-full",
+                "JOBFINDER_HYBRID_DATABASE_AUTH": "entra",
+                "JOBFINDER_HYBRID_ENTRA_VERIFIED": "1",
+                "JOBFINDER_HYBRID_ENTRA_DATABASE_URL": "postgresql://jobfinder_hybrid_entra@db.test/jobfinder?sslmode=verify-full&sslrootcert=C:/roots.pem",
+            }
+            path = project / ".env.runtime-azure"
+
+            def write(config):
+                path.write_text("".join(f"{key}={value}\n" for key, value in config.items()), encoding="utf-8")
+
+            url = values["JOBFINDER_HYBRID_ENTRA_DATABASE_URL"]
+            cases = [
+                {"JOBFINDER_HYBRID_ENTRA_VERIFIED": "0"},
+                {"JOBFINDER_RUNTIME_ACCESS": "legacy"},
+                {"JOBFINDER_RUNTIME_CREDENTIALS_READY": "0"},
+                {"JOBFINDER_HYBRID_DATABASE_AUTH": "typo"},
+                *[
+                    {"JOBFINDER_HYBRID_ENTRA_DATABASE_URL": wrong}
+                    for wrong in (
+                        "",
+                        url.replace("hybrid_entra", "review_entra"),
+                        url.replace("entra@", "entra:old@"),
+                        url.replace("verify-full", "require"),
+                        url.replace("db.test", "other.test"),
+                        url.replace("/jobfinder", "/other"),
+                        url.replace("db.test", "db.test:5444"),
+                        url + "&passfile=/other-login",
+                    )
+                ],
+            ]
+            with patch.object(self.script, "PROJECT_DIR", project), patch.dict(os.environ, {}, clear=True):
+                for changed in cases:
+                    with self.subTest(changed=changed):
+                        write({**values, **changed})
+                        with self.assertRaises(self.script.RunFailed):
+                            self.script.container_environment()
+                write(values)
+                active = self.script.container_environment()
+                self.assertEqual(active["JOBFINDER_DATABASE_AUTH"], "service_principal")
+                self.assertEqual(active["AZURE_CLIENT_ID"], "hybrid-client")
+                actual = conninfo_to_dict(active["JOBFINDER_DATABASE_URL"])
+                self.assertEqual(actual["user"], "jobfinder_hybrid_entra")
+                self.assertEqual(actual["sslrootcert"], "/etc/ssl/certs/ca-certificates.crt")
+                self.assertNotIn("password", actual)
+                self.assertEqual(actual["sslmode"], "verify-full")
+                # Preparing a new target never changes the default or rollback path.
+                write({key: value for key, value in values.items() if key != "JOBFINDER_HYBRID_DATABASE_AUTH"})
+                previous = self.script.container_environment()
+                self.assertNotIn("JOBFINDER_DATABASE_AUTH", previous)
+                self.assertEqual(conninfo_to_dict(previous["JOBFINDER_DATABASE_URL"])["user"], "jobfinder_hybrid")
+                write({**values, "JOBFINDER_HYBRID_DATABASE_AUTH": "password"})
+                self.assertEqual(self.script.container_environment(), previous)
 
     def test_logs_older_than_two_weeks_are_removed(self):
         now = datetime(2026, 9, 26, 10, 0)

@@ -19,13 +19,8 @@ def _credential(mode: str, client_id: str, tenant_id: str = "", client_secret: s
     return ClientSecretCredential(tenant_id=tenant_id, client_id=client_id, client_secret=client_secret)
 
 
-def connect_runtime(url: str, *, autocommit: bool = False) -> psycopg.Connection:
-    """Keep password mode unchanged; Entra never falls back to a developer or password login."""
-    mode = os.environ.get("JOBFINDER_DATABASE_AUTH", "password")
-    if mode == "password":
-        return psycopg.connect(url, autocommit=autocommit, connect_timeout=10)
-    if mode not in {"managed_identity", "service_principal"}:
-        raise RuntimeError("Unbekannte JOBFINDER_DATABASE_AUTH; keine Datenbankanmeldung.")
+def entra_parameters(url: str):
+    """Validate the explicit password-free target before acquiring any token."""
     try:
         parameters = conninfo_to_dict(url)
     except psycopg.Error:
@@ -38,6 +33,17 @@ def connect_runtime(url: str, *, autocommit: bool = False) -> psycopg.Connection
         or parameters.get("sslmode") != "verify-full"
     ):
         raise RuntimeError("Entra benötigt einen passwortfreien DSN mit Host, Datenbank, Rolle und verify-full.")
+    return parameters
+
+
+def connect_runtime(url: str, *, autocommit: bool = False) -> psycopg.Connection:
+    """Keep password mode unchanged; Entra never falls back to a developer or password login."""
+    mode = os.environ.get("JOBFINDER_DATABASE_AUTH", "password")
+    if mode == "password":
+        return psycopg.connect(url, autocommit=autocommit, connect_timeout=10)
+    if mode not in {"managed_identity", "service_principal"}:
+        raise RuntimeError("Unbekannte JOBFINDER_DATABASE_AUTH; keine Datenbankanmeldung.")
+    parameters = entra_parameters(url)
     if mode == "managed_identity":
         client_id = os.environ.get("JOBFINDER_MANAGED_IDENTITY_CLIENT_ID", "")
         tenant_id = client_secret = ""

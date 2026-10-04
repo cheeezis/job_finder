@@ -28,9 +28,14 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import psycopg
+from psycopg.conninfo import conninfo_to_dict, make_conninfo
+
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_DIR))
 
+from job_finder.persistence.database_auth import entra_parameters  # noqa: E402
+from job_finder.persistence.entra_permissions import ENTRA_ROLES  # noqa: E402
 from job_finder.workflow.notifications import DiscordWebhookClient, NotificationError  # noqa: E402
 
 REGISTRY = "acrjobfinder"
@@ -93,6 +98,7 @@ def container_environment():
     """Build the -e KEY=VALUE pairs the container needs, none of it inherited."""
     postgres = read_dotenv(PROJECT_DIR / ".env.postgres-azure")
     runtime_file = PROJECT_DIR / ".env.runtime-azure"
+    runtime = {}
     if runtime_file.exists():
         runtime = read_dotenv(runtime_file)
         if runtime.get("JOBFINDER_RUNTIME_ACCESS", "legacy") == "split":
@@ -101,8 +107,29 @@ def container_environment():
             ):
                 raise RunFailed("Getrennter Hybrid-Zugang ist noch nicht geprüft")
             postgres["JOBFINDER_DATABASE_URL"] = runtime["JOBFINDER_HYBRID_DATABASE_URL"]
-    database_url = re.sub(
-        r"sslrootcert=[^&]+", "sslrootcert=/etc/ssl/certs/ca-certificates.crt", postgres["JOBFINDER_DATABASE_URL"]
+    auth = runtime.get("JOBFINDER_HYBRID_DATABASE_AUTH", "password")
+    if auth not in {"password", "entra"}:
+        raise RunFailed("Unbekannte Hybrid-Datenbankanmeldung")
+    if auth == "entra":
+        if runtime.get("JOBFINDER_RUNTIME_ACCESS") != "split" or runtime.get("JOBFINDER_HYBRID_ENTRA_VERIFIED") != "1":
+            raise RunFailed("Entra-Hybridzugang ist noch nicht abgenommen")
+        try:
+            target = entra_parameters(runtime.get("JOBFINDER_HYBRID_ENTRA_DATABASE_URL", ""))
+            previous = conninfo_to_dict(postgres["JOBFINDER_DATABASE_URL"])
+        except (RuntimeError, psycopg.Error):
+            raise RunFailed("Ungültiger passwortfreier Entra-Hybridzugang") from None
+        if target["user"] != ENTRA_ROLES["hybrid"] or any(
+            target.get(key, default) != previous.get(key, default)
+            for key, default in (("host", ""), ("dbname", ""), ("port", "5432"))
+        ):
+            raise RunFailed("Entra-Hybridzugang gehört nicht zur vorbereiteten Datenbank und Rolle")
+        postgres["JOBFINDER_DATABASE_URL"] = runtime["JOBFINDER_HYBRID_ENTRA_DATABASE_URL"]
+    database_url = (
+        make_conninfo(**{**target, "sslrootcert": "/etc/ssl/certs/ca-certificates.crt"})
+        if auth == "entra"
+        else re.sub(
+            r"sslrootcert=[^&]+", "sslrootcert=/etc/ssl/certs/ca-certificates.crt", postgres["JOBFINDER_DATABASE_URL"]
+        )
     )
     docker_local = read_dotenv(PROJECT_DIR / ".env.docker-local")
     values = {
@@ -116,6 +143,8 @@ def container_environment():
         "AZURE_TENANT_ID": docker_local["AZURE_TENANT_ID"],
         "AZURE_CLIENT_SECRET": docker_local["AZURE_CLIENT_SECRET"],
     }
+    if auth == "entra":
+        values["JOBFINDER_DATABASE_AUTH"] = "service_principal"
     # Optional: without the review host the Discord cards miss their direct link, without the
     # model endpoint the agent writes no fact sheets in this run.
     for key in ("JOBFINDER_REVIEW_HOST", "JOBFINDER_OPENAI_ENDPOINT"):

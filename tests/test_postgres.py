@@ -236,6 +236,8 @@ class PostgresTests(unittest.TestCase):
         with (
             patch("run_finder.create_backup"),
             patch("run_finder.enrich_candidate_jobs"),
+            patch("run_finder.agent_phase"),
+            patch("job_finder.workflow.notifications.DiscordWebhookClient.send"),
             patch(
                 "run_finder.collect_jobs",
                 side_effect=lambda sources=None, run_id=None: (

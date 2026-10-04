@@ -73,6 +73,8 @@ Die bestehenden Adapter teilen weiterhin Bestands- und Bewerbungszeilen. F09
 trennt Komponentenrechte, aber noch nicht einzelne Spalten oder fachliche
 Repository-Verträge. Die weitere Aufteilung folgt in F17. Die NOLOGIN-Gruppen
 können in F10 auch an getrennte Entra-DB-Principals vergeben werden.
+Der erste lokal vorbereitete Verbindungsbaustein und die noch erforderliche
+Cloud-Abnahme stehen in [Datenbankanmeldung mit Entra](database-auth.md).
 
 ## Etappe 1: Vorbereiten und prüfen
 

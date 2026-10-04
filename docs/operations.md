@@ -132,11 +132,15 @@ Azure-Serverbackups, Rollen- oder Infrastruktur-Sicherungen.
 
 `infrastructure/postgresql.tf` verwaltet den produktiven Server: einen
 PostgreSQL-Flexible-Server (`B_Standard_B1ms`, 32 GiB, France Central), die
-Datenbank `jobfinder`, die Firewallregeln und `require_secure_transport`. Worker
-und Review melden sich als Rolle `jobfinder_app` an; die Verbindungs-URL samt
-Passwort liegt im Key-Vault-Secret `JobfinderDatabaseUrl`, das beide über ihre
-Managed Identity lesen. Die folgenden Schritte betreffen nur den
-administrativen Zugriff vom eigenen Rechner.
+Datenbank `jobfinder`, die Firewallregeln und `require_secure_transport`.
+Im F09-Modus `split` nutzen Worker, Review und Hybrid eigene eingeschränkte
+DB-Rollen; die Cloud-URLs liegen in den jeweiligen Worker-/Review-DB-Secrets,
+die jede Komponente mit ihrer eigenen Managed Identity liest. Nur der bisherige
+Modus `legacy` verwendet gemeinsam `jobfinder_app` und `JobfinderDatabaseUrl`.
+Rechte und Phasen: [Laufzeitzugänge](runtime-access.md). Die gesonderte Umstellung
+auf Token-Anmeldung ist in [Datenbankanmeldung mit Entra](database-auth.md)
+beschrieben; Standard bleibt Passwortauthentifizierung. Die folgenden Schritte
+betreffen den administrativen Zugriff vom eigenen Rechner.
 
 Admin-Passwort und die freizugebende IP liegen lokal in
 `infrastructure/postgres.auto.tfvars.json`, weitere private Werte in
@@ -165,11 +169,10 @@ nichts verändert:
 .\.venv\Scripts\python.exe scripts/check_azure_postgres.py
 ```
 
-Die App-Rolle in Azure einrichten beziehungsweise aktualisieren:
-
-Der bisherige gemeinsame Zugang bleibt in F09 zunächst erhalten. Getrennte
-Worker-/Review-/Hybrid-Zugänge, Rechte-Matrix und der Ablauf mit zwei Etappen
-stehen in [runtime-access.md](runtime-access.md). Nicht vor deren Abnahme umschalten.
+Den gemeinsamen Zugang nur für die Ersteinrichtung im Modus `legacy` anlegen.
+Getrennte Worker-/Review-/Hybrid-Zugänge, Rechte-Matrix und der Ablauf mit zwei Etappen
+stehen in [runtime-access.md](runtime-access.md). Nach `split` deren Wartungsweg
+verwenden, nicht den folgenden alten App-Rollen-Befehl erneut ausführen.
 
 ```powershell
 .\.venv\Scripts\python.exe scripts/create_app_role.py --azure
@@ -375,9 +378,9 @@ Anmeldung, RBAC und TLS, nicht an der Netzwerkgrenze.
 | Ressource | Eigentlicher Zugriffsschutz |
 | --- | --- |
 | Review-Container-App | Easy Auth (Entra ID), nur das eigene Konto; öffentlich erst nach der Anmeldekonfiguration, jeder Deploy prüft den Zugriff ohne Login (`review.tf`) |
-| PostgreSQL | TLS mit `sslmode=verify-full` und das Passwort der Rolle `jobfinder_app`; Firewall: Azure-Dienste (`0.0.0.0`, jede Subscription) und `local-review` |
+| PostgreSQL | TLS mit `sslmode=verify-full`, eingeschränkte DB-Rollen und deren Passwort oder nach gesonderter Entra-Abnahme Token; Firewall: Azure-Dienste (`0.0.0.0`, jede Subscription) und `local-review` |
 | Blob Storage | RBAC, Kontoschlüssel abgeschaltet; Schreibrechte nur auf `application-documents` |
-| Key Vault | RBAC: `Key Vault Secrets User` für Worker und Review, `Secrets Officer` nur für das eigene Konto |
+| Key Vault | RBAC: in `split` hat jede Laufzeit nur `Key Vault Secrets User` auf ihren benötigten Secrets; `Secrets Officer` nur für das eigene Konto |
 | Azure OpenAI | RBAC ohne API-Schlüssel: Worker, Hybrid-Lauf und das eigene Konto mit `Cognitive Services OpenAI User` |
 | Container Registry | RBAC, `admin_enabled = false` |
 | Worker (Container Apps Job) | kein Ingress, nur ausgehend |

@@ -20,6 +20,12 @@ mock_provider "azurerm" {
   mock_resource "azurerm_storage_container" {
     defaults = { id = "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/example/providers/Microsoft.Storage/storageAccounts/example/blobServices/default/containers/application-documents" }
   }
+  mock_resource "azurerm_postgresql_flexible_server" {
+    defaults = {
+      id   = "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/example/providers/Microsoft.DBforPostgreSQL/flexibleServers/example"
+      fqdn = "example.postgres.database.azure.com"
+    }
+  }
   override_resource {
     target = azurerm_user_assigned_identity.jobfinder
     values = {
@@ -120,4 +126,146 @@ run "split_removes_shared_capabilities" {
     )
     error_message = "Die echten Container-Bindungen müssen zur getrennten Identität und DB-Rolle zeigen."
   }
+}
+
+run "password_auth_keeps_existing_container_access" {
+  command = plan
+  variables {
+    runtime_identity_phase  = "split"
+    runtime_access_verified = true
+  }
+  assert {
+    condition = (
+      azurerm_postgresql_flexible_server.jobfinder.authentication[0].password_auth_enabled &&
+      !azurerm_postgresql_flexible_server.jobfinder.authentication[0].active_directory_auth_enabled &&
+      length(azurerm_postgresql_flexible_server_active_directory_administrator.owner) == 0 &&
+      length(azurerm_role_assignment.keyvault_worker_secret) == 5 &&
+      length(azurerm_role_assignment.keyvault_review_secret) == 3 &&
+      one([for env in azurerm_container_app_job.finder.template[0].container[0].env : env.secret_name if env.name == "JOBFINDER_DATABASE_URL"]) == "jobfinder-database-url" &&
+      !contains([for env in azurerm_container_app_job.finder.template[0].container[0].env : env.name], "JOBFINDER_DATABASE_AUTH") &&
+      !contains([for env in azurerm_container_app.review.template[0].container[0].env : env.name], "JOBFINDER_DATABASE_AUTH")
+    )
+    error_message = "Ein Merge darf ohne F10-Freigabe keine Anmeldung oder Secret-Verweise umschalten."
+  }
+}
+
+run "entra_prepare_preserves_password_runtimes" {
+  command = plan
+  variables {
+    runtime_identity_phase    = "split"
+    runtime_access_verified   = true
+    database_auth_phase       = "prepare"
+    postgres_entra_admin_name = "owner@example.test"
+  }
+  assert {
+    condition = (
+      azurerm_postgresql_flexible_server.jobfinder.authentication[0].password_auth_enabled &&
+      azurerm_postgresql_flexible_server.jobfinder.authentication[0].active_directory_auth_enabled &&
+      azurerm_postgresql_flexible_server.jobfinder.authentication[0].tenant_id == "00000000-0000-0000-0000-000000000001" &&
+      length(azurerm_postgresql_flexible_server_active_directory_administrator.owner) == 1 &&
+      azurerm_postgresql_flexible_server_active_directory_administrator.owner[0].principal_type == "User" &&
+      azurerm_postgresql_flexible_server_active_directory_administrator.owner[0].object_id == var.owner_object_id &&
+      length(azurerm_role_assignment.keyvault_worker_secret) == 5 &&
+      length(azurerm_role_assignment.keyvault_review_secret) == 3 &&
+      one([for secret in azurerm_container_app_job.finder.secret : secret.key_vault_secret_id if secret.name == "jobfinder-database-url"]) == "https://example.vault.azure.net/secrets/JobfinderWorkerDatabaseUrl" &&
+      one([for secret in azurerm_container_app.review.secret : secret.key_vault_secret_id if secret.name == "jobfinder-database-url"]) == "https://example.vault.azure.net/secrets/JobfinderReviewDatabaseUrl" &&
+      !contains([for env in azurerm_container_app.review.template[0].container[0].env : env.name], "JOBFINDER_DATABASE_AUTH")
+    )
+    error_message = "prepare muss Entra ergänzen und beide bisherigen Laufzeitzugänge erhalten."
+  }
+  assert {
+    condition = (
+      output.entra_principals.worker == azurerm_user_assigned_identity.jobfinder.principal_id &&
+      output.entra_principals.review == azurerm_user_assigned_identity.review[0].principal_id &&
+      output.entra_principals.hybrid == var.local_docker_sp_object_id &&
+      output.entra_database_urls.hybrid == "postgresql://jobfinder_hybrid_entra@example.postgres.database.azure.com:5432/jobfinder?sslmode=verify-full&sslrootcert=/etc/ssl/certs/ca-certificates.crt"
+    )
+    error_message = "Einrichtungsoutputs müssen die eigenen Object-IDs und passwortfreien Rollen liefern."
+  }
+}
+
+run "entra_requires_f09_split" {
+  command = plan
+  variables {
+    database_auth_phase       = "prepare"
+    postgres_entra_admin_name = "owner@example.test"
+  }
+  expect_failures = [var.database_auth_phase]
+}
+
+run "entra_requires_explicit_admin" {
+  command = plan
+  variables {
+    runtime_identity_phase  = "split"
+    runtime_access_verified = true
+    database_auth_phase     = "prepare"
+  }
+  expect_failures = [var.postgres_entra_admin_name]
+}
+
+run "entra_requires_azure_acceptance" {
+  command = plan
+  variables {
+    runtime_identity_phase    = "split"
+    runtime_access_verified   = true
+    database_auth_phase       = "entra"
+    postgres_entra_admin_name = "owner@example.test"
+  }
+  expect_failures = [var.database_entra_verified]
+}
+
+run "runtime_identity_cannot_be_database_admin" {
+  command = plan
+  variables {
+    runtime_identity_phase    = "split"
+    runtime_access_verified   = true
+    database_auth_phase       = "prepare"
+    postgres_entra_admin_name = "owner@example.test"
+    owner_object_id           = "00000000-0000-0000-0000-000000000004"
+  }
+  expect_failures = [azurerm_postgresql_flexible_server_active_directory_administrator.owner[0]]
+}
+
+run "accepted_entra_switches_only_database_credentials" {
+  command = plan
+  variables {
+    runtime_identity_phase    = "split"
+    runtime_access_verified   = true
+    database_auth_phase       = "entra"
+    database_entra_verified   = true
+    postgres_entra_admin_name = "owner@example.test"
+  }
+  assert {
+    condition = (
+      azurerm_postgresql_flexible_server.jobfinder.authentication[0].password_auth_enabled &&
+      length(azurerm_role_assignment.keyvault_worker_secret) == 4 &&
+      length(azurerm_role_assignment.keyvault_review_secret) == 2 &&
+      !contains(keys(azurerm_role_assignment.keyvault_worker_secret), "JobfinderWorkerDatabaseUrl") &&
+      !contains(keys(azurerm_role_assignment.keyvault_review_secret), "JobfinderReviewDatabaseUrl") &&
+      !contains([for secret in azurerm_container_app_job.finder.secret : secret.name], "jobfinder-database-url") &&
+      !contains([for secret in azurerm_container_app.review.secret : secret.name], "jobfinder-database-url") &&
+      one([for env in azurerm_container_app_job.finder.template[0].container[0].env : env.value if env.name == "JOBFINDER_DATABASE_URL"]) == output.entra_database_urls.worker &&
+      one([for env in azurerm_container_app.review.template[0].container[0].env : env.value if env.name == "JOBFINDER_DATABASE_URL"]) == output.entra_database_urls.review &&
+      one([for env in azurerm_container_app_job.finder.template[0].container[0].env : env.value if env.name == "JOBFINDER_DATABASE_AUTH"]) == "managed_identity" &&
+      one([for env in azurerm_container_app.review.template[0].container[0].env : env.value if env.name == "JOBFINDER_DATABASE_AUTH"]) == "managed_identity" &&
+      one([for env in azurerm_container_app_job.finder.template[0].container[0].env : env.value if env.name == "JOBFINDER_MANAGED_IDENTITY_CLIENT_ID"]) == azurerm_user_assigned_identity.jobfinder.client_id &&
+      one([for env in azurerm_container_app.review.template[0].container[0].env : env.value if env.name == "JOBFINDER_MANAGED_IDENTITY_CLIENT_ID"]) == azurerm_user_assigned_identity.review[0].client_id &&
+      length(azurerm_role_assignment.storage_blob_data_contributor) == 0 &&
+      length(azurerm_role_assignment.storage_blob_data_contributor_review) == 1
+    )
+    error_message = "entra muss nur DB-Zugänge umschalten, eigene MIs verwenden und F09-Rechte erhalten."
+  }
+}
+
+run "runtime_admin_guard_ignores_uuid_case" {
+  command = plan
+  variables {
+    runtime_identity_phase    = "split"
+    runtime_access_verified   = true
+    database_auth_phase       = "prepare"
+    postgres_entra_admin_name = "owner@example.test"
+    local_docker_sp_object_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+    owner_object_id           = "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA"
+  }
+  expect_failures = [azurerm_postgresql_flexible_server_active_directory_administrator.owner[0]]
 }

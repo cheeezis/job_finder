@@ -63,7 +63,7 @@ def jobs_from_records(records, cache_path):
 def with_current_summary(cached_job, summary):
     """Keep cached detail text but refresh fields exposed by the search API."""
     known = summary.work_mode is not WorkMode.UNKNOWN
-    return refresh_summary(
+    job = refresh_summary(
         cached_job,
         summary,
         work_mode=summary.work_mode if known else cached_job.work_mode,
@@ -71,6 +71,8 @@ def with_current_summary(cached_job, summary):
         employment_type=summary.employment_type or cached_job.employment_type,
         published_at=summary.published_at or cached_job.published_at,
     )
+    job.company = normalize_employer(job.company)
+    return job
 
 
 def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE, now=None):
@@ -165,7 +167,12 @@ def clean_title(title):
 
 def employer(record):
     """Return the company of a record, or "" when StudySmarter names the board it took the ad from."""
-    company = str(record.get("company_name") or "").strip()
+    return normalize_employer(record.get("company_name"))
+
+
+def normalize_employer(value):
+    """Apply the same board-name rule to API summaries, cached jobs and detail pages."""
+    company = str(value or "").strip()
     return "" if company.casefold() in BOARD_NAMES else company
 
 
@@ -198,6 +205,7 @@ def summary_job_from_record(record):
 def enrich_summary_job(summary, html):
     """Replace one lightweight job with structured detail-page content."""
     job = job_from_json_ld(SOURCE_NAME, summary.company, summary.primary_url, html)
+    job.company = normalize_employer(job.company) or normalize_employer(summary.company)
     job.id = summary.id
     job.sources[0].source_id = summary.primary_source.source_id
     if summary.work_mode is WorkMode.REMOTE:

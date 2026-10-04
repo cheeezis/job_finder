@@ -2,7 +2,8 @@
 
 import tempfile
 import unittest
-from datetime import UTC, datetime
+from copy import deepcopy
+from datetime import UTC, date, datetime
 from pathlib import Path
 from unittest.mock import patch
 from urllib.error import HTTPError
@@ -10,6 +11,7 @@ from urllib.error import HTTPError
 from job_finder.models import WorkflowStatus, WorkMode
 from job_finder.sources import studysmarter
 from job_finder.sources.common import fetch_diagnostics, load_detail_cache, reset_fetch_diagnostics, save_detail_cache
+from job_finder.workflow.memory import update_memory
 
 
 class StudySmarterTests(unittest.TestCase):
@@ -138,6 +140,130 @@ class StudySmarterTests(unittest.TestCase):
             with self.subTest(company=company):
                 record = {"id": 1, "link": self.JOB_URL, "title": "Junior Developer", "company_name": company}
                 self.assertEqual(studysmarter.summary_job_from_record(record).company, expected)
+
+    def test_cached_board_employer_stays_unknown_without_refetching_details(self):
+        for board in (" JOIN ", "Arbeitsagentur", "rEmOtElY"):
+            with self.subTest(board=board), tempfile.TemporaryDirectory() as directory:
+                record = {
+                    "id": 12345678,
+                    "link": self.JOB_URL,
+                    "title": "Junior Python Developer (m/w/d)",
+                    "company_name": board,
+                    "locations": ["Fulda"],
+                }
+                cached = studysmarter.enrich_summary_job(studysmarter.summary_job_from_record(record), self.JOB_HTML)
+                cached.company = board
+                cached.fetched_at = datetime(2026, 8, 25, tzinfo=UTC)
+                original = deepcopy(cached)
+                cache_path = Path(directory) / "studysmarter.json"
+                save_detail_cache(cache_path, {self.JOB_URL: cached})
+                with patch.object(studysmarter, "fetch_text") as fetch:
+                    jobs = studysmarter.jobs_from_records([record], cache_path)
+                    enriched = studysmarter.enrich_candidate_jobs(
+                        jobs, {jobs[0].id}, cache_path, now=datetime(2026, 8, 27, tzinfo=UTC)
+                    )
+                self.assertEqual(jobs[0].company, "")
+                self.assertEqual(jobs[0].description_clean, original.description_clean)
+                self.assertEqual(jobs[0].fetched_at, original.fetched_at)
+                self.assertEqual(enriched, 0)
+                fetch.assert_not_called()
+
+    def test_unknown_summary_keeps_a_known_cached_employer(self):
+        for company in ("", "JOIN", "Arbeitsagentur", "Remotely"):
+            with self.subTest(company=company):
+                record = {"id": 12345678, "link": self.JOB_URL, "company_name": company}
+                summary = studysmarter.summary_job_from_record(record)
+                cached = studysmarter.enrich_summary_job(summary, self.JOB_HTML)
+                refreshed = studysmarter.with_current_summary(cached, summary)
+                self.assertEqual(refreshed.company, "Example GmbH")
+                self.assertEqual(refreshed.description_clean, cached.description_clean)
+
+    def test_detail_board_employer_uses_known_summary_or_stays_unknown(self):
+        for board in ("JOIN", "Arbeitsagentur", "Remotely"):
+            for summary_company, expected in ((board, ""), ("Example GmbH", "Example GmbH")):
+                with self.subTest(board=board, summary_company=summary_company):
+                    record = {"id": 12345678, "link": self.JOB_URL, "company_name": summary_company}
+                    html = self.JOB_HTML.replace('"name": "Example GmbH"', f'"name": "{board}"')
+                    job = studysmarter.enrich_summary_job(studysmarter.summary_job_from_record(record), html)
+                    self.assertEqual(job.company, expected)
+                    self.assertIn("Entwicklung mit Python", job.description_clean)
+
+    def test_fresh_details_keep_board_names_out_of_the_saved_cache(self):
+        record = {
+            "id": 12345678,
+            "link": self.JOB_URL,
+            "title": "Junior Python Developer (m/w/d)",
+            "company_name": "JOIN",
+            "locations": ["Fulda"],
+        }
+        html = self.JOB_HTML.replace('"name": "Example GmbH"', '"name": "JOIN"')
+        jobs = [studysmarter.summary_job_from_record(record)]
+        with tempfile.TemporaryDirectory() as directory:
+            cache_path = Path(directory) / "studysmarter.json"
+            with patch.object(studysmarter, "fetch_text", return_value=html) as fetch:
+                enriched = studysmarter.enrich_candidate_jobs(jobs, {jobs[0].id}, cache_path)
+            cache = load_detail_cache(cache_path)
+            next_jobs = studysmarter.jobs_from_records([record], cache_path)
+        self.assertEqual(enriched, 1)
+        fetch.assert_called_once_with(self.JOB_URL)
+        self.assertEqual(jobs[0].company, "")
+        self.assertEqual(cache[self.JOB_URL].company, "")
+        self.assertEqual(next_jobs[0].company, "")
+
+    def test_cached_board_listing_respects_application_history_and_repost_window(self):
+        for status, previous_date, expected_merge in (
+            (WorkflowStatus.INTERVIEW, date(2026, 6, 1), True),
+            (WorkflowStatus.REJECTED, date(2026, 7, 26), True),
+            (WorkflowStatus.REJECTED, date(2026, 7, 25), False),
+        ):
+            with self.subTest(status=status, previous_date=previous_date), tempfile.TemporaryDirectory() as directory:
+                record = {
+                    "id": 12345678,
+                    "link": self.JOB_URL,
+                    "title": "Junior Python Developer (m/w/d)",
+                    "company_name": "JOIN",
+                    "locations": ["Fulda"],
+                    "posted": "2026-08-25",
+                }
+                cached = studysmarter.enrich_summary_job(studysmarter.summary_job_from_record(record), self.JOB_HTML)
+                cached.company = "JOIN"
+                cached.fetched_at = datetime(2026, 8, 25, tzinfo=UTC)
+                cache_path = Path(directory) / "studysmarter.json"
+                save_detail_cache(cache_path, {self.JOB_URL: cached})
+                application = {
+                    "title": record["title"],
+                    "company": "Example GmbH",
+                    "locations": ["Fulda"],
+                    "workflow_status": status.value,
+                    "published_at": previous_date.isoformat(),
+                    "first_seen_at": previous_date.isoformat(),
+                    "source_names": ["manual"],
+                    "source_urls": ["https://example.test/application"],
+                    "workflow_history": [{"status": status.value, "occurred_on": previous_date.isoformat()}],
+                    "review_note": "Keep this note",
+                    "application_documents": [{"id": "resume", "kind": "resume"}],
+                }
+                memory = {
+                    "manual:application": deepcopy(application),
+                    "studysmarter:12345678": {
+                        "title": record["title"],
+                        "company": "JOIN",
+                        "locations": ["Fulda"],
+                        "workflow_status": "new",
+                        "first_seen_at": "2026-08-25T00:00:00+00:00",
+                        "source_names": ["studysmarter"],
+                        "source_urls": [self.JOB_URL],
+                    },
+                }
+                jobs = studysmarter.jobs_from_records([record], cache_path)
+                update_memory(jobs, memory)
+                self.assertEqual(jobs[0].id, "manual:application" if expected_merge else "studysmarter:12345678")
+                self.assertEqual("studysmarter:12345678" not in memory, expected_merge)
+                if not expected_merge:
+                    self.assertEqual(memory["studysmarter:12345678"]["workflow_status"], "new")
+                    self.assertEqual(memory["studysmarter:12345678"]["company"], "")
+                for key in ("company", "workflow_status", "workflow_history", "review_note", "application_documents"):
+                    self.assertEqual(memory["manual:application"][key], application[key])
 
     def test_job_import_uses_remote_flag_and_ignores_predicted_salary(self):
         record = {

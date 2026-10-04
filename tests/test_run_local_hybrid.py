@@ -141,6 +141,37 @@ class LocalHybridRunTests(unittest.TestCase):
         self.assertEqual(full["JOBFINDER_PROFILE"], "profil: ja\n")
         self.assertIn("sslrootcert=/etc/ssl/certs/ca-certificates.crt", full["JOBFINDER_DATABASE_URL"])
 
+    def test_separate_hybrid_credentials_require_explicit_activation_and_readiness(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            (project / ".env.postgres-azure").write_text(
+                "JOBFINDER_DATABASE_URL=postgresql://legacy@db.test/jobfinder\n", encoding="utf-8"
+            )
+            (project / ".env.docker-local").write_text(
+                "AZURE_CLIENT_ID=c\nAZURE_TENANT_ID=t\nAZURE_CLIENT_SECRET=s\n", encoding="utf-8"
+            )
+            path = project / ".env.runtime-azure"
+            credentials = "JOBFINDER_HYBRID_DATABASE_URL=postgresql://hybrid@db.test/jobfinder?sslrootcert=C:/ca.pem\n"
+            with patch.object(self.script, "PROJECT_DIR", project):
+                path.write_text(
+                    credentials + "JOBFINDER_RUNTIME_CREDENTIALS_READY=1\nJOBFINDER_RUNTIME_ACCESS=legacy\n",
+                    encoding="utf-8",
+                )
+                self.assertIn("legacy@", self.script.container_environment()["JOBFINDER_DATABASE_URL"])
+                path.write_text(
+                    credentials + "JOBFINDER_RUNTIME_CREDENTIALS_READY=0\nJOBFINDER_RUNTIME_ACCESS=split\n",
+                    encoding="utf-8",
+                )
+                with self.assertRaises(self.script.RunFailed):
+                    self.script.container_environment()
+                path.write_text(
+                    credentials + "JOBFINDER_RUNTIME_CREDENTIALS_READY=1\nJOBFINDER_RUNTIME_ACCESS=split\n",
+                    encoding="utf-8",
+                )
+                activated = self.script.container_environment()
+                self.assertIn("hybrid@", activated["JOBFINDER_DATABASE_URL"])
+                self.assertIn("sslrootcert=/etc/ssl/certs/ca-certificates.crt", activated["JOBFINDER_DATABASE_URL"])
+
     def test_logs_older_than_two_weeks_are_removed(self):
         now = datetime(2026, 9, 26, 10, 0)
         ages = {"hybrid-20260911-100000.log": 15, "hybrid-20260920-100000.log": 6}

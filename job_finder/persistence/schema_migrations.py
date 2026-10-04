@@ -18,6 +18,7 @@ from sqlalchemy.pool import NullPool
 
 from job_finder.persistence.database import admin_database_url
 from job_finder.persistence.migrations.baseline import legacy_metadata, metadata
+from job_finder.persistence.migrations.runtime_boundaries import REVISION as BOUNDARIES_REVISION, rendered_predicate
 
 BASELINE_REVISION = "0001_baseline"
 
@@ -70,7 +71,7 @@ def _application_object(obj, name, kind, reflected, compared):
     return kind != "table" or name != "alembic_version"
 
 
-def validate_baseline(connection):
+def validate_baseline(connection, *, runtime_boundaries=False):
     """Check types, nullability, defaults, keys, indexes and checks without altering rows."""
     inspector = sa.inspect(connection)
     expected = sa.MetaData()
@@ -119,16 +120,33 @@ def validate_baseline(connection):
         differences.append(("unexpected_view",))
     custom_behavior = connection.exec_driver_sql(
         "SELECT EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace "
-        "WHERE n.nspname='public' AND (c.relrowsecurity OR c.relforcerowsecurity OR c.relkind='p' "
+        "WHERE n.nspname='public' AND ((c.relrowsecurity AND c.relname <> %s) OR c.relforcerowsecurity OR c.relkind='p' "
         "OR EXISTS (SELECT 1 FROM pg_trigger t WHERE t.tgrelid=c.oid AND NOT t.tgisinternal) "
         "OR EXISTS (SELECT 1 FROM pg_constraint con WHERE con.conrelid=c.oid AND NOT con.convalidated) "
-        "OR EXISTS (SELECT 1 FROM pg_index i WHERE i.indrelid=c.oid AND (NOT i.indisvalid OR NOT i.indisready))))"
+        "OR EXISTS (SELECT 1 FROM pg_index i WHERE i.indrelid=c.oid AND (NOT i.indisvalid OR NOT i.indisready))))",
+        ("datasets" if runtime_boundaries else "",),
     ).scalar()
     if custom_behavior:
         differences.append(("unexpected_table_behavior",))
     if differences:
         # Never stringify reflected objects or defaults: they may contain private data.
         raise RuntimeError("PostgreSQL-Struktur weicht von der Baseline ab; keine Migration oder Übernahme ausgeführt.")
+    if runtime_boundaries:
+        policies = connection.exec_driver_sql(
+            "SELECT c.relrowsecurity,p.polname,p.polpermissive,p.polcmd,p.polroles,"
+            "pg_get_expr(p.polqual,p.polrelid),pg_get_expr(p.polwithcheck,p.polrelid) "
+            "FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace "
+            "LEFT JOIN pg_policy p ON p.polrelid=c.oid WHERE n.nspname='public' AND c.relname='datasets'"
+        ).fetchall()
+        expected = _sql_shape(rendered_predicate())
+        if (
+            len(policies) != 1
+            or tuple(policies[0][:5]) != (True, "runtime_datasets", True, "*", [0])
+            or any(_sql_shape(value) != expected for value in policies[0][5:])
+        ):
+            raise RuntimeError(
+                "PostgreSQL-Struktur: F09-Datensatzgrenze fehlt oder weicht ab; keine automatische Reparatur."
+            )
     version = connection.exec_driver_sql("SELECT version FROM public.schema_version").fetchall()
     if version != [(2,)]:
         raise RuntimeError("Nicht unterstützte PostgreSQL-Schemaversion; keine Übernahme ausgeführt.")
@@ -161,8 +179,8 @@ def _status(connection):
             script.get_revision(revision)
         except (ResolutionError, CommandError):
             raise RuntimeError("Unbekannter PostgreSQL-Migrationsstand; passendes Release erforderlich.") from None
-        if revision == BASELINE_REVISION:
-            validate_baseline(connection)
+        if revision in {BASELINE_REVISION, BOUNDARIES_REVISION}:
+            validate_baseline(connection, runtime_boundaries=revision == BOUNDARIES_REVISION)
         return {"state": "current" if revision == head else "outdated", "revision": revision, "head": head}
     if (
         not tables

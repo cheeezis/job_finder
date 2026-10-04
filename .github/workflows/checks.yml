@@ -203,6 +203,8 @@ jobs:
       - run: terraform fmt -check
       - run: terraform init -input=false
       - run: terraform validate
+      # Nur simulierte Provider; unabhängig von Azure-State und echten Secrets.
+      - run: terraform test -no-color
       - run: terraform plan -input=false -lock=false -refresh=false
         env:
           TF_VAR_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
@@ -210,6 +212,8 @@ jobs:
           TF_VAR_postgres_client_ipv4: ${{ secrets.POSTGRES_CLIENT_IPV4 }}
           TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
           TF_VAR_review_fqdn: ${{ secrets.REVIEW_FQDN }}
+          TF_VAR_runtime_identity_phase: ${{ vars.RUNTIME_IDENTITY_PHASE || 'legacy' }}
+          TF_VAR_runtime_access_verified: ${{ vars.RUNTIME_ACCESS_VERIFIED || 'false' }}
 
   # Baut das Image schon im Pull Request, startet es kurz als Probe und prüft
   # es auf bekannte Lücken; ein kaputtes Dockerfile fällt so vor dem Merge auf.
@@ -328,6 +332,8 @@ jobs:
           TF_VAR_postgres_client_ipv4: ${{ secrets.POSTGRES_CLIENT_IPV4 }}
           TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
           TF_VAR_review_fqdn: ${{ secrets.REVIEW_FQDN }}
+          TF_VAR_runtime_identity_phase: ${{ vars.RUNTIME_IDENTITY_PHASE || 'legacy' }}
+          TF_VAR_runtime_access_verified: ${{ vars.RUNTIME_ACCESS_VERIFIED || 'false' }}
       # Terraform ignoriert das Image (lifecycle.ignore_changes); die
       # App-Version wird ausschließlich hier gesetzt.
       - name: Image ausrollen

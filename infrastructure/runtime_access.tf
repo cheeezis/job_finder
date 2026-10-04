@@ -30,12 +30,12 @@ locals {
   )
   worker_database_secret = local.runtime_split ? "JobfinderWorkerDatabaseUrl" : "JobfinderDatabaseUrl"
   review_database_secret = local.runtime_split ? "JobfinderReviewDatabaseUrl" : "JobfinderDatabaseUrl"
-  worker_secret_names = toset(local.runtime_prepared ? [
+  worker_secret_names = toset(local.runtime_prepared ? [for name in [
     "DiscordWebhookUrl", "StartupJobsApiKey", "JobfinderWorkerDatabaseUrl", "JobfinderUserSettings", "JobfinderProfile",
-  ] : [])
-  review_secret_names = toset(local.runtime_prepared ? [
+  ] : name if !local.database_entra_active || name != "JobfinderWorkerDatabaseUrl"] : [])
+  review_secret_names = toset(local.runtime_prepared ? [for name in [
     "JobfinderReviewDatabaseUrl", "ReviewAadClientSecret", "JobfinderUserSettings",
-  ] : [])
+  ] : name if !local.database_entra_active || name != "JobfinderReviewDatabaseUrl"] : [])
 }
 
 # Die bisherige Identität bleibt beim Worker; kein Austausch eines laufenden Principals.

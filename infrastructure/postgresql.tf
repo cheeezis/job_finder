@@ -17,15 +17,16 @@ resource "azurerm_postgresql_flexible_server" "jobfinder" {
   geo_redundant_backup_enabled  = false
   public_network_access_enabled = true
 
-  # Nur für Einrichtung/Verwaltung; Worker und Review nutzen die eingeschränkte
-  # Rolle jobfinder_app. Das lokale Secret bleibt außerhalb von Git.
+  # Nur für Einrichtung/Verwaltung; Laufzeiten verwenden eigene eingeschränkte
+  # Rollen. Dieser administrative Rückkehrweg bleibt während Entra erhalten.
   administrator_login               = "jobfinder_admin"
   administrator_password_wo         = var.postgres_admin_password
   administrator_password_wo_version = 1
 
   authentication {
     password_auth_enabled         = true
-    active_directory_auth_enabled = false
+    active_directory_auth_enabled = local.database_entra_prepared
+    tenant_id                     = local.database_entra_prepared ? data.azurerm_client_config.current.tenant_id : null
   }
 
   # Azure wählt die verfügbare Zone bei der Erstellung. Diese Wahl beibehalten,
@@ -53,8 +54,8 @@ resource "azurerm_postgresql_flexible_server_firewall_rule" "local_review" {
 # Zugriff bräuchte eine neu angelegte, VNet-integrierte Umgebung mit Private
 # Endpoint und ist für diesen Umfang bewusst nicht umgesetzt; die Abwägung steht
 # in docs/operations.md. Start/End 0.0.0.0 ist Azures Sonderwert für "beliebiger
-# Azure-Dienst", nicht nur diese Subscription. TLS (verify-full) und das
-# eingeschränkte jobfinder_app-Passwort bleiben die eigentliche Zugriffsschranke.
+# Azure-Dienst", nicht nur diese Subscription. TLS (verify-full) und
+# die getrennten Rollen mit Passwort/Token bleiben die Zugriffsschranke.
 resource "azurerm_postgresql_flexible_server_firewall_rule" "allow_azure_services" {
   name             = "allow-azure-services"
   server_id        = azurerm_postgresql_flexible_server.jobfinder.id

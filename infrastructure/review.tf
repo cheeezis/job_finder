@@ -18,10 +18,13 @@ resource "azurerm_container_app" "review" {
   }
 
   # Verweise auf Key-Vault-Adressen, nie auf die Werte selbst.
-  secret {
-    name                = "jobfinder-database-url"
-    key_vault_secret_id = "${azurerm_key_vault.jobfinder.vault_uri}secrets/${local.review_database_secret}"
-    identity            = local.review_identity
+  dynamic "secret" {
+    for_each = local.database_entra_active ? [] : [1]
+    content {
+      name                = "jobfinder-database-url"
+      key_vault_secret_id = "${azurerm_key_vault.jobfinder.vault_uri}secrets/${local.review_database_secret}"
+      identity            = local.review_identity
+    }
   }
   secret {
     name                = "aad-client-secret"
@@ -70,7 +73,15 @@ resource "azurerm_container_app" "review" {
       }
       env {
         name        = "JOBFINDER_DATABASE_URL"
-        secret_name = "jobfinder-database-url"
+        secret_name = local.database_entra_active ? null : "jobfinder-database-url"
+        value       = local.database_entra_active ? local.entra_database_urls.review : null
+      }
+      dynamic "env" {
+        for_each = local.database_entra_active ? [1] : []
+        content {
+          name  = "JOBFINDER_DATABASE_AUTH"
+          value = "managed_identity"
+        }
       }
       env {
         name        = "JOBFINDER_USER_SETTINGS"

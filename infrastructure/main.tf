@@ -119,10 +119,13 @@ resource "azurerm_container_app_job" "finder" {
     key_vault_secret_id = "${azurerm_key_vault.jobfinder.vault_uri}secrets/StartupJobsApiKey"
     identity            = azurerm_user_assigned_identity.jobfinder.id
   }
-  secret {
-    name                = "jobfinder-database-url"
-    key_vault_secret_id = "${azurerm_key_vault.jobfinder.vault_uri}secrets/${local.worker_database_secret}"
-    identity            = azurerm_user_assigned_identity.jobfinder.id
+  dynamic "secret" {
+    for_each = local.database_entra_active ? [] : [1]
+    content {
+      name                = "jobfinder-database-url"
+      key_vault_secret_id = "${azurerm_key_vault.jobfinder.vault_uri}secrets/${local.worker_database_secret}"
+      identity            = azurerm_user_assigned_identity.jobfinder.id
+    }
   }
   # Persönliche Sucheinstellungen (Inhalt von user_settings.local.yaml); sie
   # gehören weder ins öffentliche Repo noch ins Image.
@@ -192,7 +195,15 @@ resource "azurerm_container_app_job" "finder" {
 
       env {
         name        = "JOBFINDER_DATABASE_URL"
-        secret_name = "jobfinder-database-url"
+        secret_name = local.database_entra_active ? null : "jobfinder-database-url"
+        value       = local.database_entra_active ? local.entra_database_urls.worker : null
+      }
+      dynamic "env" {
+        for_each = local.database_entra_active ? [1] : []
+        content {
+          name  = "JOBFINDER_DATABASE_AUTH"
+          value = "managed_identity"
+        }
       }
       env {
         name        = "JOBFINDER_USER_SETTINGS"

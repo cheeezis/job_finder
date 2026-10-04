@@ -21,7 +21,7 @@ variable "runtime_access_verified" {
 
 locals {
   runtime_prepared = var.runtime_identity_phase != "legacy"
-  runtime_split    = var.runtime_identity_phase == "split"
+  runtime_split    = var.runtime_identity_phase == "split" && var.runtime_access_verified
   review_identity  = local.runtime_split ? azurerm_user_assigned_identity.review[0].id : azurerm_user_assigned_identity.jobfinder.id
   review_client_id = local.runtime_split ? azurerm_user_assigned_identity.review[0].client_id : azurerm_user_assigned_identity.jobfinder.client_id
   review_identity_ids = local.runtime_split ? [azurerm_user_assigned_identity.review[0].id] : concat(

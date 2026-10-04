@@ -147,6 +147,8 @@ verwenden denselben Migrationspfad. Es gibt keine automatische Migration beim Ap
    IDs, Erstfund-Merkmale und bestehende Workflow-Entscheidungen zuordnet.
    Alte Portalnamen im Arbeitgeberfeld von StudySmarter-Einträgen werden dabei
    entfernt, auch wenn die Anzeige in diesem Lauf nicht erneut gefunden wurde.
+   Der StudySmarter-Adapter entfernt solche Platzhalter auch aus wiederverwendeten
+   Detail-Caches und frisch geladenen Detailseiten, bevor sie das Gedächtnis erreichen.
    Tatsächliche Arbeitgebernamen und manuelle Entscheidungen bleiben erhalten.
    Anzeigen mit gleichem Titel und passender Firma erhalten dabei dieselbe ID,
    auch über Portale und Läufe hinweg; eine schon entschiedene Stelle nur ohne

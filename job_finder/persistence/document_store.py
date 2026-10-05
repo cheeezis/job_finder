@@ -6,6 +6,7 @@ so local development and tests never require Azure credentials.
 """
 
 import os
+import tempfile
 from pathlib import Path
 
 from job_finder.paths import APPLICATION_DOCUMENTS_DIR
@@ -43,25 +44,50 @@ def _blob_container():
     return _container_client
 
 
-def write(key, content, root=APPLICATION_DOCUMENTS_DIR):
-    """Store bytes under key; atomic on the local backend, overwrite on blob."""
+def write(key, content, root=APPLICATION_DOCUMENTS_DIR, *, overwrite=True):
+    """Publish complete bytes and return their Blob version; create-only is optional."""
     if _backend() == "blob":
-        _blob_container().upload_blob(key, content, overwrite=True)
-        return
+        client = _blob_container().get_blob_client(key)
+        receipt = client.upload_blob(content, overwrite=overwrite)
+        version = receipt.get("version_id")
+        if not isinstance(version, str) or not version:
+            # A successful create-only upload belongs to us, but only remove
+            # those exact bytes if the response contains their ETag.
+            if not overwrite and receipt.get("etag"):
+                from azure.core import MatchConditions
+
+                client.delete_blob(etag=receipt["etag"], match_condition=MatchConditions.IfNotModified)
+            raise RuntimeError("Blob-Versionierung fehlt; Dokument wird nicht als Bewerbung gespeichert.")
+        return version
     path = Path(root) / key
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(path.name + ".tmp")
-    temporary.write_bytes(content)
-    temporary.replace(path)
+    with tempfile.NamedTemporaryFile(dir=path.parent, prefix="jobfinder-", suffix=".tmp", delete=False) as output:
+        temporary = Path(output.name)
+        try:
+            output.write(content)
+        except BaseException:
+            output.close()
+            temporary.unlink(missing_ok=True)
+            raise
+    try:
+        if overwrite:
+            temporary.replace(path)
+        else:
+            # Publishing a hardlink is atomic and fails if the destination
+            # already exists. Never replace a concurrent writer's file.
+            path.hardlink_to(temporary)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return None
 
 
-def read(key, root=APPLICATION_DOCUMENTS_DIR):
+def read(key, root=APPLICATION_DOCUMENTS_DIR, *, version_id=None):
     """Return the bytes stored under key; FileNotFoundError if absent, either backend."""
     if _backend() == "blob":
         from azure.core.exceptions import ResourceNotFoundError
 
         try:
-            return _blob_container().download_blob(key).readall()
+            return _blob_container().download_blob(key, version_id=version_id).readall()
         except ResourceNotFoundError as error:
             raise FileNotFoundError(key) from error
     return (Path(root) / key).read_bytes()

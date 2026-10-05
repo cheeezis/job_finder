@@ -22,14 +22,19 @@ def store_documents(job_id, documents, root=APPLICATION_DOCUMENTS_DIR, *, compan
     prepared = _prepare_documents(documents)
     if not prepared:
         return []
-    folder_name = application_folder_name(company, title, job_id)
+    # A new upload group never reuses an earlier application's keys, so a
+    # failed DB commit cannot delete or overwrite its existing documents.
+    folder_name = application_folder_name(company, title, f"{job_id}:upload:{uuid.uuid4().hex}")
     written = []
     try:
         for metadata, content in prepared:
             metadata["folder_name"] = folder_name
             key = resolve_document_key(job_id, metadata)
-            document_store.write(key, content, root)
+            version = document_store.write(key, content, root, overwrite=False)
             written.append(key)
+            metadata["sha256"] = hashlib.sha256(content).hexdigest()
+            if version:
+                metadata["blob_version_id"] = version
     except Exception:
         for key in written:
             document_store.delete(key, root)
@@ -78,17 +83,29 @@ def resolve_document_key(job_id, metadata):
     return (directory / stored_name).as_posix()
 
 
-def live_document_manifest(memory, root=APPLICATION_DOCUMENTS_DIR):
-    """Hash every referenced document as currently stored, local or blob backend.
+def read_document(job_id, metadata, root=APPLICATION_DOCUMENTS_DIR):
+    """Read the referenced version and check its contents; legacy metadata remains readable."""
+    key = resolve_document_key(job_id, metadata)
+    version = metadata.get("blob_version_id")
+    if version is not None and (not isinstance(version, str) or not version):
+        raise ValueError("Ungültige Dokumentversion")
+    content = document_store.read(key, root, version_id=version)
+    expected = metadata.get("sha256")
+    if expected is not None and expected != hashlib.sha256(content).hexdigest():
+        raise ValueError("Dokument-Prüfsumme stimmt nicht überein")
+    return content
 
-    It always reads through the active JOBFINDER_DOCUMENTS_BACKEND rather than
-    a fixed local snapshot root.
-    """
+
+def live_document_manifest(memory, root=APPLICATION_DOCUMENTS_DIR):
+    """Verify each document reference; ZIP v1 cannot represent conflicting bytes at one key."""
     manifest = {}
     for job_id, entry in memory.items():
         for metadata in entry.get("application_documents", []):
             key = resolve_document_key(job_id, metadata)
-            manifest[key] = hashlib.sha256(document_store.read(key, root)).hexdigest()
+            digest = hashlib.sha256(read_document(job_id, metadata, root)).hexdigest()
+            if key in manifest and manifest[key] != digest:
+                raise ValueError("Backup benötigt unterschiedliche Dokumentversionen am selben Speicherpfad.")
+            manifest[key] = digest
     return manifest
 
 

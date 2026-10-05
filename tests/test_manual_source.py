@@ -65,6 +65,56 @@ class ManualSourceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Kein Hauptinhalt"):
             manual.job_from_page("https://example.com", "<h1>Website</h1><p>Generic content</p>" * 20)
 
+    def test_body_job_sections_are_parsed_without_a_semantic_main_container(self):
+        html = """<html><head>
+            <meta property="og:title" content="Junior Data Engineer: Dein Job bei Example">
+            <meta property="og:site_name" content="Example GmbH">
+            </head><body><div class="page-wrapper">
+            <div class="navbar19_component"><h1>Navigation</h1><p>Services und Karriere</p></div>
+            <header><h1>Junior <span>Data Engineer</span></h1></header>
+            <div><header><h1>Junior Data Engineer</h1></header></div>
+            <section><h2>Deine <span>Aufgaben</span></h2>
+            <p>Du entwickelst Datenplattformen in der Cloud und implementierst
+            Datenpipelines mit Python und SQL gemeinsam mit unserem Projektteam.</p></section>
+            <section><h2>Dein Profil</h2>
+            <p>Du bringst erste Erfahrung aus Praktika oder Werkstudententätigkeiten
+            sowie Interesse an modernen Datenarchitekturen und Cloud-Technologien mit.</p></section>
+            <form><input><p>Formularanweisung</p></form>
+            <div class="footer1_component"><div><p>Footertext und Impressum</p></div></div>
+            </div></body></html>"""
+
+        job = manual.job_from_page("https://example.com/offene-stellen/junior-data-engineer", html)
+
+        self.assertEqual(job.title, "Junior Data Engineer")
+        self.assertEqual(job.company, "Example GmbH")
+        self.assertIn("Datenpipelines mit Python und SQL", job.description_clean)
+        self.assertIn("erste Erfahrung aus Praktika", job.description_clean)
+        for excluded in ("Navigation", "Services und Karriere", "Formularanweisung", "Footertext", "Impressum"):
+            self.assertNotIn(excluded, job.description_clean)
+
+    def test_generic_body_with_only_one_job_section_is_rejected(self):
+        html = "<body><h1>Unsere Leistungen</h1><h2>Deine Aufgaben</h2>" + "<p>Allgemeiner Text.</p>" * 20 + "</body>"
+
+        with self.assertRaisesRegex(ValueError, "Kein Hauptinhalt"):
+            manual.job_from_page("https://example.com", html)
+
+    def test_body_job_sections_require_a_visible_job_title(self):
+        html = """<html><head><meta property="og:title" content="Karriere"></head><body>
+            <h2>Deine Aufgaben</h2><p>Informationen über unsere Tätigkeitsbereiche.</p>
+            <h2>Dein Profil</h2><p>Informationen über unsere Teams.</p></body></html>"""
+
+        with self.assertRaisesRegex(ValueError, "Kein Hauptinhalt"):
+            manual.job_from_page("https://example.com", html)
+
+    def test_job_sections_outside_visible_body_content_are_not_evidence(self):
+        html = """<html><head><meta property="og:title" content="Karriere"></head><body>
+            <nav><h1>Junior Data Engineer</h1><h2>Deine Aufgaben</h2></nav>
+            <p>Allgemeine Informationen über unser Unternehmen.</p>
+            <footer><h2>Dein Profil</h2></footer></body></html>"""
+
+        with self.assertRaisesRegex(ValueError, "Kein Hauptinhalt"):
+            manual.job_from_page("https://example.com", html)
+
     def test_remote_schema_uses_applicant_region_when_job_location_is_missing(self):
         html = """
         <script type="application/ld+json">{

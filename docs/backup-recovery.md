@@ -6,7 +6,7 @@ allein belegt das nicht.
 
 ## Stand und nächste Schritte
 
-Die derzeit im Terraform-Code festgelegten Fristen sind:
+Der Ausgangsstand vor der Umstellung ist:
 
 | Bestandteil | Aufbewahrung | Wiederherstellung |
 | --- | --- | --- |
@@ -20,45 +20,68 @@ Die drei Schritte für die gemeinsame Wiederherstellung sind:
 1. **Lokal vorbereiten:** Verfahren dokumentieren, mit erfundenen Daten und
    Dateien üben, Prüfsummen und Dokumentverweise kontrollieren. Die unten
    beschriebene Probe erstellt nur eigene lokale Testdatenbanken.
-2. **Aufbewahrung und Dokumentversionen abstimmen:** gemeinsames Zeitfenster
-   wählen, Terraform-Änderungen und Kostenwirkung prüfen; historische
-   Dokumentversionen eindeutig zuordnen. Vorschlag: 35 Tage. Dieser Vorschlag
-   ist noch keine Änderung der produktiven Infrastruktur.
+2. **Aufbewahrung und Dokumentversionen abstimmen:** gewähltes Zeitfenster
+   von 14 Tagen vorbereiten, Terraform-Änderungen und Kostenwirkung prüfen;
+   Dokumentversionen eindeutig zuordnen. Die Codevorbereitung ist noch keine
+   Änderung der produktiven Infrastruktur.
 3. **In Azure nachweisen:** einen gewählten Datenbankzeitpunkt zusammen mit
    mindestens einem damaligen Dokument in isolierten Zielen wiederherstellen.
    Anmeldung, Dokumentzugriff, Referenzen und Dauer prüfen. Erst dieser
    Nachweis schließt die Azure-Restore-Abnahme ab.
 
-## Vorschlag für die Aufbewahrung
+## Gewähltes Sicherungsfenster: 14 Tage
 
-PostgreSQL unterstützt sieben bis 35 Tage PITR. Für spät bemerkte Fehler im
-Bewerbungsverlauf sind **35 Tage** ein sinnvoller Vorschlag. Blob- und
-Container-Soft-Delete sollen mindestens dieses Fenster abdecken. Eine
+Für Datenbank und Dokument-Löschschutz ist ein gemeinsames Fenster von
+**14 Tagen** gewählt. Terraform verlängert PostgreSQL-PITR von sieben auf 14
+Tage; Blob- und Container-Soft-Delete behalten ihre bisherigen 14 Tage. Das
+Fenster begrenzt den Rückweg zu einem früheren Stand, nicht das Alter der
+gespeicherten Bewerbungen oder Dokumente. Eine
 Verlängerung erzeugt keine bereits abgelaufenen Daten neu; für zuvor gelöschte
 Blobs gilt weiterhin deren ursprüngliche Soft-Delete-Frist.
 
-Die aktuelle Lifecycle-Regel gilt für alle Block-Blobs im Account, also auch
+Die bisherige Lifecycle-Regel gilt für alle Block-Blobs im Account, also auch
 für Bewerbungsdokumente. Ihre Frist zählt ab **Erstellung der Version**, nicht
 ab dem Zeitpunkt, an dem sie durch eine neue Version ersetzt wurde. Eine
 monatelang unveränderte Datei kann deshalb unmittelbar nach einer Änderung
-zur Löschung vorgesehen sein. Einfach überall die Zahl 35 einzutragen ist
+zur Löschung vorgesehen sein. Einfach überall dieselbe Tageszahl einzutragen ist
 kein vollständiges Aufbewahrungsverfahren.
 
-Vor einer Umstellung sollen Bewerbungsdokumente aus dieser pauschalen
-Versionslöschung ausgenommen werden; für Terraform-State kann die bisherige
-Regel auf den State-Container begrenzt bleiben. Das bewahrt zunächst mehr
+Die vorbereitete Änderung nimmt Bewerbungsdokumente aus dieser pauschalen
+Versionslöschung aus; für Terraform-State bleibt die 30-Tage-Regel auf den
+Prefix `tfstate/` begrenzt. Das bewahrt zunächst mehr
 Dokumentversionen auf. Ein späteres Aufräumen braucht den Nachweis, dass die
 Version weder aktuell referenziert noch für das vereinbarte Restore-Fenster
 benötigt wird. Dafür entsteht in diesem Vorbereitungsschritt kein eigener
 Backup-Dienst.
 
-Außerdem speichert die Anwendung heute Dokument-ID, Namen und Speicherpfad,
-aber keine unveränderliche Blob-Version-ID oder Inhaltsprüfsumme in der
-Dokumentreferenz. Ein Speicherpfad kann überschrieben werden. Für neue
-Uploads sind deshalb feste Versionreferenzen mit Inhaltsprüfung vorzubereiten.
-Für vorhandene Daten muss eine nachvollziehbare Zuordnung separat geprüft
-werden; eine Version anhand ihres Zeitstempels auszuwählen reicht bei
-mehrdeutigen Uploads nicht als Integritätsnachweis.
+Neue Uploads erhalten eine eigene lesbare Ordnergruppe, damit ihre Schlüssel
+nicht mit früheren Bewerbungsunterlagen kollidieren. Die Originaldateinamen
+bleiben erhalten. Dateien werden nur unter noch freien Schlüsseln angelegt;
+auch ein konkurrierender Upload darf nicht überschrieben werden. Die
+Dokumentreferenz enthält eine Inhaltsprüfsumme und bei Blob Storage die
+unveränderliche Version-ID. Download und Backup lesen diese konkrete Version
+und prüfen die Bytes. Bei fehlender Version oder abweichender Prüfsumme gibt
+es keinen stillen Rückfall auf die aktuelle Datei.
+
+Vorhandene Referenzen ohne diese Felder bleiben lesbar. Sie werden durch den
+Deploy nicht automatisch umgeschrieben; für einen älteren Restore muss ihre
+historische Zuordnung separat geprüft werden. Eine Version anhand ihres
+Zeitstempels auszuwählen reicht bei mehrdeutigen Uploads nicht als
+Integritätsnachweis.
+
+Das ZIP-Format bleibt abwärtskompatibel bei Version 1. Beim Restore werden
+Quellcontainer-Version-IDs für jede Referenz an die neue Zielversion gebunden
+bzw. bei lokalem Dateiziel entfernt. Die Dokument-ID, der Anzeigename und
+eine vorhandene Inhaltsprüfsumme bleiben erhalten. Mehrere Referenzen auf
+identische Bytes desselben Schlüssels sind möglich. Unterschiedliche
+referenzierte Inhalte am selben Schlüssel führen ausdrücklich zum Abbruch
+der Sicherung, da ZIP v1 einen Inhalt pro Schlüssel abbildet. Reguläre neue
+Uploads verhindern diese Kollision durch ihre eigene Ordnergruppe.
+
+Nach verlorenen Uploadantworten kann trotz zurückgenommener DB-Transaktion
+eine nicht referenzierte Dateiversion verbleiben. Ein solcher Upload darf
+keine älteren referenzierten Unterlagen überschreiben. Eine spätere
+Bereinigung braucht den Referenz- und Restore-Fenster-Nachweis.
 
 ## Lokale Probe ohne echte Bewerbungsdaten
 

@@ -114,7 +114,7 @@ Kostenbuch des Agenten, alle referenzierten Dokumentdateien und Prüfsummen. Vor
 jedem lokalen Finder-Lauf entsteht ebenfalls ein solches Backup; die Rotation
 behält sieben Archive. In Containern (Azure-Worker, Hybrid-Lauf) entfällt es
 (`JOBFINDER_SKIP_RUN_BACKUP=1`), weil ihr Dateisystem den Lauf nicht überdauert.
-Dort sichern der Point-in-Time-Restore des Servers (sieben Tage) und die
+Dort sichern der Point-in-Time-Restore des Servers (14 Tage) und die
 Versionierung samt Soft Delete im Blob Storage (14 Tage).
 
 Eine Wiederherstellung braucht eine leere, separat konfigurierte Datenbank und

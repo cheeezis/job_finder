@@ -266,6 +266,12 @@ Job-Snapshot und Empfehlungen in einer gemeinsamen PostgreSQL-Transaktion.
 Mit ausdrücklich anderen Dateipfaden, etwa in Tests, laufen diese
 Schreibvorgänge nacheinander ohne gemeinsame Transaktion.
 
+Der Seitenparser bevorzugt `JobPosting`-Daten und sonst `main`, `article`
+oder `role="main"`. Fehlen diese Bereiche, akzeptiert er den Seiteninhalt
+nur mit einer sichtbaren H1-Überschrift und erkannten Überschriften für
+Aufgaben und Profil beziehungsweise Anforderungen. Navigation, Formulare
+und Footer werden beim Sammeln des lesbaren Textes übersprungen.
+
 ### KI-Agent
 
 Der Steckbrief einer Stelle entsteht in einem LangGraph-Graphen

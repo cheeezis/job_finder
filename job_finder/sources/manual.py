@@ -29,6 +29,17 @@ from job_finder.text import normalize_text
 SOURCE_NAME = "manual"
 _BLOCK_TAGS = {"h1", "h2", "h3", "p", "li", "dt", "dd"}
 _SKIP_TAGS = {"script", "style", "noscript", "nav", "footer", "form", "button"}
+_CHROME_CLASS = re.compile(r"(?:^|[\s_-])(?:navbar|navigation|footer)\d*(?:$|[\s_-])", re.IGNORECASE)
+_TASK_HEADINGS = {"aufgaben", "deine aufgaben", "ihre aufgaben", "tasks", "your tasks", "responsibilities"}
+_PROFILE_HEADINGS = {
+    "profil",
+    "dein profil",
+    "ihr profil",
+    "anforderungen",
+    "your profile",
+    "requirements",
+    "qualifications",
+}
 _VOID_TAGS = {
     "area",
     "base",
@@ -123,6 +134,18 @@ def job_from_visible_page(url, html):
     """Fallback for career pages without schema.org JobPosting data."""
     parser = VisibleJobParser()
     parser.feed(html)
+    if parser.fragment_start is None:
+        # Some career sites use only div/section wrappers. Require explicit
+        # job sections before trusting body content as a listing.
+        parser = VisibleJobParser(capture_body=True)
+        parser.feed(html)
+        headings = {normalize_text(heading).rstrip(":") for heading in parser.headings}
+        if (
+            not parser.title
+            or not headings.intersection(_TASK_HEADINGS)
+            or not headings.intersection(_PROFILE_HEADINGS)
+        ):
+            raise ValueError("Kein Hauptinhalt für die Stellenanzeige gefunden")
     title = parser.title or parser.metadata.get("og:title", "")
     company = parser.metadata.get("og:site_name", "") or urlsplit(url).hostname
     description_html = parser.main_fragment(html)
@@ -186,24 +209,26 @@ def validate_public_url(value):
 
 
 class VisibleJobParser(HTMLParser):
-    """Collect metadata, an H1 title, and readable block lines inside main."""
+    """Collect metadata, headings and readable blocks inside main or body."""
 
-    def __init__(self):
+    def __init__(self, *, capture_body: bool = False):
         super().__init__(convert_charrefs=True)
         self.metadata = {}
         self.lines = []
+        self.headings = []
         self.title = ""
+        self._capture_body = capture_body
         self._in_main = False
         self._main_stack = []
         self.fragment_start = None
         self.fragment_end = None
         self._skip_depth = 0
         self._parts = []
-        self._title_parts = []
-        self._in_title = False
+        self._heading_parts = []
+        self._heading_tag = None
 
     def main_fragment(self, html):
-        """Extract the main section from the HTML already fed to this parser."""
+        """Extract the captured container from the HTML already fed to this parser."""
         if self.fragment_start is None or self.fragment_end is None:
             raise ValueError("Kein Hauptinhalt für die Stellenanzeige gefunden")
         offsets = [0]
@@ -221,9 +246,12 @@ class VisibleJobParser(HTMLParser):
             content = attributes.get("content")
             if name and content:
                 self.metadata[name.casefold()] = content.strip()
-        if (
-            tag in {"main", "article"} or (attributes.get("role") or "").casefold() == "main"
-        ) and self.fragment_start is None:
+        is_container = (
+            tag == "body"
+            if self._capture_body
+            else tag in {"main", "article"} or (attributes.get("role") or "").casefold() == "main"
+        )
+        if is_container and self.fragment_start is None:
             self._in_main = True
             self._main_stack = [tag]
             line, column = self.getpos()
@@ -241,15 +269,16 @@ class VisibleJobParser(HTMLParser):
             tag in _SKIP_TAGS
             or attributes.get("role") in {"navigation", "contentinfo"}
             or attributes.get("id") == "footer"
+            or _CHROME_CLASS.search(attributes.get("class") or "")
         ):
             self._flush()
             self._skip_depth = 1
             return
         if tag in _BLOCK_TAGS:
             self._flush()
-        if tag == "h1":
-            self._in_title = True
-            self._title_parts = []
+        if tag in {"h1", "h2", "h3"}:
+            self._heading_tag = tag
+            self._heading_parts = []
 
     def handle_endtag(self, tag):
         """Close nested capture scopes and record the main fragment boundary."""
@@ -262,9 +291,12 @@ class VisibleJobParser(HTMLParser):
             self._skip_depth = max(0, self._skip_depth - closed_count)
             if self._main_stack:
                 return
-        if tag == "h1":
-            self.title = " ".join(" ".join(self._title_parts).split())
-            self._in_title = False
+        if tag == self._heading_tag:
+            heading = " ".join(" ".join(self._heading_parts).split())
+            self.headings.append(heading)
+            if tag == "h1" and not self.title:
+                self.title = heading
+            self._heading_tag = None
         if tag in _BLOCK_TAGS:
             self._flush()
         if not self._main_stack:
@@ -286,8 +318,8 @@ class VisibleJobParser(HTMLParser):
         if not text:
             return
         self._parts.append(text)
-        if self._in_title:
-            self._title_parts.append(text)
+        if self._heading_tag:
+            self._heading_parts.append(text)
 
     def _flush(self):
         text = " ".join(" ".join(self._parts).split())

@@ -114,7 +114,7 @@ Kostenbuch des Agenten, alle referenzierten Dokumentdateien und Prüfsummen. Vor
 jedem lokalen Finder-Lauf entsteht ebenfalls ein solches Backup; die Rotation
 behält sieben Archive. In Containern (Azure-Worker, Hybrid-Lauf) entfällt es
 (`JOBFINDER_SKIP_RUN_BACKUP=1`), weil ihr Dateisystem den Lauf nicht überdauert.
-Dort sichern der Point-in-Time-Restore des Servers (sieben Tage) und die
+Dort sichern der Point-in-Time-Restore des Servers (14 Tage) und die
 Versionierung samt Soft Delete im Blob Storage (14 Tage).
 
 Eine Wiederherstellung braucht eine leere, separat konfigurierte Datenbank und
@@ -127,6 +127,13 @@ ein leeres Dokumentziel. Zuerst `JOBFINDER_DATABASE_URL` auf dieses Ziel setzen:
 Die Anwendung prüft die Prüfsummen, vergleicht die zurückgeschriebenen Daten und
 überschreibt nichts. Das ist ein Anwendungsbackup, kein Ersatz für die
 Azure-Serverbackups, Rollen- oder Infrastruktur-Sicherungen.
+
+Die gemeinsame Planung für Datenbank und historische Dokumentversionen steht
+unter [Backup und Wiederherstellung](backup-recovery.md). Eine Probe mit
+erfundenen Daten auf dem lokalen PostgreSQL-Testcontainer läuft mit
+`python scripts/restore_drill.py`; sie erstellt und entfernt eigene
+Testdatenbanken und prüft die Dokumentverweise. Sie ersetzt keine Azure-PITR-
+und Blob-Restore-Abnahme.
 
 ## Azure
 

@@ -18,8 +18,7 @@ import psycopg
 from job_finder.matching.config import LOCAL_SEARCH_LOCATION, LOCAL_SEARCH_POSTAL_CODE
 from job_finder.models import WorkflowStatus
 from job_finder.paths import APPLICATION_DOCUMENTS_DIR, JOBS_FILE, MANUAL_CACHE_FILE, MEMORY_FILE, RECOMMENDATIONS_JSON
-from job_finder.persistence import document_store
-from job_finder.persistence.application_documents import find_document, resolve_document_key
+from job_finder.persistence.application_documents import find_document, read_document
 from job_finder.workflow.applications import load_application_overview
 from job_finder.workflow.manual_import import import_manual_url
 from job_finder.workflow.memory import load_memory
@@ -237,8 +236,7 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
             memory = load_memory(self.memory_path)
             entry = memory[job_id]
             metadata = find_document(entry, document_id)
-            key = resolve_document_key(job_id, metadata)
-            content = document_store.read(key, self.application_documents_dir)
+            content = read_document(job_id, metadata, self.application_documents_dir)
         except (KeyError, ValueError, OSError):
             self.send_error(404)
             return

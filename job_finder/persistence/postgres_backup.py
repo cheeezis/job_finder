@@ -11,7 +11,7 @@ from psycopg import sql
 
 from job_finder.paths import APPLICATION_DOCUMENTS_DIR, BACKUP_DIR
 from job_finder.persistence import document_store
-from job_finder.persistence.application_documents import live_document_manifest
+from job_finder.persistence.application_documents import live_document_manifest, read_document, resolve_document_key
 from job_finder.persistence.database import initialize, lock, snapshot, transaction
 from job_finder.persistence.postgres_store import read_dataset, read_memory, write_dataset, write_memory
 
@@ -31,7 +31,6 @@ def create_postgres_backup(backup_dir=BACKUP_DIR, documents_dir=APPLICATION_DOCU
     try:
         with snapshot() as connection, zipfile.ZipFile(temporary, "w", zipfile.ZIP_DEFLATED) as archive:
             memory = read_memory(connection, "default")
-            documents = live_document_manifest(memory, documents_dir)
 
             def add(name, content):
                 archive.writestr(name, content)
@@ -45,11 +44,17 @@ def create_postgres_backup(backup_dir=BACKUP_DIR, documents_dir=APPLICATION_DOCU
                 query = sql.SQL("SELECT coalesce(json_agg(t ORDER BY {}), '[]')::text FROM {} t")
                 rows = connection.execute(query.format(sql.SQL(order), sql.Identifier(table))).fetchone()
                 add(f"agent/{table}.json", (rows[0] if rows else "[]").encode())
-            for name, expected in documents.items():
-                content = document_store.read(name, documents_dir)
-                if hashlib.sha256(content).hexdigest() != expected:
-                    raise RuntimeError("Dokument während der Sicherung geändert.")
-                add("documents/" + name, content)
+            for job_id, entry in memory.items():
+                for metadata in entry.get("application_documents", []):
+                    content = read_document(job_id, metadata, documents_dir)
+                    name = "documents/" + resolve_document_key(job_id, metadata)
+                    if name in hashes:
+                        if hashes[name] != hashlib.sha256(content).hexdigest():
+                            raise ValueError(
+                                "Backup benötigt unterschiedliche Dokumentversionen am selben Speicherpfad."
+                            )
+                    else:
+                        add(name, content)
             archive.writestr("manifest.json", json.dumps({"version": 1, "hashes": hashes}))
         temporary.replace(target)
         return target
@@ -85,6 +90,24 @@ def restore_backup(archive_path, documents_dir):
                 query = sql.SQL("SELECT 1 FROM {} LIMIT 1")
                 if any(connection.execute(query.format(sql.Identifier(table))).fetchone() for table in tables):
                     raise ValueError("Wiederherstellung benötigt eine leere Datenbank")
+                versions = {}
+                for name in manifest["hashes"]:
+                    if name.startswith("documents/"):
+                        key = name.removeprefix("documents/")
+                        if document_store.exists(key, documents_dir):
+                            raise ValueError("Dokument existiert bereits am Zielort")
+                        versions[key] = document_store.write(key, archive.read(name), documents_dir, overwrite=False)
+                        written.append(key)
+                # Version IDs belong to the source container. Rebind every
+                # matching reference to the new Blob version or local bytes.
+                for job_id, entry in memory.items():
+                    for metadata in entry.get("application_documents", []):
+                        key = resolve_document_key(job_id, metadata)
+                        version = versions.get(key)
+                        if version:
+                            metadata["blob_version_id"] = version
+                        else:
+                            metadata.pop("blob_version_id", None)
                 write_memory(connection, "default", {}, memory)
                 for name in manifest["hashes"]:
                     if name.startswith("datasets/"):
@@ -93,12 +116,6 @@ def restore_backup(archive_path, documents_dir):
                         write_dataset(dataset, value)
                         if read_dataset(dataset) != value:
                             raise RuntimeError("Datenvergleich nach Wiederherstellung fehlgeschlagen")
-                    elif name.startswith("documents/"):
-                        key = name.removeprefix("documents/")
-                        if document_store.exists(key, documents_dir):
-                            raise ValueError("Dokument existiert bereits am Zielort")
-                        document_store.write(key, archive.read(name), documents_dir)
-                        written.append(key)
                     elif name.startswith("agent/"):
                         restore_agent_table(connection, name, archive.read(name).decode())
                 if read_memory(connection, "default") != memory:
@@ -106,7 +123,7 @@ def restore_backup(archive_path, documents_dir):
                 live_document_manifest(memory, documents_dir)
         except BaseException:
             for key in written:
-                document_store.delete(key, documents_dir)
+                document_store.delete(key, documents_dir, prune_empty=True)
             raise
     return {"jobs_remembered": len(memory), "documents": len(written), "verified": True}
 

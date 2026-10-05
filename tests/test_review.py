@@ -648,6 +648,20 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(content, b"%PDF resume")
         self.assertIn("Lebenslauf.pdf", disposition)
 
+    def test_document_download_refuses_bytes_changed_since_the_application(self):
+        documents_directory = self.directory / "application_documents"
+        start_application(
+            "job:1", self.memory_path, [upload("resume", "CV.pdf", b"original resume")], documents_directory
+        )
+        document = load_memory(self.memory_path)["job:1"]["application_documents"][0]
+        next(documents_directory.rglob("*.pdf")).write_bytes(b"changed after application")
+        query = urlencode({"job_id": "job:1", "document_id": document["id"]})
+        with self.server_context(application_documents_dir=documents_directory) as base_url:
+            with self.assertRaises(HTTPError) as caught:
+                urlopen(f"{base_url}/api/application-document?{query}")
+            self.assertEqual(caught.exception.code, 404)
+            caught.exception.close()
+
     def test_a_document_is_served_only_for_its_own_job(self):
         documents_directory = self.directory / "application_documents"
         start_application(

@@ -6,7 +6,7 @@ allein belegt das nicht.
 
 ## Stand und nächste Schritte
 
-Der Ausgangsstand vor der Umstellung ist:
+Der Ausgangsstand vor der Umstellung war:
 
 | Bestandteil | Aufbewahrung | Wiederherstellung |
 | --- | --- | --- |
@@ -28,6 +28,9 @@ Die drei Schritte für die gemeinsame Wiederherstellung sind:
    mindestens einem damaligen Dokument in isolierten Zielen wiederherstellen.
    Anmeldung, Dokumentzugriff, Referenzen und Dauer prüfen. Erst dieser
    Nachweis schließt die Azure-Restore-Abnahme ab.
+
+Alle drei Schritte sind erledigt; die Azure-Probe ist am 05.10.2026 bestanden
+(siehe [Ergebnis der Azure-Probe](#ergebnis-der-azure-probe)).
 
 ## Gewähltes Sicherungsfenster: 14 Tage
 
@@ -129,7 +132,7 @@ Diese Probe belegt das bestehende Anwendungs-ZIP-Verfahren. Sie verwendet
 keinen Azure-Serverbackup und stellt keine historischen Cloud-Dateiversionen
 wieder her. Ihre Dauer ist kein gemessener Azure-Wiederanlaufwert.
 
-## Ablauf der späteren Azure-Probe
+## Ablauf der Azure-Probe
 
 Vor dem Anlegen von Azure-Testressourcen müssen deren Namen, gewählter
 Restore-Zeitpunkt, Kostenrahmen und Aufräumplan konkret freigegeben sein.
@@ -165,19 +168,48 @@ ein Restore-Ziel umgestellt.
    wiederhergestellten Status und Dokumentdownload prüfen; Version und
    Prüfsumme müssen zum Protokoll passen. Alle referenzierten Dokumente auf
    Existenz prüfen. Keine regulären Worker oder Benachrichtigungen auslösen.
+   Die Test-Review behält mindestens einen laufenden Container und wird erst
+   öffentlich erreichbar, wenn ihre Revision gesund läuft: Ein Kaltstart aus
+   null Containern dauerte gemessen rund 27 Sekunden und ließ eine Prüfung mit
+   20 Sekunden Wartezeit scheitern. Die eigene Test-App-Registrierung braucht
+   die delegierte Berechtigung `User.Read` (Microsoft Graph), sonst lehnt
+   Microsoft Entra die Anmeldung mit `AADSTS650056` ab.
 6. **Abnahme und Aufräumen.** Zeiten, Prüfergebnisse und offene Einschränkungen
    protokollieren. Nur die eigens angelegten Testressourcen anhand ihrer
    vollständigen Ressourcen-IDs entfernen. Die produktiven Löschsperren
    bleiben bestehen. Keine privaten Dokumente oder Zugangsdaten veröffentlichen.
 
+## Ergebnis der Azure-Probe
+
+Am 05.10.2026 wurde ein bewusst älterer Stand (Vortag) in getrennte
+Testressourcen wiederhergestellt: neuer PostgreSQL-Server per PITR, eigener
+privater Dokumentcontainer, eigene Review mit eigener Anmeldung nur für den
+Projektinhaber. Produktionsserver, Produktionsdokumente und Laufzeitkonfiguration
+blieben unverändert. Gemessen ab dem ersten Anlegen:
+
+| Schritt | Dauer |
+| --- | --- |
+| Datenbank wiederhergestellt | 6:29 Min. |
+| Bewerbungsstand und alle referenzierten Dokumente kopiert und per Version und Prüfsumme geprüft | 7:06 Min. |
+| Test-Review läuft, anonyme Zugriffe werden abgewiesen | 8:35 Min. |
+| Persönliche Anmeldung und Dokumentdownload bestätigt | 21:33 Min. |
+| Alle Testressourcen entfernt und ihre Abwesenheit geprüft | 24:08 Min. |
+
+Die Zeit bis zur bestätigten Anmeldung enthält das Nachtragen der fehlenden
+`User.Read`-Berechtigung an der Test-App. Das RTO-Ziel von 60 Minuten ist
+damit erfüllt. Der absichtlich ältere Zeitpunkt misst kein RPO. Zwei frühere
+Versuche wurden vollständig aufgeräumt: Der erste wurde unterbrochen, im
+zweiten bestanden Datenbank und Dokumente, die Prüfung der Review scheiterte
+am Kaltstart. Beide Lehren stehen im Ablauf oben.
+
 ## Wiederherstellungsziele und Kosten
 
-Als Vorschlag für die spätere Abnahme gilt: bei einem aktuellen Restore
+Für die Abnahme gilt: bei einem aktuellen Restore
 höchstens **fünf Minuten Datenverlust (RPO)**, und innerhalb von **60 Minuten
 wieder nutzbare Review mit Dokumentzugriff (RTO)**. Microsoft beschreibt einen
 WAL-Sicherungsverzug von im Allgemeinen bis zu fünf Minuten; dies ist kein
-bereits gemessener Projektwert. Die Ziele müssen in der Azure-Probe geprüft
-und bei Bedarf angepasst werden. Bei absichtlich gewähltem älteren Restore
+gemessener Projektwert. Das RTO-Ziel ist in der Azure-Probe belegt (siehe
+oben), das RPO-Ziel für einen aktuellen Restore noch nicht. Bei absichtlich gewähltem älteren Restore
 ist der Abstand zum heutigen Stand eine bewusste Rücksetzung, kein gemessener
 Backup-Verzug.
 

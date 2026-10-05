@@ -74,8 +74,16 @@ gilt die anonymisierte Beispielkonfiguration. Eine laufende Review übernimmt
 Key-Vault-Secret `JobfinderUserSettings`, das nach Änderungen neu gesetzt wird:
 
 ```powershell
-az keyvault secret set --vault-name <key-vault> --name JobfinderUserSettings --file user_settings.local.yaml --output none
+& "C:\Program Files\Microsoft SDKs\Azure\CLI2\python.exe" -X utf8 -IBm azure.cli keyvault secret set --vault-name <key-vault> --name JobfinderUserSettings --file user_settings.local.yaml --encoding utf-8 --output none
 ```
+
+Unter Windows liest `az keyvault secret set --file` die Datei sonst mit der
+Windows-Kodierung (cp1252) statt UTF-8, auch mit `--encoding utf-8`: Aus
+„München“ wird im Secret „MÃ¼nchen“. Der Aufruf oben startet die Python-Umgebung
+der Azure CLI im UTF-8-Modus; `az.cmd` startet sie isoliert und übergeht
+deshalb eine Umgebungsvariable wie `PYTHONUTF8`. Unter Linux und macOS genügt
+`az keyvault secret set` mit denselben Argumenten. `--output none` verhindert,
+dass die CLI den gespeicherten Inhalt ausgibt.
 
 Den Namen des Key Vaults nennt `az keyvault list -g rg-jobfinder --query [].name -o tsv`.
 Jeder Finder-Lauf nennt zu Beginn, woher seine Einstellungen stammen.
@@ -162,8 +170,10 @@ Azure setzt Terraform die Adresse und das Profil kommt aus dem Key-Vault-Secret
 neu setzen:
 
 ```powershell
-az keyvault secret set --vault-name <key-vault> --name JobfinderProfile --file profile.local.yaml --output none
+& "C:\Program Files\Microsoft SDKs\Azure\CLI2\python.exe" -X utf8 -IBm azure.cli keyvault secret set --vault-name <key-vault> --name JobfinderProfile --file profile.local.yaml --encoding utf-8 --output none
 ```
+
+Zum UTF-8-Aufruf unter Windows siehe die Einstellungen oben.
 
 Jeder Lauf nennt im Abschnitt „Steckbriefe (Agent)“, warum der Agent nicht lief
 oder wie viele Steckbriefe fertig, abgebrochen oder offen sind und was der Tag

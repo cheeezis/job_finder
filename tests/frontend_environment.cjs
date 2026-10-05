@@ -28,6 +28,7 @@ function node(tagName) {
     showModal() { this.open = true; },
     close() { this.open = false; },
     reset() {},
+    scrollIntoView() { this.scrolledIntoView = true; },
   };
 }
 

@@ -100,6 +100,7 @@
       </div>
       <div class="utility-actions">
         <button id="mark-applied">Als beworben markieren</button>
+        <button id="link-application">Bestehender Bewerbung zuordnen</button>
         <a id="application-link" class="button" href="/applications" hidden>Bewerbung verwalten</a>
         <div id="job-links"></div>
         <a id="route-link" class="button" target="_blank" rel="noopener noreferrer" hidden>Entfernung &amp; Fahrtzeit</a>
@@ -137,6 +138,24 @@
       <div class="dialog-actions">
         <button id="application-cancel" type="button">Abbrechen</button>
         <button id="application-save" class="primary" type="submit">Als beworben speichern</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="link-application-dialog" aria-labelledby="link-application-title">
+    <form id="link-application-form" class="application-form">
+      <h2 id="link-application-title">Anzeige einer Bewerbung zuordnen</h2>
+      <p id="link-application-source"></p>
+      <p>Wähle die Bewerbung für dieselbe Stelle. Diese Anzeige wird dort hinzugefügt. Arbeitgeber, Verlauf, Gehalt und Unterlagen der Bewerbung bleiben erhalten.</p>
+      <label>Bestehende Bewerbung
+        <select id="link-application-select" required>
+          <option value="">Bitte auswählen</option>
+        </select>
+      </label>
+      <p id="link-application-status" class="feedback" role="status" aria-live="polite"></p>
+      <div class="dialog-actions">
+        <button id="link-application-cancel" type="button">Abbrechen</button>
+        <button id="link-application-save" type="submit" class="primary">Anzeige zuordnen</button>
       </div>
     </form>
   </dialog>

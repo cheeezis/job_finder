@@ -48,6 +48,9 @@ def load_review_jobs(recommendations_path=RECOMMENDATIONS_JSON, memory_path=MEMO
         represented_memory_ids.update(candidates)
         memory_id = preferred_memory_id(candidates, memory, job["id"]) if candidates else job["id"]
         entry = memory.get(memory_id, {})
+        if entry.get("linked_job_ids"):
+            job["title"] = entry.get("title") or job["title"]
+            job["company"] = entry.get("company") or job.get("company")
         # The listing's own id finds its details in the jobs dataset.
         job["recommendation_id"] = job["id"]
         job["id"] = memory_id

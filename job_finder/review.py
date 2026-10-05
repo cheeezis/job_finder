@@ -20,6 +20,7 @@ from job_finder.models import WorkflowStatus
 from job_finder.paths import APPLICATION_DOCUMENTS_DIR, JOBS_FILE, MANUAL_CACHE_FILE, MEMORY_FILE, RECOMMENDATIONS_JSON
 from job_finder.persistence.application_documents import find_document, read_document
 from job_finder.workflow.applications import load_application_overview
+from job_finder.workflow.linked_listings import link_listing_to_application
 from job_finder.workflow.manual_import import import_manual_url
 from job_finder.workflow.memory import load_memory
 from job_finder.workflow.review_actions import (
@@ -130,6 +131,7 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
             "/api/manual-import": self._import_manual,
             "/api/applications": self._start_application,
             "/api/application-salary": self._update_salary,
+            "/api/application-listing": self._link_application_listing,
             "/api/review-status": self._review_status,
             "/api/review-note": self._review_note,
             "/api/review-undo": self._undo_review,
@@ -175,6 +177,9 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
             salary_expectation_eur=payload.get("salary_expectation_eur", payload.get("salary_expectation")),
             salary_period=payload.get("salary_period", "year"),
         )
+
+    def _link_application_listing(self, payload):
+        return link_listing_to_application(payload["job_id"], payload["application_id"], self.memory_path)
 
     def _update_salary(self, payload):
         return update_application_salary(

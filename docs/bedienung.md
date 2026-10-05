@@ -109,6 +109,15 @@ Geänderte Bewertungsregeln wirken ab dem nächsten Finder-Lauf.
   unabhängig vom Fundlauf. Internationale und Junior-Hybrid-Stellen sind eigene,
   standardmäßig ausgeschaltete Filter. Sortiert wird nach dem Fazit des Agenten,
   bei gleichem Fazit nach Vorfilter-Score.
+- **Manueller Import:** Explizit hinzugefügte Anzeigen bleiben auch als
+  internationale oder Junior-Hybrid-Sonderfälle sichtbar. Nach dem Import
+  öffnet sich die passende Karte direkt.
+- **Zusätzliche Anzeige zur Bewerbung:** Gehört eine Karte zu einer bereits
+  gespeicherten Bewerbung, wähle „Bestehender Bewerbung zuordnen“ und die
+  passende Bewerbung. Das funktioniert auch bei abweichenden Firmennamen,
+  etwa bei Vermittlern. Die Bewerbung behält ihren Arbeitgeber, Verlauf,
+  Gehalt und ihre Unterlagen; die zusätzliche Anzeige und ihre Sichtungsnotiz
+  erscheinen dort unter „Zugeordnete Anzeigen“.
 - **Notiz:** „Meine Notiz“ hält den Grund einer Entscheidung fest (bis 2.000
   Zeichen) und wird beim Verlassen der Karte gespeichert. Der Agent liest bei
   ähnlichen Stellen die ersten 300 Zeichen mit.

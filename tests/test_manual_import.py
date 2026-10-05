@@ -8,12 +8,50 @@ from pathlib import Path
 from unittest.mock import patch
 
 from job_finder.models import Job, JobSource, WorkMode
+from job_finder.sources import manual
 from job_finder.workflow.main import score_jobs
 from job_finder.workflow.manual_import import import_manual_url
-from job_finder.workflow.memory import load_memory
+from job_finder.workflow.memory import load_memory, save_memory
 
 
 class ManualImportTests(unittest.TestCase):
+    def test_equal_manual_slugs_do_not_transfer_another_employers_application(self):
+        html = (
+            "<main><h1>Junior Data Engineer</h1><p>Standort: Fulda</p><p>"
+            + "Python und SQL im Team. " * 20
+            + "</p></main>"
+        )
+        imported = manual.job_from_page("https://new-employer.example/jobs/junior-data-engineer", html)
+        original = {
+            "title": "Junior Data Engineer",
+            "company": "Previous Employer",
+            "first_seen_at": "2026-09-01T08:00:00+00:00",
+            "workflow_status": "rejected",
+            "source_urls": ["https://previous-employer.example/jobs/junior-data-engineer"],
+            "source_names": ["manual"],
+            "locations": ["Fulda"],
+            "workflow_history": [
+                {"status": "applied", "occurred_on": "2026-09-01"},
+                {"status": "rejected", "occurred_on": "2026-09-15"},
+            ],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            paths = {
+                "cache_path": root / "manual.json",
+                "jobs_path": root / "jobs.json",
+                "memory_path": root / "memory",
+                "recommendations_path": root / "recommendations.json",
+            }
+            save_memory({"manual:junior-data-engineer": original}, paths["memory_path"])
+            with patch("job_finder.workflow.manual_import.manual.add_url", return_value=imported):
+                result = import_manual_url(imported.primary_url, **paths)
+            memory = load_memory(paths["memory_path"])
+
+        self.assertNotEqual(result["job_id"], "manual:junior-data-engineer")
+        self.assertEqual(memory["manual:junior-data-engineer"], original)
+        self.assertEqual(memory[result["job_id"]]["workflow_status"], "new")
+
     def test_import_runs_only_target_and_keeps_prefilter_warning(self):
         job = Job(
             id="manual:python",

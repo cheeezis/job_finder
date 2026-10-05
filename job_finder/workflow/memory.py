@@ -111,6 +111,11 @@ def update_memory(jobs, memory, successful_sources=None, run_sources=None, *, al
             job.first_seen_at = datetime.fromisoformat(entry["first_seen_at"])
             job.last_seen_at = now
             job.workflow_status = WorkflowStatus(entry["workflow_status"])
+            # Explicit associations may name a recruiter rather than the
+            # employer. Later crawls must keep the application's identity.
+            if entry.get("linked_job_ids") and has_application_state(entry):
+                job.title = entry.get("title") or job.title
+                job.company = entry.get("company") or job.company
             entry["last_seen_at"] = now.isoformat()
             entry["title"] = job.title
             # A listing without employer keeps the company another listing named.
@@ -191,7 +196,9 @@ def resolve_memory_id(job, memory, memory_index=None, *, aliases=None):
     """
     index = memory_index or build_memory_index(memory)
     current_urls = {source.url for source in job.sources if source.url}
-    candidates = unique_values([job.id], *[index["urls"].get(url, []) for url in current_urls])
+    candidates = unique_values(
+        [job.id], index["aliases"].get(job.id, []), *[index["urls"].get(url, []) for url in current_urls]
+    )
     candidates = [job_id for job_id in candidates if job_id in memory]
     by_title = []
     if not any(has_manual_state(memory[job_id]) for job_id in candidates):
@@ -339,7 +346,7 @@ def names_remote(places):
 
 def build_memory_index(memory):
     """Index URLs and normalized titles once per complete update."""
-    index = {"urls": defaultdict(list), "titles": defaultdict(list)}
+    index = {"urls": defaultdict(list), "titles": defaultdict(list), "aliases": defaultdict(list)}
     for job_id, entry in memory.items():
         add_memory_index_entry(index, job_id, entry)
     return index
@@ -350,6 +357,9 @@ def add_memory_index_entry(index, job_id, entry):
     for url in entry.get("source_urls", []):
         if job_id not in index["urls"][url]:
             index["urls"][url].append(job_id)
+    for alias in entry.get("linked_job_ids", []):
+        if job_id not in index["aliases"][alias]:
+            index["aliases"][alias].append(job_id)
     title = normalize_title(entry.get("title") or "")
     if title and job_id not in index["titles"][title]:
         index["titles"][title].append(job_id)
@@ -440,13 +450,17 @@ def memory_source_links(entry, *, validate_names=False):
 def memory_id_finder(memory):
     """Find each recommendation's memory rows, in memory order, via one per-request URL index."""
     index = {}
+    aliases = {}
     for memory_id, entry in memory.items():
         for url in entry.get("source_urls", []):
             index.setdefault(url, []).append(memory_id)
+        for alias in entry.get("linked_job_ids", []):
+            aliases.setdefault(alias, []).append(memory_id)
     positions = {memory_id: position for position, memory_id in enumerate(memory)}
 
     def find(job):
         found = {memory_id for url in job_urls(job) for memory_id in index.get(url, [])}
+        found.update(aliases.get(job["id"], []))
         if job["id"] in memory:
             found.add(job["id"])
         return sorted(found, key=positions.__getitem__)

@@ -313,6 +313,7 @@ dialog::backdrop { background: rgba(25, 24, 23, .58); }
 .archive { margin-top: 34px; }
 .archive-note { margin: 6px 0 16px; color: var(--muted); }
 .application { padding: 22px 24px 22px 20px; border-left: 5px solid var(--ink); }
+.application.selected-application { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 .application-header { display: flex; justify-content: space-between; gap: 18px; align-items: start; }
 .application h2 { font-size: 1.45rem; }
 .badges .badge { background: transparent; }

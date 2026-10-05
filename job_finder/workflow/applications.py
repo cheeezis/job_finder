@@ -219,6 +219,14 @@ def application_row(job_id, entry, as_of=None, listing_links=()):
         ),
         "workflow_history": history,
         "documents": public_documents(entry),
+        "linked_listings": [
+            {
+                "title": linked.get("title", ""),
+                "company": linked.get("company", ""),
+                "review_note": linked.get("review_note", ""),
+            }
+            for linked in (entry.get("linked_review_entries") or {}).values()
+        ],
         "automatic_no_response": (
             current_status == WorkflowStatus.NO_RESPONSE.value and WorkflowStatus.NO_RESPONSE.value not in statuses
         ),

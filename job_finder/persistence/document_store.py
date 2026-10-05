@@ -74,14 +74,25 @@ def exists(key, root=APPLICATION_DOCUMENTS_DIR):
     return (Path(root) / key).is_file()
 
 
-def delete(key, root=APPLICATION_DOCUMENTS_DIR):
-    """Best-effort delete; a missing key is not an error on either backend."""
+def delete(key, root=APPLICATION_DOCUMENTS_DIR, *, prune_empty=False):
+    """Delete bytes; optionally prune empty local restore folders below the root."""
     if _backend() == "blob":
         client = _blob_container().get_blob_client(key)
         if client.exists():
             client.delete_blob()
         return
-    (Path(root) / key).unlink(missing_ok=True)
+    path = Path(root) / key
+    path.unlink(missing_ok=True)
+    if prune_empty:
+        directory = path.parent
+        boundary = Path(root)
+        while directory != boundary and boundary in directory.parents:
+            try:
+                directory.rmdir()
+            except OSError:
+                # Keep a nonempty or inaccessible directory; never remove another writer's files.
+                break
+            directory = directory.parent
 
 
 def is_empty(root=APPLICATION_DOCUMENTS_DIR):

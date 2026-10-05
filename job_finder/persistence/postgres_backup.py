@@ -106,7 +106,7 @@ def restore_backup(archive_path, documents_dir):
                 live_document_manifest(memory, documents_dir)
         except BaseException:
             for key in written:
-                document_store.delete(key, documents_dir)
+                document_store.delete(key, documents_dir, prune_empty=True)
             raise
     return {"jobs_remembered": len(memory), "documents": len(written), "verified": True}
 

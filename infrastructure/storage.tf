@@ -42,6 +42,9 @@ resource "azurerm_storage_account" "jobfinder" {
 }
 
 # Ohne Aufräumen sammelt sich bei jedem Terraform-Apply eine State-Version an.
+# Nur State-Versionen aufräumen: Eine spätere Datenbankwiederherstellung kann
+# alte, weiterhin referenzierte Bewerbungsdokumente benötigen. Deren Versionen
+# dürfen deshalb nicht nach ihrem Erstellungsalter pauschal verschwinden.
 resource "azurerm_storage_management_policy" "jobfinder" {
   storage_account_id = azurerm_storage_account.jobfinder.id
 
@@ -50,7 +53,8 @@ resource "azurerm_storage_management_policy" "jobfinder" {
     enabled = true
 
     filters {
-      blob_types = ["blockBlob"]
+      blob_types   = ["blockBlob"]
+      prefix_match = ["tfstate/"]
     }
 
     actions {

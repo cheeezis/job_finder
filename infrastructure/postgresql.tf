@@ -13,7 +13,9 @@ resource "azurerm_postgresql_flexible_server" "jobfinder" {
   storage_tier      = "P4"
   auto_grow_enabled = false
 
-  backup_retention_days         = 7
+  # Gemeinsames Wiederherstellungsfenster mit Blob-/Container-Soft-Delete.
+  # Das begrenzt alte Sicherungsstände, nicht die gespeicherten Bewerbungen.
+  backup_retention_days         = 14
   geo_redundant_backup_enabled  = false
   public_network_access_enabled = true
 

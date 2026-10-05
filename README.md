@@ -36,6 +36,11 @@ serves a job search in Germany. This page is the English overview.
   CodeQL analyses the code, and Dependabot proposes updates every week.
 - **Careful data handling:** PostgreSQL with advisory locks and consistent
   snapshot reads; a source that fails never wipes the listings it found before.
+- **Rehearsed recovery:** 14 days of point-in-time restore for the database and
+  version-pinned application documents. A drill in Azure restored an older state
+  into separate resources and had a signed-in review with document download
+  working after about 22 minutes, against a 60-minute target
+  ([details](docs/backup-recovery.md#ergebnis-der-azure-probe)).
 - **Observable agent:** every job leaves a JSON log line and an OpenTelemetry
   trace in Application Insights (run → job → model and tool calls) with ids,
   tokens, cost and the verdict, but never profile, prompt or ad text; a test

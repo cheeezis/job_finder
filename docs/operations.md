@@ -133,7 +133,8 @@ unter [Backup und Wiederherstellung](backup-recovery.md). Eine Probe mit
 erfundenen Daten auf dem lokalen PostgreSQL-Testcontainer läuft mit
 `python scripts/restore_drill.py`; sie erstellt und entfernt eigene
 Testdatenbanken und prüft die Dokumentverweise. Sie ersetzt keine Azure-PITR-
-und Blob-Restore-Abnahme.
+und Blob-Restore-Abnahme; diese ist am 05.10.2026 bestanden
+([Ergebnis](backup-recovery.md#ergebnis-der-azure-probe)).
 
 ## Azure
 

@@ -1,5 +1,6 @@
   const statusLabels = {...JobFinder.statusLabels, interview: "Gespräch", offer: "Zusage"};
   const terminalStatuses = new Set(["rejected", "no_response", "offer", "withdrawn"]);
+  let focusedApplicationCard = null;
 
   const {element, make, addOptions, appendSourceLinks, postJson, showError} = JobFinder;
 
@@ -280,6 +281,10 @@
     container.replaceChildren();
     applications.forEach(application => {
       const card = make("article", null, "application");
+      if (application.id === new URLSearchParams(window.location.search).get("job")) {
+        card.className = "application selected-application";
+        focusedApplicationCard = card;
+      }
       const header = make("div", null, "application-header");
       const heading = document.createElement("div");
       heading.append(make("h2", application.title), make("p", application.company, "company"));
@@ -299,6 +304,15 @@
       card.append(meta);
       if (application.workflow_status === "interview") card.append(withdrawButton(application));
       if (application.review_note) card.append(make("p", application.review_note, "note"));
+      if (application.linked_listings?.length) {
+        const linked = make("details");
+        linked.append(make("summary", `Zugeordnete Anzeigen (${application.linked_listings.length})`));
+        application.linked_listings.forEach(listing => {
+          linked.append(make("p", `${listing.title} · ${listing.company}`));
+          if (listing.review_note) linked.append(make("p", listing.review_note, "note"));
+        });
+        card.append(linked);
+      }
       const salaryExpectation = formatSalaryExpectation(application.salary_expectation_eur);
       if (salaryExpectation) {
         const salary = make("p", null, "salary-note");
@@ -344,8 +358,15 @@
       window.applicationStatuses = result.application_statuses;
       window.workflowStatuses = result.workflow_statuses;
       renderStats(result.statistics);
+      focusedApplicationCard = null;
       renderApplications(result.applications, "applications");
       renderArchive(result.completed_applications);
+      const requested = new URLSearchParams(window.location.search).get("job");
+      if (result.completed_applications.some(application => application.id === requested)) {
+        element("archive").hidden = false;
+        element("archive-toggle").textContent = archiveLabel(result.completed_applications.length);
+      }
+      if (focusedApplicationCard) focusedApplicationCard.scrollIntoView({block: "center"});
       element("message").hidden = result.applications.length > 0;
       if (!result.applications.length) {
         element("message").textContent = result.statistics.total

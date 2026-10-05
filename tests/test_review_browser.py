@@ -176,6 +176,30 @@ class ReviewBrowserTests(unittest.TestCase):
         document = self.page.request.get(link.get_attribute("href"))
         self.assertEqual(document.body(), RESUME["buffer"])
 
+    def test_a_listing_can_be_attached_to_an_existing_application(self):
+        from playwright.sync_api import expect
+
+        before = self.page.request.get("/api/applications").json()
+        target = before["applications"][0]
+        self.page.goto("/review")
+        title = self.current_title()
+        self.page.fill("#review-note", "Notiz zur zusätzlichen Anzeige")
+        self.page.click("#link-application")
+        expect(self.page.locator("#link-application-dialog")).to_be_visible()
+        self.page.select_option("#link-application-select", target["id"])
+        with self.page.expect_response(lambda response: response.url.endswith("/api/application-listing")) as answer:
+            self.page.click("#link-application-save")
+        self.assertTrue(answer.value.ok)
+        self.page.wait_for_url("**/applications?job=*")
+        expect(self.page.locator(".selected-application h2")).to_have_text(target["title"])
+        after = self.page.request.get("/api/applications").json()
+        self.assertEqual(after["statistics"]["total"], before["statistics"]["total"])
+        linked = next(application for application in after["applications"] if application["id"] == target["id"])
+        self.assertEqual(linked["documents"], target["documents"])
+        self.assertEqual(linked["workflow_history"], target["workflow_history"])
+        self.assertEqual(linked["linked_listings"][0]["title"], title)
+        self.assertEqual(linked["linked_listings"][0]["review_note"], "Notiz zur zusätzlichen Anzeige")
+
 
 if __name__ == "__main__":
     unittest.main()

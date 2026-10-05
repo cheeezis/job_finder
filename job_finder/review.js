@@ -11,6 +11,7 @@
   let undoDecision = null;
   // The job whose note is on screen; a change is saved before any way off its card.
   let noteJobId = null;
+  let linkingJobId = null;
 
   const {element, make, addOptions, appendSourceLinks, postJson, safeUrl, showError} = JobFinder;
   // Traffic lights of the agent's fact sheet (job_finder/agent/fact_sheet.py).
@@ -162,10 +163,11 @@
     const showJuniorHybrid = element("junior-hybrid-filter").checked;
     visibleJobs = jobs.filter(job => {
       const statusMatches = !status || job.workflow_status === status;
+      const manuallyAdded = (job.source_links || []).some(link => link.source === "manual");
       return statusMatches &&
       (!role || job.role_group === role) &&
-      (showInternational || !job.international) &&
-      (showJuniorHybrid || !String(job.location_precheck || "").startsWith("Junior-Hybrid")) &&
+      (manuallyAdded || showInternational || !job.international) &&
+      (manuallyAdded || showJuniorHybrid || !String(job.location_precheck || "").startsWith("Junior-Hybrid")) &&
       (!query || `${job.title} ${job.company}`.toLocaleLowerCase("de").includes(query));
     });
     currentIndex = resetPosition
@@ -226,6 +228,8 @@
       element(id).hidden = applicationTracked;
     }
     element("application-link").hidden = !applicationTracked;
+    element("application-link").href = `/applications?job=${encodeURIComponent(job.id)}`;
+    element("link-application").hidden = applicationTracked;
     const warning = element("prefilter-warning");
     warning.hidden = !job.prefilter_warning;
     warning.textContent = job.prefilter_warning ? `Hinweis aus dem Vorfilter: ${job.prefilter_warning}` : "";
@@ -350,18 +354,75 @@
         roleLabels
       );
       const requestedJob = new URLSearchParams(window.location.search).get("job");
-      if (requestedJob) element("status-filter").value = "";
-      applyFilters();
-      if (requestedJob) {
-        const requestedIndex = visibleJobs.findIndex(job => job.id === requestedJob);
-        if (requestedIndex >= 0) {
-          currentIndex = requestedIndex;
-          render();
-        }
-      }
+      if (requestedJob) showRequestedJob(requestedJob);
+      else applyFilters();
     } catch (error) {
       element("message").className = "error";
       element("message").textContent = error.message;
+    }
+  }
+
+  function showRequestedJob(jobId) {
+    const requested = jobs.find(job => job.id === jobId || job.recommendation_id === jobId);
+    element("status-filter").value = "";
+    element("role-filter").value = "";
+    element("search-filter").value = "";
+    if (requested?.international) element("international-filter").checked = true;
+    if (String(requested?.location_precheck || "").startsWith("Junior-Hybrid")) {
+      element("junior-hybrid-filter").checked = true;
+    }
+    applyFilters();
+    const index = visibleJobs.findIndex(job => job === requested);
+    if (index >= 0) {
+      currentIndex = index;
+      render();
+    } else {
+      JobFinder.showFeedback("Die angeforderte Stelle wurde nicht gefunden. Bitte die Anzeige erneut hinzufügen.");
+    }
+  }
+
+  async function openApplicationLinker() {
+    await saveNote();
+    const job = visibleJobs[currentIndex];
+    linkingJobId = job.id;
+    const dialog = element("link-application-dialog");
+    const select = element("link-application-select");
+    const status = element("link-application-status");
+    element("link-application-source").textContent = `${job.title} · ${job.company || "Arbeitgeber unbekannt"}`;
+    select.replaceChildren();
+    addOptions(select, [""], {"": "Bitte auswählen"}, "");
+    element("link-application-save").disabled = true;
+    status.textContent = "Bewerbungen werden geladen …";
+    dialog.showModal();
+    try {
+      const response = await fetch("/api/applications");
+      if (!response.ok) throw new Error("Bewerbungen konnten nicht geladen werden");
+      const result = await response.json();
+      if (!dialog.open || linkingJobId !== job.id) return;
+      const applications = [...result.applications, ...result.completed_applications]
+        .filter(application => application.id !== job.id);
+      const labels = Object.fromEntries(applications.map(application => [application.id,
+        `${application.company} · ${application.title} (${statusLabels[application.workflow_status] || application.workflow_status})`]));
+      addOptions(select, applications.map(application => application.id), labels);
+      status.textContent = applications.length ? "" : "Noch keine bestehende Bewerbung vorhanden.";
+      element("link-application-save").disabled = !applications.length;
+    } catch (error) {
+      status.textContent = error.message;
+    }
+  }
+
+  async function linkApplication(event) {
+    event.preventDefault();
+    const button = element("link-application-save");
+    button.disabled = true;
+    try {
+      const result = await postJson("/api/application-listing", {
+        job_id: linkingJobId, application_id: element("link-application-select").value
+      }, "Anzeige konnte nicht zugeordnet werden");
+      window.location.href = `/applications?job=${encodeURIComponent(result.job_id)}`;
+    } catch (error) {
+      element("link-application-status").textContent = error.message;
+      button.disabled = false;
     }
   }
 
@@ -382,6 +443,9 @@
   }
   element("undo-ignored").addEventListener("click", () => undoIgnored().catch(showError));
   element("mark-applied").addEventListener("click", () => element("application-dialog").showModal());
+  element("link-application").addEventListener("click", () => openApplicationLinker().catch(showError));
+  element("link-application-cancel").addEventListener("click", () => element("link-application-dialog").close());
+  element("link-application-form").addEventListener("submit", linkApplication);
   element("application-cancel").addEventListener("click", () => element("application-dialog").close());
   element("application-form").addEventListener("submit", async event => {
     event.preventDefault();

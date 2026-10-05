@@ -236,6 +236,77 @@ test("landing submits only the entered URL and navigates to the imported job", a
   assert.equal(view.context.window.location.href, "/review?job=manual%3A1");
 });
 
+test("direct review links reveal the requested card across every optional filter and source alias", () => {
+  const view = page("review");
+  view.context.testJobs = [{id: "application:1", recommendation_id: "source:1", title: "Requested job",
+    company: "Employer", workflow_status: "rejected", international: true, location_precheck: "Junior-Hybrid: Test"}];
+  view.run("jobs = testJobs;");
+  view.elements.get("role-filter").value = "other-role";
+  view.elements.get("search-filter").value = "other-company";
+  view.context.showRequestedJob("source:1");
+  assert.equal(view.elements.get("title").textContent, "Requested job");
+  assert.equal(view.elements.get("card").hidden, false);
+  assert.equal(view.elements.get("status-filter").value, "");
+  assert.equal(view.elements.get("role-filter").value, "");
+  assert.equal(view.elements.get("search-filter").value, "");
+  assert.equal(view.elements.get("international-filter").checked, true);
+  assert.equal(view.elements.get("junior-hybrid-filter").checked, true);
+});
+
+test("manual submissions stay in the default review even when optional filters hide similar automatic listings", () => {
+  const rows = ["manual", "automatic"].map(source => ({id: source, workflow_status: "new",
+    international: true, location_precheck: "Junior-Hybrid: Test", source_links: [{source, url: "https://example.test/job"}]}));
+  assert.deepEqual(filteredReviewIds(rows), ["manual"]);
+});
+
+test("linking a listing offers existing applications and redirects only after saving the selected one", async () => {
+  const listing = {id: "source:1", title: "Junior Engineer", company: "Recruiter", workflow_status: "new"};
+  const application = {id: "application:1", title: "Junior Engineer", company: "Employer", workflow_status: "applied"};
+  const view = page("review", {async postJson(route, payload) {
+    assert.equal(route, "/api/application-listing");
+    assert.deepEqual(plain(payload), {job_id: "source:1", application_id: "application:1"});
+    assert.equal(view.elements.get("link-application-save").disabled, true);
+    return {job_id: "application:1"};
+  }}, async path => ({ok: true, json: async () => path === "/api/applications"
+    ? {applications: [application], completed_applications: []}
+    : {recommendations: [listing], workflow_statuses: ["new", "applied"]}}));
+  await new Promise(setImmediate);
+  await view.elements.get("link-application").emit("click");
+  assert.equal(view.elements.get("link-application-dialog").open, true);
+  const select = view.elements.get("link-application-select");
+  assert.equal(select.value, "");
+  assert.match(select.options[1].textContent, /Employer.*Junior Engineer/);
+  select.value = "application:1";
+  await view.elements.get("link-application-form").emit("submit");
+  assert.equal(view.context.window.location.href, "/applications?job=application%3A1");
+});
+
+test("a failed association leaves the selection and dialog available for retry", async () => {
+  const view = page("review", {async postJson() { throw new Error("Speichern fehlgeschlagen"); }});
+  view.run('linkingJobId = "source:1";');
+  view.elements.get("link-application-dialog").showModal();
+  view.elements.get("link-application-select").value = "application:1";
+  await view.elements.get("link-application-form").emit("submit");
+  assert.equal(view.elements.get("link-application-dialog").open, true);
+  assert.equal(view.elements.get("link-application-save").disabled, false);
+  assert.equal(view.elements.get("link-application-select").value, "application:1");
+  assert.equal(view.elements.get("link-application-status").textContent, "Speichern fehlgeschlagen");
+  assert.equal(view.context.window.location.href, undefined);
+});
+
+test("a direct application link opens the completed archive and locates the selected card", async () => {
+  const application = {id: "application:1", title: "Engineer", company: "Employer", workflow_status: "rejected", workflow_history: [],
+    linked_listings: [{title: "Recruiter ad", company: "Recruiter", review_note: "Saved source note"}]};
+  const view = page("applications", {}, async () => ({ok: true, json: async () => ({applications: [],
+    completed_applications: [application], statistics: {total: 1}, application_statuses: ["applied"], workflow_statuses: ["rejected"]})}));
+  view.context.window.location.search = "?job=application%3A1";
+  await new Promise(setImmediate);
+  assert.equal(view.elements.get("archive").hidden, false);
+  const card = view.elements.get("completed-applications").children[0];
+  assert.equal(card.className, "application selected-application");
+  assert.equal(card.scrolledIntoView, true);
+});
+
 test("complete review loading renders a card and applies a decision", async () => {
   const job = {id: "job:1", title: "Developer", company: "Example", workflow_status: "new",
     role_group: "ai_business_analysis", role_label: "Business Analyst (KI)"};

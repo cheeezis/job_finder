@@ -77,8 +77,13 @@ def fetch_jobs(cache_path=MANUAL_CACHE_FILE, now=None):
     jobs = []
     refreshed = {}
     errors = 0
+    identities_changed = False
 
     for saved_url, cached_job in cache.items():
+        identifier = job_id_for_url(saved_url)
+        if cached_job.id != identifier:
+            cached_job.id = identifier
+            identities_changed = True
         if detail_is_fresh(cached_job, now):
             cached_job.cache_stale = False
             refreshed[saved_url] = cached_job
@@ -99,7 +104,7 @@ def fetch_jobs(cache_path=MANUAL_CACHE_FILE, now=None):
                 cached_job.cache_stale = True
                 jobs.append(cached_job)
 
-    if refreshed != cache:
+    if refreshed != cache or identities_changed:
         save_detail_cache(cache_path, refreshed)
     if errors:
         record_partial_failure(errors)
@@ -115,8 +120,14 @@ def job_from_page(url, html):
         unknown = not job.locations or job.locations == ["unbekannt"]
         if unknown and (region := applicant_region(posting)):
             job.locations = [region]
+        job.id = job_id_for_url(url)
         return job
     return job_from_visible_page(url, html)
+
+
+def job_id_for_url(url):
+    """Scope manual identity to the whole URL; slugs and schema IDs are not global."""
+    return source_job_id(SOURCE_NAME, "", canonical_detail_url(url))
 
 
 def applicant_region(posting):
@@ -161,7 +172,7 @@ def job_from_visible_page(url, html):
     work_mode, remote_percentage = classify_remote(remote)
     identifier = identifier_from_url(url)
     return Job(
-        id=source_job_id(SOURCE_NAME, identifier, url),
+        id=job_id_for_url(url),
         title=title,
         company=company,
         locations=locations,

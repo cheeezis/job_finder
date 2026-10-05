@@ -22,6 +22,43 @@ def career_page(title):
 
 
 class ManualSourceTests(unittest.TestCase):
+    def test_equal_slugs_on_different_sites_have_distinct_manual_ids(self):
+        first = manual.job_from_page("https://first.example/jobs/junior-data-engineer", career_page("Data Engineer"))
+        second = manual.job_from_page("https://second.example/jobs/junior-data-engineer", career_page("Data Engineer"))
+
+        self.assertNotEqual(first.id, second.id)
+        self.assertEqual(
+            first.id,
+            manual.job_from_page(
+                "https://first.example/jobs/junior-data-engineer?utm_source=board", career_page("Data Engineer")
+            ).id,
+        )
+
+    def test_structured_manual_ids_are_also_scoped_to_the_full_url(self):
+        html = """<script type="application/ld+json">{
+            "@type": "JobPosting", "title": "Data Engineer", "identifier": "12345678",
+            "description": "Python und SQL", "hiringOrganization": {"name": "Example"}
+        }</script>"""
+        first = manual.job_from_page("https://first.example/job/12345678", html)
+        second = manual.job_from_page("https://second.example/job/12345678", html)
+
+        self.assertNotEqual(first.id, second.id)
+
+    def test_fresh_legacy_cache_ids_are_normalized_without_a_network_refresh(self):
+        url = "https://example.com/jobs/junior-data-engineer"
+        job = manual.job_from_page(url, career_page("Data Engineer"))
+        job.id = "manual:junior-data-engineer"
+        with tempfile.TemporaryDirectory() as directory:
+            cache_path = Path(directory) / "manual.json"
+            save_detail_cache(cache_path, {url: job})
+            with patch.object(manual, "fetch_text_with_final_url") as fetch:
+                jobs = manual.fetch_jobs(cache_path)
+            saved = load_detail_cache(cache_path)
+
+        fetch.assert_not_called()
+        self.assertEqual(jobs[0].id, manual.job_id_for_url(url))
+        self.assertEqual(saved[url].id, jobs[0].id)
+
     def test_join_style_escaped_description_is_readable(self):
         html = """<script type="application/ld+json">{
             "@type": "JobPosting",

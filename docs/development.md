@@ -272,6 +272,24 @@ nur mit einer sichtbaren H1-Überschrift und erkannten Überschriften für
 Aufgaben und Profil beziehungsweise Anforderungen. Navigation, Formulare
 und Footer werden beim Sammeln des lesbaren Textes übersprungen.
 
+Manuelle Anzeigen-IDs werden aus der vollständigen kanonischen URL gebildet,
+auch bei vorhandenen Schema-IDs. Gleiche URL-Enden verschiedener Arbeitgeber
+dürfen keine Bewerbungszustände teilen. Frische alte Cache-Einträge erhalten
+ebenfalls diese URL-ID; das Gedächtnis erkennt vorhandene Bewerbungen weiter
+über ihre Herkunftslinks und behält deren bisherige ID und Verlauf.
+
+Explizit hinzugefügte Anzeigen bleiben trotz der optionalen Filter für
+internationale Anzeigen und Junior-Hybrid-Sonderfälle sichtbar. Direkte
+Review-Links setzen zusätzlich Status, Bereich und Suche passend zurück.
+
+`linked_listings.link_listing_to_application` ordnet eine zusätzliche Anzeige
+unter Veröffentlichungs- und Gedächtnissperre einer bestehenden Bewerbung zu.
+Die bisherige Sichtungsnotiz und der Sichtungsverlauf bleiben als
+Zuordnungsdaten erhalten; die Bewerbung behält Identität, Status, Gehalt,
+Unterlagen und ihren Verlauf. Gespeicherte Anzeigen-ID-Aliase und Herkunftslinks
+halten die Zuordnung auch bei späteren Suchläufen aufrecht. Zwei Bewerbungen
+werden über diese Aktion nicht zusammengeführt.
+
 ### KI-Agent
 
 Der Steckbrief einer Stelle entsteht in einem LangGraph-Graphen

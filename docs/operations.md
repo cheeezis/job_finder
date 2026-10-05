@@ -128,6 +128,13 @@ Die Anwendung prüft die Prüfsummen, vergleicht die zurückgeschriebenen Daten 
 überschreibt nichts. Das ist ein Anwendungsbackup, kein Ersatz für die
 Azure-Serverbackups, Rollen- oder Infrastruktur-Sicherungen.
 
+Die gemeinsame Planung für Datenbank und historische Dokumentversionen steht
+unter [Backup und Wiederherstellung](backup-recovery.md). Eine Probe mit
+erfundenen Daten auf dem lokalen PostgreSQL-Testcontainer läuft mit
+`python scripts/restore_drill.py`; sie erstellt und entfernt eigene
+Testdatenbanken und prüft die Dokumentverweise. Sie ersetzt keine Azure-PITR-
+und Blob-Restore-Abnahme.
+
 ## Azure
 
 `infrastructure/postgresql.tf` verwaltet den produktiven Server: einen

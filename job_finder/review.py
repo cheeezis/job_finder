@@ -25,6 +25,7 @@ from job_finder.workflow.manual_import import import_manual_url
 from job_finder.workflow.memory import load_memory
 from job_finder.workflow.review_actions import (
     delete_workflow_history,
+    request_fact_sheet_rerun,
     start_application,
     undo_ignored_decision,
     update_application_salary,
@@ -136,6 +137,7 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
             "/api/application-listing": self._link_application_listing,
             "/api/review-status": self._review_status,
             "/api/review-note": self._review_note,
+            "/api/fact-sheet-rerun": self._fact_sheet_rerun,
             "/api/review-undo": self._undo_review,
             "/api/status": self._update_status,
             "/api/history": self._update_history,
@@ -196,6 +198,9 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
 
     def _review_note(self, payload):
         return update_review_note(payload["job_id"], payload.get("review_note"), self.memory_path)
+
+    def _fact_sheet_rerun(self, payload):
+        return request_fact_sheet_rerun(payload["job_id"], self.memory_path)
 
     def _undo_review(self, payload):
         return undo_ignored_decision(payload["job_id"], payload["expected_status"], self.memory_path)

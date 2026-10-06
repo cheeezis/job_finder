@@ -1,0 +1,247 @@
+{
+  "type": "json_schema",
+  "name": "steckbrief",
+  "strict": true,
+  "schema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "object",
+        "properties": {
+          "ampel": {
+            "type": "string",
+            "enum": [
+              "gruen",
+              "gelb",
+              "orange",
+              "rot",
+              "unbekannt"
+            ]
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ampel",
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "berufseinstieg": {
+        "type": "object",
+        "properties": {
+          "ampel": {
+            "type": "string",
+            "enum": [
+              "gruen",
+              "gelb",
+              "orange",
+              "rot",
+              "unbekannt"
+            ]
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ampel",
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "fachlicher_fit": {
+        "type": "object",
+        "properties": {
+          "ampel": {
+            "type": "string",
+            "enum": [
+              "gruen",
+              "gelb",
+              "orange",
+              "rot",
+              "unbekannt"
+            ]
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ampel",
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "luecken": {
+        "type": "object",
+        "properties": {
+          "ampel": {
+            "type": "string",
+            "enum": [
+              "gruen",
+              "gelb",
+              "orange",
+              "rot",
+              "unbekannt"
+            ]
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ampel",
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "homeoffice_standort": {
+        "type": "object",
+        "properties": {
+          "ampel": {
+            "type": "string",
+            "enum": [
+              "gruen",
+              "gelb",
+              "orange",
+              "rot",
+              "unbekannt"
+            ]
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ampel",
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "reiseanteil": {
+        "type": "object",
+        "properties": {
+          "ampel": {
+            "type": "string",
+            "enum": [
+              "gruen",
+              "gelb",
+              "orange",
+              "rot",
+              "unbekannt"
+            ]
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ampel",
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "gehalt": {
+        "type": "object",
+        "properties": {
+          "ampel": {
+            "type": "string",
+            "enum": [
+              "gruen",
+              "gelb",
+              "orange",
+              "rot",
+              "unbekannt"
+            ]
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ampel",
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "zusatz": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "thema": {
+              "type": "string"
+            },
+            "ampel": {
+              "type": "string",
+              "enum": [
+                "gruen",
+                "gelb",
+                "orange",
+                "rot",
+                "unbekannt",
+                "hinweis"
+              ]
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "thema",
+            "ampel",
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "fazit": {
+        "type": "object",
+        "properties": {
+          "stufe": {
+            "type": "string",
+            "enum": [
+              "bewerben",
+              "erst_klaeren",
+              "eher_streichen",
+              "streichen"
+            ]
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "stufe",
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "kurzgrund": {
+        "type": "string"
+      },
+      "quellen": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "status",
+      "berufseinstieg",
+      "fachlicher_fit",
+      "luecken",
+      "homeoffice_standort",
+      "reiseanteil",
+      "gehalt",
+      "zusatz",
+      "fazit",
+      "kurzgrund",
+      "quellen"
+    ],
+    "additionalProperties": false
+  }
+}

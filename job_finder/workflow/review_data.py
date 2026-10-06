@@ -22,6 +22,7 @@ from job_finder.workflow.memory import (
     studysmarter_board_company,
 )
 from job_finder.workflow.reporting import is_international_listing
+from job_finder.workflow.review_actions import RERUN_FIELD
 
 PERSISTED_REVIEW_STATUSES = {
     WorkflowStatus.INTERESTING.value,
@@ -81,6 +82,7 @@ def load_review_jobs(recommendations_path=RECOMMENDATIONS_JSON, memory_path=MEMO
         job["is_new"] = bool(job.get("is_new")) and (job["workflow_status"] == WorkflowStatus.NEW.value)
         job["application_tracked"] = is_application(entry)
         job["review_note"] = entry.get("review_note") or ""
+        job["fact_sheet_rerun"] = bool(entry.get(RERUN_FIELD))
         if not job.get("source_links"):
             job["source_links"] = memory_source_links(entry)
         review_jobs.append(job)
@@ -168,6 +170,8 @@ def attach_fact_sheets(jobs):
                 "sheet": entry["fact_sheet"],
                 "cost_eur": float(entry["cost_eur"]),
                 "created_at": entry["created_at"].isoformat(),
+                "retryable": entry["retryable"],
+                "outdated": entry["outdated"] or [],
             }
     return jobs
 

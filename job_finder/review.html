@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Stellen prüfen</title>
-  <link rel="stylesheet" href="/app.css?v=6">
+  <link rel="stylesheet" href="/app.css?v=7">
 </head>
 <body class="review-page">
 <main>
@@ -76,11 +76,16 @@
     <section id="fact-sheet" class="fact-sheet" aria-label="Steckbrief des Agenten" hidden>
       <h3>Steckbrief</h3>
       <p id="fact-sheet-aborted" class="prefilter-warning" hidden></p>
+      <p id="fact-sheet-outdated" class="prefilter-warning" hidden></p>
       <ul id="fact-sheet-lines" class="fact-sheet-lines"></ul>
       <p id="fact-sheet-verdict" class="fact-sheet-verdict"></p>
       <p id="fact-sheet-reason"></p>
       <p id="fact-sheet-sources" class="fact-sheet-sources"></p>
       <p id="fact-sheet-meta" class="fact-sheet-meta"></p>
+      <div class="fact-sheet-actions">
+        <span id="fact-sheet-rerun-status" class="note-status" role="status" aria-live="polite"></span>
+        <button id="fact-sheet-rerun" type="button" class="waiting">Neu bewerten</button>
+      </div>
     </section>
     <section class="review-note" aria-label="Meine Notiz">
       <label><span>Meine Notiz <span class="optional">optional</span></span>

@@ -4,13 +4,14 @@ import json
 import os
 import unittest
 from decimal import Decimal
+from pathlib import Path
 from unittest.mock import patch
 
 from psycopg import errors
 
-from job_finder.agent.fact_sheet import FIXED_LINES, SCHEMA, parse_fact_sheet
+from job_finder.agent.fact_sheet import FIXED_LINES, RESPONSE_FORMAT, SCHEMA, parse_fact_sheet
 from job_finder.persistence.database import transaction
-from job_finder.persistence.fact_sheets import fact_sheets, save_aborted, save_fact_sheet
+from job_finder.persistence.fact_sheets import fact_sheets, mark_outdated, save_aborted, save_fact_sheet
 from job_finder.workflow import review_data
 
 
@@ -42,6 +43,11 @@ def schema_objects(node):
 
 
 class FactSheetTests(unittest.TestCase):
+    def test_the_model_is_asked_for_the_same_structure_as_before_pydantic(self):
+        # The hand-written format the agent sent until the Pydantic model replaced it.
+        before = (Path(__file__).parent / "fixtures" / "fact_sheet_format.json").read_text(encoding="utf-8")
+        self.assertEqual(json.dumps(RESPONSE_FORMAT), json.dumps(json.loads(before)))
+
     def test_every_object_is_closed_as_strict_structured_output_requires(self):
         for node in schema_objects(SCHEMA):
             self.assertEqual(node["required"], list(node["properties"]))
@@ -120,6 +126,21 @@ class FactSheetStorageTests(unittest.TestCase):
         self.assertTrue(stored["job:1"]["complete"])
         self.assertEqual(stored["job:1"]["cost_eur"], Decimal("0.05"))
 
+    def test_a_new_sheet_keeps_its_basis_and_starts_without_outdated_parts(self):
+        versions = {"profile": "abc", "rules": "def", "ad": "123", "model": "gpt-5-mini medium", "graph": "1"}
+        save_aborted("job:1", "gpt-5-mini", "unvollständig", Decimal("0.02"), retryable=True, versions=versions)
+        mark_outdated({"job:1": ["profile", "ad"]})
+        self.assertEqual(fact_sheets()["job:1"]["outdated"], ["profile", "ad"])
+        self.assertTrue(fact_sheets()["job:1"]["retryable"])
+
+        save_fact_sheet("job:1", "gpt-5-mini", example_sheet(), Decimal("0.05"), attempt=2, versions=versions)
+        mark_outdated({"job:2": ["ad"]})
+
+        stored = fact_sheets()["job:1"]
+        self.assertEqual((stored["attempts"], stored["versions"]), (2, versions))
+        self.assertIsNone(stored["outdated"])
+        self.assertFalse(stored["retryable"])
+
     def test_the_review_gets_sheets_as_json_ready_data(self):
         save_fact_sheet("job:1", "gpt-5-mini", example_sheet(), Decimal("0.051"))
         save_aborted("job:2", "gpt-5-mini", "Stelle abgebrochen: 8 Modellaufrufe", Decimal("0.08"))
@@ -132,6 +153,7 @@ class FactSheetStorageTests(unittest.TestCase):
         self.assertEqual(jobs[0]["fact_sheet"]["cost_eur"], 0.051)
         self.assertEqual(jobs[0]["fact_sheet"]["model"], "gpt-5-mini")
         self.assertFalse(jobs[1]["fact_sheet"]["complete"])
+        self.assertEqual((jobs[1]["fact_sheet"]["retryable"], jobs[1]["fact_sheet"]["outdated"]), (False, []))
         self.assertNotIn("fact_sheet", jobs[2])
 
 

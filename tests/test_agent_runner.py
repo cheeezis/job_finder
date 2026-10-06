@@ -7,7 +7,7 @@ from contextlib import redirect_stdout
 from datetime import date
 from unittest.mock import ANY, patch
 
-import httpx
+import httpx2
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
@@ -82,27 +82,27 @@ class FakeModel:
 
     def __init__(self, *replies):
         self.replies, self.requests, self.deleted = list(replies), [], []
-        transport = httpx.MockTransport(self.handle)
+        transport = httpx2.MockTransport(self.handle)
         self.model = runner.agent_model("https://example.test/openai/v1/", "test", max_retries=0, transport=transport)
 
     def handle(self, request):
         if request.method == "DELETE":
             response_id = request.url.path.rsplit("/", 1)[-1]
             self.deleted.append(response_id)
-            return httpx.Response(200, json={"id": response_id, "object": "response", "deleted": True})
+            return httpx2.Response(200, json={"id": response_id, "object": "response", "deleted": True})
         self.requests.append(json.loads(request.content))
         answer = self.replies.pop(0)
         if isinstance(answer, Exception):
             raise answer
-        return answer if isinstance(answer, httpx.Response) else httpx.Response(200, json=answer)
+        return answer if isinstance(answer, httpx2.Response) else httpx2.Response(200, json=answer)
 
 
 def api_error(kind, retry_after="7"):
     if kind == "bad_request":
-        return httpx.Response(400, json={"error": {"message": "abgelehnt", "code": "invalid_prompt"}})
+        return httpx2.Response(400, json={"error": {"message": "abgelehnt", "code": "invalid_prompt"}})
     if kind == "rate_limit":
-        return httpx.Response(429, headers={"retry-after": retry_after}, json={"error": {"message": "gedrosselt"}})
-    return httpx.ConnectError("Verbindung abgebrochen")
+        return httpx2.Response(429, headers={"retry-after": retry_after}, json={"error": {"message": "gedrosselt"}})
+    return httpx2.ConnectError("Verbindung abgebrochen")
 
 
 class AgentRunnerTests(unittest.TestCase):
@@ -116,9 +116,11 @@ class AgentRunnerTests(unittest.TestCase):
         self.saved = self.enterContext(patch.object(runner, "save_fact_sheet"))
         self.aborted = self.enterContext(patch.object(runner, "save_aborted"))
 
-    def run_job(self, model, settings=SETTINGS):
+    def run_job(self, model, settings=SETTINGS, attempt=1):
         guard = CostGuard(settings, runner.MODEL)
-        outcome = runner.write_fact_sheet(JOB, "version: 5\n", guard, model.model, settings, date(2026, 9, 25))
+        outcome = runner.write_fact_sheet(
+            JOB, "version: 5\n", guard, model.model, settings, date(2026, 9, 25), attempt=attempt
+        )
         return outcome, guard
 
     def test_the_graph_loops_between_model_and_tools(self):
@@ -148,7 +150,7 @@ class AgentRunnerTests(unittest.TestCase):
         cost = call_cost(runner.MODEL, Usage(9000, 0, 800, web_searches=2)) + call_cost(
             runner.MODEL, Usage(9000, 0, 800)
         )
-        self.saved.assert_called_once_with("job:1", runner.MODEL, example_sheet(), cost)
+        self.saved.assert_called_once_with("job:1", runner.MODEL, example_sheet(), cost, attempt=1, versions=None)
         self.assertEqual(model.deleted, ["resp_1", "resp_2"])
 
     def test_only_links_the_agent_saw_stay_as_sources(self):
@@ -220,23 +222,31 @@ class AgentRunnerTests(unittest.TestCase):
         self.assertEqual(self.booked.call_args.args[2].web_searches, 2)
 
     def test_unusable_answers_end_only_this_job_with_a_reason(self):
+        incomplete = {**reply("resp_1", status="incomplete"), "incomplete_details": {"reason": "max_output_tokens"}}
+        # An incomplete or unusable answer may be retried once; a rejected request would only be rejected again.
         cases = {
-            "Steckbrief unbrauchbar": reply("resp_1", message("kein JSON")),
-            "Antwort unvollständig (max_output_tokens)": {
-                **reply("resp_1", status="incomplete"),
-                "incomplete_details": {"reason": "max_output_tokens"},
-            },
-            "Anfrage abgelehnt": api_error("bad_request"),
+            "Steckbrief unbrauchbar": (lambda: reply("resp_1", message("kein JSON")), True),
+            "Antwort unvollständig (max_output_tokens)": (lambda: incomplete, True),
+            "Anfrage abgelehnt": (lambda: api_error("bad_request"), False),
         }
-        for reason, answer in cases.items():
-            with self.subTest(reason=reason):
-                self.aborted.reset_mock()
+        for reason, (answer, retryable) in cases.items():
+            for attempt in (1, 2):
+                with self.subTest(reason=reason, attempt=attempt):
+                    self.aborted.reset_mock()
 
-                outcome, _guard = self.run_job(FakeModel(answer))
+                    outcome, _guard = self.run_job(FakeModel(answer()), attempt=attempt)
 
-                self.assertEqual(outcome, "abgebrochen")
-                self.aborted.assert_called_once_with("job:1", runner.MODEL, ANY, ANY)
-                self.assertIn(reason, self.aborted.call_args.args[2])
+                    self.assertEqual(outcome, "abgebrochen")
+                    self.aborted.assert_called_once_with(
+                        "job:1",
+                        runner.MODEL,
+                        ANY,
+                        ANY,
+                        retryable=retryable and attempt == 1,
+                        attempt=attempt,
+                        versions=None,
+                    )
+                    self.assertIn(reason, self.aborted.call_args.args[2])
 
     def test_a_job_that_keeps_calling_tools_stops_at_its_call_limit(self):
         settings = agent_settings({"agent": {"enabled": True, "job_max_model_calls": 2}})

@@ -211,6 +211,11 @@ stamp`. Die Baseline erhält die bisherige `schema_version = 2` und alle vorhand
 Daten. Ein Rollback auf das vorherige App-Image benötigt keinen Schema-Downgrade;
 ein Baseline-Downgrade wird bewusst abgelehnt, weil er den gesamten Bestand löschen
 würde. Neue Revisionen brauchen einen eigenen Kompatibilitäts- und Rückkehrplan.
+`0003_agent_fact_sheet_state` ergänzt nur Spalten mit Standardwerten an
+`agent_fact_sheets` (Wiederholung, Versuche, Grundlage, veraltete Teile): Das
+vorherige Image schreibt weiter wie bisher, ein Image-Rollback braucht also keinen
+Downgrade. Die Migration läuft vor dem Merge des passenden Releases, weil das neue
+Image die Spalten liest.
 Migrationen laufen bewusst getrennt vom Deploy (siehe [Deploy und Rollback](#deploy-und-rollback)).
 
 Nach einer freigegebenen Schemaänderung läuft der Befehl einmal gegen Azure, mit
@@ -346,7 +351,8 @@ Jeder Lauf schreibt JSON-Zeilen mit derselben `run_id` (`job_finder/console.py`)
 im Log-Analytics-Workspace stehen sie in `ContainerAppConsoleLogs_CL`, Spalte
 `Log_s`. Der Agent ergänzt je Stelle eine Zeile `agent_job`: Stellen-ID,
 Ergebnis (`fertig`, `abgebrochen`, `gestoppt`), Abbruchgrund als festes Wort
-(etwa `job_cost`, `incomplete`, `rejected`), Fazit-Stufe, Modell- und
+(etwa `job_cost`, `incomplete`, `rejected`), Versuch und ob ein weiterer folgt,
+Fazit-Stufe, Modell- und
 Werkzeugaufrufe, Websuchen, Tokens, Kosten und Sekunden. Teuerste Stellen und
 Abbruchgründe der letzten sieben Tage:
 

@@ -33,6 +33,7 @@ from job_finder.review import (
     update_workflow_status,
 )
 from job_finder.workflow.memory import load_memory, load_review_memory, save_memory
+from job_finder.workflow.review_actions import RERUN_FIELD
 from job_finder.workflow.review_data import company_applications, same_company_applications
 
 
@@ -575,7 +576,7 @@ class ReviewTests(unittest.TestCase):
                 with self.subTest(route=route), urlopen(base_url + route) as response:
                     page = response.read().decode("utf-8")
                     self.assertIn(marker, page)
-                    self.assertIn('href="/app.css?v=6"', page)
+                    self.assertIn('href="/app.css?v=7"', page)
                     self.assertIn('src="/app.js"', page)
                     self.assertNotIn("<style", page)
                     self.assertNotIn("style=", page)
@@ -795,6 +796,22 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(current["other:applied"], memory["other:applied"])
         self.assertIn("other:closed", archived)
         self.assertNotIn("other:unrelated", archived)
+
+    def test_local_api_asks_the_next_agent_run_for_a_new_fact_sheet(self):
+        with self.server_context() as base_url:
+            result = post_json(f"{base_url}/api/fact-sheet-rerun", {"job_id": "job:1"})
+            requested_at = load_memory(self.memory_path)["job:1"][RERUN_FIELD]
+            post_json(f"{base_url}/api/fact-sheet-rerun", {"job_id": "job:1"})
+            document = get_json(f"{base_url}/api/recommendations")
+            with self.assertRaises(HTTPError) as unknown:
+                urlopen(json_request(f"{base_url}/api/fact-sheet-rerun", {"job_id": "job:unknown"}))
+
+        self.assertEqual(result, {"fact_sheet_rerun": True})
+        self.assertTrue(document["recommendations"][0]["fact_sheet_rerun"])
+        # Asking twice keeps the first request; the decision itself stays untouched.
+        self.assertEqual(load_memory(self.memory_path)["job:1"][RERUN_FIELD], requested_at)
+        self.assertEqual(load_memory(self.memory_path)["job:1"]["workflow_status"], "interesting")
+        self.assertEqual(unknown.exception.code, 400)
 
     def test_local_api_saves_a_review_note(self):
         with self.server_context() as base_url:

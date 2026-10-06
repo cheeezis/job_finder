@@ -31,6 +31,10 @@
   // The review goes by the agent's verdict; a card it has not judged, or whose
   // fact sheet was aborted, sits in the middle so a good one is not buried.
   const verdictOrder = {bewerben: 0, erst_klaeren: 1, eher_streichen: 3, streichen: 4};
+  // What changed since a fact sheet was written (job_finder/agent/basis.py).
+  const basisLabels = {
+    profile: "Profil", rules: "Regeln", ad: "Anzeige", model: "Modell", graph: "Ablauf des Agenten"
+  };
   const withoutVerdict = 2;
 
   function verdictRank(job) {
@@ -50,6 +54,20 @@
     element(id).textContent = value || "";
   }
 
+  async function requestRerun() {
+    const job = visibleJobs[currentIndex];
+    element("fact-sheet-rerun").disabled = true;
+    try {
+      await postJson("/api/fact-sheet-rerun", {job_id: job.id}, "Neubewertung konnte nicht angefordert werden");
+    } catch (error) {
+      element("fact-sheet-rerun").disabled = false;
+      throw error;
+    }
+    for (const item of jobs.filter(item => item.id === job.id)) item.fact_sheet_rerun = true;
+    element("fact-sheet-rerun").textContent = "Neu bewerten angefordert";
+    setText("fact-sheet-rerun-status", "Der nächste Agent-Lauf schreibt den Steckbrief neu.");
+  }
+
   function renderFactSheet(job) {
     const entry = job.fact_sheet;
     const sheet = entry?.complete ? entry.sheet : null;
@@ -58,7 +76,17 @@
     aborted.hidden = !entry || entry.complete;
     // Stored reasons explain themselves, e.g. "Stelle abgebrochen: 8 Modellaufrufe erreicht".
     aborted.textContent = entry && !entry.complete
-      ? `⚠️ ${entry.note || "Steckbrief abgebrochen"}` : "";
+      ? `⚠️ ${entry.note || "Steckbrief abgebrochen"}${entry.retryable ? " · wird im nächsten Lauf noch einmal versucht" : ""}`
+      : "";
+    const changed = (entry?.outdated || []).map(part => basisLabels[part] || part);
+    element("fact-sheet-outdated").hidden = !changed.length;
+    element("fact-sheet-outdated").textContent = changed.length
+      ? `⚠️ Veraltet: ${changed.join(", ")} seit diesem Steckbrief geändert. Bei Bedarf neu bewerten lassen.`
+      : "";
+    const rerun = element("fact-sheet-rerun");
+    rerun.disabled = Boolean(job.fact_sheet_rerun);
+    rerun.textContent = job.fact_sheet_rerun ? "Neu bewerten angefordert" : "Neu bewerten";
+    setText("fact-sheet-rerun-status", "");
     const rows = sheet ? [
       ...factSheetLines.map(([key, label]) => [label, sheet[key]]),
       ...(sheet.zusatz || []).map(line => [line.thema, line])
@@ -492,6 +520,7 @@
     element(`mark-${status}`).addEventListener("click", () => changeStatus(status).catch(showError));
   }
   element("undo-ignored").addEventListener("click", () => undoIgnored().catch(showError));
+  element("fact-sheet-rerun").addEventListener("click", () => requestRerun().catch(showError));
   element("mark-applied").addEventListener("click", () => element("application-dialog").showModal());
   element("link-application").addEventListener("click", () => openApplicationLinker().catch(showError));
   element("link-application-cancel").addEventListener("click", () => element("link-application-dialog").close());

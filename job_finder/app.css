@@ -211,6 +211,7 @@ label { display: grid; gap: 6px; color: var(--muted); font-size: .79rem; font-we
 .verdict-eher_streichen, .verdict-streichen { color: var(--danger); }
 .fact-sheet-sources a { margin-right: 10px; }
 .fact-sheet-meta { color: var(--muted); font-size: .8rem; }
+.fact-sheet-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 8px; }
 .review-note { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line); }
 .review-note textarea {
   width: 100%;

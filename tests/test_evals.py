@@ -11,7 +11,7 @@ from decimal import Decimal
 from pathlib import Path
 from urllib.parse import urlparse
 
-import httpx
+import httpx2
 
 from evals import __main__ as cli, harness, private_cases
 from evals.grading import grade, summarize
@@ -55,25 +55,25 @@ class FakeEndpoint:
 
     def __init__(self, *outputs):
         self.outputs, self.requests, self.deleted = list(outputs), [], []
-        transport = httpx.MockTransport(self.handle)
+        transport = httpx2.MockTransport(self.handle)
         self.model = runner.agent_model("https://example.test/openai/v1/", "test", max_retries=0, transport=transport)
 
     def handle(self, request):
         if request.method == "DELETE":
             self.deleted.append(request.url.path.rsplit("/", 1)[-1])
-            return httpx.Response(200, json={"id": self.deleted[-1], "object": "response", "deleted": True})
+            return httpx2.Response(200, json={"id": self.deleted[-1], "object": "response", "deleted": True})
         self.requests.append(json.loads(request.content))
         output = self.outputs.pop(0)
-        if isinstance(output, httpx.Response):
+        if isinstance(output, httpx2.Response):
             return output
         number = len(self.requests)
         body = {"id": f"resp_{number}", "object": "response", "created_at": 1790000000, "model": runner.MODEL}
-        return httpx.Response(200, json={**body, "status": "completed", "output": [output], "usage": TOKENS})
+        return httpx2.Response(200, json={**body, "status": "completed", "output": [output], "usage": TOKENS})
 
 
 def content_filter():
     """What Azure answers when its content filter rejects a request before the model sees it."""
-    return httpx.Response(400, json={"error": {"message": "gefiltert", "code": "content_filter"}})
+    return httpx2.Response(400, json={"error": {"message": "gefiltert", "code": "content_filter"}})
 
 
 def answer(content):

@@ -113,6 +113,21 @@ class ReviewBrowserTests(unittest.TestCase):
         self.assertGreaterEqual(self.page.locator("#fact-sheet-lines li").count(), 7)
         expect(self.page.locator("#fact-sheet-meta")).to_contain_text("gpt-5-mini")
 
+    def test_a_fact_sheet_can_be_written_again_by_the_next_agent_run(self):
+        from playwright.sync_api import expect
+
+        self.page.goto(f"/review?job={WITH_FACT_SHEET}")
+        expect(self.page.locator("#fact-sheet-rerun")).to_have_text("Neu bewerten")
+        title = self.current_title()
+
+        with self.page.expect_response(lambda response: "/api/fact-sheet-rerun" in response.url) as answer:
+            self.page.click("#fact-sheet-rerun")
+
+        self.assertTrue(answer.value.ok)
+        expect(self.page.locator("#fact-sheet-rerun")).to_have_text("Neu bewerten angefordert")
+        expect(self.page.locator("#fact-sheet-rerun")).to_be_disabled()
+        self.assertTrue(self.job(title)["fact_sheet_rerun"])
+
     def test_a_decision_saves_the_note_and_moves_on(self):
         from playwright.sync_api import expect
 

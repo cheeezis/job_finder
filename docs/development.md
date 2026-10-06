@@ -315,8 +315,24 @@ graph TD
 
 Die Bing-Suche läuft als eingebautes Werkzeug im Modellaufruf selbst. Die
 abgerechnete Zahl der Suchen reicht LangChain nicht weiter; `agent_model` liest
-sie deshalb aus der HTTP-Antwort mit. Die Tests schicken das echte
-LangChain-Modell gegen einen simulierten Endpunkt (`httpx.MockTransport`).
+sie deshalb aus der HTTP-Antwort mit, über den HTTP-Client der openai-Bibliothek
+(httpx2). Die Tests schicken das echte LangChain-Modell gegen einen simulierten
+Endpunkt (`httpx2.MockTransport`).
+
+Ein Pydantic-Modell beschreibt den Steckbrief (`job_finder/agent/fact_sheet.py`):
+Aus ihm entstehen das Format der strukturierten Ausgabe und die Prüfung der
+Antwort. Ein Test hält das Format Byte für Byte gleich zum früheren,
+handgeschriebenen (`tests/fixtures/fact_sheet_format.json`), damit sich die
+Anfrage an das Modell nicht unbemerkt ändert.
+
+Jeder Steckbrief speichert Versuch und Grundlage (`job_finder/agent/basis.py`):
+Hashes von Profil (geparst, ohne Kommentare), Regeln und Anzeige sowie Modell mit
+Denkaufwand und `GRAPH_VERSION`. Ändern sich Graph, Werkzeuge oder die Anfrage je
+Stelle so, dass Steckbriefe anders ausfallen, `GRAPH_VERSION` in `runner.py`
+erhöhen; die Review zeigt ältere dann als veraltet. Wiederholt wird höchstens
+einmal (`MAX_ATTEMPTS`) und nur bei `incomplete` oder `unusable`. „Neu bewerten“
+setzt in der Review das Feld `fact_sheet_rerun_requested_at` am gemerkten Job;
+der Agent arbeitet solche Stellen zuerst ab und entfernt das Feld danach.
 LangSmith-Tracing ist nicht eingerichtet; ohne gesetzte `LANGSMITH_*`-Variablen
 verlässt nichts den eigenen Rechner beziehungsweise Azure.
 

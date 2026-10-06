@@ -15,6 +15,9 @@ from psycopg.conninfo import conninfo_to_dict, make_conninfo
 from job_finder.persistence import schema_migrations as migrations
 
 LEGACY_SCHEMA = (Path(__file__).with_name("fixtures") / "schema_v2.sql").read_text(encoding="utf-8")
+# The newest revision; a test adds a later one of its own.
+HEAD = "0003_agent_fact_sheet_state"
+ADDED_COLUMNS = {"agent_fact_sheets": ["retryable", "attempts", "versions", "outdated"]}
 
 
 class SchemaMigrationTests(unittest.TestCase):
@@ -78,10 +81,12 @@ class SchemaMigrationTests(unittest.TestCase):
                 "SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename <> 'alembic_version' ORDER BY tablename"
             ).fetchall()
             for (table,) in tables:
+                # Columns a later revision adds hold defaults; the rows from before must stay unchanged.
                 result[table] = connection.execute(
-                    sql.SQL("SELECT row_to_json(t)::text FROM {} t ORDER BY row_to_json(t)::text").format(
+                    sql.SQL("SELECT (to_jsonb(t) - %s::text[])::text AS row FROM {} t ORDER BY row").format(
                         sql.Identifier(table)
-                    )
+                    ),
+                    (ADDED_COLUMNS.get(table, []),),
                 ).fetchall()
         return result
 
@@ -123,10 +128,7 @@ class SchemaMigrationTests(unittest.TestCase):
         before = self.rows()
         self.assertEqual(migrations.migrate()["action"], "unchanged")
         self.assertEqual(self.rows(), before)
-        self.assertEqual(
-            migrations.schema_status(),
-            {"state": "current", "revision": "0002_runtime_boundaries", "head": "0002_runtime_boundaries"},
-        )
+        self.assertEqual(migrations.schema_status(), {"state": "current", "revision": HEAD, "head": HEAD})
 
     def test_existing_database_is_validated_then_stamped_without_changing_data(self):
         self.legacy()
@@ -255,10 +257,10 @@ class SchemaMigrationTests(unittest.TestCase):
         target = Path(directory.name)
         (target / "versions").mkdir()
         source = Path(migrations.__file__).with_name("migrations")
-        for relative in ("env.py", "versions/0001_baseline.py", "versions/0002_runtime_boundaries.py"):
+        for relative in ("env.py", *(f"versions/{path.name}" for path in (source / "versions").glob("*.py"))):
             (target / relative).write_text((source / relative).read_text(encoding="utf-8"), encoding="utf-8")
-        (target / "versions/0003_example.py").write_text(
-            'from alembic import op\nimport sqlalchemy as sa\nrevision="0003_example"\ndown_revision="0002_runtime_boundaries"\n'
+        (target / "versions/9999_example.py").write_text(
+            f'from alembic import op\nimport sqlalchemy as sa\nrevision="9999_example"\ndown_revision="{HEAD}"\n'
             'def upgrade():\n    op.add_column("job_state", sa.Column("example_marker", sa.Text, nullable=True))\n'
             + ('    raise RuntimeError("injected revision failure")\n' if fail else ""),
             encoding="utf-8",
@@ -281,7 +283,7 @@ class SchemaMigrationTests(unittest.TestCase):
         self.future_revision()
         self.assertEqual(migrations.schema_status()["state"], "outdated")
         result = migrations.migrate()
-        self.assertEqual((result["action"], result["revision"]), ("upgraded", "0003_example"))
+        self.assertEqual((result["action"], result["revision"]), ("upgraded", "9999_example"))
         self.assertEqual(self.execute("SELECT workflow_status,extra FROM job_state"), before)
         self.assertEqual(self.execute("SELECT example_marker FROM job_state"), [(None,)])
 
@@ -293,7 +295,7 @@ class SchemaMigrationTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "injected revision failure"):
             migrations.migrate()
         self.assertEqual((self.signature(), self.rows()), before)
-        self.assertEqual(self.execute("SELECT version_num FROM alembic_version"), [("0002_runtime_boundaries",)])
+        self.assertEqual(self.execute("SELECT version_num FROM alembic_version"), [(HEAD,)])
 
     def test_failure_after_stamping_rolls_back_the_marker_and_preserves_data(self):
         self.legacy()

@@ -140,7 +140,7 @@ verwenden denselben Migrationspfad. Es gibt keine automatische Migration beim Ap
 | `job_finder/matching/experience.py`, `location_rules.py`, `salary.py`, `matching_text.py` | Zusammenhängende Analysen und normalisierte Textvergleiche |
 | `job_finder/workflow/memory.py` | PostgreSQL-Zustand, stabile IDs (eine je Stelle, auch über Portale und Läufe) und frühere Entscheidungen |
 | `job_finder/workflow/availability.py` | Fehlende interessante Stellen auf bestätigte Schließung prüfen |
-| `job_finder/review.py`, `job_finder/workflow/review_data.py`, `review_actions.py` | HTTP-Server, Review-Datenaufbereitung und transaktionale Aktionen |
+| `job_finder/review.py`, `job_finder/review_app.py`, `job_finder/workflow/review_data.py`, `review_actions.py` | HTTP-Server und seine FastAPI-Fassung (dieselben Tests laufen gegen beide; die Demo nutzt schon FastAPI), Review-Datenaufbereitung und transaktionale Aktionen |
 | `job_finder/workflow/applications.py`; `job_finder/persistence/application_documents.py`, `document_store.py` | Bewerbungsverlauf und Unterlagen (lokal oder im Blob Storage) |
 | `job_finder/app.js`, `landing.js`, `review.js`, `applications.js` und zugehörige HTML-Dateien | Gemeinsame Browser-Helfer, Seitenskripte und Arbeitsansichten |
 | `job_finder/workflow/reporting.py`, `notifications.py` | Review-Ausgabe und Discord-Warteschlange |

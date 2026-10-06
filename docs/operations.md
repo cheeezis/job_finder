@@ -211,7 +211,7 @@ stamp`. Die Baseline erhält die bisherige `schema_version = 2` und alle vorhand
 Daten. Ein Rollback auf das vorherige App-Image benötigt keinen Schema-Downgrade;
 ein Baseline-Downgrade wird bewusst abgelehnt, weil er den gesamten Bestand löschen
 würde. Neue Revisionen brauchen einen eigenen Kompatibilitäts- und Rückkehrplan.
-Die Einbindung eines automatischen Migrationsschritts in den Deploy folgt in F13.
+Migrationen laufen bewusst getrennt vom Deploy (siehe [Deploy und Rollback](#deploy-und-rollback)).
 
 Nach einer freigegebenen Schemaänderung läuft der Befehl einmal gegen Azure, mit
 den nur für diesen Aufruf gesetzten Verbindungsdaten aus `.env.postgres-azure`.
@@ -262,8 +262,35 @@ wie oben:
 terraform -chdir=infrastructure apply -replace=azurerm_container_app.review -replace=azapi_resource.review_auth -replace=azapi_resource_action.review_public
 ```
 
-Nach jedem Deploy prüft die Pipeline, dass die Review ohne Anmeldung nur mit
-302 (Umleitung zum Login) oder 401 antwortet.
+## Deploy und Rollback
+
+Ein Deploy nach dem Merge läuft in drei Stufen:
+
+1. **Plan:** Der Job „Release plan“ erstellt den Terraform-Plan gegen den echten
+   Azure-Zustand und legt ihn privat im State-Container ab (`release-plans/<commit>`).
+   Pläne können geheime Werte enthalten; die Zusammenfassung im Lauf nennt deshalb
+   nur Ressourcen und Aktionen. Das Environment `production-plan` ist auf `main`
+   beschränkt und braucht keine Freigabe.
+2. **Freigabe und Apply:** Nach der Freigabe in `production` wendet der Apply genau
+   diesen Plan an, nach Prüfung seiner Prüfsumme. Ein veralteter Plan (State seither
+   geändert) bricht ab; dann den Lauf neu starten. Der Plan wird danach gelöscht.
+3. **Ausrollen und prüfen:** Die Zusammenfassung notiert unter „Rückweg“ das
+   bisherige Image. Danach rollt der Job das neue Image per Digest aus, prüft, dass
+   die Review ohne Anmeldung nur mit 302 (Umleitung zum Login) oder 401 antwortet,
+   und wartet, bis Worker und neueste Review-Revision auf dem neuen Image stehen und
+   die Revision gesund läuft ([verify_rollout.sh](../.github/scripts/verify_rollout.sh)).
+
+**Rollback:** Unter Actions den Workflow „Rollback“ von `main` starten und das unter
+„Rückweg“ notierte Image (`…/jobfinder@sha256:…`) eintragen. Er läuft ebenfalls erst
+nach Freigabe in `production`, setzt nur das Image von Worker und Review zurück und
+führt dieselben Prüfungen aus. Terraform und Datenbank bleiben unverändert.
+
+Das geht nur, solange das Schema zum alten Image passt. Migrationen sind deshalb
+erweiternd (neue Tabellen und Spalten, nichts entfernen) und laufen vor dem Deploy
+getrennt, wie oben unter Azure beschrieben; Aufräummigrationen folgen erst, wenn
+kein Rückweg mehr auf ein älteres Image nötig ist. Nach einer inkompatiblen
+Schemaänderung ist ein altes Image kein Rückweg mehr; dann gilt die Wiederherstellung
+aus [Backup und Wiederherstellung](backup-recovery.md).
 
 ## Lokaler Hybrid-Lauf (StepStone/Remotely)
 

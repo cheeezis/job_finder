@@ -345,7 +345,7 @@ Danach die Objekt-ID des Service Principals (`az ad sp show --id <appId> --query
 als `local_docker_sp_object_id` in `infrastructure/variables.tf` eintragen und
 die Rollenzuweisungen anwenden.
 
-## Logs und Traces des Agenten
+## Logs und Traces
 
 Jeder Lauf schreibt JSON-Zeilen mit derselben `run_id` (`job_finder/console.py`);
 im Log-Analytics-Workspace stehen sie in `ContainerAppConsoleLogs_CL`, Spalte
@@ -384,10 +384,26 @@ Was erfasst wird, legt `span()` in `job_finder/telemetry.py` fest: nur Zahlen,
 Wahrheitswerte und kurze feste Wörter; bei einem Fehler nur der Typname der
 Ausnahme. Profil, Prompt, Anzeigentext, Notizen, Titel, Firma und Antworten des
 Modells fehlen; ein Test in `tests/test_agent_runner.py` prüft das. Application
-Insights nimmt nur Daten mit Entra-ID-Anmeldung an (die Managed Identity des
-Workers), bewahrt sie 30 Tage auf und nimmt höchstens 0,1 GB am Tag an. Ohne
+Insights nimmt nur Daten mit Entra-ID-Anmeldung an (die Managed Identitys von
+Worker und Review), bewahrt sie 30 Tage auf und nimmt höchstens 0,1 GB am Tag an. Ohne
 `APPLICATIONINSIGHTS_CONNECTION_STRING`, also lokal, in Tests und Evals, sendet
 nichts.
+
+Die Review schickt je API-Anfrage einen Span `review_request` mit Route, Status,
+Dauer und `jobfinder.first_request` (erste Anfrage nach dem Start, also
+Kaltstart). Darunter hängen die Schritte `db_connect` (Verbindung samt
+Entra-Token), `read_recommendations`, `read_memory`, `build_cards`,
+`read_fact_sheets` und `read_document`, mit Zeilen- und Kartenzahl, aber ohne
+IDs oder Inhalte. Wo die Ladezeit der Stellenliste bleibt:
+
+```kusto
+AppDependencies
+| where TimeGenerated > ago(7d) and Name in ("review_request", "db_connect", "read_recommendations",
+    "read_memory", "build_cards", "read_fact_sheets", "read_document")
+| summarize Anzahl = count(), Median_ms = percentile(DurationMs, 50), P95_ms = percentile(DurationMs, 95)
+    by Name, Route = tostring(Properties["http.route"]), Kaltstart = tostring(Properties["jobfinder.first_request"])
+| order by Median_ms desc
+```
 
 ## Kosten
 

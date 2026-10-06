@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 
 from job_finder.paths import MEMORY_FILE, PROJECT_DIR
 from job_finder.persistence.database_auth import connect_runtime
+from job_finder.telemetry import step
 
 _connection: ContextVar[psycopg.Connection | None] = ContextVar("jobfinder_connection", default=None)
 
@@ -42,7 +43,11 @@ def transaction(*, admin=False):
         with existing.transaction():
             yield existing
         return
-    connection = psycopg.connect(admin_database_url(), connect_timeout=10) if admin else connect_runtime(database_url())
+    # The connection includes TLS and, with Entra, the token: a cost the trace should show.
+    with step("db_connect", **{"jobfinder.auth": os.environ.get("JOBFINDER_DATABASE_AUTH", "password")}):
+        connection = (
+            psycopg.connect(admin_database_url(), connect_timeout=10) if admin else connect_runtime(database_url())
+        )
     with connection:
         connection.execute("SET LOCAL lock_timeout = '30s'")
         token = _connection.set(connection)

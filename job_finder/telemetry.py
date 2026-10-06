@@ -1,8 +1,9 @@
-"""Traces of the agent for Application Insights: ids, counts and the verdict, never text.
+"""Traces for Application Insights: ids, counts, timings and the verdict, never text.
 
-Without APPLICATIONINSIGHTS_CONNECTION_STRING nothing is exported and every
-span is a no-op, so local runs, tests and evals behave as before. The worker
-signs in with its managed identity; the resource accepts no key.
+The agent traces each run, the review each API request. Without
+APPLICATIONINSIGHTS_CONNECTION_STRING nothing is exported and every span is a
+no-op, so local runs, tests and evals behave as before. Worker and review sign
+in with their managed identities; the resource accepts no key.
 
 What a span may carry is decided here: span() takes only numbers, booleans
 and short fixed words, and an exception leaves just its type name. Profile,
@@ -19,10 +20,10 @@ CONNECTION_ENV = "APPLICATIONINSIGHTS_CONNECTION_STRING"
 # Long enough for an id or a word like "abgebrochen", too short for a sentence.
 MAX_TEXT = 40
 
-tracer = trace.get_tracer("job_finder.agent")
+tracer = trace.get_tracer("job_finder")
 
 
-def configure_tracing(environ=os.environ):
+def configure_tracing(environ=os.environ, service="jobfinder-worker"):
     """Send spans to Application Insights when it is configured; return the provider or None."""
     connection = environ.get(CONNECTION_ENV)
     if not connection:
@@ -36,11 +37,11 @@ def configure_tracing(environ=os.environ):
     # Otherwise the exporter also reports its own usage statistics to Microsoft.
     os.environ.setdefault("APPLICATIONINSIGHTS_STATSBEAT_DISABLED_ALL", "true")
     credential = DefaultAzureCredential(managed_identity_client_id=environ.get("JOBFINDER_MANAGED_IDENTITY_CLIENT_ID"))
-    # The container is gone after the run, so spans are not kept on disk for a retry.
+    # The container may be gone a moment later, so spans are not kept on disk for a retry.
     exporter = AzureMonitorTraceExporter(
         connection_string=connection, credential=credential, disable_offline_storage=True
     )
-    provider = TracerProvider(resource=Resource.create({"service.name": "jobfinder-worker"}))
+    provider = TracerProvider(resource=Resource.create({"service.name": service}))
     provider.add_span_processor(BatchSpanProcessor(exporter))
     trace.set_tracer_provider(provider)
     return provider
@@ -68,6 +69,21 @@ def span(name, **attributes):
             raise
 
 
+@contextmanager
+def step(name, **attributes):
+    """Time one step inside a traced request or run; outside of one, do nothing.
+
+    Shared code such as a database connection runs very often in the finder,
+    which has no trace; only where a span is open does a step add one.
+    """
+    if not trace.get_current_span().is_recording():
+        yield None
+        return
+    with span(name, **attributes) as current:
+        yield current
+
+
 def annotate(current, **attributes):
-    """Add safe attributes to an open span."""
-    current.set_attributes(safe_attributes(attributes))
+    """Add safe attributes to an open span; a step outside of a trace passes None."""
+    if current is not None:
+        current.set_attributes(safe_attributes(attributes))

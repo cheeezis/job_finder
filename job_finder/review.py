@@ -14,6 +14,7 @@ import webbrowser
 import uvicorn
 
 from job_finder.review_app import create_app
+from job_finder.telemetry import configure_tracing
 
 # Set when deployed behind a real hostname (e.g. Azure Container Apps): the
 # app then allows exactly this hostname over HTTPS instead of localhost.
@@ -71,7 +72,22 @@ def main():
     print(f"Job Finder geoeffnet unter {url}")
     print("Dieses Fenster schliessen, um den Job Finder zu beenden.")
     app = create_app(deployed_host=os.environ.get(DEPLOYED_HOST_ENV, ""))
-    uvicorn.Server(uvicorn.Config(app, log_level="warning", access_log=False)).run(sockets=[sock])
+    tracing = start_tracing()
+    try:
+        uvicorn.Server(uvicorn.Config(app, log_level="warning", access_log=False)).run(sockets=[sock])
+    finally:
+        if tracing is not None:
+            # Scaling to zero ends the process: send the remaining spans first.
+            tracing.shutdown()
+
+
+def start_tracing():
+    """Turn on request timings when Application Insights is configured; a failure only costs the timings."""
+    try:
+        return configure_tracing(os.environ, service="jobfinder-review")
+    except Exception as error:
+        print(f"Traces aus: {type(error).__name__}")
+        return None
 
 
 if __name__ == "__main__":

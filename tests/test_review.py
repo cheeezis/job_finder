@@ -18,6 +18,10 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 import uvicorn
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from job_finder.matching.config import LOCAL_SEARCH_LOCATION, LOCAL_SEARCH_POSTAL_CODE
 from job_finder.review import address_is_in_use, bind_exclusively
@@ -33,6 +37,22 @@ from job_finder.workflow.review_actions import (
     update_workflow_status,
 )
 from job_finder.workflow.review_data import company_applications, load_review_jobs, same_company_applications
+
+
+def span_recorder():
+    """Record the spans of this test process in memory, once for all tests."""
+    global SPANS
+    if SPANS is None:
+        SPANS = InMemorySpanExporter()
+        provider = trace.get_tracer_provider()
+        if not isinstance(provider, TracerProvider):
+            provider = TracerProvider()
+            trace.set_tracer_provider(provider)
+        provider.add_span_processor(SimpleSpanProcessor(SPANS))
+    return SPANS
+
+
+SPANS = None
 
 
 class PageTags(HTMLParser):
@@ -861,6 +881,27 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(load_memory(self.memory_path)["job:1"][RERUN_FIELD], requested_at)
         self.assertEqual(load_memory(self.memory_path)["job:1"]["workflow_status"], "interesting")
         self.assertEqual(unknown.exception.code, 400)
+
+    def test_api_requests_leave_timings_but_no_ids_or_text(self):
+        spans = span_recorder()
+        spans.clear()
+        with self.server_context() as base_url:
+            get_json(f"{base_url}/api/recommendations")
+            get_json(f"{base_url}/api/recommendations")
+            with urlopen(f"{base_url}/review"):
+                pass
+
+        finished = spans.get_finished_spans()
+        requests = [item for item in finished if item.name == "review_request"]
+        self.assertEqual([item.attributes["http.route"] for item in requests], ["/api/recommendations"] * 2)
+        self.assertEqual([item.attributes["jobfinder.first_request"] for item in requests], [True, False])
+        self.assertEqual(requests[0].attributes["http.response.status_code"], 200)
+        steps = {item.name for item in finished if item.context.trace_id == requests[0].context.trace_id}
+        self.assertLessEqual(
+            {"read_recommendations", "read_memory", "build_cards", "read_fact_sheets", "db_connect"}, steps
+        )
+        values = [str(value) for item in finished for value in item.attributes.values()]
+        self.assertFalse([value for value in values if "job:1" in value or "Python" in value])
 
     def test_local_api_saves_a_review_note(self):
         with self.server_context() as base_url:

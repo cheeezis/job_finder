@@ -9,6 +9,7 @@ the synchronous database work in its thread pool.
 
 import mimetypes
 import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -24,6 +25,7 @@ from job_finder.matching.config import LOCAL_SEARCH_LOCATION, LOCAL_SEARCH_POSTA
 from job_finder.models import WorkflowStatus
 from job_finder.paths import APPLICATION_DOCUMENTS_DIR, JOBS_FILE, MANUAL_CACHE_FILE, MEMORY_FILE, RECOMMENDATIONS_JSON
 from job_finder.persistence.application_documents import find_document, read_document
+from job_finder.telemetry import annotate, span, step
 from job_finder.workflow.applications import load_application_overview
 from job_finder.workflow.linked_listings import link_listing_to_application
 from job_finder.workflow.manual_import import import_manual_url
@@ -154,11 +156,35 @@ def create_app(paths=ReviewPaths(), *, deployed_host="", manual_importer=import_
     """Build the review app; deployed_host allows exactly that hostname over HTTPS instead of localhost."""
     app = FastAPI(title="Job Finder Review", docs_url=None, redoc_url=None, openapi_url="/openapi.json")
     deployed_host = deployed_host.casefold()
+    started, served = time.monotonic(), {"any": False}
 
     @app.middleware("http")
     async def guard(request: Request, call_next):
         problem = request_problem(request, deployed_host)
-        response = error(*problem) if problem else await call_next(request)
+        if problem:
+            response = error(*problem)
+        elif request.url.path.startswith("/api/"):
+            # One span per API call: route, status and whether the process had just started, never ids or text.
+            with span(
+                "review_request",
+                **{
+                    "http.request.method": request.method,
+                    "jobfinder.first_request": not served["any"],
+                    "jobfinder.uptime_s": round(time.monotonic() - started),
+                },
+            ) as current:
+                served["any"] = True
+                response = await call_next(request)
+                route = request.scope.get("route")
+                annotate(
+                    current,
+                    **{
+                        "http.route": getattr(route, "path", "other"),
+                        "http.response.status_code": response.status_code,
+                    },
+                )
+        else:
+            response = await call_next(request)
         response.headers.update(SECURITY_HEADERS)
         if request.url.path == "/docs":
             response.headers["Content-Security-Policy"] = DOCS_POLICY
@@ -204,8 +230,10 @@ def create_app(paths=ReviewPaths(), *, deployed_host="", manual_importer=import_
         try:
             job_id = single_query_value(request, "job_id")
             document_id = single_query_value(request, "document_id")
-            metadata = find_document(load_memory(paths.memory)[job_id], document_id)
-            content = read_document(job_id, metadata, paths.documents)
+            with step("read_memory"):
+                metadata = find_document(load_memory(paths.memory)[job_id], document_id)
+            with step("read_document"):
+                content = read_document(job_id, metadata, paths.documents)
         except (KeyError, ValueError, OSError):
             return error(404, "Nicht gefunden")
         return Response(

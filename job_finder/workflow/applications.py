@@ -7,6 +7,7 @@ from job_finder.models import APPLICATION_STATUSES, OPEN_APPLICATION_STATUSES, W
 from job_finder.paths import MEMORY_FILE, RECOMMENDATIONS_JSON
 from job_finder.persistence.application_documents import public_documents
 from job_finder.persistence.storage import read_object
+from job_finder.telemetry import annotate, step
 from job_finder.workflow.memory import (
     has_application_state as is_application,
     load_memory,
@@ -76,7 +77,9 @@ def validated_date(value):
 
 def load_application_overview(memory_path=MEMORY_FILE, as_of=None, recommendations_path=RECOMMENDATIONS_JSON):
     """Return open and completed applications plus statistics for all."""
-    memory = load_memory(memory_path)
+    with step("read_memory") as current:
+        memory = load_memory(memory_path)
+        annotate(current, **{"jobfinder.rows": len(memory)})
     reference_date = as_of or date.today()
     links = review_links(memory, recommendations_path)
     all_applications = [

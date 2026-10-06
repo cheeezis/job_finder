@@ -11,6 +11,7 @@ from job_finder.paths import MEMORY_FILE, RECOMMENDATIONS_JSON
 from job_finder.persistence.database import snapshot
 from job_finder.persistence.fact_sheets import fact_sheets
 from job_finder.persistence.storage import dataset_name, read_object
+from job_finder.telemetry import annotate, step
 from job_finder.workflow.applications import OPEN_APPLICATION_STATUSES, application_row, is_application
 from job_finder.workflow.memory import (
     clear_studysmarter_board_companies,
@@ -44,15 +45,19 @@ def load_review_jobs(recommendations_path=RECOMMENDATIONS_JSON, memory_path=MEMO
     """
     path = Path(recommendations_path)
     with snapshot() if dataset_name(path) else nullcontext():
-        recommendations = read_object(path, {}).get("recommendations", [])
+        with step("read_recommendations") as current:
+            recommendations = read_object(path, {}).get("recommendations", [])
+            annotate(current, **{"jobfinder.rows": len(recommendations)})
         # Only the entries this list can show or match, not every remembered job.
-        memory = load_review_memory(
-            {job["id"] for job in recommendations},
-            {url for job in recommendations for url in job_urls(job)},
-            PERSISTED_REVIEW_STATUSES,
-            memory_path,
-            archived=archived,
-        )
+        with step("read_memory", **{"jobfinder.archived": archived}) as current:
+            memory = load_review_memory(
+                {job["id"] for job in recommendations},
+                {url for job in recommendations for url in job_urls(job)},
+                PERSISTED_REVIEW_STATUSES,
+                memory_path,
+                archived=archived,
+            )
+            annotate(current, **{"jobfinder.rows": len(memory)})
     # Normalize the in-memory view only; the next worker run persists cleanup.
     clear_studysmarter_board_companies(memory)
     find_memory_ids = memory_id_finder(memory)
@@ -93,10 +98,12 @@ def load_review_jobs(recommendations_path=RECOMMENDATIONS_JSON, memory_path=MEMO
         wanted = is_archived(entry) if archived else entry.get("workflow_status") in PERSISTED_REVIEW_STATUSES
         if wanted and job_id not in represented_memory_ids:
             review_jobs.append(remembered_review_job(job_id, entry))
-    cards = one_card_per_job(review_jobs)
-    applications = company_applications(memory)
-    for card in cards:
-        card["company_applications"] = same_company_applications(card, applications)
+    with step("build_cards") as current:
+        cards = one_card_per_job(review_jobs)
+        applications = company_applications(memory)
+        for card in cards:
+            card["company_applications"] = same_company_applications(card, applications)
+        annotate(current, **{"jobfinder.cards": len(cards)})
     return cards
 
 
@@ -155,7 +162,8 @@ def one_card_per_job(review_jobs):
 def attach_fact_sheets(jobs):
     """Add the agent's fact sheet, or the reason it stopped, to each job it worked on."""
     try:
-        sheets = fact_sheets([job["id"] for job in jobs])
+        with step("read_fact_sheets"):
+            sheets = fact_sheets([job["id"] for job in jobs])
     except errors.UndefinedTable:
         # The database lacks the agent's tables until `job_finder.db init`;
         # the review must keep working in between.

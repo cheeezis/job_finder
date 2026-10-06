@@ -93,6 +93,11 @@ def read_memory(connection, scope, job_id=None, *, for_update=False):
         params,
     )
     memory = {row[0]: unpack(row[1:], STATE_FIELDS) for row in rows}
+    return read_children(connection, memory, where, params)
+
+
+def read_children(connection, memory, where, params):
+    """Attach the ordered history and document metadata of the given records."""
     for table, fields in CHILD_TABLES:
         rows = connection.execute(
             f"SELECT job_id,{','.join(fields)},present,extra FROM {table} WHERE {where} ORDER BY job_id,position",
@@ -101,6 +106,39 @@ def read_memory(connection, scope, job_id=None, *, for_update=False):
         for row in rows:
             memory[row[0]].setdefault(table, []).append(unpack(row[1:], fields))
     return memory
+
+
+def read_review_memory(connection, scope, job_ids, urls, statuses, history_statuses, *, archived=False):
+    """Load only records a review list can show or match, instead of every remembered job.
+
+    These are records with one of the job IDs, listing URLs or linked IDs,
+    a status from ``statuses`` or such a status in their history, and with
+    ``archived`` the listings the availability check set to ignored.
+    """
+    rows = connection.execute(
+        f"SELECT job_id,{','.join(STATE_FIELDS)},present,extra FROM job_state "
+        """WHERE scope=%(scope)s AND (
+            job_id = ANY(%(ids)s::text[])
+            OR extra->'source_urls' ?| %(urls)s::text[]
+            OR extra->'linked_job_ids' ?| %(ids)s::text[]
+            OR workflow_status = ANY(%(statuses)s::text[])
+            OR job_id IN (
+                SELECT job_id FROM workflow_history
+                WHERE scope=%(scope)s AND status = ANY(%(history)s::text[])
+            )
+            OR (%(archived)s AND workflow_status = 'ignored' AND extra ? 'availability_checked_at')
+        )""",
+        {
+            "scope": scope,
+            "ids": list(job_ids),
+            "urls": list(urls),
+            "statuses": list(statuses),
+            "history": list(history_statuses),
+            "archived": archived,
+        },
+    )
+    memory = {row[0]: unpack(row[1:], STATE_FIELDS) for row in rows}
+    return read_children(connection, memory, "scope=%s AND job_id=ANY(%s)", (scope, list(memory)))
 
 
 def write_memory(connection, scope, before, after):

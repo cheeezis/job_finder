@@ -14,7 +14,8 @@ from job_finder.persistence.storage import dataset_name, read_object
 from job_finder.workflow.applications import OPEN_APPLICATION_STATUSES, application_row, is_application
 from job_finder.workflow.memory import (
     clear_studysmarter_board_companies,
-    load_memory,
+    job_urls,
+    load_review_memory,
     memory_id_finder,
     memory_source_links,
     preferred_memory_id,
@@ -42,11 +43,17 @@ def load_review_jobs(recommendations_path=RECOMMENDATIONS_JSON, memory_path=MEMO
     """
     path = Path(recommendations_path)
     with snapshot() if dataset_name(path) else nullcontext():
-        document = read_object(path, {})
-        memory = load_memory(memory_path)
+        recommendations = read_object(path, {}).get("recommendations", [])
+        # Only the entries this list can show or match, not every remembered job.
+        memory = load_review_memory(
+            {job["id"] for job in recommendations},
+            {url for job in recommendations for url in job_urls(job)},
+            PERSISTED_REVIEW_STATUSES,
+            memory_path,
+            archived=archived,
+        )
     # Normalize the in-memory view only; the next worker run persists cleanup.
     clear_studysmarter_board_companies(memory)
-    recommendations = document.get("recommendations", [])
     find_memory_ids = memory_id_finder(memory)
     review_jobs = []
     represented_memory_ids = set()

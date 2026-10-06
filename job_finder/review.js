@@ -12,6 +12,10 @@
   // The job whose note is on screen; a change is saved before any way off its card.
   let noteJobId = null;
   let linkingJobId = null;
+  // Cards of offline listings are most of the data and hidden by the default
+  // filter; they load once "Alle Status" or "Nicht interessant" is chosen.
+  let archiveRequest = null;
+  let archiveLoading = false;
 
   const {element, make, addOptions, appendSourceLinks, postJson, safeUrl, showError} = JobFinder;
   // Traffic lights of the agent's fact sheet (job_finder/agent/fact_sheet.py).
@@ -33,6 +37,13 @@
     const entry = job.fact_sheet;
     const verdict = entry?.complete ? entry.sheet?.fazit?.stufe : null;
     return Object.hasOwn(verdictOrder, verdict ?? "") ? verdictOrder[verdict] : withoutVerdict;
+  }
+
+  function byRank(a, b) {
+    return verdictRank(a) - verdictRank(b)
+      || (b.match_percent ?? -1) - (a.match_percent ?? -1)
+      || String(b.published_at || "").localeCompare(String(a.published_at || ""))
+      || String(b.first_seen_at || "").localeCompare(String(a.first_seen_at || ""));
   }
 
   function setText(id, value) {
@@ -156,12 +167,53 @@
   }
 
   function applyFilters(resetPosition = true) {
+    visibleJobs = filteredJobs();
+    currentIndex = resetPosition
+      ? 0
+      : Math.min(currentIndex, Math.max(visibleJobs.length - 1, 0));
+    render();
+    if (["", "ignored"].includes(element("status-filter").value)) loadArchive().catch(showError);
+  }
+
+  function loadArchive() {
+    archiveRequest ??= (async () => {
+      archiveLoading = true;
+      try {
+        const response = await fetch("/api/recommendations?archived=1");
+        if (!response.ok) throw new Error("Nicht mehr verfügbare Stellen konnten nicht geladen werden");
+        const result = await response.json();
+        const known = new Set(jobs.map(job => job.id));
+        jobs = [...jobs, ...result.recommendations.filter(job => !known.has(job.id))].sort(byRank);
+      } catch (error) {
+        archiveRequest = null;
+        throw error;
+      } finally {
+        archiveLoading = false;
+      }
+      // Keep the card on screen, and with it any note being typed.
+      const current = visibleJobs[currentIndex];
+      visibleJobs = filteredJobs();
+      const index = visibleJobs.indexOf(current);
+      if (index < 0) {
+        currentIndex = 0;
+        render();
+        return;
+      }
+      currentIndex = index;
+      setText("counter", `${currentIndex + 1} von ${visibleJobs.length}`);
+      element("previous").disabled = currentIndex === 0;
+      element("next").disabled = currentIndex === visibleJobs.length - 1;
+    })();
+    return archiveRequest;
+  }
+
+  function filteredJobs() {
     const status = element("status-filter").value;
     const role = element("role-filter").value;
     const query = element("search-filter").value.trim().toLocaleLowerCase("de");
     const showInternational = element("international-filter").checked;
     const showJuniorHybrid = element("junior-hybrid-filter").checked;
-    visibleJobs = jobs.filter(job => {
+    return jobs.filter(job => {
       const statusMatches = !status || job.workflow_status === status;
       const manuallyAdded = (job.source_links || []).some(link => link.source === "manual");
       return statusMatches &&
@@ -170,10 +222,6 @@
       (manuallyAdded || showJuniorHybrid || !String(job.location_precheck || "").startsWith("Junior-Hybrid")) &&
       (!query || `${job.title} ${job.company}`.toLocaleLowerCase("de").includes(query));
     });
-    currentIndex = resetPosition
-      ? 0
-      : Math.min(currentIndex, Math.max(visibleJobs.length - 1, 0));
-    render();
   }
 
   function render() {
@@ -183,9 +231,11 @@
     element("navigation").hidden = !hasJobs;
     element("message").hidden = hasJobs;
     if (!hasJobs) {
-      element("message").textContent = jobs.length
-        ? "Keine Stellen passen zu diesen Filtern."
-        : "Noch keine Stellen vorhanden. Starte zuerst den Job Finder.";
+      element("message").textContent = archiveLoading
+        ? "Weitere Stellen werden geladen …"
+        : jobs.length
+          ? "Keine Stellen passen zu diesen Filtern."
+          : "Noch keine Stellen vorhanden. Starte zuerst den Job Finder.";
       setText("counter", "0 Stellen");
       return;
     }
@@ -336,10 +386,7 @@
       if (!response.ok) throw new Error("Empfehlungen konnten nicht geladen werden");
       const result = await response.json();
       routeOrigin = result.route_origin || "";
-      jobs = result.recommendations.sort((a, b) => verdictRank(a) - verdictRank(b)
-        || (b.match_percent ?? -1) - (a.match_percent ?? -1)
-        || String(b.published_at || "").localeCompare(String(a.published_at || ""))
-        || String(b.first_seen_at || "").localeCompare(String(a.first_seen_at || "")));
+      jobs = result.recommendations.sort(byRank);
       addOptions(
         element("status-filter"),
         result.workflow_statuses.filter(status => reviewStatuses.has(status)),
@@ -354,7 +401,7 @@
         roleLabels
       );
       const requestedJob = new URLSearchParams(window.location.search).get("job");
-      if (requestedJob) showRequestedJob(requestedJob);
+      if (requestedJob) await showRequestedJob(requestedJob);
       else applyFilters();
     } catch (error) {
       element("message").className = "error";
@@ -362,8 +409,11 @@
     }
   }
 
-  function showRequestedJob(jobId) {
-    const requested = jobs.find(job => job.id === jobId || job.recommendation_id === jobId);
+  async function showRequestedJob(jobId) {
+    const find = () => jobs.find(job => job.id === jobId || job.recommendation_id === jobId);
+    // A link can point to a listing that has gone offline since.
+    if (!find()) await loadArchive();
+    const requested = find();
     element("status-filter").value = "";
     element("role-filter").value = "";
     element("search-filter").value = "";

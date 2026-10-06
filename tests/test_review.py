@@ -746,6 +746,25 @@ class ReviewTests(unittest.TestCase):
         jobs = load_review_jobs(self.recommendations_path, self.memory_path)
         self.assertEqual(jobs[0]["workflow_status"], "ignored")
 
+    def test_offline_listings_load_only_on_request(self):
+        memory = load_memory(self.memory_path)
+        memory["job:closed"] = {
+            "title": "Closed Developer",
+            "company": "Example GmbH",
+            "workflow_status": "ignored",
+            "availability_checked_at": "2026-10-01T08:00:00",
+        }
+        memory["job:waiting"] = {"title": "Waiting Developer", "workflow_status": "waiting"}
+        save_memory(memory, self.memory_path)
+
+        with self.server_context() as base_url:
+            current = get_json(f"{base_url}/api/recommendations")["recommendations"]
+            archived = get_json(f"{base_url}/api/recommendations?archived=1")["recommendations"]
+
+        self.assertEqual([job["id"] for job in current], ["job:1", "job:waiting"])
+        self.assertEqual([job["id"] for job in archived], ["job:closed"])
+        self.assertTrue(archived[0]["prefilter_warning"].startswith("Anzeige nicht mehr verfügbar"))
+
     def test_local_api_saves_a_review_note(self):
         with self.server_context() as base_url:
             result = post_json(f"{base_url}/api/review-note", {"job_id": "job:1", "review_note": "Gute Firma"})

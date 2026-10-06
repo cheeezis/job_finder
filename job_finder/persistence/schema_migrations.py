@@ -18,6 +18,7 @@ from sqlalchemy.pool import NullPool
 
 from job_finder.persistence.database import admin_database_url
 from job_finder.persistence.migrations.baseline import legacy_metadata, metadata
+from job_finder.persistence.migrations.fact_sheet_state import REVISION as FACT_SHEET_REVISION, added_columns
 from job_finder.persistence.migrations.runtime_boundaries import REVISION as BOUNDARIES_REVISION, rendered_predicate
 
 BASELINE_REVISION = "0001_baseline"
@@ -71,12 +72,18 @@ def _application_object(obj, name, kind, reflected, compared):
     return kind != "table" or name != "alembic_version"
 
 
-def validate_baseline(connection, *, runtime_boundaries=False):
-    """Check types, nullability, defaults, keys, indexes and checks without altering rows."""
+def validate_baseline(connection, *, runtime_boundaries=False, fact_sheet_state=False):
+    """Check types, nullability, defaults, keys, indexes and checks without altering rows.
+
+    fact_sheet_state expects the columns revision 0003 added as well.
+    """
     inspector = sa.inspect(connection)
     expected = sa.MetaData()
     for table in metadata.sorted_tables:
         table.to_metadata(expected)
+    if fact_sheet_state:
+        for column in added_columns():
+            expected.tables["agent_fact_sheets"].append_column(column)
     for table in legacy_metadata.sorted_tables:
         if inspector.has_table(table.name, schema="public"):
             table.to_metadata(expected)
@@ -179,8 +186,12 @@ def _status(connection):
             script.get_revision(revision)
         except (ResolutionError, CommandError):
             raise RuntimeError("Unbekannter PostgreSQL-Migrationsstand; passendes Release erforderlich.") from None
-        if revision in {BASELINE_REVISION, BOUNDARIES_REVISION}:
-            validate_baseline(connection, runtime_boundaries=revision == BOUNDARIES_REVISION)
+        if revision in {BASELINE_REVISION, BOUNDARIES_REVISION, FACT_SHEET_REVISION}:
+            validate_baseline(
+                connection,
+                runtime_boundaries=revision != BASELINE_REVISION,
+                fact_sheet_state=revision == FACT_SHEET_REVISION,
+            )
         return {"state": "current" if revision == head else "outdated", "revision": revision, "head": head}
     if (
         not tables

@@ -87,12 +87,17 @@ haben). CodeQL analysiert Python,
 JavaScript und die Workflows ([codeql.yml](../.github/workflows/codeql.yml)),
 Dependabot schlägt wöchentlich Updates vor, und alle Actions sind auf
 Commit-SHAs festgelegt. Nach einem Merge auf `main` baut er das Image, prüft es
-erneut, pusht es in die Registry, wendet nach manueller Freigabe im Environment
-`production` Terraform an und rollt das Image auf Worker und Review aus. Ein neuerer Deploy
-bricht einen älteren, noch wartenden ab, und nach der Freigabe rollt er nur aus,
-wenn sein Commit noch der aktuelle `main` ist. Terraform verwaltet die
+erneut und pusht es in die Registry. Danach erstellt er einen Terraform-Plan mit
+Abgleich gegen den echten Azure-Zustand, legt ihn privat neben dem State ab und
+zeigt im Lauf nur, welche Ressourcen sich wie ändern würden. Die manuelle Freigabe
+im Environment `production` gilt genau diesem Plan: Der Apply lädt ihn, prüft seine
+Prüfsumme und wendet ihn an; hat sich der State seither geändert, bricht Terraform
+ab. Anschließend rollt er das Image per Digest auf Worker und Review aus, prüft den
+Login-Schutz und wartet, bis die neue Review-Revision gesund läuft. Ein neuerer
+Deploy bricht einen älteren, noch wartenden ab, und nach der Freigabe rollt er nur
+aus, wenn sein Commit noch der aktuelle `main` ist. Terraform verwaltet die
 Image-Version nicht; ein lokales `terraform apply` setzt die App also nie
-zurück.
+zurück. Den Rückweg beschreibt [Betrieb](operations.md#deploy-und-rollback).
 
 Neue allgemeine Änderungen beginnen auf einem aktuellen `main`, zum Beispiel
 auf `docs/...`, `fix/...` oder `feat/...`. Inhaltliche und große rein mechanische

@@ -27,8 +27,10 @@ serves a job search in Germany. This page is the English overview.
   sign-in.
 - **Infrastructure as code and gated delivery:** Terraform manages all resources.
   GitHub Actions sign in to Azure with OIDC, using separate identities for plan,
-  build and apply; production deploys wait for manual approval and roll out only
-  the current `main`.
+  build and apply. After a merge, CI plans against the live Azure state, and the
+  approved deploy applies exactly that saved plan. The image rolls out by digest,
+  and the deploy waits for a healthy revision. A one-click rollback workflow restores
+  the previous digest.
 - **Supply chain:** builds install the exact versions from `uv.lock`, actions are
   pinned to commit SHAs, and the image runs as a non-root user without pip or uv.
   CI scans the image and the Terraform code with Trivy; a new Terraform finding

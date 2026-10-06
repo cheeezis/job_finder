@@ -263,6 +263,7 @@ jobs:
       id-token: write
     outputs:
       image_tag: ${{ steps.tag.outputs.tag }}
+      image_ref: ${{ steps.digest.outputs.ref }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: tag
@@ -287,15 +288,95 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
       - run: docker push acrjobfinder.azurecr.io/jobfinder:${{ steps.tag.outputs.tag }}
+      # Ausgerollt wird der unveränderliche Digest, nicht der Tag.
+      - id: digest
+        name: Digest des Images festhalten
+        run: |
+          ref=$(docker inspect --format='{{index .RepoDigests 0}}' acrjobfinder.azurecr.io/jobfinder:${{ steps.tag.outputs.tag }})
+          case "$ref" in
+            acrjobfinder.azurecr.io/jobfinder@sha256:*) echo "ref=$ref" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::Kein Digest für das neue Image gefunden."; exit 1 ;;
+          esac
 
-  # Aktualisiert Worker und Review-App auf das neue Image. Läuft im
-  # production-Environment: GitHub hält hier an, bis der hinterlegte
-  # Reviewer manuell zustimmt (die "kontrolliert" aus der Roadmap-Vorgabe).
-  # Erst danach führt terraform apply auch echte Infrastrukturänderungen aus.
+  # Erstellt nach dem Merge den Plan mit Abgleich gegen den echten Azure-Zustand
+  # und legt ihn privat neben dem Terraform-State ab: Pläne können geheime Werte
+  # enthalten und gehören nicht in die öffentlichen Artefakte. Die Zusammenfassung
+  # im Lauf nennt nur Ressourcen und Aktionen. Die Freigabe von production gilt
+  # danach genau diesem Plan. production-plan ist auf main beschränkt und hat
+  # keine Freigabe-Pause; die Apply-Identität ist dafür eigens freigeschaltet.
+  release-plan:
+    name: Release plan
+    runs-on: ubuntu-latest
+    needs: [docker-build-push]
+    environment: production-plan
+    concurrency:
+      group: production-plan
+      cancel-in-progress: false
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      plan_sha256: ${{ steps.store.outputs.sha256 }}
+    defaults:
+      run:
+        working-directory: infrastructure
+    env:
+      PLAN_BLOB: release-plans/${{ github.sha }}.tfplan
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "1.16.2"
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - run: terraform init -input=false
+      - run: terraform plan -input=false -lock-timeout=2m -out=release.tfplan
+        env:
+          TF_VAR_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          TF_VAR_postgres_admin_password: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+          TF_VAR_postgres_client_ipv4: ${{ secrets.POSTGRES_CLIENT_IPV4 }}
+          TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
+          TF_VAR_review_fqdn: ${{ secrets.REVIEW_FQDN }}
+          TF_VAR_runtime_identity_phase: ${{ vars.RUNTIME_IDENTITY_PHASE || 'legacy' }}
+          TF_VAR_runtime_access_verified: ${{ vars.RUNTIME_ACCESS_VERIFIED || 'false' }}
+          TF_VAR_database_auth_phase: ${{ vars.DATABASE_AUTH_PHASE || 'password' }}
+          TF_VAR_database_entra_verified: ${{ vars.DATABASE_ENTRA_VERIFIED || 'false' }}
+          # Secret, nicht Variable: Der Anmeldename kann eine E-Mail-Adresse enthalten, und
+          # Variablen erscheinen ungeschwärzt in den öffentlichen Logs.
+          TF_VAR_postgres_entra_admin_name: ${{ secrets.POSTGRES_ENTRA_ADMIN_NAME }}
+      # Nur Adressen und Aktionen; die JSON-Ausgabe selbst enthielte Werte.
+      - name: Zusammenfassung ohne Werte
+        run: |
+          terraform show -json release.tfplan | python3 -c '
+          import json, sys
+          plan = json.load(sys.stdin)
+          rows = [(" + ".join(change["change"]["actions"]), change["address"])
+                  for change in plan.get("resource_changes", [])
+                  if change["change"]["actions"] not in (["no-op"], ["read"])]
+          print("### Terraform-Plan für die Freigabe\n")
+          print("\n".join("- `%s` %s" % row for row in rows) or "Keine Änderung an der Infrastruktur.")
+          ' >> "$GITHUB_STEP_SUMMARY"
+      - id: store
+        name: Plan privat ablegen
+        run: |
+          sha=$(sha256sum release.tfplan | cut -d" " -f1)
+          az storage blob upload --auth-mode login --account-name stjobfindere64bfdce --container-name tfstate \
+            --name "$PLAN_BLOB" --file release.tfplan --overwrite --only-show-errors --output none
+          rm release.tfplan
+          echo "sha256=$sha" >> "$GITHUB_OUTPUT"
+          printf '\nPrüfsumme des Plans: `%s`\n' "$sha" >> "$GITHUB_STEP_SUMMARY"
+
+  # Wendet nach der manuellen Freigabe im production-Environment genau den
+  # geprüften Plan an und rollt das Image per Digest aus. Terraform verweigert
+  # einen Plan, dessen State sich seit dem Erstellen geändert hat.
   terraform-apply:
     name: Terraform apply
     runs-on: ubuntu-latest
-    needs: [docker-build-push]
+    needs: [docker-build-push, release-plan]
     environment: production
     # Nie zwei Deploys gleichzeitig; ein neu ankommender verdrängt einen noch
     # auf Freigabe wartenden.
@@ -330,28 +411,38 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       - run: terraform init -input=false
-      - run: terraform apply -input=false -auto-approve -lock-timeout=2m
+      - name: Freigegebenen Plan laden und prüfen
         env:
-          TF_VAR_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-          TF_VAR_postgres_admin_password: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
-          TF_VAR_postgres_client_ipv4: ${{ secrets.POSTGRES_CLIENT_IPV4 }}
-          TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
-          TF_VAR_review_fqdn: ${{ secrets.REVIEW_FQDN }}
-          TF_VAR_runtime_identity_phase: ${{ vars.RUNTIME_IDENTITY_PHASE || 'legacy' }}
-          TF_VAR_runtime_access_verified: ${{ vars.RUNTIME_ACCESS_VERIFIED || 'false' }}
-          TF_VAR_database_auth_phase: ${{ vars.DATABASE_AUTH_PHASE || 'password' }}
-          TF_VAR_database_entra_verified: ${{ vars.DATABASE_ENTRA_VERIFIED || 'false' }}
-          # Secret, nicht Variable: Der Anmeldename kann eine E-Mail-Adresse enthalten, und
-          # Variablen erscheinen ungeschwärzt in den öffentlichen Logs.
-          TF_VAR_postgres_entra_admin_name: ${{ secrets.POSTGRES_ENTRA_ADMIN_NAME }}
-      # Terraform ignoriert das Image (lifecycle.ignore_changes); die
-      # App-Version wird ausschließlich hier gesetzt.
-      - name: Image ausrollen
+          PLAN_BLOB: release-plans/${{ github.sha }}.tfplan
+          EXPECTED_SHA256: ${{ needs.release-plan.outputs.plan_sha256 }}
         run: |
-          image="acrjobfinder.azurecr.io/jobfinder:${{ needs.docker-build-push.outputs.image_tag }}"
+          az storage blob download --auth-mode login --account-name stjobfindere64bfdce --container-name tfstate \
+            --name "$PLAN_BLOB" --file release.tfplan --only-show-errors --output none
+          echo "$EXPECTED_SHA256  release.tfplan" | sha256sum --check --status \
+            || { echo "::error::Der abgelegte Plan weicht vom geprüften ab."; exit 1; }
+      - run: terraform apply -input=false -lock-timeout=2m release.tfplan
+      - name: Abgelegten Plan entfernen
+        if: always()
+        env:
+          PLAN_BLOB: release-plans/${{ github.sha }}.tfplan
+        run: |
+          rm -f release.tfplan
+          az storage blob delete --auth-mode login --account-name stjobfindere64bfdce --container-name tfstate \
+            --name "$PLAN_BLOB" --only-show-errors --output none || true
+      - name: Bisheriges Image als Rückweg festhalten
+        run: |
           az extension add --name containerapp --upgrade --only-show-errors
-          az containerapp job update --name jobfinder-worker --resource-group rg-jobfinder --image "$image" --output none
-          az containerapp update --name jobfinder-review --resource-group rg-jobfinder --image "$image" --output none
+          worker=$(az containerapp job show --name jobfinder-worker --resource-group rg-jobfinder --query "properties.template.containers[0].image" -o tsv)
+          review=$(az containerapp show --name jobfinder-review --resource-group rg-jobfinder --query "properties.template.containers[0].image" -o tsv)
+          printf '### Rückweg\n\nBisheriges Image Worker: `%s`\nBisheriges Image Review: `%s`\n\nZurück mit dem Workflow „Rollback“ und diesem Image.\n' "$worker" "$review" >> "$GITHUB_STEP_SUMMARY"
+      # Terraform ignoriert das Image (lifecycle.ignore_changes); die
+      # App-Version wird ausschließlich hier gesetzt, unveränderlich per Digest.
+      - name: Image ausrollen
+        env:
+          IMAGE: ${{ needs.docker-build-push.outputs.image_ref }}
+        run: |
+          az containerapp job update --name jobfinder-worker --resource-group rg-jobfinder --image "$IMAGE" --output none
+          az containerapp update --name jobfinder-review --resource-group rg-jobfinder --image "$IMAGE" --output none
       # Ohne Anmeldung darf die Review nichts ausliefern: Ein Aufruf muss auf
       # den Login umleiten (302) oder abgewiesen werden (401). Die App startet
       # beim ersten Aufruf erst (Scale to Zero), daher mehrere Versuche.
@@ -370,3 +461,8 @@ jobs:
           done
           echo "::error::Die Review war nach dem Deploy nicht erreichbar."
           exit 1
+      - name: Versionen und Zustand prüfen
+        working-directory: .
+        env:
+          IMAGE: ${{ needs.docker-build-push.outputs.image_ref }}
+        run: bash .github/scripts/verify_rollout.sh "$IMAGE"

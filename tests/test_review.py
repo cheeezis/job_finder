@@ -965,3 +965,38 @@ class CompanyApplicationTests(unittest.TestCase):
             same_company_applications({"id": "job:applied", "company": "Datenweber"}, applications)[0]["open"], True
         )
         self.assertEqual(same_company_applications({"id": "job:new", "company": ""}, applications), [])
+
+
+class FastApiReviewTests(ReviewTests):
+    """The same tests against the FastAPI app, so both servers keep one contract."""
+
+    @contextmanager
+    def server_context(self, **attributes):
+        import uvicorn
+
+        from job_finder.review_app import ReviewPaths, create_app
+
+        paths = ReviewPaths(
+            recommendations=attributes.get("recommendations_path", self.recommendations_path),
+            memory=attributes.get("memory_path", self.memory_path),
+            jobs=attributes.get("jobs_path", ReviewPaths.jobs),
+            manual_cache=attributes.get("manual_cache_path", ReviewPaths.manual_cache),
+            documents=attributes.get("application_documents_dir", ReviewPaths.documents),
+        )
+        importer = attributes.get("manual_importer")
+        options = {} if importer is None else {"manual_importer": importer.__func__}
+        server = uvicorn.Server(
+            uvicorn.Config(
+                create_app(paths, **options), host="127.0.0.1", port=0, log_level="warning", access_log=False
+            )
+        )
+        thread = threading.Thread(target=server.run)
+        thread.start()
+        try:
+            while not server.started:
+                thread.join(0.01)
+            port = server.servers[0].sockets[0].getsockname()[1]
+            yield f"http://127.0.0.1:{port}"
+        finally:
+            server.should_exit = True
+            thread.join()

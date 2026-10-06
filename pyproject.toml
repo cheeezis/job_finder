@@ -25,6 +25,8 @@ dependencies = [
     "langchain-openai>=1.6,<2",
     "opentelemetry-sdk>=1.30,<2",
     "azure-monitor-opentelemetry-exporter>=1.0.0b46,<2",
+    "fastapi>=0.142,<1",
+    "uvicorn>=0.54,<1",
 ]
 
 [dependency-groups]

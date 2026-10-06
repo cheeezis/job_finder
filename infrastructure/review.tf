@@ -107,6 +107,11 @@ resource "azurerm_container_app" "review" {
         name  = "JOBFINDER_MANAGED_IDENTITY_CLIENT_ID"
         value = local.review_client_id
       }
+      # Zeiten je API-Anfrage (job_finder/telemetry.py), nur Route, Status und Dauern.
+      env {
+        name  = "APPLICATIONINSIGHTS_CONNECTION_STRING"
+        value = azurerm_application_insights.jobfinder.connection_string
+      }
     }
   }
 

@@ -124,19 +124,17 @@ def seed(demo, cases, today):
 
 
 def serve(port, open_browser):
-    from job_finder.review import LocalReviewServer, ReviewRequestHandler
+    import threading
+
+    import uvicorn
+
+    from job_finder.review_app import create_app
 
     url = f"http://127.0.0.1:{port}"
-    server = LocalReviewServer(("127.0.0.1", port), ReviewRequestHandler)
-    print(f"Demo-Review unter {url} – Strg+C beendet sie.")
+    print(f"Demo-Review unter {url} – Strg+C beendet sie.", flush=True)
     if open_browser:
-        webbrowser.open(url)
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        server.server_close()
+        threading.Timer(1.0, webbrowser.open, args=(url,)).start()
+    uvicorn.run(create_app(), host="127.0.0.1", port=port, log_level="warning", access_log=False)
 
 
 def main(argv=None):

@@ -40,6 +40,23 @@ class DocumentVersionTests(unittest.TestCase):
             document_store.write(key, b"replacement", self.root, overwrite=False)
         self.assertEqual(document_store.read(key, self.root), b"existing")
 
+    def test_a_local_key_never_leads_outside_the_documents_folder(self):
+        outside = self.root.parent / f"{self.root.name}-outside.pdf"
+        outside.write_bytes(b"not a document")
+        self.addCleanup(outside.unlink, missing_ok=True)
+        keys = (f"../{outside.name}", str(outside), "folder/../../x.pdf", "..")
+        for key in keys:
+            with self.subTest(key=key):
+                for action in (
+                    lambda: document_store.write(key, b"x", self.root),
+                    lambda: document_store.read(key, self.root),
+                    lambda: document_store.exists(key, self.root),
+                    lambda: document_store.delete(key, self.root),
+                ):
+                    with self.assertRaisesRegex(ValueError, "Dokumentschlüssel"):
+                        action()
+        self.assertEqual(outside.read_bytes(), b"not a document")
+
     def test_repeated_uploads_for_same_job_keep_distinct_keys_and_original_names(self):
         first = store_documents(
             "synthetic:job", [upload("resume", "CV.pdf", b"earlier")], self.root, company="Example", title="Developer"

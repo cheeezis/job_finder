@@ -44,6 +44,19 @@ def _blob_container():
     return _container_client
 
 
+def local_path(key, root=APPLICATION_DOCUMENTS_DIR):
+    """Return the file of key inside root; refuse a key that would lead outside it.
+
+    The keys are built from cleaned names already. This second check sits
+    where the file is touched, so no later caller can bypass it.
+    """
+    base = os.path.realpath(root)
+    path = os.path.realpath(os.path.join(base, key))
+    if not path.startswith(base + os.sep):
+        raise ValueError("Ungültiger Dokumentschlüssel")
+    return Path(path)
+
+
 def write(key, content, root=APPLICATION_DOCUMENTS_DIR, *, overwrite=True):
     """Publish complete bytes and return their Blob version; create-only is optional."""
     if _backend() == "blob":
@@ -59,7 +72,7 @@ def write(key, content, root=APPLICATION_DOCUMENTS_DIR, *, overwrite=True):
                 client.delete_blob(etag=receipt["etag"], match_condition=MatchConditions.IfNotModified)
             raise RuntimeError("Blob-Versionierung fehlt; Dokument wird nicht als Bewerbung gespeichert.")
         return version
-    path = Path(root) / key
+    path = local_path(key, root)
     path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(dir=path.parent, prefix="jobfinder-", suffix=".tmp", delete=False) as output:
         temporary = Path(output.name)
@@ -90,14 +103,14 @@ def read(key, root=APPLICATION_DOCUMENTS_DIR, *, version_id=None):
             return _blob_container().download_blob(key, version_id=version_id).readall()
         except ResourceNotFoundError as error:
             raise FileNotFoundError(key) from error
-    return (Path(root) / key).read_bytes()
+    return local_path(key, root).read_bytes()
 
 
 def exists(key, root=APPLICATION_DOCUMENTS_DIR):
     """Check presence without reading the content."""
     if _backend() == "blob":
         return _blob_container().get_blob_client(key).exists()
-    return (Path(root) / key).is_file()
+    return local_path(key, root).is_file()
 
 
 def delete(key, root=APPLICATION_DOCUMENTS_DIR, *, prune_empty=False):
@@ -107,11 +120,11 @@ def delete(key, root=APPLICATION_DOCUMENTS_DIR, *, prune_empty=False):
         if client.exists():
             client.delete_blob()
         return
-    path = Path(root) / key
+    path = local_path(key, root)
     path.unlink(missing_ok=True)
     if prune_empty:
         directory = path.parent
-        boundary = Path(root)
+        boundary = Path(os.path.realpath(root))
         while directory != boundary and boundary in directory.parents:
             try:
                 directory.rmdir()

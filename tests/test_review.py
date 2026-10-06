@@ -32,7 +32,7 @@ from job_finder.review import (
     update_review_note,
     update_workflow_status,
 )
-from job_finder.workflow.memory import load_memory, save_memory
+from job_finder.workflow.memory import load_memory, load_review_memory, save_memory
 from job_finder.workflow.review_data import company_applications, same_company_applications
 
 
@@ -745,6 +745,56 @@ class ReviewTests(unittest.TestCase):
         self.assertNotIn("personal_ratings", document)
         jobs = load_review_jobs(self.recommendations_path, self.memory_path)
         self.assertEqual(jobs[0]["workflow_status"], "ignored")
+
+    def test_offline_listings_load_only_on_request(self):
+        memory = load_memory(self.memory_path)
+        memory["job:closed"] = {
+            "title": "Closed Developer",
+            "company": "Example GmbH",
+            "workflow_status": "ignored",
+            "availability_checked_at": "2026-10-01T08:00:00",
+        }
+        memory["job:waiting"] = {"title": "Waiting Developer", "workflow_status": "waiting"}
+        save_memory(memory, self.memory_path)
+
+        with self.server_context() as base_url:
+            current = get_json(f"{base_url}/api/recommendations")["recommendations"]
+            archived = get_json(f"{base_url}/api/recommendations?archived=1")["recommendations"]
+
+        self.assertEqual([job["id"] for job in current], ["job:1", "job:waiting"])
+        self.assertEqual([job["id"] for job in archived], ["job:closed"])
+        self.assertTrue(archived[0]["prefilter_warning"].startswith("Anzeige nicht mehr verfügbar"))
+
+    def test_the_review_reads_only_entries_it_can_show_or_match(self):
+        memory = load_memory(self.memory_path)
+        memory.update(
+            {
+                "other:url": {"title": "Same listing", "source_urls": ["https://example.test/listing"]},
+                "other:alias": {"title": "Linked listing", "linked_job_ids": ["job:x"]},
+                "other:applied": {
+                    "title": "Old application",
+                    "workflow_status": "ignored",
+                    "workflow_history": [{"status": "applied", "occurred_on": "2026-09-01"}],
+                },
+                "other:waiting": {"title": "Waiting", "workflow_status": "waiting"},
+                "other:closed": {
+                    "title": "Closed",
+                    "workflow_status": "ignored",
+                    "availability_checked_at": "2026-10-01T08:00:00",
+                },
+                "other:unrelated": {"title": "Unrelated", "workflow_status": "new"},
+            }
+        )
+        save_memory(memory, self.memory_path)
+
+        current = load_review_memory({"job:x"}, {"https://example.test/listing"}, {"waiting"}, self.memory_path)
+        archived = load_review_memory(set(), set(), set(), self.memory_path, archived=True)
+
+        self.assertLessEqual({"other:url", "other:alias", "other:applied", "other:waiting"}, current.keys())
+        self.assertFalse({"other:closed", "other:unrelated"} & current.keys())
+        self.assertEqual(current["other:applied"], memory["other:applied"])
+        self.assertIn("other:closed", archived)
+        self.assertNotIn("other:unrelated", archived)
 
     def test_local_api_saves_a_review_note(self):
         with self.server_context() as base_url:

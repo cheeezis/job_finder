@@ -140,6 +140,36 @@ class ReviewBrowserTests(unittest.TestCase):
         expect(self.page.locator("#title")).to_have_text(title)
         self.assertEqual(self.job(title)["workflow_status"], "waiting")
 
+    def test_offline_listings_load_only_with_their_filter(self):
+        from playwright.sync_api import expect
+
+        offline = {
+            "id": "demo:offline",
+            "title": "Abgelaufene Stelle",
+            "company": "Beispiel GmbH",
+            "workflow_status": "ignored",
+            "source_links": [],
+            "current_snapshot_missing": True,
+            "prefilter_warning": "Anzeige nicht mehr verfügbar; automatisch auf Nicht interessant gesetzt.",
+        }
+        requests = []
+
+        def archive(route):
+            requests.append(route.request.url)
+            route.fulfill(json={"recommendations": [offline]})
+
+        self.page.route("**/api/recommendations?archived=1", archive)
+        self.page.goto("/review")
+        self.current_title()
+        self.assertEqual(requests, [])
+
+        self.page.select_option("#status-filter", "ignored")
+        self.page.fill("#search-filter", "Abgelaufene")
+
+        expect(self.page.locator("#title")).to_have_text("Abgelaufene Stelle")
+        self.page.select_option("#status-filter", "")
+        self.assertEqual(len(requests), 1)
+
     def test_not_interested_can_be_undone(self):
         from playwright.sync_api import expect
 

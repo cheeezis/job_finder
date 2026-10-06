@@ -100,15 +100,17 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
         """Return the page or the current joined recommendation data."""
         if not self.accept_local_request():
             return
-        request_path = urlsplit(self.path).path
+        request = urlsplit(self.path)
+        request_path = request.path
         if request_path in STATIC_FILES:
             self.send_file(*STATIC_FILES[request_path])
             return
         if request_path == "/api/recommendations":
+            archived = parse_qs(request.query).get("archived") == ["1"]
             self.send_json(
                 {
                     "recommendations": attach_fact_sheets(
-                        load_review_jobs(self.recommendations_path, self.memory_path)
+                        load_review_jobs(self.recommendations_path, self.memory_path, archived=archived)
                     ),
                     "workflow_statuses": [status.value for status in WorkflowStatus],
                     "route_origin": ROUTE_ORIGIN,

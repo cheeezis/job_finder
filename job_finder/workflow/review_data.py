@@ -14,7 +14,8 @@ from job_finder.persistence.storage import dataset_name, read_object
 from job_finder.workflow.applications import OPEN_APPLICATION_STATUSES, application_row, is_application
 from job_finder.workflow.memory import (
     clear_studysmarter_board_companies,
-    load_memory,
+    job_urls,
+    load_review_memory,
     memory_id_finder,
     memory_source_links,
     preferred_memory_id,
@@ -29,15 +30,30 @@ PERSISTED_REVIEW_STATUSES = {
 }
 
 
-def load_review_jobs(recommendations_path=RECOMMENDATIONS_JSON, memory_path=MEMORY_FILE):
-    """Combine compact review jobs with their persisted workflow status."""
+def is_archived(entry):
+    """Tell whether a listing went offline and was ignored for it; such cards grow daily."""
+    return entry.get("workflow_status") == "ignored" and bool(entry.get("availability_checked_at"))
+
+
+def load_review_jobs(recommendations_path=RECOMMENDATIONS_JSON, memory_path=MEMORY_FILE, *, archived=False):
+    """Combine compact review jobs with their persisted workflow status.
+
+    The archived cards of offline listings come only on request (``archived``),
+    then alone: they are most of the data and hidden by the default filter.
+    """
     path = Path(recommendations_path)
     with snapshot() if dataset_name(path) else nullcontext():
-        document = read_object(path, {})
-        memory = load_memory(memory_path)
+        recommendations = read_object(path, {}).get("recommendations", [])
+        # Only the entries this list can show or match, not every remembered job.
+        memory = load_review_memory(
+            {job["id"] for job in recommendations},
+            {url for job in recommendations for url in job_urls(job)},
+            PERSISTED_REVIEW_STATUSES,
+            memory_path,
+            archived=archived,
+        )
     # Normalize the in-memory view only; the next worker run persists cleanup.
     clear_studysmarter_board_companies(memory)
-    recommendations = document.get("recommendations", [])
     find_memory_ids = memory_id_finder(memory)
     review_jobs = []
     represented_memory_ids = set()
@@ -69,13 +85,12 @@ def load_review_jobs(recommendations_path=RECOMMENDATIONS_JSON, memory_path=MEMO
             job["source_links"] = memory_source_links(entry)
         review_jobs.append(job)
 
+    if archived:
+        review_jobs = []
     for job_id, entry in memory.items():
-        if job_id in represented_memory_ids or not (
-            entry.get("workflow_status") in PERSISTED_REVIEW_STATUSES
-            or (entry.get("workflow_status") == "ignored" and entry.get("availability_checked_at"))
-        ):
-            continue
-        review_jobs.append(remembered_review_job(job_id, entry))
+        wanted = is_archived(entry) if archived else entry.get("workflow_status") in PERSISTED_REVIEW_STATUSES
+        if wanted and job_id not in represented_memory_ids:
+            review_jobs.append(remembered_review_job(job_id, entry))
     cards = one_card_per_job(review_jobs)
     applications = company_applications(memory)
     for card in cards:
@@ -87,8 +102,11 @@ def company_applications(memory, as_of=None):
     """List the user's applications by normalized company, with the status the applications page shows."""
     rows = []
     for job_id, entry in memory.items():
+        # Most remembered jobs are no application; normalize only the few that are.
+        if not is_application(entry):
+            continue
         company = normalize_company(entry.get("company") or "")
-        if company and is_application(entry):
+        if company:
             rows.append(
                 (job_id, company, entry.get("title") or "", application_row(job_id, entry, as_of)["workflow_status"])
             )

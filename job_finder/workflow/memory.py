@@ -17,7 +17,7 @@ from job_finder.matching.deduplication import (
 from job_finder.models import APPLICATION_STATUSES, COMPLETED_APPLICATION_STATUSES, WorkflowStatus
 from job_finder.paths import MEMORY_FILE
 from job_finder.persistence.database import lock, memory_scope, snapshot, transaction
-from job_finder.persistence.postgres_store import read_memory, write_memory
+from job_finder.persistence.postgres_store import read_memory, read_review_memory, write_memory
 
 INACTIVE_AFTER_MISSED_RUNS = 3
 COMPLETED_APPLICATION_REPOST_DAYS = 30
@@ -28,6 +28,20 @@ def load_memory(path=MEMORY_FILE):
     scope = memory_scope(path)
     with snapshot() as connection:
         return read_memory(connection, scope)
+
+
+def load_review_memory(job_ids, urls, statuses, path=MEMORY_FILE, *, archived=False):
+    """Read the remembered jobs a review list needs: matches, kept statuses and applications."""
+    with snapshot() as connection:
+        return read_review_memory(
+            connection,
+            memory_scope(path),
+            job_ids,
+            urls,
+            {*statuses, *APPLICATION_STATUSES},
+            APPLICATION_STATUSES,
+            archived=archived,
+        )
 
 
 def load_workflow_statuses(job_ids, path=MEMORY_FILE):

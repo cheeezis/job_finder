@@ -6,9 +6,9 @@ import unittest
 from datetime import date, timedelta
 from pathlib import Path
 
-from job_finder.review import delete_workflow_history, update_workflow_history, update_workflow_status
 from job_finder.workflow.applications import load_application_overview
 from job_finder.workflow.memory import load_memory, save_memory
+from job_finder.workflow.review_actions import delete_workflow_history, update_workflow_history, update_workflow_status
 
 
 class ApplicationTrackingTests(unittest.TestCase):

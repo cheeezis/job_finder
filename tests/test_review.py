@@ -3,6 +3,7 @@
 import base64
 import http.client
 import json
+import re
 import socket
 import tempfile
 import threading
@@ -10,21 +11,20 @@ import unittest
 from contextlib import contextmanager
 from copy import deepcopy
 from datetime import date
-from http.server import HTTPServer
 from pathlib import Path
 from unittest import mock
 from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+import uvicorn
+
 from job_finder.matching.config import LOCAL_SEARCH_LOCATION, LOCAL_SEARCH_POSTAL_CODE
-from job_finder.review import (
-    MAX_REQUEST_BYTES,
-    PACKAGE,
-    LocalReviewServer,
-    ReviewRequestHandler,
-    address_is_in_use,
-    load_review_jobs,
+from job_finder.review import address_is_in_use, bind_exclusively
+from job_finder.review_app import MAX_REQUEST_BYTES, PACKAGE, ReviewPaths, create_app
+from job_finder.workflow.memory import load_memory, load_review_memory, save_memory
+from job_finder.workflow.review_actions import (
+    RERUN_FIELD,
     start_application,
     undo_ignored_decision,
     update_application_salary,
@@ -32,9 +32,7 @@ from job_finder.review import (
     update_review_note,
     update_workflow_status,
 )
-from job_finder.workflow.memory import load_memory, load_review_memory, save_memory
-from job_finder.workflow.review_actions import RERUN_FIELD
-from job_finder.workflow.review_data import company_applications, same_company_applications
+from job_finder.workflow.review_data import company_applications, load_review_jobs, same_company_applications
 
 
 def json_request(url, payload):
@@ -65,18 +63,36 @@ class ReviewTests(unittest.TestCase):
 
         self.assertTrue(address_is_in_use(error))
 
-    def test_review_server_requests_exclusive_port_binding_on_windows(self):
-        self.assertFalse(LocalReviewServer.allow_reuse_address)
+    def test_review_port_is_bound_exclusively_on_windows(self):
         if not hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
             self.skipTest("SO_EXCLUSIVEADDRUSE is Windows-specific")
-        server = object.__new__(LocalReviewServer)
-        server.socket = mock.Mock()
+        sock = bind_exclusively("127.0.0.1", 0)
+        try:
+            self.assertEqual(sock.getsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE), 1)
+            with self.assertRaises(OSError) as second:
+                bind_exclusively("127.0.0.1", sock.getsockname()[1])
+            self.assertTrue(address_is_in_use(second.exception))
+        finally:
+            sock.close()
 
-        with mock.patch.object(HTTPServer, "server_bind") as parent_bind:
-            server.server_bind()
+    def test_the_api_page_loads_only_two_pinned_swagger_files(self):
+        with self.server_context() as base_url:
+            with urlopen(base_url + "/docs") as response:
+                page = response.read().decode("utf-8")
+                policy = response.headers["Content-Security-Policy"]
+            with urlopen(base_url + "/review") as response:
+                strict = response.headers["Content-Security-Policy"]
+            schema = get_json(base_url + "/openapi.json")
 
-        server.socket.setsockopt.assert_called_once_with(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
-        parent_bind.assert_called_once_with()
+        external = re.findall(r'(?:src|href)="(https://[^"]+)"', page)
+        self.assertEqual(len(external), 2)
+        for url in external:
+            tag = next(tag for tag in re.findall(r"<(?:script|link)[^>]*>", page) if url in tag)
+            self.assertRegex(tag, r'integrity="sha384-[A-Za-z0-9+/=]{64}"')
+            self.assertIn(url, policy)
+        self.assertNotIn("unsafe-inline", policy)
+        self.assertNotIn("cdn.jsdelivr.net", strict)
+        self.assertIn("/api/review-note", schema["paths"])
 
     def setUp(self):
         self.temporary_directory = tempfile.TemporaryDirectory()
@@ -116,19 +132,28 @@ class ReviewTests(unittest.TestCase):
 
     @contextmanager
     def server_context(self, **attributes):
-        handler = type(
-            "TemporaryReviewHandler",
-            (ReviewRequestHandler,),
-            {"recommendations_path": self.recommendations_path, "memory_path": self.memory_path, **attributes},
+        paths = ReviewPaths(
+            recommendations=attributes.get("recommendations_path", self.recommendations_path),
+            memory=attributes.get("memory_path", self.memory_path),
+            jobs=attributes.get("jobs_path", ReviewPaths.jobs),
+            manual_cache=attributes.get("manual_cache_path", ReviewPaths.manual_cache),
+            documents=attributes.get("application_documents_dir", ReviewPaths.documents),
         )
-        server = LocalReviewServer(("127.0.0.1", 0), handler)
-        thread = threading.Thread(target=server.serve_forever)
+        options = {"manual_importer": attributes["manual_importer"]} if "manual_importer" in attributes else {}
+        server = uvicorn.Server(
+            uvicorn.Config(
+                create_app(paths, **options), host="127.0.0.1", port=0, log_level="warning", access_log=False
+            )
+        )
+        thread = threading.Thread(target=server.run)
         thread.start()
         try:
-            yield f"http://127.0.0.1:{server.server_port}"
+            while not server.started:
+                thread.join(0.01)
+            port = server.servers[0].sockets[0].getsockname()[1]
+            yield f"http://127.0.0.1:{port}"
         finally:
-            server.shutdown()
-            server.server_close()
+            server.should_exit = True
             thread.join()
 
     def test_idle_connection_does_not_block_other_requests(self):
@@ -613,7 +638,7 @@ class ReviewTests(unittest.TestCase):
         with self.server_context(
             jobs_path=self.directory / "jobs.json",
             manual_cache_path=self.directory / "manual.json",
-            manual_importer=staticmethod(importer),
+            manual_importer=importer,
         ) as base_url:
             result = post_json(f"{base_url}/api/manual-import", {"url": "https://example.com/jobs/python"})
 
@@ -965,38 +990,3 @@ class CompanyApplicationTests(unittest.TestCase):
             same_company_applications({"id": "job:applied", "company": "Datenweber"}, applications)[0]["open"], True
         )
         self.assertEqual(same_company_applications({"id": "job:new", "company": ""}, applications), [])
-
-
-class FastApiReviewTests(ReviewTests):
-    """The same tests against the FastAPI app, so both servers keep one contract."""
-
-    @contextmanager
-    def server_context(self, **attributes):
-        import uvicorn
-
-        from job_finder.review_app import ReviewPaths, create_app
-
-        paths = ReviewPaths(
-            recommendations=attributes.get("recommendations_path", self.recommendations_path),
-            memory=attributes.get("memory_path", self.memory_path),
-            jobs=attributes.get("jobs_path", ReviewPaths.jobs),
-            manual_cache=attributes.get("manual_cache_path", ReviewPaths.manual_cache),
-            documents=attributes.get("application_documents_dir", ReviewPaths.documents),
-        )
-        importer = attributes.get("manual_importer")
-        options = {} if importer is None else {"manual_importer": importer.__func__}
-        server = uvicorn.Server(
-            uvicorn.Config(
-                create_app(paths, **options), host="127.0.0.1", port=0, log_level="warning", access_log=False
-            )
-        )
-        thread = threading.Thread(target=server.run)
-        thread.start()
-        try:
-            while not server.started:
-                thread.join(0.01)
-            port = server.servers[0].sockets[0].getsockname()[1]
-            yield f"http://127.0.0.1:{port}"
-        finally:
-            server.should_exit = True
-            thread.join()

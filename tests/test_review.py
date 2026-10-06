@@ -3,7 +3,6 @@
 import base64
 import http.client
 import json
-import re
 import socket
 import tempfile
 import threading
@@ -11,6 +10,7 @@ import unittest
 from contextlib import contextmanager
 from copy import deepcopy
 from datetime import date
+from html.parser import HTMLParser
 from pathlib import Path
 from unittest import mock
 from urllib.error import HTTPError
@@ -33,6 +33,27 @@ from job_finder.workflow.review_actions import (
     update_workflow_status,
 )
 from job_finder.workflow.review_data import company_applications, load_review_jobs, same_company_applications
+
+
+class PageTags(HTMLParser):
+    """Collect every linked file of a page and whether it has inline script, as the browser parses it."""
+
+    def __init__(self):
+        super().__init__()
+        self.links = []
+        self.inline_script = False
+        self._in_script = False
+
+    def handle_starttag(self, tag, attrs):
+        attributes = dict(attrs)
+        self.links += [(attributes[key] or "", attributes) for key in ("src", "href") if key in attributes]
+        self._in_script = tag == "script"
+
+    def handle_endtag(self, tag):
+        self._in_script = False
+
+    def handle_data(self, data):
+        self.inline_script = self.inline_script or (self._in_script and bool(data.strip()))
 
 
 def json_request(url, payload):
@@ -84,12 +105,15 @@ class ReviewTests(unittest.TestCase):
                 strict = response.headers["Content-Security-Policy"]
             schema = get_json(base_url + "/openapi.json")
 
-        external = re.findall(r'(?:src|href)="(https://[^"]+)"', page)
+        tags = PageTags()
+        tags.feed(page)
+        external = [(url, attributes) for url, attributes in tags.links if not url.startswith("/")]
         self.assertEqual(len(external), 2)
-        for url in external:
-            tag = next(tag for tag in re.findall(r"<(?:script|link)[^>]*>", page) if url in tag)
-            self.assertRegex(tag, r'integrity="sha384-[A-Za-z0-9+/=]{64}"')
+        for url, attributes in external:
+            self.assertRegex(attributes.get("integrity") or "", r"^sha384-[A-Za-z0-9+/]{64}$")
+            self.assertEqual(attributes.get("crossorigin"), "anonymous")
             self.assertIn(url, policy)
+        self.assertFalse(tags.inline_script)
         self.assertNotIn("unsafe-inline", policy)
         self.assertNotIn("cdn.jsdelivr.net", strict)
         self.assertIn("/api/review-note", schema["paths"])

@@ -19,7 +19,9 @@ from job_finder.text import html_to_text
 SOURCE_NAME = "remotely"
 BASE_URL = "https://www.remotely.de"
 LIST_URL = f"{BASE_URL}/alle-jobs"
-CACHE_FILE = cache_file("remotely")
+# v2: location and employment type come from the right key facts; older entries could hold the
+# employment type or the category as location. A new name rebuilds the detail cache once.
+CACHE_FILE = cache_file("remotely_v2")
 LINKEDIN_STATUS_FILE = REMOTELY_LINKEDIN_STATUS_FILE
 MAX_LIST_PAGES = 100
 OLD_PAGE_STOP_COUNT = 2
@@ -33,6 +35,9 @@ LINKEDIN_HEADERS = {
     "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/128 Safari/537.36"),
     "Accept-Language": "de-DE,de;q=0.9,en;q=0.7",
 }
+# Key facts list employment type, location, salary and category side by side; only the
+# location carries a tooltip (data-state), and full time is not labelled at all.
+EMPLOYMENT_LABELS = {"teilzeit", "vollzeit", "werkstudent", "praktikum", "minijob", "freelance", "ausbildung"}
 LINKEDIN_CLOSED_MARKERS = ("es werden keine bewerbungen mehr angenommen", "no longer accepting applications")
 
 
@@ -267,7 +272,8 @@ def job_from_html(url, html, today=None):
     if not title or not company or not description:
         raise ValueError("Remotely-Anzeige ohne Titel, Unternehmen oder Beschreibung")
 
-    location = clean_text(parser.location) or "Remote"
+    location = next((text for text, has_tooltip in parser.key_facts if has_tooltip), "") or "Remote"
+    employment_type = next((text for text, _ in parser.key_facts if text.casefold() in EMPLOYMENT_LABELS), None)
     work_model = clean_text(parser.work_model)
     detected_remote = detect_remote(title, description, location, work_model)
     work_mode, remote_percentage = classify_remote(detected_remote)
@@ -281,6 +287,7 @@ def job_from_html(url, html, today=None):
         company=company,
         locations=[location],
         sources=[source],
+        employment_type=employment_type,
         description_raw=description_raw,
         description_clean=description,
         work_mode=work_mode,
@@ -331,7 +338,8 @@ class _RemotelyDetailParser(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.title = ""
         self.company = ""
-        self.location = ""
+        self.key_facts = []
+        self.key_fact_has_tooltip = False
         self.work_model = ""
         self.published_label = ""
         self.application_url = ""
@@ -369,6 +377,8 @@ class _RemotelyDetailParser(HTMLParser):
         elif tag == "p" and not self.company and self.pending_company_mark:
             self.capture_company = True
             self.pending_company_mark = False
+        elif tag == "span" and self.active_section == "eckdaten":
+            self.key_fact_has_tooltip = "data-state" in values
         elif tag == "span" and self.awaiting_published_label and not self.published_label:
             self.capture_published_label = True
             self.awaiting_published_label = False
@@ -422,8 +432,9 @@ class _RemotelyDetailParser(HTMLParser):
             return
         if self.active_section == "arbeitsmodell" and not self.work_model:
             self.work_model = data
-        elif self.active_section == "eckdaten" and not self.location:
-            self.location = data
+        elif self.active_section == "eckdaten":
+            self.key_facts.append((text, self.key_fact_has_tooltip))
+            self.key_fact_has_tooltip = False
 
 
 class _RemotelyListParser(HTMLParser):

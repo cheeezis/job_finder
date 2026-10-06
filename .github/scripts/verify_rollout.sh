@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Prüft nach dem Ausrollen: Worker und Review zeigen auf das erwartete Image, und
-# die neueste Review-Revision läuft gesund. Sonst endet der Lauf mit Fehler.
+# die neueste Review-Revision läuft gesund. Sonst endet der Lauf mit Fehler. Eine gesunde
+# Revision darf schon wieder schlafen (ScaledToZero); die Review skaliert auf null.
 set -euo pipefail
 image="$1"
 worker=$(az containerapp job show --name jobfinder-worker --resource-group rg-jobfinder \
@@ -12,12 +13,14 @@ fi
 for attempt in $(seq 1 20); do
   revision=$(az containerapp show --name jobfinder-review --resource-group rg-jobfinder \
     --query properties.latestRevisionName -o tsv)
-  read -r revision_image state health < <(az containerapp revision show --name jobfinder-review \
+  # Here-String statt Prozess-Ersetzung: Ohne abschließenden Zeilenumbruch meldet read
+  # sonst Dateiende, und set -e beendet das Skript wortlos.
+  read -r revision_image state health <<< "$(az containerapp revision show --name jobfinder-review \
     --resource-group rg-jobfinder --revision "$revision" \
     --query "[properties.template.containers[0].image, properties.runningState, properties.healthState]" \
-    -o tsv | tr '\n' ' ')
+    -o tsv | tr '\n' ' ')"
   if [ "$revision_image" = "$image" ] && [ "$health" = "Healthy" ] \
-    && { [ "$state" = "Running" ] || [ "$state" = "RunningAtMaxScale" ]; }; then
+    && case "$state" in Running | RunningAtMaxScale | ScaledToZero) true ;; *) false ;; esac; then
     echo "Review-Revision $revision läuft gesund auf dem erwarteten Image; der Worker ebenso."
     exit 0
   fi

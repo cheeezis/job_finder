@@ -216,7 +216,9 @@ jobs:
           TF_VAR_runtime_access_verified: ${{ vars.RUNTIME_ACCESS_VERIFIED || 'false' }}
           TF_VAR_database_auth_phase: ${{ vars.DATABASE_AUTH_PHASE || 'password' }}
           TF_VAR_database_entra_verified: ${{ vars.DATABASE_ENTRA_VERIFIED || 'false' }}
-          TF_VAR_postgres_entra_admin_name: ${{ vars.POSTGRES_ENTRA_ADMIN_NAME }}
+          # Secret, nicht Variable: Der Anmeldename kann eine E-Mail-Adresse enthalten, und
+          # Variablen erscheinen ungeschwärzt in den öffentlichen Logs.
+          TF_VAR_postgres_entra_admin_name: ${{ secrets.POSTGRES_ENTRA_ADMIN_NAME }}
 
   # Baut das Image schon im Pull Request, startet es kurz als Probe und prüft
   # es auf bekannte Lücken; ein kaputtes Dockerfile fällt so vor dem Merge auf.
@@ -339,7 +341,9 @@ jobs:
           TF_VAR_runtime_access_verified: ${{ vars.RUNTIME_ACCESS_VERIFIED || 'false' }}
           TF_VAR_database_auth_phase: ${{ vars.DATABASE_AUTH_PHASE || 'password' }}
           TF_VAR_database_entra_verified: ${{ vars.DATABASE_ENTRA_VERIFIED || 'false' }}
-          TF_VAR_postgres_entra_admin_name: ${{ vars.POSTGRES_ENTRA_ADMIN_NAME }}
+          # Secret, nicht Variable: Der Anmeldename kann eine E-Mail-Adresse enthalten, und
+          # Variablen erscheinen ungeschwärzt in den öffentlichen Logs.
+          TF_VAR_postgres_entra_admin_name: ${{ secrets.POSTGRES_ENTRA_ADMIN_NAME }}
       # Terraform ignoriert das Image (lifecycle.ignore_changes); die
       # App-Version wird ausschließlich hier gesetzt.
       - name: Image ausrollen

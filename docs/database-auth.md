@@ -67,8 +67,10 @@ des durch `owner_object_id` bestimmten persönlichen Entra-Administrators enthal
 Eine Worker-/Review-MI oder der Hybrid-Service-Principal darf nicht Administrator sein.
 `entra` verlangt zusätzlich `database_entra_verified=true` nach der tatsächlichen
 Azure-Abnahme. Die GitHub-Pipeline übergibt entsprechend `DATABASE_AUTH_PHASE`
-(Standard `password`), `DATABASE_ENTRA_VERIFIED` (Standard `false`) und
-`POSTGRES_ENTRA_ADMIN_NAME`. Lokale Terraform-Werte und GitHub-Werte müssen vor
+(Standard `password`) und `DATABASE_ENTRA_VERIFIED` (Standard `false`) als
+Repository-Variablen sowie `POSTGRES_ENTRA_ADMIN_NAME` als Repository-Secret: Der
+Anmeldename kann eine E-Mail-Adresse enthalten, und Variablen stehen ungeschwärzt in
+den öffentlichen Workflow-Logs. Lokale Terraform-Werte und GitHub-Werte müssen vor
 einem Apply zusammenpassen. Das Image mit Token-Unterstützung zuerst deployen.
 
 Entra-Aktivierung startet den PostgreSQL-Server neu. Ein passendes Betriebsfenster

@@ -2,6 +2,11 @@
 
 ## Nutzen und aktueller Umfang
 
+**Stand 06.10.2026: aktiv.** Worker, Review und Hybridlauf melden sich mit Entra-Tokens an.
+Vor der Umschaltung bestanden alle drei Identitäten in Azure die Proben aus Etappe 3
+(Token-Anmeldung, Rechte-Matrix, verbotene DDL, zurückgerollter Schreibzugriff, neue
+Verbindung mit neuem Token). Die bisherigen DB-Secrets bleiben als Rückweg im Key Vault.
+
 Worker und Review verwenden nach F09 eigene Datenbankrollen mit festgelegten
 Rechten. F10 ergänzt die Anmeldung über ihre bereits vorhandenen Azure-Identitäten:
 Ein zeitlich begrenztes Entra-Token ersetzt beim Verbindungsaufbau das gespeicherte
@@ -65,6 +70,9 @@ weiterhin Testpasswörter.
 `runtime_access_verified=true`. `postgres_entra_admin_name` muss den Anmeldenamen
 des durch `owner_object_id` bestimmten persönlichen Entra-Administrators enthalten.
 Eine Worker-/Review-MI oder der Hybrid-Service-Principal darf nicht Administrator sein.
+PostgreSQL begrenzt Rollennamen auf 63 Zeichen, und Azure speichert den Administratornamen
+entsprechend gekürzt (etwa bei langen Gastkonten mit `#EXT#`). Deshalb den auf 63 Zeichen
+gekürzten Namen eintragen; die Anmeldung mit dem vollen Namen funktioniert trotzdem.
 `entra` verlangt zusätzlich `database_entra_verified=true` nach der tatsächlichen
 Azure-Abnahme. Die GitHub-Pipeline übergibt entsprechend `DATABASE_AUTH_PHASE`
 (Standard `password`) und `DATABASE_ENTRA_VERIFIED` (Standard `false`) als

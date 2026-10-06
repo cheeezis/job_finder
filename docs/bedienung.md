@@ -223,7 +223,9 @@ Den Ablauf eines Laufs beschreibt die
   Suchtreffer vorgemerkt. Fehlen sie in einem Lauf, dessen Quellen alle vollständig waren,
   prüft der Lauf ihre URLs. Erst wenn alle eindeutig geschlossen sind (HTTP
   404/410 oder Schließungshinweis), wechselt die Stelle mit Datum und Grund auf
-  „Nicht interessant“; Bewerbungen bleiben unberührt.
+  „Nicht interessant“; Bewerbungen bleiben unberührt. Diese Karten lädt die
+  Review erst, wenn der Filter „Alle Status“ oder „Nicht interessant“ gewählt
+  ist oder ein Link auf eine solche Stelle zeigt; die übliche Liste bleibt so klein.
 - **Caches:** Detaildaten gelten sieben Tage als frisch. Bei einem
   Netzwerkfehler darf ein höchstens 14 Tage alter Eintrag als markierter
   Fallback erscheinen. Ein teilweise fehlgeschlagenes Suchsegment setzt keine

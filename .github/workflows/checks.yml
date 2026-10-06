@@ -421,6 +421,9 @@ jobs:
           echo "$EXPECTED_SHA256  release.tfplan" | sha256sum --check --status \
             || { echo "::error::Der abgelegte Plan weicht vom geprüften ab."; exit 1; }
       - run: terraform apply -input=false -lock-timeout=2m release.tfplan
+        env:
+          # Flüchtige Variablen stehen nicht im gespeicherten Plan; der Apply braucht sie erneut.
+          TF_VAR_postgres_admin_password: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
       - name: Abgelegten Plan entfernen
         if: always()
         env:

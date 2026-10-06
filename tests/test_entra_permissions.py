@@ -46,9 +46,9 @@ class EntraConfigurationTests(unittest.TestCase):
             ("role", "oid", "service", False, False),
         )
         cursor = connection.execute.return_value
-        cursor.description = [SimpleNamespace(name=key) for key in ("rolename", "objectId", "isAdmin")]
+        cursor.description = [SimpleNamespace(name=key) for key in ("rolname", "objectId", "isAdmin")]
         cursor.fetchall.return_value = [("role", "oid", 0)]
-        self.assertEqual(entra.list_principals(connection), [{"rolename": "role", "objectid": "oid", "isadmin": 0}])
+        self.assertEqual(entra.list_principals(connection), [{"rolname": "role", "objectid": "oid", "isadmin": 0}])
         connection.execute.assert_called_with("SELECT * FROM pg_catalog.pgaadauth_list_principals(false)")
 
     def test_setup_connections_must_target_same_server_with_separate_databases(self):
@@ -154,7 +154,7 @@ class EntraPermissionsTests(unittest.TestCase):
             )
             connection.execute(
                 sql.SQL(
-                    "CREATE TABLE {} (rolename text,objectid text,tenantid text,principaltype text,isadmin int,ismfa int)"
+                    "CREATE TABLE {} (rolname text,objectid text,tenantid text,principaltype text,isadmin int,ismfa int)"
                 ).format(sql.Identifier(cls.mapping_table))
             )
 
@@ -279,13 +279,13 @@ class EntraPermissionsTests(unittest.TestCase):
         for column, value in cases:
             with self.subTest(column=column), psycopg.connect(self.url, autocommit=True) as connection:
                 original = connection.execute(
-                    sql.SQL("SELECT {} FROM {} WHERE rolename=%s").format(
+                    sql.SQL("SELECT {} FROM {} WHERE rolname=%s").format(
                         sql.Identifier(column), sql.Identifier(self.mapping_table)
                     ),
                     (self.roles["worker"],),
                 ).fetchone()[0]
                 connection.execute(
-                    sql.SQL("UPDATE {} SET {}=%s WHERE rolename=%s").format(
+                    sql.SQL("UPDATE {} SET {}=%s WHERE rolname=%s").format(
                         sql.Identifier(self.mapping_table), sql.Identifier(column)
                     ),
                     (value, self.roles["worker"]),
@@ -295,7 +295,7 @@ class EntraPermissionsTests(unittest.TestCase):
                         self.prepare(apply=True)
                 finally:
                     connection.execute(
-                        sql.SQL("UPDATE {} SET {}=%s WHERE rolename=%s").format(
+                        sql.SQL("UPDATE {} SET {}=%s WHERE rolname=%s").format(
                             sql.Identifier(self.mapping_table), sql.Identifier(column)
                         ),
                         (original, self.roles["worker"]),

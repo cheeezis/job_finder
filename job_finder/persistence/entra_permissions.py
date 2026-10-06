@@ -34,6 +34,7 @@ def validate_principals(values):
 
 
 def list_principals(connection):
+    # Azure returns the role in column "rolname", although the create function's parameter is called rolename.
     cursor = connection.execute("SELECT * FROM pg_catalog.pgaadauth_list_principals(false)")
     columns = [column.name.casefold() for column in cursor.description]
     return [dict(zip(columns, row, strict=True)) for row in cursor.fetchall()]
@@ -51,8 +52,8 @@ def _mapped_roles(connection, principals, roles):
     present = {}
     for component, role in roles.items():
         object_id = principals[component]
-        rows = [row for row in mappings if row["rolename"] == role]
-        if any(row["objectid"].casefold() == object_id and row["rolename"] != role for row in mappings):
+        rows = [row for row in mappings if row["rolname"] == role]
+        if any(row["objectid"].casefold() == object_id and row["rolname"] != role for row in mappings):
             raise RuntimeError("Laufzeitidentität ist bereits einer anderen Entra-Rolle zugeordnet.")
         exists = _validate_role(connection, role, login=True)
         if rows:

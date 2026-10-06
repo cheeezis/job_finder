@@ -86,6 +86,10 @@ def load_application_overview(memory_path=MEMORY_FILE, as_of=None, recommendatio
     ]
     all_applications.sort(key=lambda item: item["applied_on"] or item["last_event_on"] or "", reverse=True)
     applications = [item for item in all_applications if item["workflow_status"] in OPEN_APPLICATION_STATUSES]
+    # Stable sorts prioritize upcoming interviews, then recent past interviews,
+    # preserving application-date order for other applications and tied appointments.
+    applications.sort(key=lambda item: item["last_interview_at"] or "", reverse=True)
+    applications.sort(key=lambda item: (item["next_interview_at"] is None, item["next_interview_at"] or ""))
     completed_applications = [
         item for item in all_applications if item["workflow_status"] not in OPEN_APPLICATION_STATUSES
     ]

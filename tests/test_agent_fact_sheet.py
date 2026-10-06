@@ -4,11 +4,12 @@ import json
 import os
 import unittest
 from decimal import Decimal
+from pathlib import Path
 from unittest.mock import patch
 
 from psycopg import errors
 
-from job_finder.agent.fact_sheet import FIXED_LINES, SCHEMA, parse_fact_sheet
+from job_finder.agent.fact_sheet import FIXED_LINES, RESPONSE_FORMAT, SCHEMA, parse_fact_sheet
 from job_finder.persistence.database import transaction
 from job_finder.persistence.fact_sheets import fact_sheets, save_aborted, save_fact_sheet
 from job_finder.workflow import review_data
@@ -42,6 +43,11 @@ def schema_objects(node):
 
 
 class FactSheetTests(unittest.TestCase):
+    def test_the_model_is_asked_for_the_same_structure_as_before_pydantic(self):
+        # The hand-written format the agent sent until the Pydantic model replaced it.
+        before = (Path(__file__).parent / "fixtures" / "fact_sheet_format.json").read_text(encoding="utf-8")
+        self.assertEqual(json.dumps(RESPONSE_FORMAT), json.dumps(json.loads(before)))
+
     def test_every_object_is_closed_as_strict_structured_output_requires(self):
         for node in schema_objects(SCHEMA):
             self.assertEqual(node["required"], list(node["properties"]))

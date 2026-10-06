@@ -1,12 +1,15 @@
 """The fact sheet the agent writes: fixed lines with a traffic light, verdict and short reason.
 
-The model must answer in this structure (structured output), so none of the
-seven fixed lines can be missing. The review turns the light words into
-symbols: gruen 🟢, gelb 🟡, orange 🟠, rot 🔴, unbekannt ⚪, hinweis ⚠️.
+One Pydantic model describes it twice over: as the structure the model must
+answer in (structured output), so none of the seven fixed lines can be
+missing, and as the check of that answer. The review turns the light words
+into symbols: gruen 🟢, gelb 🟡, orange 🟠, rot 🔴, unbekannt ⚪, hinweis ⚠️.
 """
 
-import json
 import re
+from typing import Annotated, Literal, get_args
+
+from pydantic import AfterValidator, BaseModel, ConfigDict, ValidationError, field_validator
 
 FIXED_LINES = (
     ("status", "Status"),
@@ -18,9 +21,10 @@ FIXED_LINES = (
     ("gehalt", "Gehalt"),
 )
 # A warning (hinweis) belongs in an extra line; a fixed line always judges.
-FIXED_LIGHTS = ("gruen", "gelb", "orange", "rot", "unbekannt")
-LIGHTS = (*FIXED_LIGHTS, "hinweis")
-VERDICTS = ("bewerben", "erst_klaeren", "eher_streichen", "streichen")
+FixedLight = Literal["gruen", "gelb", "orange", "rot", "unbekannt"]
+Light = Literal["gruen", "gelb", "orange", "rot", "unbekannt", "hinweis"]
+Verdict = Literal["bewerben", "erst_klaeren", "eher_streichen", "streichen"]
+FIXED_LIGHTS, LIGHTS, VERDICTS = get_args(FixedLight), get_args(Light), get_args(Verdict)
 # Clutter the review would show as text: citations the web search appends,
 # as in "([example.com](https://example.com/x))", other Markdown links and a
 # leading light word, as in "gruen – offen".
@@ -30,26 +34,96 @@ LEADING_LIGHT = re.compile(rf"^\s*(?:{'|'.join(LIGHTS)})\s*[–-]\s*", re.IGNORE
 MAX_EXTRA_LINES = 2
 
 
-def closed_object(properties):
+def tidy(text):
+    """Keep the words, drop link markup and a leading light word; the sources list the links."""
+    text = MARKDOWN_LINK.sub(r"\1", CITATION.sub("", text))
+    return LEADING_LIGHT.sub("", text).strip()
+
+
+def tidy_required(text):
+    """Return the tidied text; nothing left means the line says nothing."""
+    if not (text := tidy(text)):
+        raise ValueError("Text fehlt")
+    return text
+
+
+Text = Annotated[str, AfterValidator(tidy_required)]
+
+
+class Closed(BaseModel):
     """Strict structured output wants every property required and no others allowed."""
-    return {"type": "object", "properties": properties, "required": list(properties), "additionalProperties": False}
+
+    model_config = ConfigDict(extra="forbid")
 
 
-LINE = closed_object({"ampel": {"type": "string", "enum": list(FIXED_LIGHTS)}, "text": {"type": "string"}})
-EXTRA_LINE = closed_object(
-    {"thema": {"type": "string"}, "ampel": {"type": "string", "enum": list(LIGHTS)}, "text": {"type": "string"}}
-)
-SCHEMA = closed_object(
-    {
-        **{key: LINE for key, _label in FIXED_LINES},
-        "zusatz": {"type": "array", "items": EXTRA_LINE},
-        "fazit": closed_object({"stufe": {"type": "string", "enum": list(VERDICTS)}, "text": {"type": "string"}}),
-        "kurzgrund": {"type": "string"},
-        "quellen": {"type": "array", "items": {"type": "string"}},
-    }
-)
+class Line(Closed):
+    ampel: FixedLight
+    text: Text
+
+
+class ExtraLine(Closed):
+    thema: Text
+    ampel: Light
+    text: Text
+
+
+class Conclusion(Closed):
+    stufe: Verdict
+    text: Text
+
+
+class FactSheet(Closed):
+    status: Line
+    berufseinstieg: Line
+    fachlicher_fit: Line
+    luecken: Line
+    homeoffice_standort: Line
+    reiseanteil: Line
+    gehalt: Line
+    zusatz: list[ExtraLine]
+    fazit: Conclusion
+    kurzgrund: Text
+    quellen: list[str]
+
+    @field_validator("zusatz")
+    @classmethod
+    def at_most_two(cls, lines):
+        return lines[:MAX_EXTRA_LINES]
+
+
+# The keywords in the order the hand-written schema had, so the request stays byte for byte the same.
+KEYWORD_ORDER = ("type", "properties", "required", "additionalProperties", "items", "enum")
+
+
+def strict_schema(model):
+    """Return the model's JSON schema with references inlined and titles dropped.
+
+    This is exactly the structure the agent sent before the model existed,
+    so the switch to Pydantic does not change what the model is asked for.
+    """
+    schema = model.model_json_schema()
+    definitions = schema.pop("$defs", {})
+
+    def inline(node):
+        if "$ref" in node:
+            return inline(definitions[node["$ref"].rsplit("/", 1)[1]])
+        result = {}
+        for keyword in sorted(node.keys() - {"title"}, key=KEYWORD_ORDER.index):
+            value = node[keyword]
+            if keyword == "properties":
+                value = {name: inline(child) for name, child in value.items()}
+            elif keyword == "items":
+                value = inline(value)
+            result[keyword] = value
+        return result
+
+    return inline(schema)
+
+
+SCHEMA = strict_schema(FactSheet)
 # The Responses API's text.format for this structure.
 RESPONSE_FORMAT = {"type": "json_schema", "name": "steckbrief", "strict": True, "schema": SCHEMA}
+LABELS = {**dict(FIXED_LINES), "zusatz": "Zusatz", "fazit": "Fazit", "kurzgrund": "Kurzgrund"}
 
 
 def parse_fact_sheet(text):
@@ -59,44 +133,25 @@ def parse_fact_sheet(text):
     line, because a broken fact sheet must never reach the review.
     """
     try:
-        sheet = json.loads(text)
-    except (TypeError, json.JSONDecodeError) as error:
-        raise ValueError("Steckbrief ist kein gültiges JSON") from error
-    if not isinstance(sheet, dict) or set(sheet) != set(SCHEMA["properties"]):
-        raise ValueError("Steckbrief hat nicht die erwarteten Felder")
-    for key, label in FIXED_LINES:
-        check_line(sheet[key], label, FIXED_LIGHTS)
-    if not isinstance(sheet["zusatz"], list):
-        raise ValueError("Zusatzzeilen fehlen")
-    for line in sheet["zusatz"]:
-        check_line(line, "Zusatz", LIGHTS)
-        if not isinstance(line.get("thema"), str) or not line["thema"].strip():
-            raise ValueError("Zusatzzeile ohne Thema")
-    sheet["zusatz"] = sheet["zusatz"][:MAX_EXTRA_LINES]
-    verdict = sheet["fazit"]
-    if not isinstance(verdict, dict) or verdict.get("stufe") not in VERDICTS:
-        raise ValueError("Fazit hat keine gültige Stufe")
-    if not non_empty_text(verdict.get("text")) or not non_empty_text(sheet["kurzgrund"]):
-        raise ValueError("Fazit oder Kurzgrund ist leer")
-    verdict["text"], sheet["kurzgrund"] = tidy(verdict["text"]), tidy(sheet["kurzgrund"])
-    if not isinstance(sheet["quellen"], list) or not all(isinstance(source, str) for source in sheet["quellen"]):
-        raise ValueError("Quellen müssen eine Liste von Texten sein")
-    return sheet
+        return FactSheet.model_validate_json(text or "").model_dump()
+    except ValidationError as error:
+        raise ValueError(reason(error.errors()[0])) from None
 
 
-def check_line(line, label, lights):
-    if not isinstance(line, dict) or line.get("ampel") not in lights:
-        raise ValueError(f"{label}: keine gültige Ampel")
-    if not isinstance(line.get("text"), str) or not (text := tidy(line["text"])):
-        raise ValueError(f"{label}: Text fehlt")
-    line["text"] = text
-
-
-def tidy(text):
-    """Keep the words, drop link markup and a leading light word; the sources list the links."""
-    text = MARKDOWN_LINK.sub(r"\1", CITATION.sub("", text))
-    return LEADING_LIGHT.sub("", text).strip()
-
-
-def non_empty_text(value):
-    return isinstance(value, str) and bool(value.strip())
+def reason(error):
+    """Name the first problem in the words the review shows for an unusable sheet."""
+    kind, location = error["type"], error["loc"]
+    if kind == "json_invalid":
+        return "Steckbrief ist kein gültiges JSON"
+    if len(location) <= 1 and kind in {"missing", "extra_forbidden", "model_type", "dict_type"}:
+        return "Steckbrief hat nicht die erwarteten Felder"
+    label = LABELS.get(str(location[0]), str(location[0]))
+    if location[-1] == "ampel":
+        return f"{label}: keine gültige Ampel"
+    if location[-1] == "stufe":
+        return "Fazit hat keine gültige Stufe"
+    if location[-1] == "thema":
+        return "Zusatzzeile ohne Thema"
+    if location[-1] == "text" or location == ("kurzgrund",):
+        return f"{label}: Text fehlt"
+    return f"{label}: unerwartete Form"

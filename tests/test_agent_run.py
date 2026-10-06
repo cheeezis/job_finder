@@ -9,13 +9,16 @@ from itertools import count
 from unittest.mock import Mock, patch
 
 from job_finder.agent import run
+from job_finder.agent.basis import job_basis, run_basis
 from job_finder.agent.cost_guard import AgentStopped
 from job_finder.agent.settings import agent_settings
 from job_finder.paths import JOBS_FILE, RECOMMENDATIONS_JSON
 from job_finder.persistence.database import transaction
-from job_finder.persistence.fact_sheets import save_aborted
+from job_finder.persistence.fact_sheets import fact_sheets, save_aborted, save_fact_sheet
 from job_finder.persistence.postgres_store import read_jobs, write_dataset, write_memory
 from job_finder.persistence.storage import dataset_name
+from job_finder.workflow.memory import load_memory
+from job_finder.workflow.review_actions import RERUN_FIELD
 
 ENABLED = {"agent": {"enabled": True}}
 ENDPOINT = {run.ENDPOINT_ENV: "https://oai-example.openai.azure.com/"}
@@ -82,7 +85,7 @@ class AgentPhaseTests(unittest.TestCase):
         )
 
         self.assertEqual(result, stats)
-        self.assertIn("12 fertig · 1 abgebrochen · 4 offen · heute 1,00 € von 1,00 €", text)
+        self.assertIn("12 fertig · 1 abgebrochen · 4 offen · 0 veraltet · heute 1,00 € von 1,00 €", text)
         self.assertIn("Stopp: Tagesgrenze erreicht", text)
         self.assertEqual(warning.call_args.args[1], "Agent gestoppt: Tagesgrenze erreicht: 1,00 € von 1,00 € · 4 offen")
         self.assertIn("Discord-Warnung: DISCORD_WEBHOOK_URL ist nicht gesetzt", text)
@@ -180,6 +183,8 @@ class RunAgentTests(unittest.TestCase):
         self.write = Mock(side_effect=outcomes)
         with patch.multiple(
             run,
+            load_review_jobs=Mock(return_value=[]),
+            fact_sheets=Mock(return_value={}),
             waiting_jobs=Mock(return_value=waiting),
             read_jobs=Mock(return_value=ads),
             write_fact_sheet=self.write,
@@ -289,6 +294,82 @@ class AgentSelectionTests(unittest.TestCase):
                 ("job:entry", "job:entry"),
             ],
         )
+
+    def recommend(self, *jobs):
+        """Publish recommendations and remember them with the given status and extra fields."""
+        write_dataset(
+            dataset_name(RECOMMENDATIONS_JSON),
+            {
+                "recommendations": [
+                    {
+                        "id": job_id,
+                        "title": job_id,
+                        "company": "Beispiel GmbH",
+                        "match_percent": score,
+                        "experience_rank": 0,
+                        "url": f"https://example.com/{job_id}",
+                    }
+                    for job_id, score, _status, _extra in jobs
+                ]
+            },
+        )
+        memory = {
+            job_id: {
+                "title": job_id,
+                "workflow_status": status,
+                "source_urls": [f"https://example.com/{job_id}"],
+                **extra,
+            }
+            for job_id, _score, status, extra in jobs
+        }
+        with transaction() as connection:
+            write_memory(connection, "default", {}, memory)
+
+    def test_an_aborted_sheet_gets_one_more_attempt_and_a_requested_job_comes_first(self):
+        self.recommend(
+            ("job:retry", 60, "new", {}),
+            ("job:failed", 70, "new", {}),
+            ("job:fresh", 50, "new", {}),
+            # Decided and below the gate, but the user asked for a new sheet in the review.
+            ("job:asked", 10, "interesting", {RERUN_FIELD: "2026-10-06T18:00:00+00:00"}),
+        )
+        save_aborted("job:retry", "gpt-5-mini", "unvollständig", Decimal("0.02"), retryable=True)
+        save_aborted("job:failed", "gpt-5-mini", "unvollständig", Decimal("0.02"), attempt=2)
+        save_fact_sheet("job:asked", "gpt-5-mini", {"fazit": {"stufe": "bewerben"}}, Decimal("0.03"))
+
+        waiting = run.waiting_jobs()
+
+        self.assertEqual(
+            [(job["id"], job["agent_attempt"]) for job in waiting],
+            [("job:asked", 1), ("job:retry", 2), ("job:fresh", 1)],
+        )
+
+    def test_a_run_stamps_new_sheets_marks_changed_ones_and_clears_the_request(self):
+        ads = {
+            "job:old": {"id": "job:old", "title": "Python", "company": "A", "description_clean": "Neuer Text"},
+            "job:asked": {"id": "job:asked", "title": "Java", "company": "B", "description_clean": "Text"},
+        }
+        write_dataset(dataset_name(JOBS_FILE), list(ads.values()))
+        self.recommend(
+            ("job:old", 60, "interesting", {}),
+            ("job:asked", 50, "interesting", {RERUN_FIELD: "2026-10-06T18:00:00+00:00"}),
+        )
+        settings = agent_settings(ENABLED)
+        basis = run_basis("name: Alex", {}, settings)
+        written_on = job_basis(basis, {**ads["job:old"], "description_clean": "Alter Text"})
+        save_fact_sheet("job:old", "gpt-5-mini", {"fazit": {"stufe": "bewerben"}}, Decimal("0.03"), versions=written_on)
+        write = Mock(return_value="fertig")
+
+        with patch.multiple(
+            run, write_fact_sheet=write, spent_today_and_this_month=Mock(return_value=(Decimal("0.03"), 1))
+        ):
+            stats = run.run_agent(settings, "name: Alex", object(), clock=count().__next__, basis=basis)
+
+        self.assertEqual((stats["fertig"], stats["veraltet"]), (1, 1))
+        self.assertEqual(fact_sheets()["job:old"]["outdated"], ["ad"])
+        self.assertEqual(write.call_args.args[0]["id"], "job:asked")
+        self.assertEqual(write.call_args.kwargs, {"attempt": 1, "versions": job_basis(basis, ads["job:asked"])})
+        self.assertNotIn(RERUN_FIELD, load_memory()["job:asked"])
 
     def test_only_the_requested_job_details_are_read(self):
         write_dataset(

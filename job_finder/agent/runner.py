@@ -40,6 +40,13 @@ RATE_LIMIT_RETRIES = 3
 RATE_LIMIT_WAIT_SECONDS = 60
 # Each round is two graph steps; the cost guard ends a job long before this.
 RECURSION_LIMIT = 50
+# Raise when the graph, its tools or the per-job prompt change what a fact sheet says;
+# the review then marks older sheets as outdated.
+GRAPH_VERSION = "1"
+# An incomplete or unusable answer gets one more attempt in a later run; a
+# rejected request or a reached job limit none, as they would only cost again.
+MAX_ATTEMPTS = 2
+RETRYABLE = {"incomplete", "unusable"}
 # How a model call appears in traces (OpenTelemetry's names for generative AI).
 MODEL_CALL = {"gen_ai.operation.name": "chat", "gen_ai.provider.name": "azure.ai.openai", "gen_ai.request.model": MODEL}
 
@@ -91,38 +98,40 @@ class JobState(TypedDict):
     messages: Annotated[list, add_messages]
 
 
-def write_fact_sheet(job, profile_text, guard, model, settings, today, run_id=None):
+def write_fact_sheet(job, profile_text, guard, model, settings, today, run_id=None, *, attempt=1, versions=None):
     """Write and store the fact sheet of one job; return "fertig" or "abgebrochen".
 
     A limit, a rejected request or an unusable answer ends only this job, and
     its reason is stored. AgentStopped propagates: money used up, ledger
     unusable or model unreachable end the whole run. Every job leaves one
-    agent_job log line and span with ids, counts and the verdict.
+    agent_job log line and span with ids, counts and the verdict. attempt
+    counts the tries at this job, versions is the basis the sheet is written on.
     """
-    started, result = time.monotonic(), {"outcome": "fehler"}
+    started, result = time.monotonic(), {"outcome": "fehler", "attempt": attempt}
     with span("agent_job", **{"jobfinder.run_id": run_id, "jobfinder.job_id": job["id"]}) as current:
         try:
-            result = draft_and_store(job, profile_text, guard, model, settings, today)
+            result = draft_and_store(job, profile_text, guard, model, settings, today, attempt, versions)
         except AgentStopped:
-            result = {"outcome": "gestoppt", "reason": "run_stopped"}
+            result = {"outcome": "gestoppt", "reason": "run_stopped", "attempt": attempt}
             raise
         finally:
             report_job(current, job["id"], run_id, guard, result, time.monotonic() - started)
     return result["outcome"]
 
 
-def draft_and_store(job, profile_text, guard, model, settings, today):
+def draft_and_store(job, profile_text, guard, model, settings, today, attempt=1, versions=None):
     """Store the fact sheet or why this job ended; return the outcome, its reason or verdict."""
+    stamp = {"attempt": attempt, "versions": versions}
     try:
         sheet, _dropped = draft_fact_sheet(job, profile_text, guard, model, settings, today)
-    except JobLimitReached as stop:
-        save_aborted(job["id"], MODEL, str(stop), guard.job_cost)
-        return {"outcome": "abgebrochen", "reason": stop.reason}
-    except ValueError as error:
-        save_aborted(job["id"], MODEL, f"Steckbrief unbrauchbar: {error}", guard.job_cost)
-        return {"outcome": "abgebrochen", "reason": "unusable"}
-    save_fact_sheet(job["id"], MODEL, sheet, guard.job_cost)
-    return {"outcome": "fertig", "verdict": sheet["fazit"]["stufe"]}
+    except (JobLimitReached, ValueError) as error:
+        reason = error.reason if isinstance(error, JobLimitReached) else "unusable"
+        note = str(error) if isinstance(error, JobLimitReached) else f"Steckbrief unbrauchbar: {error}"
+        retryable = reason in RETRYABLE and attempt < MAX_ATTEMPTS
+        save_aborted(job["id"], MODEL, note, guard.job_cost, retryable=retryable, **stamp)
+        return {"outcome": "abgebrochen", "reason": reason, "attempt": attempt, "retryable": retryable}
+    save_fact_sheet(job["id"], MODEL, sheet, guard.job_cost, **stamp)
+    return {"outcome": "fertig", "verdict": sheet["fazit"]["stufe"], "attempt": attempt}
 
 
 def report_job(current, job_id, run_id, guard, result, seconds):

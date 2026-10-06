@@ -1,5 +1,7 @@
 """Transactional actions for review decisions and application history."""
 
+from datetime import UTC, datetime
+
 from job_finder.models import WorkflowStatus
 from job_finder.paths import APPLICATION_DOCUMENTS_DIR, MEMORY_FILE
 from job_finder.persistence.application_documents import remove_documents, store_documents
@@ -36,6 +38,17 @@ def update_review_decision(job_id, workflow_status, memory_path=MEMORY_FILE):
         if is_application(entry):
             return status_result(entry.get("workflow_status", WorkflowStatus.APPLIED.value), True)
         return status_result(record_status_change(entry, status), False)
+
+
+# Set by the review, cleared by the agent once it has written the job's fact sheet again.
+RERUN_FIELD = "fact_sheet_rerun_requested_at"
+
+
+def request_fact_sheet_rerun(job_id, memory_path=MEMORY_FILE):
+    """Ask the next agent run to write this job's fact sheet again; the review itself calls no model."""
+    with edit_job(job_id, memory_path) as entry:
+        entry.setdefault(RERUN_FIELD, datetime.now(UTC).isoformat(timespec="seconds"))
+    return {"fact_sheet_rerun": True}
 
 
 def update_review_note(job_id, review_note, memory_path=MEMORY_FILE):

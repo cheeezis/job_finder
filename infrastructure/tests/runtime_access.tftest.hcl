@@ -203,6 +203,17 @@ run "entra_requires_explicit_admin" {
   expect_failures = [var.postgres_entra_admin_name]
 }
 
+run "entra_admin_name_fits_postgres_role_names" {
+  command = plan
+  variables {
+    runtime_identity_phase    = "split"
+    runtime_access_verified   = true
+    database_auth_phase       = "prepare"
+    postgres_entra_admin_name = "${join("", [for i in range(60) : "x"])}@example.test"
+  }
+  expect_failures = [var.postgres_entra_admin_name]
+}
+
 run "entra_requires_azure_acceptance" {
   command = plan
   variables {

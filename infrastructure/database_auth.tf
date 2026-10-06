@@ -31,6 +31,12 @@ variable "postgres_entra_admin_name" {
     condition     = var.database_auth_phase == "password" || trimspace(var.postgres_entra_admin_name) != ""
     error_message = "Für Entra muss der getrennte Administrator explizit benannt werden."
   }
+  validation {
+    # PostgreSQL kürzt Rollennamen auf 63 Zeichen, Azure speichert den Namen ebenso; ein
+    # längerer Wert gilt sonst bei jedem Abgleich als geändert und erzwingt einen Ersatz.
+    condition     = length(var.postgres_entra_admin_name) <= 63
+    error_message = "Den Anmeldenamen auf 63 Zeichen gekürzt angeben, so wie Azure ihn speichert."
+  }
 }
 
 locals {

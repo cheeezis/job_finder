@@ -8,9 +8,10 @@ from types import SimpleNamespace
 from unittest.mock import patch
 from urllib.error import HTTPError
 
-from job_finder.review import load_review_jobs, undo_ignored_decision
 from job_finder.workflow.availability import ignore_closed_listings, listing_is_closed
 from job_finder.workflow.memory import edit_memory, load_memory, save_memory
+from job_finder.workflow.review_actions import undo_ignored_decision
+from job_finder.workflow.review_data import load_review_jobs
 
 
 class AvailabilityTests(unittest.TestCase):

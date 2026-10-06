@@ -1,11 +1,10 @@
 """The review as a FastAPI app: pages, JSON API and document downloads.
 
-Paths and payloads stay as the browser code sends them; Pydantic describes
-each payload and OpenAPI lists them under /openapi.json. The checks of the
-previous server stay: one allowed host, same origin, JSON for every change,
-a size limit and hardening headers on every response. The endpoints are
-plain functions, so FastAPI runs the synchronous database work in its
-thread pool.
+Pydantic describes each payload, OpenAPI lists them under /openapi.json and
+Swagger UI shows them at /docs. Every request passes the same checks: one
+allowed host, same origin, JSON for every change, a size limit and hardening
+headers on every response. The endpoints are plain functions, so FastAPI runs
+the synchronous database work in its thread pool.
 """
 
 import mimetypes
@@ -58,6 +57,8 @@ STATIC_FILES = {
     "/landing.js": ("landing.js", JAVASCRIPT),
     "/review.js": ("review.js", JAVASCRIPT),
     "/applications.js": ("applications.js", JAVASCRIPT),
+    "/docs": ("docs.html", HTML),
+    "/docs.js": ("docs.js", JAVASCRIPT),
 }
 MAX_REQUEST_BYTES = 45 * 1024 * 1024
 ROUTE_ORIGIN = f"{LOCAL_SEARCH_POSTAL_CODE} {LOCAL_SEARCH_LOCATION}".strip()
@@ -72,6 +73,14 @@ SECURITY_HEADERS = {
         "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"
     ),
 }
+# Only the API page loads Swagger UI, and only these two files of one version;
+# docs.html pins their checksums, so the browser refuses any other bytes.
+SWAGGER = "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.33.1"
+DOCS_POLICY = (
+    f"default-src 'self'; script-src 'self' {SWAGGER}/swagger-ui-bundle.js; "
+    f"style-src 'self' {SWAGGER}/swagger-ui.css; img-src 'self' data:; "
+    "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"
+)
 
 
 @dataclass(frozen=True)
@@ -151,6 +160,8 @@ def create_app(paths=ReviewPaths(), *, deployed_host="", manual_importer=import_
         problem = request_problem(request, deployed_host)
         response = error(*problem) if problem else await call_next(request)
         response.headers.update(SECURITY_HEADERS)
+        if request.url.path == "/docs":
+            response.headers["Content-Security-Policy"] = DOCS_POLICY
         return response
 
     @app.exception_handler(RequestValidationError)

@@ -21,7 +21,7 @@ DETAIL_HTML = """
   <span class="text-meta text-text-muted sm:ml-auto">vor 6 Tagen</span>
   <h1>Junior Python Developer (m/w/d)</h1>
   <h3>Eckdaten</h3>
-  <div><span>Berlin</span><span>Computer Software</span></div>
+  <div><span>Teilzeit</span><span data-state="closed">Berlin</span><span>ab 46.000 €</span><span>Computer Software</span></div>
   <h3>Arbeitsmodell</h3>
   <span><svg class="lucide lucide-globe"></svg>Vollständig remote</span>
   <a data-apply-cta="true" href="https://example.test/apply?from=remotely">
@@ -115,11 +115,24 @@ class RemotelySourceTests(unittest.TestCase):
         self.assertEqual(job.title, "Junior Python Developer (m/w/d)")
         self.assertEqual(job.company, "Example GmbH")
         self.assertEqual(job.locations, ["Berlin"])
+        self.assertEqual(job.employment_type, "Teilzeit")
         self.assertIn("Python, APIs", job.description_clean)
         self.assertIs(job.work_mode, WorkMode.REMOTE)
         self.assertEqual(job.remote_percentage, 100)
         self.assertEqual(job.published_at.isoformat(), "2026-08-22")
         self.assertEqual(job.sources[0].application_url, "https://example.test/apply?from=remotely")
+
+    def test_key_facts_without_location_fall_back_to_remote(self):
+        # Some fully remote ads list only a category, which used to become the location.
+        html = DETAIL_HTML.replace(
+            '<span>Teilzeit</span><span data-state="closed">Berlin</span><span>ab 46.000 €</span><span>Computer Software</span>',
+            "<span>Web Development</span>",
+        )
+
+        job = remotely.job_from_html("https://www.remotely.de/job/example", html, today=date(2026, 8, 28))
+
+        self.assertEqual(job.locations, ["Remote"])
+        self.assertIsNone(job.employment_type)
 
     def test_job_from_html_rejects_already_filled_listing(self):
         html = """

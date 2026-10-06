@@ -7,7 +7,7 @@ from contextlib import redirect_stdout
 from datetime import date
 from unittest.mock import ANY, patch
 
-import httpx
+import httpx2
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
@@ -82,27 +82,27 @@ class FakeModel:
 
     def __init__(self, *replies):
         self.replies, self.requests, self.deleted = list(replies), [], []
-        transport = httpx.MockTransport(self.handle)
+        transport = httpx2.MockTransport(self.handle)
         self.model = runner.agent_model("https://example.test/openai/v1/", "test", max_retries=0, transport=transport)
 
     def handle(self, request):
         if request.method == "DELETE":
             response_id = request.url.path.rsplit("/", 1)[-1]
             self.deleted.append(response_id)
-            return httpx.Response(200, json={"id": response_id, "object": "response", "deleted": True})
+            return httpx2.Response(200, json={"id": response_id, "object": "response", "deleted": True})
         self.requests.append(json.loads(request.content))
         answer = self.replies.pop(0)
         if isinstance(answer, Exception):
             raise answer
-        return answer if isinstance(answer, httpx.Response) else httpx.Response(200, json=answer)
+        return answer if isinstance(answer, httpx2.Response) else httpx2.Response(200, json=answer)
 
 
 def api_error(kind, retry_after="7"):
     if kind == "bad_request":
-        return httpx.Response(400, json={"error": {"message": "abgelehnt", "code": "invalid_prompt"}})
+        return httpx2.Response(400, json={"error": {"message": "abgelehnt", "code": "invalid_prompt"}})
     if kind == "rate_limit":
-        return httpx.Response(429, headers={"retry-after": retry_after}, json={"error": {"message": "gedrosselt"}})
-    return httpx.ConnectError("Verbindung abgebrochen")
+        return httpx2.Response(429, headers={"retry-after": retry_after}, json={"error": {"message": "gedrosselt"}})
+    return httpx2.ConnectError("Verbindung abgebrochen")
 
 
 class AgentRunnerTests(unittest.TestCase):

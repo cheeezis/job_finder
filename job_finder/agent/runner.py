@@ -6,7 +6,6 @@ import time
 from dataclasses import dataclass, field
 from typing import Annotated, TypedDict
 
-import httpx
 import openai
 from langchain_core.messages import HumanMessage, ToolMessage
 from langchain_openai import ChatOpenAI
@@ -68,7 +67,10 @@ def agent_model(base_url, api_key, *, max_retries=2, transport=None):
             if body.get("id") and count is not None:
                 billed[body["id"]] = count
 
-    http_client = httpx.Client(transport=transport, event_hooks={"response": [remember_billing]}, timeout=120)
+    # openai's own client (httpx2); it would accept a classic httpx client only for a transition.
+    http_client = openai.DefaultHttpxClient(
+        transport=transport, event_hooks={"response": [remember_billing]}, timeout=120
+    )
     chat = ChatOpenAI(
         model=MODEL,
         base_url=base_url,

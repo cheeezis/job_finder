@@ -129,6 +129,10 @@ Geänderte Bewertungsregeln wirken ab dem nächsten Finder-Lauf.
   zeigt sie „Letztes Gespräch“, bis ein neues Ereignis eingetragen wird. Mit
   „Gespräch absagen“ endet die Bewerbung als „Selbst abgesagt“; das zählt weder
   als Absage noch als „Keine Rückmeldung“.
+- **Reihenfolge der Bewerbungen:** Zuerst kommen bevorstehende Gespräche, der
+  nächste Termin ganz oben. Danach folgen vergangene Gespräche, das jüngste
+  zuerst. Die übrigen offenen Bewerbungen stehen darunter, weiterhin nach
+  Bewerbungsdatum mit der neuesten zuerst.
 - **Links:** Die Karte zeigt alle Anzeigen, die die Review derselben Stelle
   zuordnet, auch von anderen Portalen.
 - **Keine Rückmeldung:** Kommt 14 Tage nach Bewerbung, Rückmeldung oder letztem

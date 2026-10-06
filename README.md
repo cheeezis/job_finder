@@ -15,7 +15,10 @@ serves a job search in Germany. This page is the English overview.
   OpenAI (Responses API with web search) writes a structured fact sheet per job:
   seven traffic-light lines, a verdict and a short reason. Its tools only read, job
   ads and web pages count as material rather than instructions, and only links the
-  model actually saw survive as sources.
+  model actually saw survive as sources. One Pydantic model defines and checks the
+  sheet. Each sheet records the profile, rules, ad and model it was written on, so
+  the review flags outdated sheets; an incomplete answer gets one more try, and a
+  new sheet comes only when the user asks for it.
 - **Cost control in layers:** every model and tool call passes a cost guard backed
   by a ledger in PostgreSQL, with limits per job, day and month that fail closed.
   In Azure, a throttled model deployment, a token alert and a monthly budget add to

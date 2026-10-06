@@ -188,9 +188,22 @@ neu setzen:
 
 Zum UTF-8-Aufruf unter Windows siehe die Einstellungen oben.
 
+Endet ein Steckbrief mit einer unvollständigen oder unbrauchbaren Antwort,
+versucht der nächste Lauf diese Stelle genau noch einmal; die Review nennt das.
+Eine abgelehnte Anfrage oder eine erreichte Grenze je Stelle wird nicht
+wiederholt, weil sie nur erneut Geld kosten würde.
+
+Jeder Steckbrief merkt sich, auf welcher Grundlage er entstand: Profil (nach
+Inhalt, Kommentare zählen nicht), Regeln, Anzeige, Modell samt Denkaufwand und
+Ablauf des Agenten. Hat sich davon seitdem etwas geändert, zeigt die Review
+„Veraltet“ mit den geänderten Teilen; neu bewertet wird dadurch nichts. Der
+Knopf „Neu bewerten“ am Steckbrief markiert die Stelle, und der nächste
+Agent-Lauf schreibt ihren Steckbrief vor allen anderen neu, auch wenn sie schon
+entschieden ist. Die Review selbst ruft dabei kein Modell auf.
+
 Jeder Lauf nennt im Abschnitt „Steckbriefe (Agent)“, warum der Agent nicht lief
-oder wie viele Steckbriefe fertig, abgebrochen oder offen sind und was der Tag
-gekostet hat. Bricht der Agent ab oder stoppt er vor der letzten Stelle, etwa an
+oder wie viele Steckbriefe fertig, abgebrochen, offen oder veraltet sind und was
+der Tag gekostet hat. Bricht der Agent ab oder stoppt er vor der letzten Stelle, etwa an
 der Tagesgrenze, meldet das zusätzlich eine Warnung in Discord.
 `agent.reasoning_effort` stellt den Denkaufwand ein (Standard `medium`).
 

@@ -16,8 +16,13 @@ from job_finder.persistence import schema_migrations as migrations
 
 LEGACY_SCHEMA = (Path(__file__).with_name("fixtures") / "schema_v2.sql").read_text(encoding="utf-8")
 # The newest revision; a test adds a later one of its own.
-HEAD = "0004_review_lookup_indexes"
-ADDED_COLUMNS = {"agent_fact_sheets": ["retryable", "attempts", "versions", "outdated"]}
+HEAD = "0005_job_listings"
+ADDED_COLUMNS = {
+    "agent_fact_sheets": ["retryable", "attempts", "versions", "outdated"],
+    "job_state": ["first_seen_at", "last_seen_at", "locations"],
+}
+# Tables a later revision derives from existing rows; the rows from before are what must stay unchanged.
+ADDED_TABLES = {"job_listings", "job_links"}
 
 
 class SchemaMigrationTests(unittest.TestCase):
@@ -81,6 +86,8 @@ class SchemaMigrationTests(unittest.TestCase):
                 "SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename <> 'alembic_version' ORDER BY tablename"
             ).fetchall()
             for (table,) in tables:
+                if table in ADDED_TABLES:
+                    continue
                 # Columns a later revision adds hold defaults; the rows from before must stay unchanged.
                 result[table] = connection.execute(
                     sql.SQL("SELECT (to_jsonb(t) - %s::text[])::text AS row FROM {} t ORDER BY row").format(

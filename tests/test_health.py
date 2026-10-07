@@ -18,7 +18,7 @@ class BacklogTests(unittest.TestCase):
             self.skipTest("Use scripts/test_postgres.py with an isolated test database")
         with transaction() as connection:
             self.assertTrue(connection.info.dbname.endswith("_test"))
-            connection.execute("TRUNCATE datasets, agent_fact_sheets CASCADE")
+            connection.execute("TRUNCATE datasets, agent_fact_sheets, job_state CASCADE")
 
     def test_pending_messages_and_aborted_sheets_are_counted(self):
         now = datetime(2026, 10, 7, 12, 0, tzinfo=UTC)
@@ -36,7 +36,13 @@ class BacklogTests(unittest.TestCase):
 
         self.assertEqual(
             backlog(now),
-            {"outbox_pending": 2, "outbox_oldest_hours": 30.0, "fact_sheets_aborted": 2, "fact_sheets_retryable": 1},
+            {
+                "outbox_pending": 2,
+                "outbox_oldest_hours": 30.0,
+                "fact_sheets_aborted": 2,
+                "fact_sheets_retryable": 1,
+                "listing_drift": 0,
+            },
         )
 
     def test_ages_without_a_zone_count_as_utc_and_none_as_zero(self):

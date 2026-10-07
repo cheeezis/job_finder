@@ -94,6 +94,19 @@ Dokumente liegen standardmäßig unter `data/internal/application_documents`;
 `JOBFINDER_STORAGE_ACCOUNT` und `JOBFINDER_STORAGE_CONTAINER` benennen; so
 arbeiten Worker, Review und Hybrid-Lauf.
 
+Beim Start einer Bewerbung schreibt die Review die Dokumente zuerst unter neuen
+Schlüsseln und trägt sie danach in einer kurzen Transaktion ein; scheitert diese,
+löscht sie die neuen Dateien wieder. Nur ein Absturz genau dazwischen hinterlässt
+eine Datei ohne Verweis. Solche Dateien, die älter als 24 Stunden sind, listet
+der folgende Befehl; gelöscht wird nur mit `--delete`. Gegen Azure mit denselben
+Umgebungsvariablen wie die Review (`JOBFINDER_DOCUMENTS_BACKEND=blob`, Konto,
+Container) und einer Datenbank-URL mit Lesezugriff:
+
+```powershell
+.\.venv\Scripts\python.exe -m job_finder.db orphaned-documents
+.\.venv\Scripts\python.exe -m job_finder.db orphaned-documents --delete
+```
+
 Automatische Cache-Einträge, die seit mindestens 30 Tagen nicht neu gespeichert
 oder geändert wurden, lassen sich aufräumen; unverändertes erneutes Schreiben
 setzt die Frist nicht zurück. Manuelle Quellen, Stellen, Bewerbungen,

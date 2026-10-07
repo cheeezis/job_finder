@@ -263,9 +263,15 @@ Größenänderungen von Karten zwischen zwei Teilversänden sind abgesichert.
 
 ### Review-API
 
+Bewerbungsunterlagen kommen als Formular-Upload (`multipart/form-data`, zwei
+Dateien zu höchstens 15 MB). Weil ein Browser Formulare ohne Vorabprüfung an fremde
+Seiten schicken darf, verlangt dieser Weg zusätzlich den Header `X-Jobfinder-Upload`
+und einen passenden `Origin`; eine fremde Seite bräuchte für den Header eine
+CORS-Freigabe, die die App nicht erteilt.
+
 `job_finder/review_app.py` beschreibt jede Schnittstelle mit einem Pydantic-Modell;
 Fehler kommen einheitlich als `{"error": "…"}`. Vor jeder Anfrage prüft die App Host,
-Ursprung, bei Änderungen JSON und Größe (45 MB) und setzt die Sicherheits-Header
+Ursprung, bei Änderungen JSON und Größe (1 MB) und setzt die Sicherheits-Header
 samt strenger Content-Security-Policy. Ausnahme ist nur `/docs`: Swagger UI kommt
 von jsDelivr, mit fester Version und SRI-Prüfsumme in `job_finder/docs.html`, und
 die Policy dieser Seite erlaubt genau diese zwei Dateien. Für ein Update Version

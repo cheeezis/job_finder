@@ -139,6 +139,8 @@ def container_environment():
         "JOBFINDER_STORAGE_CONTAINER": STORAGE_CONTAINER,
         # The container is removed after the run, so a ZIP backup would be lost.
         "JOBFINDER_SKIP_RUN_BACKUP": "1",
+        # The runs table and the review name this run as the local hybrid one.
+        "JOBFINDER_RUNNER": "hybrid",
         "AZURE_CLIENT_ID": docker_local["AZURE_CLIENT_ID"],
         "AZURE_TENANT_ID": docker_local["AZURE_TENANT_ID"],
         "AZURE_CLIENT_SECRET": docker_local["AZURE_CLIENT_SECRET"],

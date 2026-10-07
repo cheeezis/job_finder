@@ -1,6 +1,6 @@
 """Shared HTTP client for source adapters: timeouts, bounded responses and fair retries.
 
-Every source request goes through one HTTPX client. A request that fails briefly
+Every source request goes through one HTTPX client, one request per host at a time. A request that fails briefly
 (timeout, lost connection, HTTP 5xx) is retried at most twice with a growing pause.
 HTTP 429 is retried only when the server names a short wait in Retry-After; 403 and
 all other client errors are never retried, so the job finder does not work around a
@@ -23,6 +23,9 @@ MAX_RETRY_AFTER_SECONDS = 60
 
 _client = None
 _client_lock = threading.Lock()
+# One lock per host: parallel sources never send two requests to the same host at once.
+_host_locks = {}
+_host_locks_lock = threading.Lock()
 
 
 class HttpStatusError(OSError):
@@ -42,6 +45,13 @@ def client():
         if _client is None:
             _client = httpx.Client(headers=DEFAULT_HEADERS, timeout=httpx.Timeout(20, connect=10))
         return _client
+
+
+def host_slot(url):
+    """Return the lock that admits one request at a time to the URL's host."""
+    host = httpx.URL(url).host
+    with _host_locks_lock:
+        return _host_locks.setdefault(host, threading.Lock())
 
 
 def session():
@@ -103,7 +113,7 @@ def _fetch_once(url, headers, timeout, url_validator, max_bytes):
     request_headers = {**DEFAULT_HEADERS, **(headers or {})}
     try:
         for _redirect in range(MAX_REDIRECTS + 1):
-            with client().stream("GET", url, headers=request_headers, timeout=timeout) as response:
+            with host_slot(url), client().stream("GET", url, headers=request_headers, timeout=timeout) as response:
                 if response.is_redirect:
                     url = urljoin(str(response.url), response.headers["Location"])
                     if url_validator is not None:

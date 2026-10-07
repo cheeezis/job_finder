@@ -4,6 +4,8 @@ import argparse
 import os
 import time
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
+from contextvars import copy_context
 from dataclasses import dataclass, field
 
 from psycopg import errors
@@ -81,6 +83,11 @@ class SourceResult:
     def report(self):
         """Return the source report that the summary, Discord and the logs read."""
         return {"name": self.name, "status": self.status, "jobs": len(self.jobs), **self.details}
+
+
+# Sources run side by side, at most this many at once; each keeps its own pauses,
+# and the HTTP client sends only one request per host at a time.
+MAX_PARALLEL_SOURCES = 4
 
 
 class IncompleteSourceSnapshotError(RuntimeError):
@@ -381,12 +388,16 @@ def print_review_diagnostics(results, memory_stats):
 def collect_jobs(sources, run_id=None):
     """Return deduplicated jobs and coverage reports from selected sources.
 
-    Each source runs on its own (fetch_source); a failing source cannot stop
-    the others. Reports expose name, status, job count and error details.
+    Up to MAX_PARALLEL_SOURCES sources run at once (fetch_source); a failing
+    source cannot stop the others. Each runs in a copy of the caller's context,
+    so its trace step and diagnostics stay its own. Results keep the order of
+    sources. Reports expose name, status, job count and error details.
     """
     jobs = []
     seen_urls = set()
-    results = [fetch_source(source, run_id) for source in sources]
+    with ThreadPoolExecutor(max_workers=MAX_PARALLEL_SOURCES, thread_name_prefix="source") as pool:
+        futures = [pool.submit(copy_context().run, fetch_source, source, run_id) for source in sources]
+        results = [future.result() for future in futures]
     for result in results:
         for job in result.jobs:
             if (dedupe_key := canonical_url(job.primary_url)) not in seen_urls:

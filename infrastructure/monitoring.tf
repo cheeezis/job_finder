@@ -165,3 +165,20 @@ resource "azurerm_role_assignment" "monitoring_publisher_review" {
   principal_id         = azurerm_user_assigned_identity.review[0].principal_id
   principal_type       = "ServicePrincipal"
 }
+
+# Betriebs-Dashboard (Azure-Monitor-Arbeitsmappe): Läufe, Kennzahlen, Quellen,
+# Agentenkosten und Review-Ladezeiten aus dem Log-Analytics-Workspace. Kostenlos;
+# die Abfragen stehen in workbooks/operations.json, docs/operations.md erklärt sie.
+resource "azurerm_application_insights_workbook" "operations" {
+  # Arbeitsmappen brauchen eine GUID als Namen; uuidv5 hält sie über alle Pläne gleich.
+  name                = uuidv5("url", "https://github.com/cheeezis/job_finder/workbooks/operations")
+  resource_group_name = azurerm_resource_group.jobfinder.name
+  location            = azurerm_resource_group.jobfinder.location
+  display_name        = "Job Finder – Betrieb"
+  source_id           = lower(azurerm_log_analytics_workspace.jobfinder.id)
+  data_json = templatefile("${path.module}/workbooks/operations.json", {
+    workspace_id = azurerm_log_analytics_workspace.jobfinder.id
+  })
+
+  tags = azurerm_resource_group.jobfinder.tags
+}

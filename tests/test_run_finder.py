@@ -498,8 +498,12 @@ class RunTracingTests(unittest.TestCase):
             patch.object(run_finder, "worker_lock", return_value=nullcontext()),
             patch.object(run_finder, "RunLog", return_value=run_log),
             patch.object(run_finder, "run_pipeline", side_effect=RuntimeError("kaputt")),
+            patch.object(run_finder, "start_run") as started,
+            patch.object(run_finder, "finish_run") as finished,
             self.assertRaises(RuntimeError),
         ):
             run_finder.main()
 
         tracing.shutdown.assert_called_once_with()
+        self.assertEqual(started.call_args.args[0], "run-1")
+        finished.assert_called_once_with("run-1", "failed")

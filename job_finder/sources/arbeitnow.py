@@ -3,10 +3,9 @@
 import time
 from datetime import UTC, datetime
 from html.parser import HTMLParser
-from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlencode, urlsplit
 
-from job_finder.http import fetch_json, fetch_text_with_final_url
+from job_finder.http import HttpStatusError, fetch_json, fetch_text_with_final_url
 from job_finder.models import Job, JobSource, WorkMode
 from job_finder.paths import cache_file
 from job_finder.sources.common import (
@@ -56,7 +55,7 @@ def fetch_jobs(cache_path=CACHE_FILE):
 
     try:
         records = collect_records()
-    except HTTPError as error:
+    except HttpStatusError as error:
         if error.code != 429:
             raise
         jobs = [job for job in cache.values() if detail_is_fresh(job)]

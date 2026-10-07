@@ -6,8 +6,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
-from urllib.error import HTTPError
 
+from job_finder.http import HttpStatusError
 from job_finder.workflow.availability import ignore_closed_listings, listing_is_closed
 from job_finder.workflow.memory import edit_memory, load_memory, save_memory
 from job_finder.workflow.review_actions import undo_ignored_decision
@@ -67,7 +67,7 @@ class AvailabilityTests(unittest.TestCase):
             (500, "example.test", False),
             (404, "login.test", False),
         ]:
-            error = HTTPError(f"https://{host}/job/1", code, "error", {}, None)
+            error = HttpStatusError(code, f"https://{host}/job/1")
             with (
                 self.subTest(code=code, host=host),
                 patch("job_finder.workflow.availability.fetch_text_with_final_url", side_effect=error),

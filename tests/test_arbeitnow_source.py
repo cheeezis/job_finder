@@ -5,8 +5,8 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
-from urllib.error import HTTPError
 
+from job_finder.http import HttpStatusError
 from job_finder.sources import arbeitnow
 from job_finder.sources.common import fetch_diagnostics, load_detail_cache, reset_fetch_diagnostics, save_detail_cache
 
@@ -92,7 +92,7 @@ class ArbeitnowTests(unittest.TestCase):
     def test_rate_limited_api_uses_recent_cache(self):
         url = "https://www.arbeitnow.com/jobs/example/cached"
         cached = arbeitnow.job_from_record(api_record("cached", "<p>Python</p>"))
-        limited = HTTPError(arbeitnow.API_URL, 429, "Too Many Requests", None, None)
+        limited = HttpStatusError(429, arbeitnow.API_URL)
 
         with tempfile.TemporaryDirectory() as directory:
             cache_path = Path(directory) / "arbeitnow.json"

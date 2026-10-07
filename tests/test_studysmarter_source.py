@@ -6,8 +6,8 @@ from copy import deepcopy
 from datetime import UTC, date, datetime
 from pathlib import Path
 from unittest.mock import patch
-from urllib.error import HTTPError
 
+from job_finder.http import HttpStatusError
 from job_finder.models import WorkflowStatus, WorkMode
 from job_finder.sources import studysmarter
 from job_finder.sources.common import fetch_diagnostics, load_detail_cache, reset_fetch_diagnostics, save_detail_cache
@@ -360,7 +360,7 @@ class StudySmarterTests(unittest.TestCase):
 
         with (
             tempfile.TemporaryDirectory() as directory,
-            patch.object(studysmarter, "fetch_text", side_effect=HTTPError(self.JOB_URL, 404, "Not Found", {}, None)),
+            patch.object(studysmarter, "fetch_text", side_effect=HttpStatusError(404, self.JOB_URL)),
             patch("builtins.print"),
         ):
             enriched = studysmarter.enrich_candidate_jobs(jobs, {jobs[0].id}, Path(directory) / "studysmarter.json")
@@ -384,7 +384,7 @@ class StudySmarterTests(unittest.TestCase):
 
         def fetch_page(url):
             if "/koeln/" in url:
-                raise HTTPError(url, 404, "Not Found", {}, None)
+                raise HttpStatusError(404, url)
             return self.JOB_HTML
 
         with tempfile.TemporaryDirectory() as directory:

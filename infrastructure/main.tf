@@ -192,6 +192,11 @@ resource "azurerm_container_app_job" "finder" {
         name  = "JOBFINDER_SKIP_RUN_BACKUP"
         value = "1"
       }
+      # Names this run as the cloud one in the runs table and the review.
+      env {
+        name  = "JOBFINDER_RUNNER"
+        value = "cloud"
+      }
 
       env {
         name        = "JOBFINDER_DATABASE_URL"

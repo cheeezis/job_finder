@@ -435,6 +435,13 @@ AppDependencies
 | order by Median_ms desc
 ```
 
+Jeder Finder-Lauf trägt sich außerdem in die Tabelle `runs` ein (Revision `0006_runs`):
+beim Start mit Quellen und Ort (`cloud` aus dem Worker-Job, `hybrid` aus dem lokalen
+Hybrid-Lauf, sonst `local`, gesetzt über `JOBFINDER_RUNNER`), am Ende mit Ergebnis
+(`finished` oder `failed`) und den Kennzahlen. So erscheinen auch die Hybrid-Läufe, die
+keine Logs nach Azure senden. Die Startseite der Review zeigt den letzten Lauf je Ort
+(`/api/runs`).
+
 Am Ende jedes Laufs, nach dem Agenten, steht eine Zeile `run_summary`: Dauer,
 Stellen, neue Stellen gesamt und je Quelle (`new_by_source`), neue Review-Karten,
 teilweise oder ganz gescheiterte Quellen, gesendete und fehlgeschlagene

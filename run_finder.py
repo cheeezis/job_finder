@@ -5,6 +5,8 @@ import os
 import time
 from collections import Counter
 
+from psycopg import errors
+
 from job_finder.agent.run import agent_phase
 from job_finder.console import configure_utf8_output, log_event, print_phase, print_progress
 from job_finder.matching.deduplication import deduplicate_jobs
@@ -14,6 +16,7 @@ from job_finder.operations import RunLog, create_backup, timed_step
 from job_finder.paths import JOBS_FILE, MEMORY_FILE
 from job_finder.persistence.database import lock, transaction, worker_lock
 from job_finder.persistence.health import backlog
+from job_finder.persistence.runs import finish_run, start_run
 from job_finder.persistence.storage import publish_results
 from job_finder.sources import (
     arbeitnow,
@@ -153,7 +156,13 @@ def main():
     tracing = start_tracing()
     try:
         with worker_lock(), RunLog() as run_log, span("finder_run", **{"jobfinder.run_id": run_log.run_id}):
-            run_pipeline(exclude_sources=excluded, run_id=run_log.run_id)
+            selected = [source.SOURCE_NAME for source in SOURCES if source.SOURCE_NAME not in excluded]
+            record_run(start_run, run_log.run_id, selected)
+            try:
+                run_pipeline(exclude_sources=excluded, run_id=run_log.run_id)
+            except BaseException:
+                record_run(finish_run, run_log.run_id, "failed")
+                raise
     finally:
         if tracing is not None:
             # The container ends with the run: send the spans now, not in the background.
@@ -284,9 +293,28 @@ def run_pipeline(exclude_sources=frozenset(), run_id=None):
     log_run_summary(summary, source_reports, time.monotonic() - started, run_id)
 
 
+def record_run(action, *args, **figures):
+    """Write to the runs table; a database without it (before revision 0006) costs only the record."""
+    try:
+        action(*args, **figures)
+    except (errors.UndefinedTable, errors.UndefinedColumn):
+        print("  Lauf nicht verzeichnet: Tabelle runs fehlt (Migration 0006)")
+
+
 def log_run_summary(summary, source_reports, duration_seconds, run_id):
-    """Log the run's key figures as one event, after the agent, with the backlogs it leaves."""
+    """Log the run's key figures as one event, after the agent, with the backlogs it leaves; record the run as finished."""
     counts = Counter(report["status"] for report in source_reports)
+    if run_id is not None:
+        record_run(
+            finish_run,
+            run_id,
+            "finished",
+            jobs_total=summary["jobs_total"],
+            jobs_new=summary["jobs_new"],
+            review_new=summary["review_new"],
+            sources_partial=counts["partial"],
+            sources_failed=counts["failed"],
+        )
     log_event(
         "run_summary",
         run_id=run_id,

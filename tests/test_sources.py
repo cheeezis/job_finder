@@ -6,8 +6,8 @@ import unittest
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import ANY, Mock, patch
-from urllib.error import HTTPError
 
+from job_finder.http import HttpStatusError
 from job_finder.matching.config import (
     COMMUTER_SEARCH_RADIUS_KM,
     local_search_postal_code,
@@ -329,7 +329,7 @@ class StepStoneHttpClientTests(unittest.TestCase):
 
     def test_raises_dedicated_error_for_access_limits(self):
         client = stepstone.StepStoneHttpClient(delay=0, sleeper=Mock())
-        error = HTTPError("https://example.test", 429, "limited", {}, None)
+        error = HttpStatusError(429, "https://example.test")
 
         with (
             patch.object(stepstone, "fetch_text", side_effect=error),

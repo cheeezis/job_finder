@@ -6,10 +6,9 @@ from copy import deepcopy
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from html.parser import HTMLParser
-from urllib.error import HTTPError
 from urllib.parse import urlsplit
 
-from job_finder.http import fetch_text_with_final_url
+from job_finder.http import HttpStatusError, fetch_text_with_final_url
 from job_finder.models import WorkflowStatus
 from job_finder.sources.arbeitnow import application_page_is_missing
 from job_finder.sources.manual import VisibleJobParser, validate_public_url
@@ -92,9 +91,9 @@ def listing_is_closed(url):
     """
     try:
         final_url, html = fetch_text_with_final_url(
-            url, timeout=10, max_bytes=2 * 1024 * 1024, url_validator=validate_public_url
+            url, timeout=10, max_bytes=2 * 1024 * 1024, url_validator=validate_public_url, retries=0
         )
-    except HTTPError as error:
+    except HttpStatusError as error:
         # A failed redirected login or another site's error is inconclusive.
         return error.code in {404, 410} and (
             urlsplit(error.url).hostname == urlsplit(url).hostname

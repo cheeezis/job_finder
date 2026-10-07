@@ -2,13 +2,12 @@
 
 import json
 import threading
-import time
 import unittest
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.error import HTTPError
+from unittest.mock import patch
 
-from job_finder.http import fetch_json, fetch_text, fetch_text_with_final_url
+from job_finder.http import HttpStatusError, fetch_json, fetch_text, fetch_text_with_final_url
 from job_finder.workflow.notifications import DiscordWebhookClient, NotificationError
 
 
@@ -19,7 +18,7 @@ class QuietServer(ThreadingHTTPServer):
 
 @contextmanager
 def local_server(routes):
-    """Serve path -> (status, headers, body[, delay]) and record every request."""
+    """Serve path -> (status, headers, body[, delay]), or a list answered in turn, and record every request."""
     requests = []
 
     class Handler(BaseHTTPRequestHandler):
@@ -39,9 +38,11 @@ def local_server(routes):
                     "body": self.rfile.read(length),
                 }
             )
-            status, headers, body, *delay = routes[self.path.split("?")[0]]
+            route = routes[self.path.split("?")[0]]
+            status, headers, body, *delay = route.pop(0) if isinstance(route, list) else route
             if delay:
-                time.sleep(delay[0])
+                # Not time.sleep: the retry tests patch it to skip their pauses.
+                threading.Event().wait(delay[0])
             self.send_response(status)
             for key, value in headers.items():
                 self.send_header(key, value)
@@ -130,9 +131,64 @@ class HttpHelperTests(unittest.TestCase):
         self.assertNotIn("/blocked", [request["path"] for request in requests])
 
     def test_http_errors_propagate_with_their_status(self):
-        with local_server({"/missing": (404, {}, b"")}) as (base, _requests), self.assertRaises(HTTPError) as caught:
+        with (
+            local_server({"/missing": (404, {}, b"")}) as (base, requests),
+            self.assertRaises(HttpStatusError) as caught,
+        ):
             fetch_text(f"{base}/missing")
         self.assertEqual(caught.exception.code, 404)
+        self.assertEqual(caught.exception.url, f"{base}/missing")
+        self.assertEqual(len(requests), 1)
+
+
+@patch("job_finder.http.time.sleep")
+class RetryTests(unittest.TestCase):
+    def test_server_errors_are_retried_twice_with_growing_pauses(self, sleep):
+        routes = {"/flaky": [(503, {}, b""), (502, {}, b""), (200, {}, b"ok")]}
+        with local_server(routes) as (base, requests):
+            self.assertEqual(fetch_text(f"{base}/flaky"), "ok")
+        self.assertEqual(len(requests), 3)
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [2, 4])
+
+    def test_a_third_server_error_is_final(self, sleep):
+        routes = {"/down": [(500, {}, b"")] * 3}
+        with local_server(routes) as (base, requests), self.assertRaises(HttpStatusError) as caught:
+            fetch_text(f"{base}/down")
+        self.assertEqual(caught.exception.code, 500)
+        self.assertEqual(len(requests), 3)
+
+    def test_rate_limit_waits_as_long_as_the_server_asks(self, sleep):
+        routes = {"/limited": [(429, {"Retry-After": "7"}, b""), (200, {}, b"ok")]}
+        with local_server(routes) as (base, requests):
+            self.assertEqual(fetch_text(f"{base}/limited"), "ok")
+        self.assertEqual(len(requests), 2)
+        sleep.assert_called_once_with(7)
+
+    def test_blocks_and_open_ended_rate_limits_are_not_retried(self, sleep):
+        routes = {
+            "/forbidden": (403, {}, b""),
+            "/limited": (429, {}, b""),
+            "/long": (429, {"Retry-After": "3600"}, b""),
+        }
+        with local_server(routes) as (base, requests):
+            for path, code in (("/forbidden", 403), ("/limited", 429), ("/long", 429)):
+                with self.subTest(path), self.assertRaises(HttpStatusError) as caught:
+                    fetch_text(f"{base}{path}")
+                self.assertEqual(caught.exception.code, code)
+        self.assertEqual(len(requests), 3)
+        sleep.assert_not_called()
+
+    def test_timeouts_are_retried_and_then_raised_as_timeout_error(self, sleep):
+        routes = {"/slow": (200, {}, b"late", 1.0)}
+        with local_server(routes) as (base, requests), self.assertRaises(TimeoutError):
+            fetch_text(f"{base}/slow", timeout=0.1)
+        self.assertEqual(len(requests), 3)
+
+    def test_retries_can_be_switched_off(self, sleep):
+        with local_server({"/down": (503, {}, b"")}) as (base, requests), self.assertRaises(HttpStatusError):
+            fetch_text_with_final_url(f"{base}/down", retries=0)
+        self.assertEqual(len(requests), 1)
+        sleep.assert_not_called()
 
 
 class DiscordWebhookClientTests(unittest.TestCase):

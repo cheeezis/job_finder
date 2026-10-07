@@ -8,11 +8,10 @@ import re
 import time
 from html import unescape
 from itertools import product
-from urllib.error import HTTPError
 from urllib.parse import quote, urljoin, urlsplit
 
 from job_finder.console import print_progress, progress_checkpoint
-from job_finder.http import fetch_text
+from job_finder.http import HttpStatusError, fetch_text
 from job_finder.matching.config import stepstone_search_locations, stepstone_search_terms
 from job_finder.models import Job
 from job_finder.paths import cache_file
@@ -63,7 +62,7 @@ class StepStoneHttpClient:
 
         try:
             return fetch_text(url)
-        except HTTPError as error:
+        except HttpStatusError as error:
             if error.code in BLOCKING_STATUS_CODES:
                 raise StepStoneBlockedError(error.code, url) from error
             raise

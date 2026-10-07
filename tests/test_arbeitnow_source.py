@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from job_finder.http import HttpStatusError
 from job_finder.sources import arbeitnow
-from job_finder.sources.common import fetch_diagnostics, load_detail_cache, reset_fetch_diagnostics, save_detail_cache
+from job_finder.sources.common import collecting_diagnostics, load_detail_cache, save_detail_cache
 
 
 def api_record(slug, description, **fields):
@@ -179,18 +179,17 @@ class ArbeitnowTests(unittest.TestCase):
 
     def test_unreachable_original_page_is_recorded_as_candidate_failure(self):
         job = arbeitnow.job_from_record(api_record("offline", "Find Jobs in Germany on Arbeitnow"))
-        reset_fetch_diagnostics()
-
         with (
             tempfile.TemporaryDirectory() as directory,
             patch.object(arbeitnow, "fetch_text_with_final_url", side_effect=OSError("timeout")),
             patch("builtins.print"),
+            collecting_diagnostics() as diagnostics,
         ):
             count = arbeitnow.enrich_candidate_jobs([job], {job.id}, cache_path=Path(directory) / "arbeitnow.json")
 
         self.assertEqual(count, 0)
-        self.assertEqual(fetch_diagnostics()["failed_candidates"], 1)
-        self.assertEqual(fetch_diagnostics()["failed_segments"], 0)
+        self.assertEqual(diagnostics.failed_candidates, 1)
+        self.assertEqual(diagnostics.failed_segments, 0)
 
     def test_failed_enrichment_does_not_keep_application_url(self):
         job = arbeitnow.job_from_record(api_record("missing", "Find Jobs in Germany on Arbeitnow"))

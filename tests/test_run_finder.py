@@ -12,7 +12,9 @@ from unittest.mock import Mock, patch
 
 import run_finder
 from job_finder.models import Job, JobSource
+from job_finder.sources import startup_jobs
 from job_finder.sources.common import record_candidate_failure, record_partial_failure, record_total_segments
+from job_finder.sources.registry import SOURCE_LABELS
 from run_finder import (
     SOURCES,
     IncompleteSourceSnapshotError,
@@ -392,6 +394,38 @@ class RunFinderTests(unittest.TestCase):
         self.assertEqual(reports[0]["status"], "partial")
         self.assertEqual(reports[0]["failed_segments"], 2)
         self.assertEqual(reports[0]["total_segments"], 10)
+
+    def test_diagnostics_stay_with_the_source_that_recorded_them(self):
+        def partial():
+            record_partial_failure(3)
+            return [make_job("partial:1")]
+
+        def broken():
+            record_total_segments(4)
+            raise RuntimeError("kaputt")
+
+        sources = [
+            SimpleNamespace(SOURCE_NAME="partial", fetch_jobs=partial),
+            SimpleNamespace(SOURCE_NAME="broken", fetch_jobs=broken),
+            SimpleNamespace(SOURCE_NAME="working", fetch_jobs=lambda: [make_job("working:1")]),
+        ]
+        with redirect_stdout(io.StringIO()):
+            _jobs, reports = collect_jobs(sources)
+
+        self.assertEqual(
+            reports,
+            [
+                {"name": "partial", "status": "partial", "jobs": 1, "failed_segments": 3},
+                {"name": "broken", "status": "failed", "jobs": 0, "error": "RuntimeError"},
+                {"name": "working", "status": "success", "jobs": 1},
+            ],
+        )
+
+    def test_every_source_has_a_display_name(self):
+        for source in run_finder.SOURCES:
+            with self.subTest(source.SOURCE_NAME):
+                self.assertIn(source.SOURCE_NAME, SOURCE_LABELS)
+        self.assertIn(startup_jobs.SOURCE_NAME, SOURCE_LABELS)
 
     def test_run_summary_tracks_source_counts_and_review_new(self):
         job = make_job("working:1")

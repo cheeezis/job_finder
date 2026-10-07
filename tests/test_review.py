@@ -14,7 +14,7 @@ from datetime import date
 from html.parser import HTMLParser
 from pathlib import Path
 from unittest import mock
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -28,6 +28,7 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 from job_finder.matching.config import route_origin
 from job_finder.review import address_is_in_use, bind_exclusively
 from job_finder.review_app import MAX_JSON_BYTES, PACKAGE, ReviewPaths, create_app
+from job_finder.sources.registry import SOURCE_LABELS
 from job_finder.workflow.memory import load_memory, load_review_memory, save_memory
 from job_finder.workflow.review_actions import (
     RERUN_FIELD,
@@ -110,6 +111,24 @@ def post_form(url, fields, files=()):
         return json.load(response)
 
 
+def rejection_status(request):
+    """Return the status the review rejects a request with, or "reset".
+
+    The review may answer an oversized body before reading it and close the
+    connection; the client can then see the reset before the answer.
+    """
+    try:
+        urlopen(request).close()
+    except HTTPError as error:
+        error.close()
+        return error.code
+    except URLError as error:
+        if isinstance(error.reason, ConnectionResetError):
+            return "reset"
+        raise
+    raise AssertionError("request was accepted")
+
+
 def get_json(url):
     with urlopen(url) as response:
         return json.load(response)
@@ -151,6 +170,11 @@ class ReviewTests(unittest.TestCase):
         self.assertIn("Datenbankanmeldung vorbereitet", output.getvalue())
         self.assertIn("Datenbank-Vorbereitung fehlgeschlagen: OperationalError", output.getvalue())
         self.assertNotIn("secret", output.getvalue())
+
+    def test_source_names_come_from_the_registry(self):
+        with self.server_context() as base_url:
+            labels = get_json(base_url + "/api/sources")["labels"]
+        self.assertEqual(labels, SOURCE_LABELS)
 
     def test_the_api_page_loads_only_two_pinned_swagger_files(self):
         with self.server_context() as base_url:
@@ -761,18 +785,16 @@ class ReviewTests(unittest.TestCase):
                 (form_request(url, {"job_id": "job:1"}, headers={"X-Jobfinder-Upload": "0"}), 403),
                 (form_request(url, {"job_id": "job:1"}, headers={"Origin": "https://attacker.example"}), 403),
                 (json_request(url, {"job_id": "job:1"}), 415),
-                (
-                    json_request(
-                        f"{base_url}/api/review-note", {"job_id": "job:1", "review_note": "x" * MAX_JSON_BYTES}
-                    ),
-                    400,
-                ),
             ]
             for request, code in cases:
                 with self.subTest(code=code), self.assertRaises(HTTPError) as caught:
                     urlopen(request)
                 self.assertEqual(caught.exception.code, code)
                 caught.exception.close()
+            oversized = json_request(
+                f"{base_url}/api/review-note", {"job_id": "job:1", "review_note": "x" * MAX_JSON_BYTES}
+            )
+            self.assertIn(rejection_status(oversized), {400, "reset"})
             too_big = form_request(url, {"job_id": "job:1"}, [("resume", "cv.pdf", b"x" * (15 * 1024 * 1024 + 1))])
             with self.assertRaises(HTTPError) as caught:
                 urlopen(too_big)

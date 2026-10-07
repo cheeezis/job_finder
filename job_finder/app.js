@@ -7,10 +7,17 @@ const JobFinder = (() => {
     interview: "Interview", rejected: "Absage", no_response: "Keine Rückmeldung",
     offer: "Angebot", withdrawn: "Selbst abgesagt", closed: "Abgeschlossen"
   };
-  const sourceLabels = {
-    stepstone: "StepStone", get_in_it: "get-in-IT", studysmarter: "StudySmarter",
-    arbeitnow: "Arbeitnow", arbeitsagentur: "Arbeitsagentur", remotely: "Remotely"
-  };
+  // Source names come from the server's registry; loadSourceLabels fills them once per page.
+  const sourceLabels = {};
+  let sourceLabelsLoaded = null;
+
+  function loadSourceLabels() {
+    sourceLabelsLoaded ||= fetch("/api/sources")
+      .then(response => response.ok ? response.json() : {})
+      .then(result => Object.assign(sourceLabels, result.labels || {}))
+      .catch(() => sourceLabels);
+    return sourceLabelsLoaded;
+  }
 
   function make(tag, text, className) {
     const node = document.createElement(tag);
@@ -108,5 +115,5 @@ const JobFinder = (() => {
 
   const showError = error => showFeedback(error.message);
   return {element, make, addOptions, safeUrl, externalLink, appendSourceLinks, postJson, showError, showFeedback,
-    statusLabels, sourceLabels, salaryYearAmount, bindSalaryInputs};
+    statusLabels, sourceLabels, loadSourceLabels, salaryYearAmount, bindSalaryInputs};
 })();

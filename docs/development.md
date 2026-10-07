@@ -443,7 +443,8 @@ Der vom Runner erwartete Vertrag:
 | `enrich_candidate_jobs(jobs, candidate_ids)` (optional) | Verändert die übergebene Liste beziehungsweise ihre Jobs und liefert die Anzahl betroffener Anzeigen; nicht ladbare Kandidatendetails meldet sie über `record_candidate_failure()` |
 
 Eine Quelle mit mehreren Suchen meldet ihre Abdeckung während `fetch_jobs()`;
-der Runner bildet daraus Status und Details:
+der Runner sammelt diese Meldungen je Quelle (`collecting_diagnostics()`) und
+bildet daraus ein `SourceResult` mit Status, Details und Dauer:
 
 ```python
 from job_finder.sources.common import record_partial_failure, record_total_segments
@@ -479,7 +480,9 @@ Beim Ergänzen einer Quelle:
    zur Seite passen. Bei manuell eingegebenen URLs auch Weiterleitungen durch
    `validate_public_url` prüfen lassen.
 3. Das Modul beziehungsweise den `CareerPage`-Eintrag in `run_finder.py`
-   importieren und in `SOURCES` registrieren. Optionale Zugangsdaten nur über
+   importieren und in `SOURCES` registrieren, den Anzeigenamen in
+   `job_finder/sources/registry.py` eintragen (Konsole, Discord und Review lesen
+   ihn dort). Optionale Zugangsdaten nur über
    Umgebungsvariablen beziehen; bei Bedarf die Quelle nur bei vorhandener
    Konfiguration aktivieren.
 4. Parser und Quellenausfälle mit kleinen Fixtures testen: reguläre Anzeige,

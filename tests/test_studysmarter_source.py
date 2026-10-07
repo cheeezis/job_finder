@@ -10,7 +10,7 @@ from unittest.mock import patch
 from job_finder.http import HttpStatusError
 from job_finder.models import WorkflowStatus, WorkMode
 from job_finder.sources import studysmarter
-from job_finder.sources.common import fetch_diagnostics, load_detail_cache, reset_fetch_diagnostics, save_detail_cache
+from job_finder.sources.common import SourceDiagnostics, collecting_diagnostics, load_detail_cache, save_detail_cache
 from job_finder.workflow.memory import update_memory
 
 
@@ -356,17 +356,16 @@ class StudySmarterTests(unittest.TestCase):
             "is_remote_positions": "completely",
         }
         jobs = [studysmarter.summary_job_from_record(record)]
-        reset_fetch_diagnostics()
-
         with (
             tempfile.TemporaryDirectory() as directory,
             patch.object(studysmarter, "fetch_text", side_effect=HttpStatusError(404, self.JOB_URL)),
             patch("builtins.print"),
+            collecting_diagnostics() as diagnostics,
         ):
             enriched = studysmarter.enrich_candidate_jobs(jobs, {jobs[0].id}, Path(directory) / "studysmarter.json")
 
         self.assertEqual(enriched, 0)
-        self.assertEqual(fetch_diagnostics(), {"failed_segments": 0, "failed_candidates": 1})
+        self.assertEqual(diagnostics, SourceDiagnostics(failed_candidates=1))
 
     def test_detail_url_drops_city_segment_and_keeps_plain_links(self):
         self.assertEqual(studysmarter.detail_url(self.CITY_LINK), self.JOB_URL)

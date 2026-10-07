@@ -21,7 +21,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
-from job_finder.matching.config import LOCAL_SEARCH_LOCATION, LOCAL_SEARCH_POSTAL_CODE
+from job_finder.matching.config import route_origin as configured_route_origin
 from job_finder.models import WorkflowStatus
 from job_finder.paths import APPLICATION_DOCUMENTS_DIR, JOBS_FILE, MANUAL_CACHE_FILE, MEMORY_FILE, RECOMMENDATIONS_JSON
 from job_finder.persistence.application_documents import MAX_DOCUMENT_BYTES, find_document, read_document
@@ -69,7 +69,6 @@ UPLOAD_PATHS = {"/api/applications"}
 # Only the review's own pages send it; another site would need a CORS
 # preflight for it, and the app grants none.
 UPLOAD_HEADER = "x-jobfinder-upload"
-ROUTE_ORIGIN = f"{LOCAL_SEARCH_POSTAL_CODE} {LOCAL_SEARCH_LOCATION}".strip()
 LOCAL_HOST_PATTERN = re.compile(r"^(?:127\.0\.0\.1|localhost)(?::\d{1,5})?$")
 SECURITY_HEADERS = {
     "Cache-Control": "no-store",
@@ -150,9 +149,10 @@ class HistoryEdit(HistoryEvent):
     scheduled_for: str | None = None
 
 
-def create_app(paths=ReviewPaths(), *, deployed_host="", manual_importer=import_manual_url, route_origin=ROUTE_ORIGIN):
+def create_app(paths=ReviewPaths(), *, deployed_host="", manual_importer=import_manual_url, route_origin=None):
     """Build the review app; deployed_host allows exactly that hostname over HTTPS instead of localhost."""
     app = FastAPI(title="Job Finder Review", docs_url=None, redoc_url=None, openapi_url="/openapi.json")
+    route_origin = configured_route_origin() if route_origin is None else route_origin
     deployed_host = deployed_host.casefold()
     started, served = time.monotonic(), {"any": False}
 

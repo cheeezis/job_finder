@@ -15,7 +15,7 @@ from unittest.mock import patch
 
 from job_finder import db
 from job_finder.agent.pricing import Usage
-from job_finder.matching.scoring import LOCAL_PLACES
+from job_finder.matching.user_settings import current_settings
 from job_finder.models import Job, JobSource
 from job_finder.paths import JOBS_FILE, RECOMMENDATIONS_JSON
 from job_finder.persistence.agent_usage import record_model_call, spent_today_and_this_month
@@ -228,7 +228,7 @@ class PostgresTests(unittest.TestCase):
             id="test:1",
             title="Junior Python Developer",
             company="Example GmbH",
-            locations=[LOCAL_PLACES[0]],
+            locations=[current_settings().matching.local_places[0]],
             sources=[JobSource(source="test", url="https://example.test/1")],
             description_raw="Python, keine Berufserfahrung erforderlich.",
             description_clean="Python, keine Berufserfahrung erforderlich.",

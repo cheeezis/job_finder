@@ -8,7 +8,7 @@ from collections import Counter
 from job_finder.agent.run import agent_phase
 from job_finder.console import configure_utf8_output, log_event, print_phase, print_progress
 from job_finder.matching.deduplication import deduplicate_jobs
-from job_finder.matching.user_settings import SETTINGS_SOURCE
+from job_finder.matching.user_settings import current_settings
 from job_finder.models import WorkflowStatus
 from job_finder.operations import RunLog, create_backup, timed_step
 from job_finder.paths import JOBS_FILE, MEMORY_FILE
@@ -56,15 +56,11 @@ SOURCES = [
     *([startup_jobs] if startup_jobs.is_configured() else []),
     studysmarter,
     manual,
-    COMPOSE_IT,
-    BYTEWERK,
-    RHOENENERGIE,
-    jumo,
-    edag,
-    CSS,
-    PROEMION,
-    NETHINKS,
 ]
+# Career pages of single companies near the home location; sources.companies
+# in the settings chooses among them, without it all are searched.
+COMPANY_SOURCES = [COMPOSE_IT, BYTEWERK, RHOENENERGIE, jumo, edag, CSS, PROEMION, NETHINKS]
+SOURCES = [*SOURCES, *COMPANY_SOURCES]
 
 
 class IncompleteSourceSnapshotError(RuntimeError):
@@ -115,10 +111,23 @@ def parse_source_names(value):
     return {name.strip() for name in value.split(",") if name.strip()}
 
 
-def excluded_source_names(args):
+def unselected_companies(settings):
+    """Return the company career pages the settings leave out; refuse names no adapter has."""
+    chosen = settings.sources.companies
+    if chosen is None:
+        return set()
+    known = {source.SOURCE_NAME for source in COMPANY_SOURCES}
+    if unknown := set(chosen) - known:
+        raise SystemExit(f"Unbekannte Firmen in sources.companies: {', '.join(sorted(unknown))}")
+    return known - set(chosen)
+
+
+def excluded_source_names(args, settings=None):
     """Return the sources to skip; --only-sources skips every source it does not name.
 
-    A selection that leaves no source is refused instead of running nothing.
+    Company career pages the settings leave out are skipped as well; like
+    any skipped source they keep their earlier jobs. A selection that leaves
+    no source is refused instead of running nothing.
     """
     known = {source.SOURCE_NAME for source in SOURCES}
     if args.only_sources is None:
@@ -128,6 +137,8 @@ def excluded_source_names(args):
         if unknown := only - known:
             raise SystemExit(f"Unbekannte Quellen: {', '.join(sorted(unknown))}")
         excluded = known - only
+    if settings is not None:
+        excluded |= unselected_companies(settings)
     if known <= excluded:
         raise SystemExit("Keine Quelle ausgewählt; der Lauf würde nichts abrufen.")
     return excluded
@@ -137,10 +148,12 @@ def main():
     """Run collection and scoring before persisting state and reporting."""
     configure_utf8_output()
     args = parse_args()
+    # Invalid settings stop the run here, before any source is searched.
+    excluded = excluded_source_names(args, current_settings())
     tracing = start_tracing()
     try:
         with worker_lock(), RunLog() as run_log, span("finder_run", **{"jobfinder.run_id": run_log.run_id}):
-            run_pipeline(exclude_sources=excluded_source_names(args), run_id=run_log.run_id)
+            run_pipeline(exclude_sources=excluded, run_id=run_log.run_id)
     finally:
         if tracing is not None:
             # The container ends with the run: send the spans now, not in the background.
@@ -158,7 +171,7 @@ def run_pipeline(exclude_sources=frozenset(), run_id=None):
         with timed_step("Backup", "backup"):
             create_backup()
 
-    print(f"  Einstellungen: {SETTINGS_SOURCE}")
+    print(f"  Einstellungen: {current_settings().source}")
     print_phase(1, 4, "Quellen")
     with timed_step("Quellen und Deduplizierung", "collect_sources"):
         selected_sources = [source for source in SOURCES if source.SOURCE_NAME not in exclude_sources]

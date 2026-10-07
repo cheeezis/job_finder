@@ -7,6 +7,8 @@ from contextlib import redirect_stdout
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from settings_helpers import with_settings
+
 from job_finder.models import Job, JobSource
 from job_finder.persistence.database import transaction
 from job_finder.sources import german_tech_jobs, get_in_it, stepstone, studysmarter
@@ -193,7 +195,8 @@ class SourceReportTests(unittest.TestCase):
         for answer, status, failed, console in cases:
             with (
                 self.subTest(status=status, answer=type(answer).__name__),
-                patch.multiple(stepstone, STEPSTONE_SEARCH_TERMS=["python"], STEPSTONE_SEARCH_LOCATIONS=["Fulda"]),
+                with_settings(search={"stepstone_terms": ["python"]}),
+                patch.object(stepstone, "stepstone_search_locations", return_value=["Fulda"]),
                 patch.object(stepstone, "StepStoneHttpClient", type("Client", (StepStoneClient,), {"answer": answer})),
             ):
                 self.assert_report(

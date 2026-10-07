@@ -25,7 +25,7 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
-from job_finder.matching.config import LOCAL_SEARCH_LOCATION, LOCAL_SEARCH_POSTAL_CODE
+from job_finder.matching.config import route_origin
 from job_finder.review import address_is_in_use, bind_exclusively
 from job_finder.review_app import MAX_JSON_BYTES, PACKAGE, ReviewPaths, create_app
 from job_finder.workflow.memory import load_memory, load_review_memory, save_memory
@@ -901,7 +901,7 @@ class ReviewTests(unittest.TestCase):
             result = post_json(f"{base_url}/api/review-status", {"job_id": "job:1", "workflow_status": "ignored"})
 
         self.assertEqual(document["recommendations"][0]["workflow_status"], "interesting")
-        self.assertEqual(document["route_origin"], f"{LOCAL_SEARCH_POSTAL_CODE} {LOCAL_SEARCH_LOCATION}")
+        self.assertEqual(document["route_origin"], route_origin())
         self.assertEqual(result["workflow_status"], "ignored")
         self.assertNotIn("personal_ratings", document)
         jobs = load_review_jobs(self.recommendations_path, self.memory_path)

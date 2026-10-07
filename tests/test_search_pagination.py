@@ -5,6 +5,8 @@ import unittest
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlsplit
 
+from settings_helpers import with_settings
+
 from job_finder.sources import arbeitsagentur, get_in_it
 
 
@@ -70,15 +72,12 @@ class ArbeitsagenturSearchTests(unittest.TestCase):
             searches.append((term, location, radius))
             return results[term]
 
-        settings = {
-            "SEARCH_TERMS": ["python"],
-            "LOCAL_SEARCH_LOCATION": "Fulda",
-            "LOCAL_SEARCH_RADIUS_KM": 25,
-            "COMMUTER_SEARCH_TERMS": ["java"],
-            "COMMUTER_SEARCH_LOCATIONS": ["Kassel"],
-            "COMMUTER_SEARCH_RADIUS_KM": 10,
-        }
-        with patch.multiple(arbeitsagentur, **settings), patch.object(arbeitsagentur, "search", side_effect=search):
+        kassel = {"search_location": "Kassel", "aliases": ["kassel"], "minimum_remote_percentage": 60}
+        settings = with_settings(
+            search={"local_location": "Fulda", "local_radius_km": 25, "terms": ["python"], "commuter_terms": ["java"]},
+            matching={"commuter_locations": [kassel]},
+        )
+        with settings, patch.object(arbeitsagentur, "search", side_effect=search):
             links = arbeitsagentur.collect_links()
 
         detail = "https://www.arbeitsagentur.de/jobsuche/jobdetail"

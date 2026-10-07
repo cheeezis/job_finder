@@ -7,6 +7,7 @@ search:
   # Optional: eigene Suchbegriffe statt der eingebauten
   # (job_finder/matching/config.py). Ohne Eintrag gelten diese.
   # terms: [Junior Python Developer, Data Analyst]
+  # Ohne stepstone_terms sucht StepStone mit denselben Begriffen wie terms.
   # stepstone_terms: [Python Developer, Data Analyst]
   # commuter_terms: [Junior IT, Trainee IT]
 

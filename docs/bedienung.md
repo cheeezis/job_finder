@@ -55,6 +55,17 @@ Teilergebnisse, etwa wegen Rate-Limits, meldet der Lauf das in Konsole, Log und
 Discord. Sind mehr als die Hälfte der Quellen unbrauchbar, bricht er ab und
 lässt den bisherigen Stand unverändert.
 
+### Faire Abrufe
+
+Die Quellen fragt ein erkennbarer Client (`job-finder/0.1`) ab. StepStone ruft
+nur Adressen auf, die die robots.txt erlaubt: Suchseiten ohne Parameter, also
+nur die erste Ergebnisseite je Suchbegriff und Ort, ohne Radius. Dafür sucht
+StepStone mit allen allgemeinen Suchbegriffen. Zwischen zwei Abrufen liegen
+1,5 Sekunden; bei HTTP 403 oder 429 stoppt die Quelle und nutzt den letzten
+Cache-Stand, statt die Sperre zu umgehen. Ausnahme: Remotely prüft verlinkte
+LinkedIn-Originale auf geschlossene Stellen mit einer Browser-Kennung, höchstens
+einmal am Tag je Stelle.
+
 ## Einrichtung
 
 ```powershell

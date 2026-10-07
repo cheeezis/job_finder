@@ -50,27 +50,6 @@ SEARCH_TERMS = [
     "KI",
 ]
 
-# StepStone's text search produces heavily overlapping result sets. These
-# broader role families cover the profile without requesting every synonym.
-STEPSTONE_SEARCH_TERMS = [
-    "Junior Software Developer",
-    "Python Developer",
-    "Data Engineer",
-    "Data Analyst",
-    "AI Engineer",
-    "Machine Learning Engineer",
-    "DevOps Engineer",
-    "Cloud Engineer",
-    "Security Engineer",
-    "Network Engineer",
-    "IT Consultant",
-    "Automation Engineer",
-    "Junior Requirements Engineer",
-    "Software Test Engineer",
-    "Junior SAP Consultant",
-    "Microsoft 365 Junior Consultant",
-]
-
 COMMUTER_SEARCH_TERMS = ["Junior IT", "Junior Softwareentwickler", "Berufseinsteiger IT", "Trainee IT"]
 COMMUTER_SEARCH_RADIUS_KM = 10
 
@@ -80,7 +59,8 @@ def search_terms():
 
 
 def stepstone_search_terms():
-    return current_settings().search.stepstone_terms or STEPSTONE_SEARCH_TERMS
+    # StepStone's robots.txt allows only the first result page, so it gets every general term.
+    return current_settings().search.stepstone_terms or search_terms()
 
 
 def commuter_search_terms():

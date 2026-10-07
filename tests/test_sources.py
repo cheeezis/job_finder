@@ -11,7 +11,7 @@ from urllib.error import HTTPError
 from job_finder.matching.config import (
     COMMUTER_SEARCH_RADIUS_KM,
     local_search_postal_code,
-    local_search_radius_km,
+    search_terms,
     stepstone_search_locations,
     stepstone_search_terms,
 )
@@ -50,47 +50,41 @@ class StepStoneSearchTests(unittest.TestCase):
         for role in ("Data Analyst", "DevOps Engineer", "Software Test Engineer"):
             self.assertIn(role, terms)
 
-    def test_local_search_uses_postcode_and_radius(self):
-        url = build_search_url("Python Developer", local_search_postal_code(), page=2)
-
+    def test_search_urls_carry_no_query_parameters(self):
+        # robots.txt disallows search URLs with parameters such as page or radius.
         self.assertEqual(
-            url,
-            "https://www.stepstone.de/jobs/Python-Developer/"
-            f"in-{local_search_postal_code()}?page=2"
-            f"&radius={local_search_radius_km()}",
+            build_search_url("Python Developer", local_search_postal_code()),
+            f"https://www.stepstone.de/jobs/Python-Developer/in-{local_search_postal_code()}",
+        )
+        self.assertEqual(
+            build_search_url("Python Developer", "Remote"), "https://www.stepstone.de/jobs/Python-Developer/in-Remote"
         )
 
-    def test_remote_search_does_not_add_local_radius(self):
-        url = build_search_url("Python Developer", "Remote")
-
-        self.assertEqual(url, "https://www.stepstone.de/jobs/Python-Developer/in-Remote?page=1")
+    def test_default_terms_are_the_general_search_terms(self):
+        self.assertEqual(stepstone_search_terms(), search_terms())
 
 
-class StepStonePaginationTests(unittest.TestCase):
-    def test_search_reads_pages_until_stepstone_returns_no_links(self):
+class StepStoneSearchPageTests(unittest.TestCase):
+    def test_search_reads_only_the_first_page_of_each_query(self):
         first = "https://www.stepstone.de/stellenangebote--first.html"
         second = "https://www.stepstone.de/stellenangebote--second.html"
         client = Mock()
-        client.get.side_effect = [
-            f'<a href="{first}">Erste</a>',
-            f'<a href="{second}">Zweite</a>',
-            "<html>Keine weiteren Stellen</html>",
-        ]
+        client.get.side_effect = [f'<a href="{first}">Erste</a>', f'<a href="{second}">Zweite</a>']
 
         with (
-            patch.object(stepstone, "stepstone_search_terms", return_value=["Python"]),
+            patch.object(stepstone, "stepstone_search_terms", return_value=["Python", "Data"]),
             patch.object(stepstone, "stepstone_search_locations", return_value=["Remote"]),
         ):
             links = stepstone.search_links(client)
 
         self.assertEqual(links, [first, second])
-        self.assertEqual(client.get.call_count, 3)
-        self.assertIn("page=3", client.get.call_args.args[0])
+        self.assertEqual(client.get.call_count, 2)
+        self.assertTrue(all("?" not in call.args[0] for call in client.get.call_args_list))
 
     def test_search_progress_replaces_stop_reason_summary(self):
         url = "https://www.stepstone.de/stellenangebote--same.html"
         client = Mock()
-        client.get.side_effect = [f'<a href="{url}">Stelle</a>', f'<a href="{url}">Stelle</a>']
+        client.get.side_effect = [f'<a href="{url}">Stelle</a>']
 
         with (
             patch.object(stepstone, "stepstone_search_terms", return_value=["Python"]),
@@ -103,7 +97,7 @@ class StepStonePaginationTests(unittest.TestCase):
         output = print_output.call_args.args[0]
         self.assertIn("StepStone Suche:", output)
         self.assertNotIn("1/1", output)
-        self.assertIn("2 Seiten", output)
+        self.assertIn("1 Seiten", output)
         self.assertIn("1 Anzeigen", output)
         self.assertNotIn("Stopps:", output)
 

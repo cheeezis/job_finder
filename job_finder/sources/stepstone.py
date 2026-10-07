@@ -9,11 +9,11 @@ import time
 from html import unescape
 from itertools import product
 from urllib.error import HTTPError
-from urllib.parse import quote, urlencode, urljoin, urlsplit
+from urllib.parse import quote, urljoin, urlsplit
 
 from job_finder.console import print_progress, progress_checkpoint
 from job_finder.http import fetch_text
-from job_finder.matching.config import local_search_radius_km, stepstone_search_locations, stepstone_search_terms
+from job_finder.matching.config import stepstone_search_locations, stepstone_search_terms
 from job_finder.models import Job
 from job_finder.paths import cache_file
 from job_finder.persistence.storage import read_versioned, write_versioned
@@ -129,7 +129,10 @@ def fetch_jobs(cache_path=CACHE_FILE, client=None, now=None):
 
 
 def search_links(client=None):
-    """Collect unique detail links from all configured search pages."""
+    """Collect unique detail links from the first result page of every configured search.
+
+    robots.txt disallows search URLs with query parameters, so there is no paging and no radius.
+    """
     client = client or StepStoneHttpClient()
     links = {}
     search_errors = 0
@@ -140,29 +143,15 @@ def search_links(client=None):
 
     queries = product(terms, locations)
     for processed_queries, (term, location) in enumerate(queries, start=1):
-        page = 1
-        query_seen = set()
-
-        while True:
-            search_url = build_search_url(term, location, page)
-            try:
-                html = client.get(search_url)
-                requested_pages += 1
-            except StepStoneBlockedError:
-                raise
-            except Exception:
-                search_errors += 1
-                break
-
-            page_links = [url for url in extract_detail_links(html) if url not in query_seen]
-            query_seen.update(page_links)
-
-            links.update(dict.fromkeys(page_links))
-
-            if not page_links:
-                break
-
-            page += 1
+        try:
+            html = client.get(build_search_url(term, location))
+            requested_pages += 1
+        except StepStoneBlockedError:
+            raise
+        except Exception:
+            search_errors += 1
+        else:
+            links.update(dict.fromkeys(extract_detail_links(html)))
         print_progress(
             "StepStone Suche", processed_queries, planned_queries, f"{requested_pages} Seiten · {len(links)} Anzeigen"
         )
@@ -173,13 +162,9 @@ def search_links(client=None):
     return list(links)
 
 
-def build_search_url(term, location, page=1):
-    """Build a paginated search URL with a radius for nonremote locations."""
-    base_url = f"{SEARCH_BASE_URL}/{quote(term.replace(' ', '-'))}/in-{quote(location)}"
-    query = {"page": page}
-    if location.lower() != "remote":
-        query["radius"] = local_search_radius_km()
-    return f"{base_url}?{urlencode(query)}"
+def build_search_url(term, location):
+    """Build a search URL without query parameters, the form robots.txt allows."""
+    return f"{SEARCH_BASE_URL}/{quote(term.replace(' ', '-'))}/in-{quote(location)}"
 
 
 def extract_detail_links(html):

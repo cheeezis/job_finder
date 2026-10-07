@@ -27,7 +27,7 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 
 from job_finder.matching.config import LOCAL_SEARCH_LOCATION, LOCAL_SEARCH_POSTAL_CODE
 from job_finder.review import address_is_in_use, bind_exclusively
-from job_finder.review_app import MAX_REQUEST_BYTES, PACKAGE, ReviewPaths, create_app
+from job_finder.review_app import MAX_JSON_BYTES, PACKAGE, ReviewPaths, create_app
 from job_finder.workflow.memory import load_memory, load_review_memory, save_memory
 from job_finder.workflow.review_actions import (
     RERUN_FIELD,
@@ -86,6 +86,27 @@ def json_request(url, payload):
 
 def post_json(url, payload):
     with urlopen(json_request(url, payload)) as response:
+        return json.load(response)
+
+
+def form_request(url, fields, files=(), headers=None):
+    """A form upload as the review sends it: fields, files and the review's own header."""
+    boundary = "jobfinder-test-boundary"
+    parts = [
+        f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'.encode()
+        for name, value in fields.items()
+    ]
+    for name, filename, content in files:
+        head = f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"; filename="{filename}"\r\n'
+        parts.append(head.encode() + b"Content-Type: application/octet-stream\r\n\r\n" + content + b"\r\n")
+    body = b"".join(parts) + f"--{boundary}--\r\n".encode()
+    own = {"Content-Type": f"multipart/form-data; boundary={boundary}", "X-Jobfinder-Upload": "1"}
+    origin = url.split("/api/", 1)[0]
+    return Request(url, data=body, headers={**own, "Origin": origin, **(headers or {})}, method="POST")
+
+
+def post_form(url, fields, files=()):
+    with urlopen(form_request(url, fields, files)) as response:
         return json.load(response)
 
 
@@ -228,7 +249,6 @@ class ReviewTests(unittest.TestCase):
         original = load_memory(self.memory_path)
         routes = (
             "/api/status",
-            "/api/applications",
             "/api/application-salary",
             "/api/review-status",
             "/api/review-undo",
@@ -707,7 +727,7 @@ class ReviewTests(unittest.TestCase):
 
     def test_application_start_api_adds_job_to_overview(self):
         with self.server_context() as base_url:
-            result = post_json(f"{base_url}/api/applications", {"job_id": "job:1", "salary_expectation_eur": 58000})
+            result = post_form(f"{base_url}/api/applications", {"job_id": "job:1", "salary_expectation_eur": "58000"})
             overview = get_json(f"{base_url}/api/applications")
 
         self.assertEqual(result["workflow_status"], "applied")
@@ -715,6 +735,62 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(overview["statistics"]["total"], 1)
         self.assertEqual(overview["applications"][0]["id"], "job:1")
         self.assertEqual(overview["applications"][0]["salary_expectation_eur"], 58_000)
+
+    def test_documents_arrive_as_a_form_upload_and_can_be_downloaded(self):
+        documents = self.directory / "application_documents"
+        with self.server_context(application_documents_dir=documents) as base_url:
+            result = post_form(
+                f"{base_url}/api/applications",
+                {"job_id": "job:1", "salary_period": "year"},
+                [("resume", "Lebenslauf.pdf", b"%PDF resume")],
+            )
+            document = load_memory(self.memory_path)["job:1"]["application_documents"][0]
+            query = urlencode({"job_id": "job:1", "document_id": document["id"]})
+            with urlopen(f"{base_url}/api/application-document?{query}") as response:
+                content = response.read()
+
+        self.assertEqual(result["workflow_status"], "applied")
+        self.assertEqual((document["kind"], document["name"]), ("resume", "Lebenslauf.pdf"))
+        self.assertEqual(content, b"%PDF resume")
+
+    def test_uploads_need_the_reviews_header_and_origin_and_json_stays_small(self):
+        before = load_memory(self.memory_path)
+        with self.server_context() as base_url:
+            url = f"{base_url}/api/applications"
+            cases = [
+                (form_request(url, {"job_id": "job:1"}, headers={"X-Jobfinder-Upload": "0"}), 403),
+                (form_request(url, {"job_id": "job:1"}, headers={"Origin": "https://attacker.example"}), 403),
+                (json_request(url, {"job_id": "job:1"}), 415),
+                (
+                    json_request(
+                        f"{base_url}/api/review-note", {"job_id": "job:1", "review_note": "x" * MAX_JSON_BYTES}
+                    ),
+                    400,
+                ),
+            ]
+            for request, code in cases:
+                with self.subTest(code=code), self.assertRaises(HTTPError) as caught:
+                    urlopen(request)
+                self.assertEqual(caught.exception.code, code)
+                caught.exception.close()
+            too_big = form_request(url, {"job_id": "job:1"}, [("resume", "cv.pdf", b"x" * (15 * 1024 * 1024 + 1))])
+            with self.assertRaises(HTTPError) as caught:
+                urlopen(too_big)
+            self.assertEqual(caught.exception.code, 400)
+            self.assertIn("15 MB", json.loads(caught.exception.read())["error"])
+        self.assertEqual(load_memory(self.memory_path), before)
+
+    def test_documents_of_a_job_applied_to_meanwhile_are_removed_again(self):
+        documents = self.directory / "documents"
+        undecided = load_memory(self.memory_path)["job:1"]
+        start_application("job:1", self.memory_path)
+        # As if another tab had applied between reading the job and saving the documents.
+        with mock.patch("job_finder.workflow.review_actions.load_job", return_value=undecided):
+            result = start_application("job:1", self.memory_path, [upload("resume", "cv.pdf", b"%PDF")], documents)
+
+        self.assertEqual(result["workflow_status"], "applied")
+        self.assertNotIn("application_documents", load_memory(self.memory_path)["job:1"])
+        self.assertFalse([path for path in documents.rglob("*") if path.is_file()])
 
     def test_application_document_can_be_downloaded_from_overview_link(self):
         documents_directory = self.directory / "application_documents"
@@ -772,7 +848,7 @@ class ReviewTests(unittest.TestCase):
             # Only the announced size counts: the server must answer without waiting for 46 MB.
             connection.putrequest("POST", "/api/review-status")
             connection.putheader("Content-Type", "application/json")
-            connection.putheader("Content-Length", str(MAX_REQUEST_BYTES + 1))
+            connection.putheader("Content-Length", str(MAX_JSON_BYTES + 1))
             connection.endheaders()
             response = connection.getresponse()
             body = json.loads(response.read())

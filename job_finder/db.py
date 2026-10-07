@@ -2,12 +2,16 @@
 
 import argparse
 import json
+from datetime import UTC, datetime, timedelta
 
 from job_finder.paths import APPLICATION_DOCUMENTS_DIR
+from job_finder.persistence import document_store
+from job_finder.persistence.application_documents import orphaned_documents
 from job_finder.persistence.database import initialize, transaction
 from job_finder.persistence.postgres_backup import create_postgres_backup, restore_backup
 from job_finder.persistence.postgres_store import prune_cache
 from job_finder.persistence.schema_migrations import migrate, schema_status
+from job_finder.workflow.memory import load_memory
 
 
 def main():
@@ -22,6 +26,12 @@ def main():
     cleanup.add_argument("--days", type=int, default=30)
     backup = commands.add_parser("backup")
     backup.add_argument("--documents-dir", default=str(APPLICATION_DOCUMENTS_DIR))
+    orphans = commands.add_parser(
+        "orphaned-documents", help="Dokumente ohne Verweis auflisten; löschen nur mit --delete."
+    )
+    orphans.add_argument("--hours", type=int, default=24)
+    orphans.add_argument("--delete", action="store_true")
+    orphans.add_argument("--documents-dir", default=str(APPLICATION_DOCUMENTS_DIR))
     restore = commands.add_parser("restore")
     restore.add_argument("archive")
     restore.add_argument("--documents-dir", required=True)
@@ -37,6 +47,8 @@ def main():
         result = {"backup": str(create_postgres_backup(documents_dir=args.documents_dir))}
     elif args.command == "restore":
         result = restore_backup(args.archive, args.documents_dir)
+    elif args.command == "orphaned-documents":
+        result = clean_orphaned_documents(args.documents_dir, timedelta(hours=args.hours), delete=args.delete)
     elif args.command == "prune-cache":
         result = {"removed_cache_entries": prune_cache(args.days)}
     else:
@@ -57,6 +69,17 @@ def main():
                 )
             }
     print(json.dumps(result, indent=2, ensure_ascii=False))
+
+
+def clean_orphaned_documents(root, older_than, *, delete=False):
+    """List documents no remembered job refers to; remove them only when asked."""
+    if older_than < timedelta(hours=1):
+        raise ValueError("Nur Dokumente, die mindestens eine Stunde alt sind; ein Upload könnte noch laufen.")
+    keys = orphaned_documents(load_memory(), root, older_than=older_than, now=datetime.now(UTC))
+    if delete:
+        for key in keys:
+            document_store.delete(key, root)
+    return {"orphaned": keys, "deleted": len(keys) if delete else 0}
 
 
 if __name__ == "__main__":

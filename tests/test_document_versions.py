@@ -57,6 +57,25 @@ class DocumentVersionTests(unittest.TestCase):
                         action()
         self.assertEqual(outside.read_bytes(), b"not a document")
 
+    def test_orphans_are_documents_without_a_reference_and_old_enough(self):
+        from datetime import UTC, datetime, timedelta
+
+        from job_finder.persistence.application_documents import orphaned_documents
+
+        kept = store_documents("job:1", [upload("resume", "cv.pdf", b"%PDF kept")], self.root)
+        memory = {"job:1": {"application_documents": kept}}
+        old, young = self.root / "left" / "old.pdf", self.root / "left" / "young.pdf"
+        old.parent.mkdir()
+        old.write_bytes(b"crashed before commit")
+        young.write_bytes(b"upload still being saved")
+        week_ago = (datetime.now(UTC) - timedelta(days=7)).timestamp()
+        os.utime(old, (week_ago, week_ago))
+        os.utime(self.root / resolve_document_key("job:1", kept[0]), (week_ago, week_ago))
+
+        found = orphaned_documents(memory, self.root, older_than=timedelta(hours=24), now=datetime.now(UTC))
+
+        self.assertEqual(found, ["left/old.pdf"])
+
     def test_repeated_uploads_for_same_job_keep_distinct_keys_and_original_names(self):
         first = store_documents(
             "synthetic:job", [upload("resume", "CV.pdf", b"earlier")], self.root, company="Example", title="Developer"

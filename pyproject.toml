@@ -27,6 +27,7 @@ dependencies = [
     "azure-monitor-opentelemetry-exporter>=1.0.0b46,<2",
     "fastapi>=0.142,<1",
     "uvicorn>=0.54,<1",
+    "python-multipart>=0.0.32,<1",
 ]
 
 [dependency-groups]

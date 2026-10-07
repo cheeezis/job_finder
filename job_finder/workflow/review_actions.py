@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 from job_finder.models import WorkflowStatus
 from job_finder.paths import APPLICATION_DOCUMENTS_DIR, MEMORY_FILE
-from job_finder.persistence.application_documents import remove_documents, store_documents
+from job_finder.persistence.application_documents import prepare_documents, remove_documents, write_documents
 from job_finder.workflow.applications import (
     delete_history_event,
     is_application,
@@ -12,7 +12,7 @@ from job_finder.workflow.applications import (
     synchronize_current_status,
     update_history_event,
 )
-from job_finder.workflow.memory import edit_job
+from job_finder.workflow.memory import edit_job, load_job
 
 MAX_REVIEW_NOTE_CHARS = 2000
 
@@ -93,26 +93,40 @@ def start_application(
     salary_expectation_eur=None,
     salary_period="year",
 ):
-    """Record the first application without overwriting later progress."""
-    stored_documents = []
+    """Record the first application without overwriting later progress.
+
+    The documents are checked and written first, outside the database
+    transaction, so the job is locked only for the short commit of their
+    references. If that commit fails, or the job became an application in
+    the meantime, the new documents are removed again.
+    """
+    entry = load_job(job_id, memory_path)
+    if is_application(entry):
+        return status_result(entry.get("workflow_status", WorkflowStatus.APPLIED.value), True)
+    salary_eur = validated_salary_expectation_eur(salary_expectation_eur, salary_period)
+    stored_documents = write_documents(
+        job_id,
+        prepare_documents(documents),
+        documents_dir,
+        company=entry.get("company", ""),
+        title=entry.get("title", ""),
+    )
     try:
         with edit_job(job_id, memory_path) as entry:
             if is_application(entry):
-                return status_result(entry.get("workflow_status", WorkflowStatus.APPLIED.value), True)
-            salary_eur = validated_salary_expectation_eur(salary_expectation_eur, salary_period)
-            stored_documents = store_documents(
-                job_id, documents, documents_dir, company=entry.get("company", ""), title=entry.get("title", "")
-            )
-            if stored_documents:
-                entry["application_documents"] = stored_documents
-            if salary_eur is not None:
-                entry["salary_expectation_eur"] = salary_eur
-            return status_result(record_status_change(entry, WorkflowStatus.APPLIED), True)
+                result = status_result(entry.get("workflow_status", WorkflowStatus.APPLIED.value), True)
+            else:
+                if stored_documents:
+                    entry["application_documents"] = stored_documents
+                if salary_eur is not None:
+                    entry["salary_expectation_eur"] = salary_eur
+                return status_result(record_status_change(entry, WorkflowStatus.APPLIED), True)
     except Exception:
-        # Files are created before the database commit and must not survive a
-        # failed transaction as unreferenced application documents.
+        # The documents must not survive a failed commit as unreferenced files.
         remove_documents(job_id, stored_documents, documents_dir)
         raise
+    remove_documents(job_id, stored_documents, documents_dir)
+    return result
 
 
 def status_result(workflow_status, application_tracked):

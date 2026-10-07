@@ -7,6 +7,7 @@ so local development and tests never require Azure credentials.
 
 import os
 import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
 
 from job_finder.paths import APPLICATION_DOCUMENTS_DIR
@@ -132,6 +133,20 @@ def delete(key, root=APPLICATION_DOCUMENTS_DIR, *, prune_empty=False):
                 # Keep a nonempty or inaccessible directory; never remove another writer's files.
                 break
             directory = directory.parent
+
+
+def list_keys(root=APPLICATION_DOCUMENTS_DIR):
+    """Yield (key, last modified in UTC) of every stored document, either backend."""
+    if _backend() == "blob":
+        for blob in _blob_container().list_blobs():
+            yield blob.name, blob.last_modified
+        return
+    base = Path(os.path.realpath(root))
+    if not base.exists():
+        return
+    for path in base.rglob("*"):
+        if path.is_file():
+            yield path.relative_to(base).as_posix(), datetime.fromtimestamp(path.stat().st_mtime, UTC)
 
 
 def is_empty(root=APPLICATION_DOCUMENTS_DIR):

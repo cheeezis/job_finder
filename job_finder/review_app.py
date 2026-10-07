@@ -12,11 +12,11 @@ import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 from urllib.parse import quote
 
 import psycopg
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Form, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
@@ -24,7 +24,7 @@ from pydantic import BaseModel
 from job_finder.matching.config import LOCAL_SEARCH_LOCATION, LOCAL_SEARCH_POSTAL_CODE
 from job_finder.models import WorkflowStatus
 from job_finder.paths import APPLICATION_DOCUMENTS_DIR, JOBS_FILE, MANUAL_CACHE_FILE, MEMORY_FILE, RECOMMENDATIONS_JSON
-from job_finder.persistence.application_documents import find_document, read_document
+from job_finder.persistence.application_documents import MAX_DOCUMENT_BYTES, find_document, read_document
 from job_finder.telemetry import annotate, span, step
 from job_finder.workflow.applications import load_application_overview
 from job_finder.workflow.linked_listings import link_listing_to_application
@@ -62,7 +62,13 @@ STATIC_FILES = {
     "/docs": ("docs.html", HTML),
     "/docs.js": ("docs.js", JAVASCRIPT),
 }
-MAX_REQUEST_BYTES = 45 * 1024 * 1024
+MAX_JSON_BYTES = 1024 * 1024
+# Two documents of at most 15 MB each plus the form fields.
+MAX_UPLOAD_BYTES = 2 * MAX_DOCUMENT_BYTES + 1024 * 1024
+UPLOAD_PATHS = {"/api/applications"}
+# Only the review's own pages send it; another site would need a CORS
+# preflight for it, and the app grants none.
+UPLOAD_HEADER = "x-jobfinder-upload"
 ROUTE_ORIGIN = f"{LOCAL_SEARCH_POSTAL_CODE} {LOCAL_SEARCH_LOCATION}".strip()
 LOCAL_HOST_PATTERN = re.compile(r"^(?:127\.0\.0\.1|localhost)(?::\d{1,5})?$")
 SECURITY_HEADERS = {
@@ -102,14 +108,6 @@ class JobRequest(BaseModel):
 
 class ManualImport(BaseModel):
     url: Any = None
-
-
-class ApplicationStart(JobRequest):
-    # Each document: {kind, name, content (base64)}; checked where they are stored.
-    documents: list[Any] | None = None
-    salary_expectation_eur: Any = None
-    salary_expectation: Any = None
-    salary_period: str = "year"
 
 
 class ApplicationListing(JobRequest):
@@ -254,17 +252,23 @@ def create_app(paths=ReviewPaths(), *, deployed_host="", manual_importer=import_
         )
 
     @app.post("/api/applications")
-    def application_start(body: ApplicationStart):
-        """Record an application with its documents and salary expectation."""
-        # The older field name still counts when the current one is absent.
-        explicit = "salary_expectation_eur" in body.model_fields_set
+    def application_start(
+        job_id: Annotated[str, Form()],
+        salary_expectation_eur: Annotated[str | None, Form()] = None,
+        salary_period: Annotated[str, Form()] = "year",
+        cover_letter: UploadFile | None = None,
+        resume: UploadFile | None = None,
+    ):
+        """Record an application with its documents (a form upload) and salary expectation."""
+        files = (("cover_letter", cover_letter), ("resume", resume))
+        documents = [uploaded_document(kind, file) for kind, file in files if file is not None]
         return start_application(
-            body.job_id,
+            job_id,
             paths.memory,
-            body.documents,
+            documents,
             paths.documents,
-            salary_expectation_eur=body.salary_expectation_eur if explicit else body.salary_expectation,
-            salary_period=body.salary_period,
+            salary_expectation_eur=salary_expectation_eur,
+            salary_period=salary_period,
         )
 
     @app.post("/api/application-salary")
@@ -351,15 +355,25 @@ def request_problem(request, deployed_host):
         return 403, "Ungültiger Ursprung"
     if request.method != "POST":
         return None
-    # Browsers cannot send a JSON POST to another site without a preflight, and no CORS permission is given.
-    if request.headers.get("content-type", "").partition(";")[0].strip().casefold() != "application/json":
-        return 415, "JSON-Inhalt erforderlich"
+    content_type = request.headers.get("content-type", "").partition(";")[0].strip().casefold()
+    if request.url.path in UPLOAD_PATHS:
+        # A form upload needs no preflight, so it must carry the review's own header and origin.
+        if content_type != "multipart/form-data":
+            return 415, "Formular-Upload erforderlich"
+        if request.headers.get(UPLOAD_HEADER) != "1" or not origin:
+            return 403, "Upload nur aus der Review"
+        limit = MAX_UPLOAD_BYTES
+    else:
+        # Browsers cannot send a JSON POST to another site without a preflight, and no CORS permission is given.
+        if content_type != "application/json":
+            return 415, "JSON-Inhalt erforderlich"
+        limit = MAX_JSON_BYTES
     try:
         length = int(request.headers.get("content-length", "0"))
     except ValueError:
         length = 0
     # Only the announced size counts, so an oversized body is refused before it is read.
-    if length <= 0 or length > MAX_REQUEST_BYTES:
+    if length <= 0 or length > limit:
         return 400, "Anfrage ist leer oder zu groß"
     return None
 
@@ -374,6 +388,14 @@ def validation_message(errors):
         return "JSON-Objekt erforderlich"
     field = ".".join(location)
     return f"Feld fehlt: {field}" if first.get("type") == "missing" else f"Ungültiger Wert: {field}"
+
+
+def uploaded_document(kind, file):
+    """Read one uploaded file, at most one byte beyond the limit, as the documents check expects it."""
+    content = file.file.read(MAX_DOCUMENT_BYTES + 1)
+    if len(content) > MAX_DOCUMENT_BYTES:
+        raise ValueError("Eine Datei darf höchstens 15 MB groß sein")
+    return {"kind": kind, "name": file.filename, "content": content}
 
 
 def single_query_value(request, name):

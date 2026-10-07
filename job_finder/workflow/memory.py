@@ -30,6 +30,12 @@ def load_memory(path=MEMORY_FILE):
         return read_memory(connection, scope)
 
 
+def load_job(job_id, path=MEMORY_FILE):
+    """Read one remembered job with its history and documents; KeyError if it is unknown."""
+    with snapshot() as connection:
+        return read_memory(connection, memory_scope(path), job_id)[job_id]
+
+
 def load_review_memory(job_ids, urls, statuses, path=MEMORY_FILE, *, archived=False):
     """Read the remembered jobs a review list needs: matches, kept statuses and applications."""
     with snapshot() as connection:

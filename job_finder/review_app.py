@@ -29,7 +29,7 @@ from job_finder.telemetry import annotate, span, step
 from job_finder.workflow.applications import load_application_overview
 from job_finder.workflow.linked_listings import link_listing_to_application
 from job_finder.workflow.manual_import import import_manual_url
-from job_finder.workflow.memory import load_memory
+from job_finder.workflow.memory import load_job
 from job_finder.workflow.review_actions import (
     delete_workflow_history,
     request_fact_sheet_rerun,
@@ -231,7 +231,7 @@ def create_app(paths=ReviewPaths(), *, deployed_host="", manual_importer=import_
             job_id = single_query_value(request, "job_id")
             document_id = single_query_value(request, "document_id")
             with step("read_memory"):
-                metadata = find_document(load_memory(paths.memory)[job_id], document_id)
+                metadata = find_document(load_job(job_id, paths.memory), document_id)
             with step("read_document"):
                 content = read_document(job_id, metadata, paths.documents)
         except (KeyError, ValueError, OSError):

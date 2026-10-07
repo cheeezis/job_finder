@@ -10,7 +10,8 @@ from job_finder.persistence.storage import read_object
 from job_finder.telemetry import annotate, step
 from job_finder.workflow.memory import (
     has_application_state as is_application,
-    load_memory,
+    job_urls,
+    load_review_memory,
     memory_id_finder,
     memory_source_links,
     preferred_memory_id,
@@ -76,12 +77,22 @@ def validated_date(value):
 
 
 def load_application_overview(memory_path=MEMORY_FILE, as_of=None, recommendations_path=RECOMMENDATIONS_JSON):
-    """Return open and completed applications plus statistics for all."""
+    """Return open and completed applications plus statistics for all.
+
+    Only applications and the entries that current recommendations match are
+    read, which is all the page and its listing links need.
+    """
+    recommendations = read_object(Path(recommendations_path), {}).get("recommendations", [])
     with step("read_memory") as current:
-        memory = load_memory(memory_path)
+        memory = load_review_memory(
+            {job["id"] for job in recommendations},
+            {url for job in recommendations for url in job_urls(job)},
+            (),
+            memory_path,
+        )
         annotate(current, **{"jobfinder.rows": len(memory)})
     reference_date = as_of or date.today()
-    links = review_links(memory, recommendations_path)
+    links = review_links(memory, recommendations)
     all_applications = [
         application_row(job_id, entry, reference_date, links.get(job_id, ()))
         for job_id, entry in memory.items()
@@ -169,11 +180,11 @@ def synchronize_current_status(entry):
     return status
 
 
-def review_links(memory, recommendations_path):
+def review_links(memory, recommendations):
     """Return the listing links of current recommendations per memory id, joined as the review joins them."""
     find_memory_ids = memory_id_finder(memory)
     links = {}
-    for recommendation in read_object(Path(recommendations_path), {}).get("recommendations", []):
+    for recommendation in recommendations:
         if candidates := find_memory_ids(recommendation):
             memory_id = preferred_memory_id(candidates, memory, recommendation["id"])
             links.setdefault(memory_id, []).extend(recommendation.get("source_links") or [])

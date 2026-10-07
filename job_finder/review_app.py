@@ -165,10 +165,11 @@ def create_app(paths=ReviewPaths(), *, deployed_host="", manual_importer=import_
             response = error(*problem)
         elif request.url.path.startswith("/api/"):
             # One span per API call: route, status and whether the process had just started, never ids or text.
+            # Own names: the Azure exporter drops the standard http.* attributes of an internal span.
             with span(
                 "review_request",
                 **{
-                    "http.request.method": request.method,
+                    "jobfinder.method": request.method,
                     "jobfinder.first_request": not served["any"],
                     "jobfinder.uptime_s": round(time.monotonic() - started),
                 },
@@ -179,8 +180,8 @@ def create_app(paths=ReviewPaths(), *, deployed_host="", manual_importer=import_
                 annotate(
                     current,
                     **{
-                        "http.route": getattr(route, "path", "other"),
-                        "http.response.status_code": response.status_code,
+                        "jobfinder.route": getattr(route, "path", "other"),
+                        "jobfinder.status_code": response.status_code,
                     },
                 )
         else:

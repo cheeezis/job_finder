@@ -19,7 +19,11 @@ INVALID_WINDOWS_NAME_CHARACTERS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
 def store_documents(job_id, documents, root=APPLICATION_DOCUMENTS_DIR, *, company="", title=""):
     """Validate and persist at most one document of each supported kind."""
-    prepared = _prepare_documents(documents)
+    return write_documents(job_id, prepare_documents(documents), root, company=company, title=title)
+
+
+def write_documents(job_id, prepared, root=APPLICATION_DOCUMENTS_DIR, *, company="", title=""):
+    """Persist validated documents under new keys and return their metadata; remove them again on failure."""
     if not prepared:
         return []
     # A new upload group never reuses an earlier application's keys, so a
@@ -42,8 +46,12 @@ def store_documents(job_id, documents, root=APPLICATION_DOCUMENTS_DIR, *, compan
     return [metadata for metadata, _ in prepared]
 
 
-def _prepare_documents(documents):
-    """Validate and decode the entire upload before creating any files."""
+def prepare_documents(documents):
+    """Validate and decode the entire upload before creating any files.
+
+    Each document is {kind, name, content}: content is the file's bytes from
+    an upload, or base64 text as older callers send it.
+    """
     if documents is None:
         return []
     if not isinstance(documents, list):
@@ -61,7 +69,8 @@ def _prepare_documents(documents):
         name = safe_original_name(document.get("name"))
         if Path(name).suffix.casefold() not in ALLOWED_EXTENSIONS:
             raise ValueError("Erlaubt sind PDF-, DOC-, DOCX- und ODT-Dateien")
-        content = decode_content(document.get("content"))
+        raw = document.get("content")
+        content = checked_content(raw) if isinstance(raw, bytes) else decode_content(raw)
         metadata = {"id": uuid.uuid4().hex, "kind": kind, "name": name, "stored_name": name}
         prepared.append((metadata, content))
 
@@ -140,6 +149,22 @@ def remove_documents(job_id, documents, root=APPLICATION_DOCUMENTS_DIR):
             document_store.delete(resolve_document_key(job_id, document), root)
 
 
+def orphaned_documents(memory, root=APPLICATION_DOCUMENTS_DIR, *, older_than, now):
+    """Return stored keys no remembered job refers to and older than the given age.
+
+    An upload is written before its database commit; a crash in between
+    leaves such a key. The age keeps an upload that is still being saved.
+    """
+    referenced = {
+        resolve_document_key(job_id, metadata)
+        for job_id, entry in memory.items()
+        for metadata in entry.get("application_documents", [])
+    }
+    return sorted(
+        key for key, modified in document_store.list_keys(root) if key not in referenced and modified < now - older_than
+    )
+
+
 def document_directory(job_id, folder_name=None):
     """Resolve readable current folders and legacy opaque folders safely."""
     if folder_name:
@@ -183,6 +208,11 @@ def decode_content(value):
         content = base64.b64decode(value, validate=True)
     except (binascii.Error, ValueError) as error:
         raise ValueError("Dateiinhalt ist ungültig") from error
+    return checked_content(content)
+
+
+def checked_content(content):
+    """Refuse an empty or oversized document."""
     if not content:
         raise ValueError("Die Datei ist leer")
     if len(content) > MAX_DOCUMENT_BYTES:

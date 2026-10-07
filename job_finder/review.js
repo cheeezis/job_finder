@@ -369,38 +369,34 @@
     render();
   }
 
-  async function filePayload(kind, file) {
-    if (!file) return null;
-    if (file.size > 15 * 1024 * 1024) throw new Error("Eine Datei darf höchstens 15 MB groß sein");
-    const content = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.addEventListener("load", () => resolve(String(reader.result).split(",", 2)[1] || ""));
-      reader.addEventListener("error", () => reject(new Error("Datei konnte nicht gelesen werden")));
-      reader.readAsDataURL(file);
-    });
-    return {kind, name: file.name, content};
+  // The documents go as a form upload, as they are; the server checks them again.
+  function applicationForm(job) {
+    const form = new FormData();
+    form.append("job_id", job.id);
+    const salaryValue = element("salary-expectation").value;
+    if (salaryValue) form.append("salary_expectation_eur", salaryValue);
+    form.append("salary_period", element("salary-period").value);
+    for (const [kind, id] of [["cover_letter", "cover-letter-file"], ["resume", "resume-file"]]) {
+      const file = element(id).files[0];
+      if (!file) continue;
+      if (file.size > 15 * 1024 * 1024) throw new Error("Eine Datei darf höchstens 15 MB groß sein");
+      form.append(kind, file, file.name);
+    }
+    return form;
   }
 
-  async function selectedDocuments() {
-    const documents = await Promise.all([
-      filePayload("cover_letter", element("cover-letter-file").files[0]),
-      filePayload("resume", element("resume-file").files[0])
-    ]);
-    return documents.filter(Boolean);
-  }
-
-  async function startApplication(documents) {
+  async function startApplication() {
     const job = visibleJobs[currentIndex];
     const button = element("mark-applied");
-    const salaryValue = element("salary-expectation").value;
     button.disabled = true;
     try {
+      const form = applicationForm(job);
       await saveNote();
-      const result = await postJson("/api/applications", {
-        job_id: job.id, documents,
-        salary_expectation_eur: salaryValue ? Number(salaryValue) : null,
-        salary_period: element("salary-period").value
-      }, "Bewerbung konnte nicht gespeichert werden");
+      const response = await fetch("/api/applications", {
+        method: "POST", headers: {"X-Jobfinder-Upload": "1"}, body: form
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Bewerbung konnte nicht gespeichert werden");
       applyWorkflowResult(job, result);
       element("application-dialog").close();
     } finally {
@@ -531,7 +527,7 @@
     const button = element("application-save");
     button.disabled = true;
     try {
-      await startApplication(await selectedDocuments());
+      await startApplication();
       event.target.reset();
       element("salary-period").dispatchEvent(new Event("change"));
     } catch (error) {

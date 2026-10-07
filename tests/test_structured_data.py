@@ -16,6 +16,14 @@ class StructuredDataTests(unittest.TestCase):
 
         self.assertIn("&quot;aufgaben&quot;", posting["description"])
 
+    def test_raw_line_breaks_inside_strings_are_accepted(self):
+        # As on JUMO's career pages: the description keeps the page's own line breaks.
+        html = '<script type="application/ld+json">{"@type": "JobPosting", "description": "Kosten\r\n</li><li>Selbst"}</script>'
+
+        posting = extract_json_ld_job_posting(html)
+
+        self.assertEqual(posting["description"], "Kosten\r\n</li><li>Selbst")
+
     def test_accepts_entirely_html_escaped_json(self):
         html = """<script type="application/ld+json">{
             &quot;@type&quot;: &quot;JobPosting&quot;,

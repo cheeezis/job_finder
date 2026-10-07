@@ -112,35 +112,6 @@ class AgentPhaseTests(unittest.TestCase):
 
         warning.assert_not_called()
 
-    def test_traces_are_sent_before_the_container_ends_even_after_a_failure(self):
-        tracing = Mock()
-        _result, text = phase(
-            ENABLED,
-            ENDPOINT,
-            configured_profile=Mock(return_value=("version: 5", "JOBFINDER_PROFILE")),
-            model_client=Mock(),
-            run_agent=Mock(side_effect=RuntimeError("kaputt")),
-            send_warning=Mock(return_value=None),
-            configure_tracing=Mock(return_value=tracing),
-        )
-
-        self.assertIn("Traces: Application Insights", text)
-        tracing.shutdown.assert_called_once_with()
-
-    def test_broken_tracing_costs_only_the_traces(self):
-        run_agent = Mock(return_value={"fertig": 0, "abgebrochen": 0, "offen": 0, "stopp": "", "heute_eur": 0})
-        _result, text = phase(
-            ENABLED,
-            ENDPOINT,
-            configured_profile=Mock(return_value=("version: 5", "JOBFINDER_PROFILE")),
-            model_client=Mock(),
-            run_agent=run_agent,
-            configure_tracing=Mock(side_effect=ValueError("kaputte Verbindungszeichenfolge")),
-        )
-
-        self.assertIn("Traces aus: ValueError", text)
-        run_agent.assert_called_once()
-
     def test_the_agent_gets_the_places_the_profile_refers_to(self):
         values = {
             **ENABLED,

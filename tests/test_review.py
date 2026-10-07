@@ -984,9 +984,9 @@ class ReviewTests(unittest.TestCase):
 
         finished = spans.get_finished_spans()
         requests = [item for item in finished if item.name == "review_request"]
-        self.assertEqual([item.attributes["http.route"] for item in requests], ["/api/recommendations"] * 2)
+        self.assertEqual([item.attributes["jobfinder.route"] for item in requests], ["/api/recommendations"] * 2)
         self.assertEqual([item.attributes["jobfinder.first_request"] for item in requests], [True, False])
-        self.assertEqual(requests[0].attributes["http.response.status_code"], 200)
+        self.assertEqual(requests[0].attributes["jobfinder.status_code"], 200)
         steps = {item.name for item in finished if item.context.trace_id == requests[0].context.trace_id}
         self.assertLessEqual(
             {"read_recommendations", "read_memory", "build_cards", "read_fact_sheets", "db_connect"}, steps

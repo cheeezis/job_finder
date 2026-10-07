@@ -3,13 +3,14 @@
 import sys
 import time
 import traceback as traceback_module
-from contextlib import AbstractContextManager, contextmanager
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 from datetime import datetime
 from pathlib import Path
 
 from job_finder.console import format_clock, log_event, new_run_id
 from job_finder.paths import BACKUP_DIR, LOG_DIR
 from job_finder.persistence.postgres_backup import create_postgres_backup
+from job_finder.telemetry import step
 
 BACKUP_FILES_TO_KEEP = 7
 
@@ -142,8 +143,13 @@ def create_backup(backup_dir=BACKUP_DIR, keep=BACKUP_FILES_TO_KEEP):
 
 
 @contextmanager
-def timed_step(label):
-    """Log elapsed wall time even when a step fails or is interrupted."""
+def timed_step(label, trace_name=None):
+    """Log elapsed wall time even when a step fails or is interrupted; trace_name also times it in the run's trace."""
+    with step(trace_name) if trace_name else nullcontext():
+        yield from _timed(label)
+
+
+def _timed(label):
     started = time.monotonic()
     writer = getattr(sys.stdout, "write_progress", None)
     if writer is not None and getattr(sys.stdout, "isatty", lambda: False)():

@@ -20,13 +20,15 @@ def extract_script_json(html, script_id):
 def extract_json_ld_job_posting(html):
     """Return the first valid JobPosting from JSON-LD scripts, if present."""
     for script in _JSON_LD_PATTERN.findall(html):
+        # strict=False accepts raw line breaks inside strings, which some
+        # career sites (e.g. JUMO) leave in their job descriptions.
         try:
-            data = json.loads(script.strip())
+            data = json.loads(script.strip(), strict=False)
         except json.JSONDecodeError:
             # Some publishers escape the entire JSON document. Decode only as
             # a fallback: &quot; inside a valid JSON string must not break it.
             try:
-                data = json.loads(unescape(script.strip()))
+                data = json.loads(unescape(script.strip()), strict=False)
             except json.JSONDecodeError:
                 continue
 

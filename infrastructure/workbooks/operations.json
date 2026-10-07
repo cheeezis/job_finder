@@ -1,0 +1,170 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "name": "intro",
+      "content": {
+        "json": "## Job Finder – Betrieb\nLäufe, Quellen, Agent und Review. Nur Zahlen, Status und Dauern, keine Inhalte (siehe `docs/operations.md`, „Logs und Traces“)."
+      }
+    },
+    {
+      "type": 9,
+      "name": "parameters",
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "4f6b2f4e-2d1b-4c7a-9d50-6b9a8e1f0c11",
+            "version": "KqlParameterItem/1.0",
+            "name": "Zeitraum",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 1209600000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2592000000
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": 3,
+      "name": "runs",
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ContainerAppConsoleLogs_CL | where Log_s startswith \"{\" | extend e = parse_json(Log_s) | where tostring(e.event) == \"run_finished\" | project Zeit = TimeGenerated, Dauer_min = round(todouble(e.duration_seconds) / 60, 1)",
+        "size": 0,
+        "title": "Finder-Läufe in Azure: Dauer in Minuten",
+        "timeContextFromParameter": "Zeitraum",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "${workspace_id}"
+        ],
+        "visualization": "timechart"
+      }
+    },
+    {
+      "type": 3,
+      "name": "run_summary",
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ContainerAppConsoleLogs_CL | where Log_s startswith \"{\" | extend e = parse_json(Log_s) | where tostring(e.event) == \"run_summary\" | project Zeit = TimeGenerated, Stellen = toint(e.jobs_total), Neu = toint(e.jobs_new), Review_neu = toint(e.review_new), Quellen_teilweise = toint(e.sources_partial), Quellen_fehlgeschlagen = toint(e.sources_failed), Discord_offen = toint(e.outbox_pending), Discord_aeltester_h = todouble(e.outbox_oldest_hours), Steckbriefe_abgebrochen = toint(e.fact_sheets_aborted), Steckbriefe_zweiter_Versuch = toint(e.fact_sheets_retryable) | order by Zeit desc",
+        "size": 0,
+        "title": "Kennzahlen der letzten Läufe",
+        "timeContextFromParameter": "Zeitraum",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "${workspace_id}"
+        ],
+        "visualization": "table"
+      }
+    },
+    {
+      "type": 3,
+      "name": "sources",
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ContainerAppConsoleLogs_CL | where Log_s startswith \"{\" | extend e = parse_json(Log_s) | where tostring(e.event) == \"source_completed\" | summarize Laeufe = count(), Teilweise = countif(tostring(e.status) == 'partial'), Fehlgeschlagen = countif(tostring(e.status) == 'failed'), Treffer = round(avg(toint(e.jobs_found)), 0), Sekunden = round(avg(todouble(e.duration_seconds)), 0) by Quelle = tostring(e.source) | order by Fehlgeschlagen desc, Teilweise desc, Treffer desc",
+        "size": 0,
+        "title": "Quellen: Status, Treffer und Dauer je Lauf",
+        "timeContextFromParameter": "Zeitraum",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "${workspace_id}"
+        ],
+        "visualization": "table"
+      }
+    },
+    {
+      "type": 3,
+      "name": "new_by_source",
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ContainerAppConsoleLogs_CL | where Log_s startswith \"{\" | extend e = parse_json(Log_s) | where tostring(e.event) == \"run_summary\" | extend Quellen = e.new_by_source | mv-expand bagexpansion = array Quellen | extend Quelle = tostring(Quellen[0]), Neu = toint(Quellen[1]) | summarize Neu = sum(Neu) by Quelle | where Neu > 0 | order by Neu desc",
+        "size": 0,
+        "title": "Neue Stellen je Quelle",
+        "timeContextFromParameter": "Zeitraum",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "${workspace_id}"
+        ],
+        "visualization": "barchart"
+      }
+    },
+    {
+      "type": 3,
+      "name": "agent",
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ContainerAppConsoleLogs_CL | where Log_s startswith \"{\" | extend e = parse_json(Log_s) | where tostring(e.event) == \"agent_job\" | summarize Kosten_EUR = round(sum(todouble(e.cost_eur)), 2) by Tag = bin(TimeGenerated, 1d), Ergebnis = tostring(e.outcome)",
+        "size": 0,
+        "title": "Agent: Steckbriefe und Kosten je Tag (EUR)",
+        "timeContextFromParameter": "Zeitraum",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "${workspace_id}"
+        ],
+        "visualization": "categoricalbar"
+      }
+    },
+    {
+      "type": 3,
+      "name": "review",
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AppDependencies | where Name == \"review_request\" | summarize Anfragen = count(), Median_ms = round(percentile(DurationMs, 50)), P95_ms = round(percentile(DurationMs, 95)) by Route = tostring(Properties[\"jobfinder.route\"]), Kaltstart = tostring(Properties[\"jobfinder.first_request\"]) | order by Anfragen desc",
+        "size": 0,
+        "title": "Review: Ladezeiten je Schnittstelle (ms)",
+        "timeContextFromParameter": "Zeitraum",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "${workspace_id}"
+        ],
+        "visualization": "table"
+      }
+    },
+    {
+      "type": 3,
+      "name": "review_steps",
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AppDependencies | where Name in (\"db_connect\", \"read_recommendations\", \"read_memory\", \"build_cards\", \"read_fact_sheets\", \"read_document\") and AppRoleName == \"jobfinder-review\" | summarize Median_ms = round(percentile(DurationMs, 50)), P95_ms = round(percentile(DurationMs, 95)) by Schritt = Name | order by P95_ms desc",
+        "size": 0,
+        "title": "Review: Dauer der Schritte (ms)",
+        "timeContextFromParameter": "Zeitraum",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "${workspace_id}"
+        ],
+        "visualization": "table"
+      }
+    }
+  ],
+  "fallbackResourceIds": [
+    "${workspace_id}"
+  ],
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

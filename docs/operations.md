@@ -233,6 +233,19 @@ Image die Spalten liest.
 verknüpfte IDs), über die die Review gemerkte Stellen einer Anzeige findet; ohne sie liest
 PostgreSQL für jede Stellenliste die ganze Tabelle. Die Strukturprüfung erwartet genau diese
 beiden Definitionen. Auch diese Migration läuft vor dem Merge des passenden Releases.
+`0005_job_listings` (F17, Etappe 1) legt die Tabellen `job_listings` (Anzeigen einer
+Stelle: Position, URL, Quelle) und `job_links` (verknüpfte Stellen) sowie die Spalten
+`first_seen_at`, `last_seen_at` und `locations` an `job_state` an, übernimmt die Werte
+aus `job_state.extra` und gibt den Tabellen dieselben Rechte wie `job_state`. Bis zum
+Abbau in einer späteren Etappe bleiben die JSON-Felder die Quelle: Jedes Speichern
+leitet Tabellen und Spalten daraus neu ab, ein älteres Image läuft also unverändert
+weiter. Abweichungen, etwa nach einem Rollback, meldet `listing_drift` in der
+Laufzeile `run_summary`; prüfen und reparieren:
+
+```powershell
+.\.venv\Scripts\python.exe -m job_finder.db listings-drift
+.\.venv\Scripts\python.exe -m job_finder.db listings-drift --repair
+```
 Migrationen laufen bewusst getrennt vom Deploy (siehe [Deploy und Rollback](#deploy-und-rollback)).
 
 Nach einer freigegebenen Schemaänderung läuft der Befehl einmal gegen Azure, mit

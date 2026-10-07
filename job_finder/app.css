@@ -378,3 +378,8 @@ button.danger:hover { background: var(--danger); color: white; }
   .stats { grid-template-columns: 1fr 1fr; }
   .application { padding: 18px 15px 18px 13px; }
 }
+
+.recent-runs { margin-top: 28px; }
+.recent-runs ul { display: grid; gap: 6px; margin: 8px 0 0; padding: 0; list-style: none; }
+.recent-runs li { color: var(--muted); font-size: .9rem; }
+.recent-runs strong { color: var(--ink); font-weight: 600; }

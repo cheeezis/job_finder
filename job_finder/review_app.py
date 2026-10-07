@@ -25,6 +25,7 @@ from job_finder.matching.config import route_origin as configured_route_origin
 from job_finder.models import WorkflowStatus
 from job_finder.paths import APPLICATION_DOCUMENTS_DIR, JOBS_FILE, MANUAL_CACHE_FILE, MEMORY_FILE, RECOMMENDATIONS_JSON
 from job_finder.persistence.application_documents import MAX_DOCUMENT_BYTES, find_document, read_document
+from job_finder.persistence.runs import latest_runs
 from job_finder.telemetry import annotate, span, step
 from job_finder.workflow.applications import load_application_overview
 from job_finder.workflow.linked_listings import link_listing_to_application
@@ -217,6 +218,11 @@ def create_app(paths=ReviewPaths(), *, deployed_host="", manual_importer=import_
                 "route_origin": route_origin,
             }
         )
+
+    @app.get("/api/runs")
+    def runs():
+        """Return the newest finder run of each runner (cloud, hybrid, local) with its key figures."""
+        return JSONResponse({"runs": latest_runs()})
 
     @app.get("/api/applications")
     def applications():

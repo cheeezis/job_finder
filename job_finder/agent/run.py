@@ -24,7 +24,7 @@ from job_finder.persistence.agent_usage import spent_today_and_this_month
 from job_finder.persistence.fact_sheets import fact_sheets, mark_outdated
 from job_finder.persistence.postgres_store import read_jobs
 from job_finder.persistence.storage import dataset_name
-from job_finder.telemetry import annotate, configure_tracing, span
+from job_finder.telemetry import annotate, span
 from job_finder.workflow.memory import edit_job
 from job_finder.workflow.notifications import send_warning
 from job_finder.workflow.review_actions import RERUN_FIELD
@@ -56,7 +56,6 @@ def agent_phase(run_id=None, values=USER_SETTINGS, environ=os.environ):
     # The profile refers to the search settings for the places; the agent needs them itself.
     profile_text = profile_with_places(profile_text, values)
     print(f"  Profil: {source} · Denkaufwand: {settings.reasoning_effort}")
-    tracing = start_tracing(environ)
     try:
         stats = run_agent(settings, profile_text, model_client(endpoint, environ), run_id=run_id, basis=basis)
     except Exception as error:
@@ -65,10 +64,6 @@ def agent_phase(run_id=None, values=USER_SETTINGS, environ=os.environ):
         log_event("agent_failed", run_id=run_id, level="error", error=type(error).__name__)
         warn(f"Agent abgebrochen: {type(error).__name__}", environ)
         return None
-    finally:
-        if tracing is not None:
-            # The container ends with the run: send the spans now, not in the background.
-            tracing.shutdown()
     print(
         f"  {stats['fertig']} fertig · {stats['abgebrochen']} abgebrochen · "
         f"{stats['offen']} offen · {stats.get('veraltet', 0)} veraltet · heute {euro(stats['heute_eur'])} von "
@@ -83,18 +78,6 @@ def agent_phase(run_id=None, values=USER_SETTINGS, environ=os.environ):
         **{key: str(value) if key.endswith("_eur") else value for key, value in stats.items()},
     )
     return stats
-
-
-def start_tracing(environ):
-    """Turn on traces when Application Insights is configured; a failure only costs the traces."""
-    try:
-        tracing = configure_tracing(environ)
-    except Exception as error:
-        print(f"  Traces aus: {type(error).__name__}")
-        return None
-    if tracing is not None:
-        print("  Traces: Application Insights")
-    return tracing
 
 
 def warn(text, environ):

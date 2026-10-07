@@ -5,11 +5,12 @@ import json
 import os
 import tempfile
 import unittest
-from contextlib import redirect_stderr, redirect_stdout
+from contextlib import nullcontext, redirect_stderr, redirect_stdout
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
+import run_finder
 from job_finder.models import Job, JobSource
 from job_finder.sources.common import record_candidate_failure, record_partial_failure, record_total_segments
 from run_finder import (
@@ -320,6 +321,60 @@ class RunFinderTests(unittest.TestCase):
         self.assertEqual(events[1]["jobs_found"], 1)
         self.assertIn("duration_seconds", events[1])
 
+    def test_each_source_is_a_step_in_the_runs_trace(self):
+        from opentelemetry import trace
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+        from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+
+        from job_finder.telemetry import span
+
+        spans = InMemorySpanExporter()
+        provider = trace.get_tracer_provider()
+        if not isinstance(provider, TracerProvider):
+            provider = TracerProvider()
+            trace.set_tracer_provider(provider)
+        provider.add_span_processor(SimpleSpanProcessor(spans))
+        failing = SimpleNamespace(SOURCE_NAME="broken", fetch_jobs=lambda: (_ for _ in ()).throw(RuntimeError("x")))
+        working = SimpleNamespace(SOURCE_NAME="working", fetch_jobs=lambda: [make_job("working:1")])
+        with redirect_stdout(io.StringIO()), span("finder_run"):
+            collect_jobs([failing, working], run_id="test-run-1")
+
+        steps = [item for item in spans.get_finished_spans() if item.name == "source"]
+        self.assertEqual(
+            [
+                (
+                    item.attributes["jobfinder.source"],
+                    item.attributes["jobfinder.status"],
+                    item.attributes["jobfinder.jobs"],
+                )
+                for item in steps
+            ],
+            [("broken", "failed", 0), ("working", "success", 1)],
+        )
+
+    def test_the_run_summary_logs_key_figures_and_backlogs(self):
+        summary = {
+            "jobs_total": 12,
+            "jobs_new": 3,
+            "review_new": 2,
+            "notifications": {"sent": 2, "failed": 1},
+            "sources": [{"new": 3}, {"new": 0}],
+        }
+        reports = [{"name": "arbeitnow", "status": "success"}, {"name": "stepstone", "status": "partial"}]
+        stock = {"outbox_pending": 1, "outbox_oldest_hours": 5.5, "fact_sheets_aborted": 2, "fact_sheets_retryable": 1}
+        output = io.StringIO()
+        with redirect_stdout(output), patch.object(run_finder, "backlog", return_value=stock):
+            run_finder.log_run_summary(summary, reports, 61.24, "run-1")
+
+        event = json.loads(output.getvalue().strip())
+        self.assertEqual(event["event"], "run_summary")
+        self.assertEqual(event["new_by_source"], {"arbeitnow": 3, "stepstone": 0})
+        self.assertEqual(
+            (event["sources_partial"], event["notifications_failed"], event["outbox_oldest_hours"]), (1, 1, 5.5)
+        )
+        self.assertEqual(event["duration_seconds"], 61.2)
+
     def test_empty_source_is_reported_as_a_complete_empty_snapshot(self):
         jobs, reports = collect_jobs([SimpleNamespace(SOURCE_NAME="empty", fetch_jobs=list)])
         self.assertEqual(jobs, [])
@@ -429,3 +484,22 @@ class RunFinderTests(unittest.TestCase):
             run_pipeline(exclude_sources={"stepstone"})
 
         self.assertEqual(seen_sources, [kept])
+
+
+class RunTracingTests(unittest.TestCase):
+    def test_traces_are_sent_before_the_container_ends_even_after_a_failure(self):
+        tracing = Mock()
+        run_log = Mock(run_id="run-1")
+        run_log.__enter__ = Mock(return_value=run_log)
+        run_log.__exit__ = Mock(return_value=False)
+        with (
+            patch.object(run_finder, "parse_args", return_value=SimpleNamespace(exclude_sources="", only_sources=None)),
+            patch.object(run_finder, "start_tracing", return_value=tracing),
+            patch.object(run_finder, "worker_lock", return_value=nullcontext()),
+            patch.object(run_finder, "RunLog", return_value=run_log),
+            patch.object(run_finder, "run_pipeline", side_effect=RuntimeError("kaputt")),
+            self.assertRaises(RuntimeError),
+        ):
+            run_finder.main()
+
+        tracing.shutdown.assert_called_once_with()

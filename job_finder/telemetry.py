@@ -47,6 +47,18 @@ def configure_tracing(environ=os.environ, service="jobfinder-worker"):
     return provider
 
 
+def start_tracing(environ=os.environ, service="jobfinder-worker"):
+    """Turn tracing on for a process and say so; a failure only costs the traces."""
+    try:
+        tracing = configure_tracing(environ, service)
+    except Exception as error:
+        print(f"  Traces aus: {type(error).__name__}")
+        return None
+    if tracing is not None:
+        print("  Traces: Application Insights")
+    return tracing
+
+
 def safe_attributes(attributes):
     """Keep numbers, booleans and short texts; drop None and anything longer."""
     return {

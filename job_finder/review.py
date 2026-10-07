@@ -16,7 +16,7 @@ import uvicorn
 
 from job_finder.persistence.database import transaction
 from job_finder.review_app import create_app
-from job_finder.telemetry import configure_tracing
+from job_finder.telemetry import start_tracing
 
 # Set when deployed behind a real hostname (e.g. Azure Container Apps): the
 # app then allows exactly this hostname over HTTPS instead of localhost.
@@ -74,7 +74,7 @@ def main():
     print(f"Job Finder geoeffnet unter {url}")
     print("Dieses Fenster schliessen, um den Job Finder zu beenden.")
     app = create_app(deployed_host=os.environ.get(DEPLOYED_HOST_ENV, ""))
-    tracing = start_tracing()
+    tracing = start_tracing(service="jobfinder-review")
     # Signing in to the database first takes seconds after a cold start; do it while uvicorn starts.
     threading.Thread(target=warm_up_database, daemon=True).start()
     try:
@@ -96,15 +96,6 @@ def warm_up_database():
         print(f"Datenbank-Vorbereitung fehlgeschlagen: {type(error).__name__}")
         return
     print(f"Datenbankanmeldung vorbereitet in {time.monotonic() - started:.1f} s")
-
-
-def start_tracing():
-    """Turn on request timings when Application Insights is configured; a failure only costs the timings."""
-    try:
-        return configure_tracing(os.environ, service="jobfinder-review")
-    except Exception as error:
-        print(f"Traces aus: {type(error).__name__}")
-        return None
 
 
 if __name__ == "__main__":

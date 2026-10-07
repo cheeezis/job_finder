@@ -13,6 +13,7 @@ from job_finder.models import WorkflowStatus
 from job_finder.operations import RunLog, create_backup, timed_step
 from job_finder.paths import JOBS_FILE, MEMORY_FILE
 from job_finder.persistence.database import lock, transaction, worker_lock
+from job_finder.persistence.health import backlog
 from job_finder.persistence.storage import publish_results
 from job_finder.sources import (
     arbeitnow,
@@ -32,6 +33,7 @@ from job_finder.sources import (
 from job_finder.sources.common import canonical_detail_url as canonical_url, fetch_diagnostics, reset_fetch_diagnostics
 from job_finder.sources.company_careers import BYTEWERK, CSS, NETHINKS, PROEMION, RHOENENERGIE
 from job_finder.sources.compose_it import COMPOSE_IT
+from job_finder.telemetry import annotate, span, start_tracing, step
 from job_finder.workflow.availability import (
     apply_closed_listing_checks,
     prepare_closed_listing_checks,
@@ -135,8 +137,14 @@ def main():
     """Run collection and scoring before persisting state and reporting."""
     configure_utf8_output()
     args = parse_args()
-    with worker_lock(), RunLog() as run_log:
-        run_pipeline(exclude_sources=excluded_source_names(args), run_id=run_log.run_id)
+    tracing = start_tracing()
+    try:
+        with worker_lock(), RunLog() as run_log, span("finder_run", **{"jobfinder.run_id": run_log.run_id}):
+            run_pipeline(exclude_sources=excluded_source_names(args), run_id=run_log.run_id)
+    finally:
+        if tracing is not None:
+            # The container ends with the run: send the spans now, not in the background.
+            tracing.shutdown()
 
 
 def run_pipeline(exclude_sources=frozenset(), run_id=None):
@@ -147,28 +155,28 @@ def run_pipeline(exclude_sources=frozenset(), run_id=None):
     if os.environ.get("JOBFINDER_SKIP_RUN_BACKUP") == "1":
         print("  Backup: übersprungen (Container ohne dauerhaftes Dateisystem)")
     else:
-        with timed_step("Backup"):
+        with timed_step("Backup", "backup"):
             create_backup()
 
     print(f"  Einstellungen: {SETTINGS_SOURCE}")
     print_phase(1, 4, "Quellen")
-    with timed_step("Quellen und Deduplizierung"):
+    with timed_step("Quellen und Deduplizierung", "collect_sources"):
         selected_sources = [source for source in SOURCES if source.SOURCE_NAME not in exclude_sources]
         jobs, source_reports = collect_jobs(selected_sources, run_id=run_id)
         print_source_summary(source_reports, len(jobs))
         require_usable_source_snapshot(source_reports)
 
     print_phase(2, 4, "Bewertung")
-    with timed_step("Vorfilter"):
+    with timed_step("Vorfilter", "prefilter"):
         results = score_jobs(jobs)
 
     candidate_ids = {job["id"] for job in results["included"]}
-    with timed_step("Detailanreicherung"):
+    with timed_step("Detailanreicherung", "enrich_details"):
         enrichment_reports = enrich_candidate_jobs(jobs, candidate_ids, sources=selected_sources, run_id=run_id)
 
     # Validate final details before committing any workflow state. The score
     # stays attached to the job as memory resolves its ID and timestamps.
-    with timed_step("Endgültige Bewertung"):
+    with timed_step("Endgültige Bewertung", "evaluate"):
         evaluated_jobs = evaluate_jobs(jobs)
 
     # Persist only the final post-enrichment set; enrichers may remove closed ads.
@@ -176,7 +184,7 @@ def run_pipeline(exclude_sources=frozenset(), run_id=None):
     complete_sources = {report["name"] for report in source_reports if report["status"] in {"success", "empty"}}
     # A split schedule's run answers for missing jobs only through its own sources.
     run_sources = {report["name"] for report in source_reports}
-    with timed_step("Offline-Prüfung"):
+    with timed_step("Offline-Prüfung", "availability_checks"):
         availability_checks = prepare_closed_listing_checks(
             jobs,
             MEMORY_FILE,
@@ -188,7 +196,10 @@ def run_pipeline(exclude_sources=frozenset(), run_id=None):
 
     # Publication always locks before memory, matching manual imports and restore.
     # No source, closure check or Discord request runs inside this transaction.
-    with timed_step("Bestand, Ergebnisse und Benachrichtigungsaufträge speichern"), transaction() as connection:
+    with (
+        timed_step("Bestand, Ergebnisse und Benachrichtigungsaufträge speichern", "publish"),
+        transaction() as connection,
+    ):
         lock(connection, "finder-publication")
         with edit_memory(MEMORY_FILE) as memory:
             unchanged_ids = unchanged_check_ids(availability_checks, memory)
@@ -227,7 +238,7 @@ def run_pipeline(exclude_sources=frozenset(), run_id=None):
     )
 
     print_phase(4, 4, "Ausgabe und Benachrichtigungen")
-    with timed_step("Benachrichtigungen"):
+    with timed_step("Benachrichtigungen", "notifications"):
         notification_stats = deliver_notifications(
             stats=notification_stats,
             webhook_url=os.getenv("DISCORD_WEBHOOK_URL"),
@@ -238,18 +249,16 @@ def run_pipeline(exclude_sources=frozenset(), run_id=None):
         else:
             print(f"Discord: {notification_stats['sent']} gesendet, {notification_stats['failed']} fehlgeschlagen")
 
-        summary_error = send_run_summary(
-            build_run_summary(
-                duration_seconds=time.monotonic() - started,
-                jobs=jobs,
-                results=results,
-                memory_stats=memory_stats,
-                source_reports=source_reports,
-                notification_stats=notification_stats,
-                enrichment_reports=enrichment_reports,
-            ),
-            webhook_url=os.getenv("DISCORD_WEBHOOK_URL"),
+        summary = build_run_summary(
+            duration_seconds=time.monotonic() - started,
+            jobs=jobs,
+            results=results,
+            memory_stats=memory_stats,
+            source_reports=source_reports,
+            notification_stats=notification_stats,
+            enrichment_reports=enrichment_reports,
         )
+        summary_error = send_run_summary(summary, webhook_url=os.getenv("DISCORD_WEBHOOK_URL"))
         if summary_error:
             print(f"Discord-Laufstatistik: {summary_error}")
         else:
@@ -259,6 +268,29 @@ def run_pipeline(exclude_sources=frozenset(), run_id=None):
     print_review_diagnostics(results, memory_stats)
     # Last, once every result is saved: the agent can fail without the finder failing.
     agent_phase(run_id=run_id)
+    log_run_summary(summary, source_reports, time.monotonic() - started, run_id)
+
+
+def log_run_summary(summary, source_reports, duration_seconds, run_id):
+    """Log the run's key figures as one event, after the agent, with the backlogs it leaves."""
+    counts = Counter(report["status"] for report in source_reports)
+    log_event(
+        "run_summary",
+        run_id=run_id,
+        duration_seconds=round(duration_seconds, 1),
+        jobs_total=summary["jobs_total"],
+        jobs_new=summary["jobs_new"],
+        review_new=summary["review_new"],
+        sources_partial=counts["partial"],
+        sources_failed=counts["failed"],
+        notifications_sent=summary["notifications"].get("sent", 0),
+        notifications_failed=summary["notifications"].get("failed", 0),
+        # summary["sources"] follows source_reports one by one.
+        new_by_source={
+            report["name"]: source["new"] for report, source in zip(source_reports, summary["sources"], strict=True)
+        },
+        **backlog(),
+    )
 
 
 def print_availability_progress(current, total):
@@ -305,17 +337,19 @@ def collect_jobs(sources, run_id=None):
         print_progress(label, 0, 1, "wird geladen")
         reset_fetch_diagnostics()
         started = time.monotonic()
-        try:
-            source_jobs, status, details = fetch_source_jobs(source)
-        except Exception as error:
-            source_jobs, status, details = [], "failed", {"error": source_error_label(error)}
-            level, progress = "error", f"fehlgeschlagen ({details['error']})"
-        else:
-            level = "warning" if status in {"partial", "failed"} else "info"
-            progress = f"{len(source_jobs)} Stellen"
-            if status == "partial":
-                failed = details.get("failed_segments", "?")
-                progress += f" · Teilergebnis ({failed} Segment(e) fehlgeschlagen)"
+        with step("source", **{"jobfinder.source": source.SOURCE_NAME}) as current:
+            try:
+                source_jobs, status, details = fetch_source_jobs(source)
+            except Exception as error:
+                source_jobs, status, details = [], "failed", {"error": source_error_label(error)}
+                level, progress = "error", f"fehlgeschlagen ({details['error']})"
+            else:
+                level = "warning" if status in {"partial", "failed"} else "info"
+                progress = f"{len(source_jobs)} Stellen"
+                if status == "partial":
+                    failed = details.get("failed_segments", "?")
+                    progress += f" · Teilergebnis ({failed} Segment(e) fehlgeschlagen)"
+            annotate(current, **{"jobfinder.status": status, "jobfinder.jobs": len(source_jobs)})
         source_reports.append({"name": source.SOURCE_NAME, "status": status, "jobs": len(source_jobs), **details})
         print_progress(label, 1, 1, progress)
         log_event(

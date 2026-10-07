@@ -405,9 +405,27 @@ AppDependencies
 | where TimeGenerated > ago(7d) and Name in ("review_request", "db_connect", "read_recommendations",
     "read_memory", "build_cards", "read_fact_sheets", "read_document")
 | summarize Anzahl = count(), Median_ms = percentile(DurationMs, 50), P95_ms = percentile(DurationMs, 95)
-    by Name, Route = tostring(Properties["http.route"]), Kaltstart = tostring(Properties["jobfinder.first_request"])
+    by Name, Route = tostring(Properties["jobfinder.route"]), Kaltstart = tostring(Properties["jobfinder.first_request"])
 | order by Median_ms desc
 ```
+
+Am Ende jedes Laufs, nach dem Agenten, steht eine Zeile `run_summary`: Dauer,
+Stellen, neue Stellen gesamt und je Quelle (`new_by_source`), neue Review-Karten,
+teilweise oder ganz gescheiterte Quellen, gesendete und fehlgeschlagene
+Discord-Nachrichten sowie der Rückstand danach: offene Discord-Aufträge, Alter des
+ältesten in Stunden, abgebrochene Steckbriefe und solche, die noch einmal
+versucht werden. Mit Application Insights ist der ganze Lauf außerdem ein Trace
+`finder_run` mit den Phasen (`collect_sources` mit je einem Schritt `source`,
+`prefilter`, `enrich_details`, `evaluate`, `availability_checks`, `publish`,
+`notifications`) und darunter `agent_run`.
+
+Die Arbeitsmappe „Job Finder – Betrieb“ (Azure-Portal, Application Insights
+`appi-jobfinder` oder Log Analytics, „Arbeitsmappen“; Terraform:
+`infrastructure/workbooks/operations.json`) zeigt auf einer Seite die Laufdauer,
+diese Kennzahlen, Status und Treffer je Quelle, neue Stellen je Quelle,
+Agentenkosten je Tag und die Ladezeiten der Review samt Schritten, für einen
+wählbaren Zeitraum. Arbeitsmappen kosten nichts; sie lesen nur die vorhandenen
+Logs.
 
 ## Kosten
 

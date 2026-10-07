@@ -16,7 +16,7 @@ from job_finder.persistence import schema_migrations as migrations
 
 LEGACY_SCHEMA = (Path(__file__).with_name("fixtures") / "schema_v2.sql").read_text(encoding="utf-8")
 # The newest revision; a test adds a later one of its own.
-HEAD = "0003_agent_fact_sheet_state"
+HEAD = "0004_review_lookup_indexes"
 ADDED_COLUMNS = {"agent_fact_sheets": ["retryable", "attempts", "versions", "outdated"]}
 
 
@@ -160,6 +160,20 @@ class SchemaMigrationTests(unittest.TestCase):
                     migrations.schema_status()
                 with self.assertRaisesRegex(RuntimeError, "Datensatzgrenze"):
                     migrations.migrate()
+                self.execute("DROP SCHEMA public CASCADE")
+                self.execute("CREATE SCHEMA public")
+
+    def test_changed_review_indexes_are_detected_readonly_without_repair(self):
+        for change in (
+            "DROP INDEX job_state_source_urls",
+            "DROP INDEX job_state_linked_job_ids; CREATE INDEX job_state_linked_job_ids ON job_state USING gin ((extra -> 'source_urls'))",
+            "DROP INDEX job_state_source_urls; CREATE INDEX job_state_source_urls ON job_state ((extra -> 'source_urls'))",
+        ):
+            with self.subTest(change=change):
+                migrations.migrate()
+                self.execute(change)
+                with self.assertRaisesRegex(RuntimeError, "Struktur"):
+                    migrations.schema_status()
                 self.execute("DROP SCHEMA public CASCADE")
                 self.execute("CREATE SCHEMA public")
 

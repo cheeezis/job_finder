@@ -19,9 +19,16 @@ from sqlalchemy.pool import NullPool
 from job_finder.persistence.database import admin_database_url
 from job_finder.persistence.migrations.baseline import legacy_metadata, metadata
 from job_finder.persistence.migrations.fact_sheet_state import REVISION as FACT_SHEET_REVISION, added_columns
+from job_finder.persistence.migrations.review_indexes import (
+    INDEXES as REVIEW_INDEXES,
+    REVISION as INDEX_REVISION,
+    expected_definition,
+)
 from job_finder.persistence.migrations.runtime_boundaries import REVISION as BOUNDARIES_REVISION, rendered_predicate
 
 BASELINE_REVISION = "0001_baseline"
+# Revisions whose complete structure the check knows, oldest first; each one adds to the previous.
+KNOWN_REVISIONS = (BASELINE_REVISION, BOUNDARIES_REVISION, FACT_SHEET_REVISION, INDEX_REVISION)
 
 
 def migration_config(connection=None):
@@ -69,13 +76,15 @@ def _different_default(context, inspected, expected, inspected_default, expected
 
 
 def _application_object(obj, name, kind, reflected, compared):
-    return kind != "table" or name != "alembic_version"
+    # Alembic cannot compare expression indexes; validate_baseline checks these two itself.
+    return (kind != "table" or name != "alembic_version") and (kind != "index" or name not in REVIEW_INDEXES)
 
 
-def validate_baseline(connection, *, runtime_boundaries=False, fact_sheet_state=False):
+def validate_baseline(connection, *, runtime_boundaries=False, fact_sheet_state=False, review_indexes=False):
     """Check types, nullability, defaults, keys, indexes and checks without altering rows.
 
-    fact_sheet_state expects the columns revision 0003 added as well.
+    fact_sheet_state expects the columns revision 0003 added as well,
+    review_indexes the two GIN indexes of revision 0004 with their exact definition.
     """
     inspector = sa.inspect(connection)
     expected = sa.MetaData()
@@ -114,6 +123,8 @@ def validate_baseline(connection, *, runtime_boundaries=False, fact_sheet_state=
             differences.append(("check_constraint", table.name))
         # Alembic's PostgreSQL comparator omits predicates and several index options.
         for index in inspector.get_indexes(table.name, schema="public"):
+            if review_indexes and index["name"] in REVIEW_INDEXES:
+                continue
             options = index.get("dialect_options", {})
             if (
                 options.get("postgresql_where") is not None
@@ -123,6 +134,16 @@ def validate_baseline(connection, *, runtime_boundaries=False, fact_sheet_state=
                 or index.get("column_sorting")
             ):
                 differences.append(("index_options", table.name))
+    if review_indexes:
+        definitions = dict(
+            connection.exec_driver_sql(
+                "SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = 'public' AND indexname = ANY(%s)",
+                (list(REVIEW_INDEXES),),
+            ).fetchall()
+        )
+        for name, key in REVIEW_INDEXES.items():
+            if _sql_shape(definitions.get(name)) != _sql_shape(expected_definition(name, key)):
+                differences.append(("review_index", name))
     if inspector.get_view_names(schema="public") or inspector.get_materialized_view_names(schema="public"):
         differences.append(("unexpected_view",))
     custom_behavior = connection.exec_driver_sql(
@@ -186,11 +207,10 @@ def _status(connection):
             script.get_revision(revision)
         except (ResolutionError, CommandError):
             raise RuntimeError("Unbekannter PostgreSQL-Migrationsstand; passendes Release erforderlich.") from None
-        if revision in {BASELINE_REVISION, BOUNDARIES_REVISION, FACT_SHEET_REVISION}:
+        if revision in KNOWN_REVISIONS:
+            level = KNOWN_REVISIONS.index(revision)
             validate_baseline(
-                connection,
-                runtime_boundaries=revision != BASELINE_REVISION,
-                fact_sheet_state=revision == FACT_SHEET_REVISION,
+                connection, runtime_boundaries=level >= 1, fact_sheet_state=level >= 2, review_indexes=level >= 3
             )
         return {"state": "current" if revision == head else "outdated", "revision": revision, "head": head}
     if (

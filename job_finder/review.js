@@ -1,7 +1,9 @@
+// @ts-check
   const statusLabels = JobFinder.statusLabels;
   // Filled from the server's source names in load().
   const sourceLabels = {original: "Originalanzeige"};
   const reviewStatuses = new Set(["review", "interesting", "inquiry", "waiting", "ignored"]);
+  /** @type {ReviewCard[]} */
   let jobs = [];
   let visibleJobs = [];
   let currentIndex = 0;
@@ -207,6 +209,7 @@
       try {
         const response = await fetch("/api/recommendations?archived=1");
         if (!response.ok) throw new Error("Nicht mehr verfügbare Stellen konnten nicht geladen werden");
+        /** @type {RecommendationsResponse} */
         const result = await response.json();
         const known = new Set(jobs.map(job => job.id));
         jobs = [...jobs, ...result.recommendations.filter(job => !known.has(job.id))].sort(byRank);
@@ -407,6 +410,7 @@
       const [response, labels] = await Promise.all([fetch("/api/recommendations"), JobFinder.loadSourceLabels()]);
       Object.assign(sourceLabels, labels);
       if (!response.ok) throw new Error("Empfehlungen konnten nicht geladen werden");
+      /** @type {RecommendationsResponse} */
       const result = await response.json();
       routeOrigin = result.route_origin || "";
       jobs = result.recommendations.sort(byRank);
@@ -470,6 +474,7 @@
     try {
       const response = await fetch("/api/applications");
       if (!response.ok) throw new Error("Bewerbungen konnten nicht geladen werden");
+      /** @type {ApplicationsResponse} */
       const result = await response.json();
       if (!dialog.open || linkingJobId !== job.id) return;
       const applications = [...result.applications, ...result.completed_applications]

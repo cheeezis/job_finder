@@ -70,6 +70,11 @@ jobs:
           node-version: "24"
           package-manager-cache: false
       - run: node --test tests/frontend.test.cjs
+      # Typprüfung der Browser-Skripte gegen die Typen aus dem OpenAPI-Schema;
+      # scheitert auch, wenn api-types.d.ts nicht mehr zum Server passt.
+      - run: npm ci --no-audit --no-fund
+      - run: npm run check:types
+      - run: npm run types:api && git diff --exit-code job_finder/api-types.d.ts
 
   # Klickt die Kernabläufe der Review in Chromium durch, auf frisch befüllten
   # Demo-Daten: Steckbrief, Entscheidung mit Notiz, Warteliste, Rückgängig,

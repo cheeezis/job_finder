@@ -1,0 +1,8 @@
+{
+  "extends": "./base.json",
+  "files": [
+    "../job_finder/types.d.ts",
+    "../job_finder/app.js",
+    "../job_finder/landing.js"
+  ]
+}

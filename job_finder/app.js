@@ -1,5 +1,7 @@
+// @ts-check
 /* Shared browser helpers. Job data is rendered as text, never as HTML. */
 const JobFinder = (() => {
+  /** Page elements by id; their type follows the page's markup. @param {string} id @returns {any} */
   const element = id => document.getElementById(id);
   const statusLabels = {
     new: "Neu", review: "Prüfen", interesting: "Interessant", inquiry: "Rückfrage offen",
@@ -8,13 +10,15 @@ const JobFinder = (() => {
     offer: "Angebot", withdrawn: "Selbst abgesagt", closed: "Abgeschlossen"
   };
   // Source names come from the server's registry; loadSourceLabels fills them once per page.
+  /** @type {Record<string, string>} */
   const sourceLabels = {};
+  /** @type {Promise<Record<string, string>> | null} */
   let sourceLabelsLoaded = null;
 
   function loadSourceLabels() {
     sourceLabelsLoaded ||= fetch("/api/sources")
-      .then(response => response.ok ? response.json() : {})
-      .then(result => Object.assign(sourceLabels, result.labels || {}))
+      .then(response => response.ok ? response.json() : {labels: {}})
+      .then((/** @type {SourcesResponse} */ result) => Object.assign(sourceLabels, result.labels))
       .catch(() => sourceLabels);
     return sourceLabelsLoaded;
   }

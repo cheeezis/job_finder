@@ -1,20 +1,22 @@
+// @ts-check
   const form = document.getElementById("manual-import-form");
-  const button = document.getElementById("manual-import-button");
-  const status = document.getElementById("import-status");
+  const button = /** @type {HTMLButtonElement} */ (document.getElementById("manual-import-button"));
+  // Not "status": that name is already window.status.
+  const importStatus = document.getElementById("import-status");
   form.addEventListener("submit", async event => {
     event.preventDefault();
     button.disabled = true;
-    status.className = "";
-    status.textContent = "Anzeige wird eingelesen und vorgefiltert …";
+    importStatus.className = "";
+    importStatus.textContent = "Anzeige wird eingelesen und vorgefiltert …";
     try {
       const result = await JobFinder.postJson(
-        "/api/manual-import", {url: document.getElementById("manual-url").value},
+        "/api/manual-import", {url: /** @type {HTMLInputElement} */ (document.getElementById("manual-url")).value},
         "Die Stelle konnte nicht importiert werden"
       );
       window.location.href = `/review?job=${encodeURIComponent(result.job_id)}`;
     } catch (error) {
-      status.className = "error";
-      status.textContent = error.message;
+      importStatus.className = "error";
+      importStatus.textContent = error.message;
       button.disabled = false;
     }
   });
@@ -46,7 +48,7 @@
     try {
       const response = await fetch("/api/runs");
       if (!response.ok) throw new Error();
-      const {runs} = await response.json();
+      const {runs} = /** @type {RunsResponse} */ (await response.json());
       list.replaceChildren(...runs.map(run => {
         const item = document.createElement("li");
         const label = document.createElement("strong");

@@ -2,27 +2,24 @@
 
 The browser code takes its types from that schema. The endpoints answer with
 the fields each item actually has (response_model_exclude_unset), so optional
-fields are missing rather than null, as before these models. Extra fields are
-kept: stored review cards can carry fields from older runs.
+fields are missing rather than null, as before these models. Fields a model
+does not name are left out, so a new field of a card or application needs its
+place here, and the browser code gets its type with it.
 """
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
 Number = int | float
 
 
-class Shape(BaseModel):
-    model_config = ConfigDict(extra="allow")
-
-
-class SourceLink(Shape):
+class SourceLink(BaseModel):
     source: str
     url: str
 
 
-class CompanyApplication(Shape):
+class CompanyApplication(BaseModel):
     """An application at the card's company, for the review's hint."""
 
     title: str
@@ -30,7 +27,7 @@ class CompanyApplication(Shape):
     open: bool
 
 
-class FactSheetInfo(Shape):
+class FactSheetInfo(BaseModel):
     """The agent's fact sheet for a card, or why it stopped."""
 
     model: str
@@ -43,7 +40,7 @@ class FactSheetInfo(Shape):
     outdated: list[str] = []
 
 
-class ReviewCard(Shape):
+class ReviewCard(BaseModel):
     """One card of the review: a job with its listings and the user's decision."""
 
     id: str
@@ -84,7 +81,7 @@ class RecommendationsResponse(BaseModel):
     route_origin: str
 
 
-class HistoryEvent(Shape):
+class HistoryEvent(BaseModel):
     status: str
     occurred_on: str | None = None
     scheduled_for: str | None = None
@@ -92,19 +89,19 @@ class HistoryEvent(Shape):
     event_index: int | None = None
 
 
-class Document(Shape):
+class Document(BaseModel):
     id: str | None = None
     kind: str | None = None
     name: str | None = None
 
 
-class LinkedListing(Shape):
+class LinkedListing(BaseModel):
     title: str
     company: str
     review_note: str
 
 
-class Application(Shape):
+class Application(BaseModel):
     """One application with its timeline, documents and derived figures."""
 
     id: str

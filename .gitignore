@@ -51,3 +51,7 @@ evals/results/*.json
 *.tfplan
 
 # Terraform-Quellcode (.tf) und .terraform.lock.hcl bleiben versioniert.
+
+# Werkzeuge der Typprüfung (npm ci) und das Zwischenprodukt von npm run types:api
+node_modules/
+openapi.json

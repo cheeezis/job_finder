@@ -4,6 +4,8 @@ import io
 import json
 import os
 import tempfile
+import threading
+import time
 import unittest
 from contextlib import nullcontext, redirect_stderr, redirect_stdout
 from pathlib import Path
@@ -420,6 +422,45 @@ class RunFinderTests(unittest.TestCase):
                 {"name": "working", "status": "success", "jobs": 1},
             ],
         )
+
+    def test_sources_run_side_by_side_and_keep_their_order(self):
+        # Both sources must wait at the barrier together; run one after the other, it times out.
+        barrier = threading.Barrier(2, timeout=5)
+
+        def meeting(name):
+            def fetch_jobs():
+                barrier.wait()
+                return [make_job(f"{name}:1")]
+
+            return SimpleNamespace(SOURCE_NAME=name, fetch_jobs=fetch_jobs)
+
+        with redirect_stdout(io.StringIO()):
+            _jobs, reports = collect_jobs([meeting("first"), meeting("second")])
+
+        self.assertEqual(
+            reports,
+            [{"name": "first", "status": "success", "jobs": 1}, {"name": "second", "status": "success", "jobs": 1}],
+        )
+
+    def test_at_most_four_sources_run_at_once(self):
+        lock, active, peak = threading.Lock(), [0], [0]
+
+        def fetch_jobs():
+            with lock:
+                active[0] += 1
+                peak[0] = max(peak[0], active[0])
+            time.sleep(0.1)
+            with lock:
+                active[0] -= 1
+            return []
+
+        sources = [SimpleNamespace(SOURCE_NAME=f"source{index}", fetch_jobs=fetch_jobs) for index in range(7)]
+        with redirect_stdout(io.StringIO()):
+            collect_jobs(sources)
+
+        self.assertEqual(run_finder.MAX_PARALLEL_SOURCES, 4)
+        self.assertLessEqual(peak[0], 4)
+        self.assertGreater(peak[0], 1)
 
     def test_every_source_has_a_display_name(self):
         for source in run_finder.SOURCES:

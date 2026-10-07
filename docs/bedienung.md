@@ -62,7 +62,8 @@ HTTPX-Client mit festen Zeitlimits (`job_finder/http.py`). Bricht ein Abruf kurz
 ab (Zeitüberschreitung, Verbindungsfehler, HTTP 5xx), folgen höchstens zwei neue
 Versuche nach 2 und 4 Sekunden. HTTP 429 wird nur wiederholt, wenn der Server in
 `Retry-After` eine Wartezeit bis 60 Sekunden nennt; HTTP 403 und andere
-Client-Fehler nie.
+Client-Fehler nie. Bis zu vier Quellen laufen gleichzeitig, jede mit ihren
+eigenen Pausen; an denselben Host geht trotzdem immer nur ein Abruf auf einmal.
 
 StepStone ruft nur Adressen auf, die die robots.txt erlaubt: Suchseiten ohne
 Parameter, also nur die erste Ergebnisseite je Suchbegriff und Ort, ohne Radius.

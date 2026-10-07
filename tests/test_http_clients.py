@@ -2,6 +2,7 @@
 
 import json
 import threading
+import time
 import unittest
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -36,6 +37,7 @@ def local_server(routes):
                     "path": self.path,
                     "headers": dict(self.headers),
                     "body": self.rfile.read(length),
+                    "started": time.monotonic(),
                 }
             )
             route = routes[self.path.split("?")[0]]
@@ -48,6 +50,8 @@ def local_server(routes):
                 self.send_header(key, value)
             self.end_headers()
             self.wfile.write(body)
+            self.wfile.flush()
+            requests[-1]["finished"] = time.monotonic()
 
         def log_message(self, *args):
             """Keep test output free of access logs."""
@@ -139,6 +143,22 @@ class HttpHelperTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, 404)
         self.assertEqual(caught.exception.url, f"{base}/missing")
         self.assertEqual(len(requests), 1)
+
+
+class HostSlotTests(unittest.TestCase):
+    def test_one_request_per_host_at_a_time(self):
+        routes = {"/slow": (200, {}, b"ok", 0.2)}
+        with local_server(routes) as (base, requests):
+            threads = [threading.Thread(target=fetch_text, args=(f"{base}/slow",)) for _ in range(3)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+
+        spans = sorted((request["started"], request["finished"]) for request in requests)
+        self.assertEqual(len(spans), 3)
+        for (_start, end), (next_start, _end) in zip(spans, spans[1:], strict=False):
+            self.assertGreaterEqual(next_start, end)
 
 
 @patch("job_finder.http.time.sleep")

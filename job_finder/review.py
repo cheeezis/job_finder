@@ -9,10 +9,12 @@ import errno
 import os
 import socket
 import threading
+import time
 import webbrowser
 
 import uvicorn
 
+from job_finder.persistence.database import transaction
 from job_finder.review_app import create_app
 from job_finder.telemetry import configure_tracing
 
@@ -73,12 +75,27 @@ def main():
     print("Dieses Fenster schliessen, um den Job Finder zu beenden.")
     app = create_app(deployed_host=os.environ.get(DEPLOYED_HOST_ENV, ""))
     tracing = start_tracing()
+    # Signing in to the database first takes seconds after a cold start; do it while uvicorn starts.
+    threading.Thread(target=warm_up_database, daemon=True).start()
     try:
         uvicorn.Server(uvicorn.Config(app, log_level="warning", access_log=False)).run(sockets=[sock])
     finally:
         if tracing is not None:
             # Scaling to zero ends the process: send the remaining spans first.
             tracing.shutdown()
+
+
+def warm_up_database():
+    """Open one database connection right away, so the first request finds the sign-in done."""
+    started = time.monotonic()
+    try:
+        with transaction() as connection:
+            connection.execute("SELECT 1")
+    except Exception as error:
+        # The requests report a real database problem themselves.
+        print(f"Datenbank-Vorbereitung fehlgeschlagen: {type(error).__name__}")
+        return
+    print(f"Datenbankanmeldung vorbereitet in {time.monotonic() - started:.1f} s")
 
 
 def start_tracing():

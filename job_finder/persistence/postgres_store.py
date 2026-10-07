@@ -115,19 +115,19 @@ def read_review_memory(connection, scope, job_ids, urls, statuses, history_statu
     a status from ``statuses`` or such a status in their history, and with
     ``archived`` the listings the availability check set to ignored.
     """
+    # One indexed lookup per kind of match (GIN indexes of revision 0004 for the
+    # JSONB arrays); a single OR with a subquery would read the whole table.
     rows = connection.execute(
         f"SELECT job_id,{','.join(STATE_FIELDS)},present,extra FROM job_state "
-        """WHERE scope=%(scope)s AND (
-            job_id = ANY(%(ids)s::text[])
-            OR extra->'source_urls' ?| %(urls)s::text[]
-            OR extra->'linked_job_ids' ?| %(ids)s::text[]
-            OR workflow_status = ANY(%(statuses)s::text[])
-            OR job_id IN (
-                SELECT job_id FROM workflow_history
-                WHERE scope=%(scope)s AND status = ANY(%(history)s::text[])
-            )
-            OR (%(archived)s AND workflow_status = 'ignored' AND extra ? 'availability_checked_at')
-        )""",
+        """WHERE scope=%(scope)s AND job_id IN (
+            SELECT job_id FROM job_state WHERE scope=%(scope)s AND job_id = ANY(%(ids)s::text[])
+            UNION SELECT job_id FROM job_state WHERE scope=%(scope)s AND extra->'source_urls' ?| %(urls)s::text[]
+            UNION SELECT job_id FROM job_state WHERE scope=%(scope)s AND extra->'linked_job_ids' ?| %(ids)s::text[]
+            UNION SELECT job_id FROM job_state WHERE scope=%(scope)s AND workflow_status = ANY(%(statuses)s::text[])
+            UNION SELECT job_id FROM workflow_history WHERE scope=%(scope)s AND status = ANY(%(history)s::text[])
+            UNION SELECT job_id FROM job_state WHERE %(archived)s AND scope=%(scope)s
+                AND workflow_status = 'ignored' AND extra ? 'availability_checked_at'
+        ) ORDER BY job_id""",
         {
             "scope": scope,
             "ids": list(job_ids),

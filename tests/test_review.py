@@ -2,12 +2,13 @@
 
 import base64
 import http.client
+import io
 import json
 import socket
 import tempfile
 import threading
 import unittest
-from contextlib import contextmanager
+from contextlib import contextmanager, redirect_stdout
 from copy import deepcopy
 from datetime import date
 from html.parser import HTMLParser
@@ -17,6 +18,7 @@ from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+import psycopg
 import uvicorn
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
@@ -115,6 +117,19 @@ class ReviewTests(unittest.TestCase):
             self.assertTrue(address_is_in_use(second.exception))
         finally:
             sock.close()
+
+    def test_the_database_sign_in_is_prepared_at_start_and_a_failure_only_logs(self):
+        from job_finder import review
+
+        output = io.StringIO()
+        with redirect_stdout(output):
+            review.warm_up_database()
+            with mock.patch.object(review, "transaction", side_effect=psycopg.OperationalError("secret dsn")):
+                review.warm_up_database()
+
+        self.assertIn("Datenbankanmeldung vorbereitet", output.getvalue())
+        self.assertIn("Datenbank-Vorbereitung fehlgeschlagen: OperationalError", output.getvalue())
+        self.assertNotIn("secret", output.getvalue())
 
     def test_the_api_page_loads_only_two_pinned_swagger_files(self):
         with self.server_context() as base_url:

@@ -216,6 +216,10 @@ würde. Neue Revisionen brauchen einen eigenen Kompatibilitäts- und Rückkehrpl
 vorherige Image schreibt weiter wie bisher, ein Image-Rollback braucht also keinen
 Downgrade. Die Migration läuft vor dem Merge des passenden Releases, weil das neue
 Image die Spalten liest.
+`0004_review_lookup_indexes` legt zwei GIN-Indizes auf `job_state.extra` an (Listen-URLs und
+verknüpfte IDs), über die die Review gemerkte Stellen einer Anzeige findet; ohne sie liest
+PostgreSQL für jede Stellenliste die ganze Tabelle. Die Strukturprüfung erwartet genau diese
+beiden Definitionen. Auch diese Migration läuft vor dem Merge des passenden Releases.
 Migrationen laufen bewusst getrennt vom Deploy (siehe [Deploy und Rollback](#deploy-und-rollback)).
 
 Nach einer freigegebenen Schemaänderung läuft der Befehl einmal gegen Azure, mit

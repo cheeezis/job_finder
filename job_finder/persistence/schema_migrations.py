@@ -19,6 +19,7 @@ from sqlalchemy.pool import NullPool
 from job_finder.persistence.database import admin_database_url
 from job_finder.persistence.migrations.baseline import legacy_metadata, metadata
 from job_finder.persistence.migrations.fact_sheet_state import REVISION as FACT_SHEET_REVISION, added_columns
+from job_finder.persistence.migrations.job_listings import REVISION as LISTINGS_REVISION, define as define_listings
 from job_finder.persistence.migrations.review_indexes import (
     INDEXES as REVIEW_INDEXES,
     REVISION as INDEX_REVISION,
@@ -28,7 +29,7 @@ from job_finder.persistence.migrations.runtime_boundaries import REVISION as BOU
 
 BASELINE_REVISION = "0001_baseline"
 # Revisions whose complete structure the check knows, oldest first; each one adds to the previous.
-KNOWN_REVISIONS = (BASELINE_REVISION, BOUNDARIES_REVISION, FACT_SHEET_REVISION, INDEX_REVISION)
+KNOWN_REVISIONS = (BASELINE_REVISION, BOUNDARIES_REVISION, FACT_SHEET_REVISION, INDEX_REVISION, LISTINGS_REVISION)
 
 
 def migration_config(connection=None):
@@ -80,11 +81,14 @@ def _application_object(obj, name, kind, reflected, compared):
     return (kind != "table" or name != "alembic_version") and (kind != "index" or name not in REVIEW_INDEXES)
 
 
-def validate_baseline(connection, *, runtime_boundaries=False, fact_sheet_state=False, review_indexes=False):
+def validate_baseline(
+    connection, *, runtime_boundaries=False, fact_sheet_state=False, review_indexes=False, job_listings=False
+):
     """Check types, nullability, defaults, keys, indexes and checks without altering rows.
 
     fact_sheet_state expects the columns revision 0003 added as well,
-    review_indexes the two GIN indexes of revision 0004 with their exact definition.
+    review_indexes the two GIN indexes of revision 0004 with their exact definition,
+    job_listings the tables and job_state columns of revision 0005.
     """
     inspector = sa.inspect(connection)
     expected = sa.MetaData()
@@ -93,6 +97,9 @@ def validate_baseline(connection, *, runtime_boundaries=False, fact_sheet_state=
     if fact_sheet_state:
         for column in added_columns():
             expected.tables["agent_fact_sheets"].append_column(column)
+    if job_listings:
+        for column in define_listings(expected):
+            expected.tables["job_state"].append_column(column)
     for table in legacy_metadata.sorted_tables:
         if inspector.has_table(table.name, schema="public"):
             table.to_metadata(expected)
@@ -210,7 +217,11 @@ def _status(connection):
         if revision in KNOWN_REVISIONS:
             level = KNOWN_REVISIONS.index(revision)
             validate_baseline(
-                connection, runtime_boundaries=level >= 1, fact_sheet_state=level >= 2, review_indexes=level >= 3
+                connection,
+                runtime_boundaries=level >= 1,
+                fact_sheet_state=level >= 2,
+                review_indexes=level >= 3,
+                job_listings=level >= 4,
             )
         return {"state": "current" if revision == head else "outdated", "revision": revision, "head": head}
     if (

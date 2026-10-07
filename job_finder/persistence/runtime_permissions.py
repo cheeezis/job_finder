@@ -9,7 +9,7 @@ from job_finder.persistence.schema_migrations import _sql_shape
 
 WORKER_GROUP = "jobfinder_worker_access"
 RUNTIME_ROLES = {"worker": "jobfinder_worker", "review": "jobfinder_review", "hybrid": "jobfinder_hybrid"}
-STATE_TABLES = ("job_state", "workflow_history", "application_documents")
+STATE_TABLES = ("job_state", "workflow_history", "application_documents", "job_listings", "job_links")
 REVIEW_WRITE_TABLES = (*STATE_TABLES, "datasets", "jobs", "recommendations", "manual_sources")
 REVIEW_READ_TABLES = ("agent_usage", "agent_fact_sheets")
 WORKER_TABLES = (*REVIEW_WRITE_TABLES, *REVIEW_READ_TABLES, "notifications", "source_cache")

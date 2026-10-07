@@ -6,6 +6,7 @@ from datetime import date, datetime
 from psycopg import sql
 from psycopg.types.json import Jsonb
 
+from job_finder.persistence import job_listings
 from job_finder.persistence.database import lock, snapshot, transaction
 
 STATE_FIELDS = (
@@ -115,14 +116,14 @@ def read_review_memory(connection, scope, job_ids, urls, statuses, history_statu
     a status from ``statuses`` or such a status in their history, and with
     ``archived`` the listings the availability check set to ignored.
     """
-    # One indexed lookup per kind of match (GIN indexes of revision 0004 for the
-    # JSONB arrays); a single OR with a subquery would read the whole table.
+    # One indexed lookup per kind of match; a single OR with a subquery would
+    # read the whole table. Listing URLs and links come from their own tables.
     rows = connection.execute(
         f"SELECT job_id,{','.join(STATE_FIELDS)},present,extra FROM job_state "
         """WHERE scope=%(scope)s AND job_id IN (
             SELECT job_id FROM job_state WHERE scope=%(scope)s AND job_id = ANY(%(ids)s::text[])
-            UNION SELECT job_id FROM job_state WHERE scope=%(scope)s AND extra->'source_urls' ?| %(urls)s::text[]
-            UNION SELECT job_id FROM job_state WHERE scope=%(scope)s AND extra->'linked_job_ids' ?| %(ids)s::text[]
+            UNION SELECT job_id FROM job_listings WHERE scope=%(scope)s AND url = ANY(%(urls)s::text[])
+            UNION SELECT job_id FROM job_links WHERE scope=%(scope)s AND linked_job_id = ANY(%(ids)s::text[])
             UNION SELECT job_id FROM job_state WHERE scope=%(scope)s AND workflow_status = ANY(%(statuses)s::text[])
             UNION SELECT job_id FROM workflow_history WHERE scope=%(scope)s AND status = ANY(%(history)s::text[])
             UNION SELECT job_id FROM job_state WHERE %(archived)s AND scope=%(scope)s
@@ -166,6 +167,9 @@ def write_memory(connection, scope, before, after):
         if changed:
             connection.execute(f"DELETE FROM {table} WHERE scope=%s AND job_id=ANY(%s)", (scope, list(changed)))
         upsert_records(connection, table, ("scope", "job_id", "position"), fields, children[table])
+    if changed:
+        # Listings, links and sighting columns follow the JSONB fields just written (F17, stage 1).
+        job_listings.derive(connection, scope, list(changed))
 
 
 def read_jobs(name, job_ids):

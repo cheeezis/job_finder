@@ -1,8 +1,6 @@
   const statusLabels = JobFinder.statusLabels;
-  const sourceLabels = {
-    ...JobFinder.sourceLabels, original: "Originalanzeige",
-    german_tech_jobs: "GermanTechJobs", manual: "Manuell hinzugefügt"
-  };
+  // Filled from the server's source names in load().
+  const sourceLabels = {original: "Originalanzeige"};
   const reviewStatuses = new Set(["review", "interesting", "inquiry", "waiting", "ignored"]);
   let jobs = [];
   let visibleJobs = [];
@@ -406,7 +404,8 @@
 
   async function load() {
     try {
-      const response = await fetch("/api/recommendations");
+      const [response, labels] = await Promise.all([fetch("/api/recommendations"), JobFinder.loadSourceLabels()]);
+      Object.assign(sourceLabels, labels);
       if (!response.ok) throw new Error("Empfehlungen konnten nicht geladen werden");
       const result = await response.json();
       routeOrigin = result.route_origin || "";

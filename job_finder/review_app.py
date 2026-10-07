@@ -26,6 +26,7 @@ from job_finder.models import WorkflowStatus
 from job_finder.paths import APPLICATION_DOCUMENTS_DIR, JOBS_FILE, MANUAL_CACHE_FILE, MEMORY_FILE, RECOMMENDATIONS_JSON
 from job_finder.persistence.application_documents import MAX_DOCUMENT_BYTES, find_document, read_document
 from job_finder.persistence.runs import latest_runs
+from job_finder.sources.registry import SOURCE_LABELS
 from job_finder.telemetry import annotate, span, step
 from job_finder.workflow.applications import load_application_overview
 from job_finder.workflow.linked_listings import link_listing_to_application
@@ -218,6 +219,11 @@ def create_app(paths=ReviewPaths(), *, deployed_host="", manual_importer=import_
                 "route_origin": route_origin,
             }
         )
+
+    @app.get("/api/sources")
+    def sources():
+        """Return the display name of every source, keyed by its internal name."""
+        return JSONResponse({"labels": SOURCE_LABELS})
 
     @app.get("/api/runs")
     def runs():

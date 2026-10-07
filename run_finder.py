@@ -4,6 +4,7 @@ import argparse
 import os
 import time
 from collections import Counter
+from dataclasses import dataclass, field
 
 from psycopg import errors
 
@@ -33,9 +34,10 @@ from job_finder.sources import (
     stepstone,
     studysmarter,
 )
-from job_finder.sources.common import canonical_detail_url as canonical_url, fetch_diagnostics, reset_fetch_diagnostics
+from job_finder.sources.common import canonical_detail_url as canonical_url, collecting_diagnostics
 from job_finder.sources.company_careers import BYTEWERK, CSS, NETHINKS, PROEMION, RHOENENERGIE
 from job_finder.sources.compose_it import COMPOSE_IT
+from job_finder.sources.registry import source_label
 from job_finder.telemetry import annotate, span, start_tracing, step
 from job_finder.workflow.availability import (
     apply_closed_listing_checks,
@@ -64,6 +66,21 @@ SOURCES = [
 # in the settings chooses among them, without it all are searched.
 COMPANY_SOURCES = [COMPOSE_IT, BYTEWERK, RHOENENERGIE, jumo, edag, CSS, PROEMION, NETHINKS]
 SOURCES = [*SOURCES, *COMPANY_SOURCES]
+
+
+@dataclass
+class SourceResult:
+    """One source's jobs with its status, coverage details and duration."""
+
+    name: str
+    jobs: list = field(default_factory=list)
+    status: str = "success"
+    details: dict = field(default_factory=dict)
+    duration_seconds: float = 0.0
+
+    def report(self):
+        """Return the source report that the summary, Discord and the logs read."""
+        return {"name": self.name, "status": self.status, "jobs": len(self.jobs), **self.details}
 
 
 class IncompleteSourceSnapshotError(RuntimeError):
@@ -364,62 +381,71 @@ def print_review_diagnostics(results, memory_stats):
 def collect_jobs(sources, run_id=None):
     """Return deduplicated jobs and coverage reports from selected sources.
 
-    Each adapter provides SOURCE_NAME and fetch_jobs() and records its
-    coverage through the fetch diagnostics (record_total_segments,
-    record_partial_failure). Catch source errors so other sources can
-    complete. Reports expose name, status, job count and error details.
+    Each source runs on its own (fetch_source); a failing source cannot stop
+    the others. Reports expose name, status, job count and error details.
     """
     jobs = []
     seen_urls = set()
-    source_reports = []
-
-    for source in sources:
-        label = source_label(source.SOURCE_NAME)
-        print_progress(label, 0, 1, "wird geladen")
-        reset_fetch_diagnostics()
-        started = time.monotonic()
-        with step("source", **{"jobfinder.source": source.SOURCE_NAME}) as current:
-            try:
-                source_jobs, status, details = fetch_source_jobs(source)
-            except Exception as error:
-                source_jobs, status, details = [], "failed", {"error": source_error_label(error)}
-                level, progress = "error", f"fehlgeschlagen ({details['error']})"
-            else:
-                level = "warning" if status in {"partial", "failed"} else "info"
-                progress = f"{len(source_jobs)} Stellen"
-                if status == "partial":
-                    failed = details.get("failed_segments", "?")
-                    progress += f" · Teilergebnis ({failed} Segment(e) fehlgeschlagen)"
-            annotate(current, **{"jobfinder.status": status, "jobfinder.jobs": len(source_jobs)})
-        source_reports.append({"name": source.SOURCE_NAME, "status": status, "jobs": len(source_jobs), **details})
-        print_progress(label, 1, 1, progress)
-        log_event(
-            "source_completed",
-            run_id=run_id,
-            level=level,
-            source=source.SOURCE_NAME,
-            status=status,
-            jobs_found=len(source_jobs),
-            duration_seconds=round(time.monotonic() - started, 1),
-            **details,
-        )
-        for job in source_jobs:
+    results = [fetch_source(source, run_id) for source in sources]
+    for result in results:
+        for job in result.jobs:
             if (dedupe_key := canonical_url(job.primary_url)) not in seen_urls:
                 seen_urls.add(dedupe_key)
                 jobs.append(job)
 
-    return deduplicate_jobs(jobs), source_reports
+    return deduplicate_jobs(jobs), [result.report() for result in results]
+
+
+def fetch_source(source, run_id=None):
+    """Fetch one source and return its SourceResult; log and trace it, never raise.
+
+    The adapter provides SOURCE_NAME and fetch_jobs() and records its coverage
+    in the diagnostics collected for this call (record_total_segments,
+    record_partial_failure).
+    """
+    name = source.SOURCE_NAME
+    label = source_label(name)
+    print_progress(label, 0, 1, "wird geladen")
+    started = time.monotonic()
+    with step("source", **{"jobfinder.source": name}) as current:
+        try:
+            result = fetch_source_jobs(source)
+        except Exception as error:
+            result = SourceResult(name, status="failed", details={"error": source_error_label(error)})
+            level, progress = "error", f"fehlgeschlagen ({result.details['error']})"
+        else:
+            level = "warning" if result.status in {"partial", "failed"} else "info"
+            progress = f"{len(result.jobs)} Stellen"
+            if result.status == "partial":
+                failed = result.details.get("failed_segments", "?")
+                progress += f" · Teilergebnis ({failed} Segment(e) fehlgeschlagen)"
+        annotate(current, **{"jobfinder.status": result.status, "jobfinder.jobs": len(result.jobs)})
+    result.duration_seconds = round(time.monotonic() - started, 1)
+    print_progress(label, 1, 1, progress)
+    log_event(
+        "source_completed",
+        run_id=run_id,
+        level=level,
+        source=name,
+        status=result.status,
+        jobs_found=len(result.jobs),
+        duration_seconds=result.duration_seconds,
+        **result.details,
+    )
+    return result
 
 
 def fetch_source_jobs(source):
-    """Fetch one source and derive its status and details from the recorded diagnostics."""
-    source_jobs = source.fetch_jobs()
-    diagnostics = fetch_diagnostics()
-    failed, total = diagnostics["failed_segments"], diagnostics.get("total_segments")
+    """Fetch one source and derive its status and details from the diagnostics it recorded."""
+    with collecting_diagnostics() as diagnostics:
+        source_jobs = source.fetch_jobs()
+    failed, total = diagnostics.failed_segments, diagnostics.total_segments
     status = "partial" if failed else ("success" if source_jobs else "empty")
     if total is not None:
-        return source_jobs, status, {"failed_segments": failed, "total_segments": total}
-    return source_jobs, status, ({"failed_segments": failed} if failed else {})
+        details = {"failed_segments": failed, "total_segments": total}
+    else:
+        details = {"failed_segments": failed} if failed else {}
+    return SourceResult(source.SOURCE_NAME, source_jobs, status, details)
 
 
 def enrich_candidate_jobs(jobs, candidate_ids, sources, run_id=None):
@@ -437,10 +463,9 @@ def enrich_candidate_jobs(jobs, candidate_ids, sources, run_id=None):
         enricher = getattr(source, "enrich_candidate_jobs", None)
         if enricher is not None:
             name = getattr(source, "SOURCE_NAME", "Details")
-            reset_fetch_diagnostics()
-            with timed_step(f"Details {source_label(name)}"):
+            with timed_step(f"Details {source_label(name)}"), collecting_diagnostics() as diagnostics:
                 enriched = enricher(jobs, candidate_ids)
-            failed = fetch_diagnostics()["failed_candidates"]
+            failed = diagnostics.failed_candidates
             reports.append({"name": name, "enriched": enriched, "failed": failed})
             log_event(
                 "enrichment_completed",
@@ -511,31 +536,6 @@ def format_duration(duration_seconds):
     if minutes:
         return f"{minutes} Min. {seconds:02d} Sek."
     return f"{seconds} Sek."
-
-
-def source_label(name):
-    """Make source adapter names pleasant to read in Discord."""
-    return {
-        "arbeitsagentur": "Arbeitsagentur",
-        "stepstone": "StepStone",
-        "get_in_it": "get-in-IT",
-        "arbeitnow": "Arbeitnow",
-        "himalayas": "Himalayas",
-        "jobicy": "Jobicy",
-        "german_tech_jobs": "GermanTechJobs",
-        "remotely": "Remotely",
-        "startup_jobs": "Startup Jobs",
-        "studysmarter": "StudySmarter",
-        "manual": "Manuell hinzugefügt",
-        "compose_it": "Compose IT",
-        "bytewerk": "bytewerk",
-        "rhoenenergie": "RhönEnergie",
-        "jumo": "JUMO",
-        "edag": "EDAG",
-        "css": "CSS",
-        "proemion": "Proemion",
-        "nethinks": "NETHINKS",
-    }.get(name, name)
 
 
 if __name__ == "__main__":

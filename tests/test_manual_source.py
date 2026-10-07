@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 from job_finder.models import WorkMode
 from job_finder.sources import manual
-from job_finder.sources.common import fetch_diagnostics, load_detail_cache, reset_fetch_diagnostics, save_detail_cache
+from job_finder.sources.common import collecting_diagnostics, load_detail_cache, save_detail_cache
 
 
 def career_page(title):
@@ -243,11 +243,11 @@ class ManualSourceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             cache_path = Path(directory) / "manual.json"
             save_detail_cache(cache_path, cache)
-            reset_fetch_diagnostics()
             output = io.StringIO()
             with (
                 patch.object(manual, "fetch_text_with_final_url", side_effect=fetch) as fetched,
                 redirect_stdout(output),
+                collecting_diagnostics() as diagnostics,
             ):
                 jobs = manual.fetch_jobs(cache_path, now=now)
             saved = load_detail_cache(cache_path)
@@ -259,7 +259,7 @@ class ManualSourceTests(unittest.TestCase):
             [call.args[0].rsplit("/", 1)[1] for call in fetched.call_args_list], ["stale-ok", "stale-error", "too-old"]
         )
         self.assertEqual([url.rsplit("/", 1)[1] for url in saved], ["fresh", "moved", "stale-error", "too-old"])
-        self.assertEqual(fetch_diagnostics()["failed_segments"], 2)
+        self.assertEqual(diagnostics.failed_segments, 2)
         self.assertIn("WARNUNG Manuell: 2 Detailseite(n) nicht erreichbar", output.getvalue())
 
     def test_local_network_url_is_rejected(self):

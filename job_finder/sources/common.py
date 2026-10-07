@@ -2,7 +2,9 @@
 
 import hashlib
 import re
-from dataclasses import fields, replace
+from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass, fields, replace
 from datetime import UTC, date, datetime, timedelta
 from urllib.parse import parse_qsl, urlencode, urlsplit
 
@@ -31,28 +33,51 @@ GERMANY_REMOTE_REGION_LABELS = {
 # Detail caches keep source data only, never memory or workflow state.
 MEMORY_FIELDS = {"first_seen_at", "last_seen_at", "workflow_status", "is_new", "cache_stale"}
 DETAIL_CACHE_FIELDS = tuple(field.name for field in fields(Job) if field.name not in MEMORY_FIELDS)
-# total_segments stays None unless a source reports its search coverage.
-_FETCH_DIAGNOSTICS = {"failed_segments": 0, "failed_candidates": 0, "total_segments": None}
 
 
-def reset_fetch_diagnostics():
-    """Reset sequential per-source diagnostics before one adapter runs."""
-    _FETCH_DIAGNOSTICS.update(failed_segments=0, failed_candidates=0, total_segments=None)
+@dataclass
+class SourceDiagnostics:
+    """What one adapter run recorded about its coverage; total_segments only if the source reports it."""
+
+    failed_segments: int = 0
+    failed_candidates: int = 0
+    total_segments: int | None = None
+
+
+# Each adapter run gets its own diagnostics; a context variable keeps parallel runs apart.
+_DIAGNOSTICS: ContextVar[SourceDiagnostics | None] = ContextVar("source_diagnostics", default=None)
+
+
+@contextmanager
+def collecting_diagnostics():
+    """Collect the diagnostics that the adapter code inside this block records."""
+    diagnostics = SourceDiagnostics()
+    token = _DIAGNOSTICS.set(diagnostics)
+    try:
+        yield diagnostics
+    finally:
+        _DIAGNOSTICS.reset(token)
+
+
+def _current():
+    """Return the diagnostics being collected; outside a block they are discarded."""
+    return _DIAGNOSTICS.get() or SourceDiagnostics()
 
 
 def record_total_segments(count):
     """Record how many search segments the source covered, including failed ones."""
-    _FETCH_DIAGNOSTICS["total_segments"] = count
+    _current().total_segments = count
 
 
 def record_partial_failure(count=1):
     """Record internally handled failures that make a source result partial."""
-    _FETCH_DIAGNOSTICS["failed_segments"] += max(0, int(count))
+    _current().failed_segments += max(0, int(count))
 
 
 def ensure_partial_failure():
     """Mark the result partial without adding to failures already counted."""
-    _FETCH_DIAGNOSTICS["failed_segments"] = max(1, _FETCH_DIAGNOSTICS["failed_segments"])
+    diagnostics = _current()
+    diagnostics.failed_segments = max(1, diagnostics.failed_segments)
 
 
 def record_candidate_failure(count=1):
@@ -61,12 +86,7 @@ def record_candidate_failure(count=1):
     Unlike record_partial_failure, this leaves the source status unchanged:
     the search itself was complete, only the candidates lack detail text.
     """
-    _FETCH_DIAGNOSTICS["failed_candidates"] += max(0, int(count))
-
-
-def fetch_diagnostics():
-    """Return a copy of diagnostics for the just-completed adapter run; totals only if recorded."""
-    return {key: value for key, value in _FETCH_DIAGNOSTICS.items() if value is not None}
+    _current().failed_candidates += max(0, int(count))
 
 
 class ListingUnavailableError(ValueError):

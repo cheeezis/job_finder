@@ -352,7 +352,7 @@
 
   async function load() {
     try {
-      const response = await fetch("/api/applications");
+      const [response] = await Promise.all([fetch("/api/applications"), JobFinder.loadSourceLabels()]);
       if (!response.ok) throw new Error("Bewerbungen konnten nicht geladen werden");
       const result = await response.json();
       window.applicationStatuses = result.application_statuses;

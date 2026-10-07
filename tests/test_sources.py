@@ -10,10 +10,10 @@ from urllib.error import HTTPError
 
 from job_finder.matching.config import (
     COMMUTER_SEARCH_RADIUS_KM,
-    LOCAL_SEARCH_POSTAL_CODE,
-    LOCAL_SEARCH_RADIUS_KM,
-    STEPSTONE_SEARCH_LOCATIONS,
-    STEPSTONE_SEARCH_TERMS,
+    local_search_postal_code,
+    local_search_radius_km,
+    stepstone_search_locations,
+    stepstone_search_terms,
 )
 from job_finder.models import Job, JobSource, WorkMode
 from job_finder.sources import arbeitsagentur, get_in_it, stepstone
@@ -30,10 +30,10 @@ class CommuterSearchTests(unittest.TestCase):
 
     def test_get_in_it_uses_reduced_terms_for_commuter_cities(self):
         with (
-            patch.object(get_in_it, "SEARCH_TERMS", []),
-            patch.object(get_in_it, "SEARCH_LOCATIONS", []),
-            patch.object(get_in_it, "COMMUTER_SEARCH_TERMS", ["Junior Developer"]),
-            patch.object(get_in_it, "COMMUTER_SEARCH_LOCATIONS", ["Beispielstadt"]),
+            patch.object(get_in_it, "search_terms", return_value=[]),
+            patch.object(get_in_it, "search_locations", return_value=[]),
+            patch.object(get_in_it, "commuter_search_terms", return_value=["Junior Developer"]),
+            patch.object(get_in_it, "commuter_search_locations", return_value=["Beispielstadt"]),
         ):
             searches = list(get_in_it.build_api_searches())
 
@@ -43,20 +43,21 @@ class CommuterSearchTests(unittest.TestCase):
 
 class StepStoneSearchTests(unittest.TestCase):
     def test_search_plan_has_unique_roles_and_local_remote_scopes(self):
-        self.assertEqual(len(STEPSTONE_SEARCH_TERMS), len(set(STEPSTONE_SEARCH_TERMS)))
-        self.assertIn("Remote", STEPSTONE_SEARCH_LOCATIONS)
-        self.assertIn(LOCAL_SEARCH_POSTAL_CODE, STEPSTONE_SEARCH_LOCATIONS)
+        terms, locations = stepstone_search_terms(), stepstone_search_locations()
+        self.assertEqual(len(terms), len(set(terms)))
+        self.assertIn("Remote", locations)
+        self.assertIn(local_search_postal_code(), locations)
         for role in ("Data Analyst", "DevOps Engineer", "Software Test Engineer"):
-            self.assertIn(role, STEPSTONE_SEARCH_TERMS)
+            self.assertIn(role, terms)
 
     def test_local_search_uses_postcode_and_radius(self):
-        url = build_search_url("Python Developer", LOCAL_SEARCH_POSTAL_CODE, page=2)
+        url = build_search_url("Python Developer", local_search_postal_code(), page=2)
 
         self.assertEqual(
             url,
             "https://www.stepstone.de/jobs/Python-Developer/"
-            f"in-{LOCAL_SEARCH_POSTAL_CODE}?page=2"
-            f"&radius={LOCAL_SEARCH_RADIUS_KM}",
+            f"in-{local_search_postal_code()}?page=2"
+            f"&radius={local_search_radius_km()}",
         )
 
     def test_remote_search_does_not_add_local_radius(self):
@@ -77,8 +78,8 @@ class StepStonePaginationTests(unittest.TestCase):
         ]
 
         with (
-            patch.object(stepstone, "STEPSTONE_SEARCH_TERMS", ["Python"]),
-            patch.object(stepstone, "STEPSTONE_SEARCH_LOCATIONS", ["Remote"]),
+            patch.object(stepstone, "stepstone_search_terms", return_value=["Python"]),
+            patch.object(stepstone, "stepstone_search_locations", return_value=["Remote"]),
         ):
             links = stepstone.search_links(client)
 
@@ -92,8 +93,8 @@ class StepStonePaginationTests(unittest.TestCase):
         client.get.side_effect = [f'<a href="{url}">Stelle</a>', f'<a href="{url}">Stelle</a>']
 
         with (
-            patch.object(stepstone, "STEPSTONE_SEARCH_TERMS", ["Python"]),
-            patch.object(stepstone, "STEPSTONE_SEARCH_LOCATIONS", ["Remote"]),
+            patch.object(stepstone, "stepstone_search_terms", return_value=["Python"]),
+            patch.object(stepstone, "stepstone_search_locations", return_value=["Remote"]),
             patch("builtins.print") as print_output,
         ):
             links = stepstone.search_links(client)

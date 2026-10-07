@@ -517,11 +517,17 @@ Funktionsparameter oder gezielte Patches ein.
   automatische Backup vor lokalen Finder-Läufen enthalten die referenzierten
   Dokumente samt Prüfsummen.
 
-`user_settings.local.yaml` wird beim Import der Konfigurationsmodule gelesen.
-Ohne diese Datei wird die anonymisierte Beispielkonfiguration verwendet. Ist
-`JOBFINDER_USER_SETTINGS` gesetzt (in Azure aus dem Key Vault), hat deren
-YAML-Inhalt Vorrang; `SETTINGS_SOURCE` nennt die tatsächliche Quelle.
-Nach Änderungen laufende Prozesse neu starten. Persönliche Konfiguration,
+Pydantic-Modelle in `job_finder/matching/user_settings.py` prüfen die
+Einstellungen; `current_settings()` liest sie beim ersten Gebrauch, nicht beim
+Import. Ohne `user_settings.local.yaml` gilt die anonymisierte
+Beispielkonfiguration. Ist `JOBFINDER_USER_SETTINGS` gesetzt (in Azure aus dem
+Key Vault), hat deren YAML-Inhalt Vorrang; `current_settings().source` nennt die
+tatsächliche Quelle. Suche, Bewertung und Quellen lesen ihre Werte zur Laufzeit
+über die Funktionen in `job_finder/matching/config.py`. Tests setzen eigene
+Einstellungen mit `use_settings()` bzw. `tests/settings_helpers.py`
+(`with_settings(matching={...})`), ohne Umgebungsvariablen. Der Agent liest
+seinen Abschnitt aus `current_settings().mapping`. Nach Änderungen laufende
+Prozesse neu starten. Persönliche Konfiguration,
 Dokumente, Datenbanken und Zugangsdaten bleiben außerhalb von Git.
 
 `score_job` liefert ein Ergebnis-Dictionary, keine einzelne Prozentzahl.

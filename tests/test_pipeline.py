@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from job_finder.matching.scoring import LOCAL_PLACES
+from job_finder.matching.user_settings import current_settings
 from job_finder.models import Job, JobSource, WorkMode
 from job_finder.workflow.main import combine_listings, load_jobs, score_jobs
 from job_finder.workflow.memory import update_memory
@@ -18,7 +18,7 @@ class PipelineTests(unittest.TestCase):
             id="test:123",
             title="Junior Python Developer",
             company="Example GmbH",
-            locations=[LOCAL_PLACES[0]],
+            locations=[current_settings().matching.local_places[0]],
             sources=[JobSource(source="test", source_id="123", url="https://example.test/jobs/123")],
             description_raw="<p>Python, keine Berufserfahrung erforderlich.</p>",
             description_clean="Python, keine Berufserfahrung erforderlich.",

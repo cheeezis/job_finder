@@ -11,7 +11,7 @@ from itertools import product
 from urllib.parse import urlencode, urljoin
 
 from job_finder.http import fetch_json, fetch_text
-from job_finder.matching.config import COMMUTER_SEARCH_LOCATIONS, COMMUTER_SEARCH_TERMS, SEARCH_LOCATIONS, SEARCH_TERMS
+from job_finder.matching.config import commuter_search_locations, commuter_search_terms, search_locations, search_terms
 from job_finder.models import Job, JobSource, WorkMode
 from job_finder.paths import cache_file
 from job_finder.sources.common import (
@@ -125,7 +125,7 @@ def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE, now=None):
 def build_api_searches():
     """Map our shared search terms to get-in-IT's available category filters."""
     searches = {}
-    search_plans = [(SEARCH_TERMS, SEARCH_LOCATIONS), (COMMUTER_SEARCH_TERMS, COMMUTER_SEARCH_LOCATIONS)]
+    search_plans = [(search_terms(), search_locations()), (commuter_search_terms(), commuter_search_locations())]
     for terms, locations in search_plans:
         for term, location in product(terms, locations):
             for priority_id in priority_ids_for_term(term):

@@ -8,12 +8,12 @@ from urllib.parse import urlencode
 
 from job_finder.http import fetch_text
 from job_finder.matching.config import (
-    COMMUTER_SEARCH_LOCATIONS,
     COMMUTER_SEARCH_RADIUS_KM,
-    COMMUTER_SEARCH_TERMS,
-    LOCAL_SEARCH_LOCATION,
-    LOCAL_SEARCH_RADIUS_KM,
-    SEARCH_TERMS,
+    commuter_search_locations,
+    commuter_search_terms,
+    local_search_location,
+    local_search_radius_km,
+    search_terms,
 )
 from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource
@@ -42,11 +42,11 @@ def fetch_jobs(cache_path=CACHE_FILE, now=None):
 def collect_links():
     """Collect unique detail URLs from all configured Arbeitsagentur searches."""
     links = {}
-    searches = [(term, LOCAL_SEARCH_LOCATION, LOCAL_SEARCH_RADIUS_KM) for term in SEARCH_TERMS]
+    searches = [(term, local_search_location(), local_search_radius_km()) for term in search_terms()]
     searches.extend(
         (term, location, COMMUTER_SEARCH_RADIUS_KM)
-        for location in COMMUTER_SEARCH_LOCATIONS
-        for term in COMMUTER_SEARCH_TERMS
+        for location in commuter_search_locations()
+        for term in commuter_search_terms()
     )
 
     for term, location, radius in searches:
@@ -57,7 +57,7 @@ def collect_links():
     return list(links)
 
 
-def search(term, location=LOCAL_SEARCH_LOCATION, radius=LOCAL_SEARCH_RADIUS_KM):
+def search(term, location=None, radius=None):
     """Load every available result page for one search term."""
     results = []
     seen_references = set()
@@ -80,8 +80,10 @@ def search(term, location=LOCAL_SEARCH_LOCATION, radius=LOCAL_SEARCH_RADIUS_KM):
         page += 1
 
 
-def build_search_url(term, page=1, location=LOCAL_SEARCH_LOCATION, radius=LOCAL_SEARCH_RADIUS_KM):
-    """Encode a term, page and local search radius into a search URL."""
+def build_search_url(term, page=1, location=None, radius=None):
+    """Encode a term, page and local search radius into a search URL; without location and radius the home search."""
+    location = local_search_location() if location is None else location
+    radius = local_search_radius_km() if radius is None else radius
     query = {"angebotsart": "1", "was": term, "wo": location, "umkreis": str(radius), "page": str(page)}
     return f"{SEARCH_BASE_URL}?{urlencode(query)}"
 

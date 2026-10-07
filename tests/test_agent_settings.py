@@ -18,7 +18,7 @@ class AgentSettingsTests(unittest.TestCase):
                 self.assertEqual(settings.limits, AgentLimits(**DEFAULT_LIMITS))
 
     def test_public_example_documents_the_defaults_and_keeps_the_agent_off(self):
-        settings = agent_settings(load_user_settings(EXAMPLE_SETTINGS_PATH))
+        settings = agent_settings(load_user_settings(EXAMPLE_SETTINGS_PATH).mapping)
 
         self.assertFalse(settings.enabled)
         self.assertEqual(settings.limits, AgentLimits(**DEFAULT_LIMITS))

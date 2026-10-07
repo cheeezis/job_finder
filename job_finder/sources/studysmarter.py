@@ -5,7 +5,7 @@ import time
 from urllib.parse import urlencode, urlsplit
 
 from job_finder.http import fetch_json, fetch_text
-from job_finder.matching.config import LOCAL_SEARCH_RADIUS_KM, STUDYSMARTER_LOCAL_SEARCH_LOCATION
+from job_finder.matching.config import local_search_radius_km, studysmarter_search_location
 from job_finder.matching.deduplication import BOARD_NAMES
 from job_finder.models import Job, JobSource, WorkMode
 from job_finder.paths import cache_file
@@ -123,8 +123,8 @@ def build_searches():
     """Build one local-radius search and focused Germany-wide remote searches."""
     categories = ",".join(IT_CATEGORIES)
     yield {
-        "city": STUDYSMARTER_LOCAL_SEARCH_LOCATION,
-        "radius": LOCAL_SEARCH_RADIUS_KM,
+        "city": studysmarter_search_location(),
+        "radius": local_search_radius_km(),
         "job_listing_category": categories,
     }
     for term in REMOTE_ENTRY_TERMS:

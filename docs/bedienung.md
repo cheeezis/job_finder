@@ -68,9 +68,13 @@ per `python -m pip install --user uv`) und PostgreSQL
 `.venv` an und installiert genau die Versionen aus `uv.lock`.
 
 `user_settings.local.yaml` (von Git ignoriert) enthält Suchort, Radius,
-Pendlerorte, fachliche Stichwörter und die Grenzen des Agenten. Ohne die Datei
-gilt die anonymisierte Beispielkonfiguration. Eine laufende Review übernimmt
-Änderungen erst nach einem Neustart. In Azure kommt der Inhalt aus dem
+Pendlerorte, fachliche Stichwörter und die Grenzen des Agenten. Optional
+ersetzen `search.terms`, `search.stepstone_terms` und `search.commuter_terms`
+die eingebauten Suchbegriffe, und `sources.companies` wählt die Karriereseiten
+einzelner Firmen; die Beispieldatei zeigt beides. Ohne die Datei gilt die
+anonymisierte Beispielkonfiguration. Ein Finder-Lauf prüft die Einstellungen,
+bevor er eine Quelle abfragt, und bricht bei einem Fehler mit dem Namen des
+Feldes ab. Eine laufende Review übernimmt Änderungen erst nach einem Neustart. In Azure kommt der Inhalt aus dem
 Key-Vault-Secret `JobfinderUserSettings`, das nach Änderungen neu gesetzt wird:
 
 ```powershell

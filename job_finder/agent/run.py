@@ -18,7 +18,7 @@ from job_finder.agent.profile import configured_profile
 from job_finder.agent.runner import MODEL, agent_model, write_fact_sheet
 from job_finder.agent.settings import agent_settings
 from job_finder.console import log_event
-from job_finder.matching.user_settings import USER_SETTINGS
+from job_finder.matching.user_settings import current_settings
 from job_finder.paths import JOBS_FILE
 from job_finder.persistence.agent_usage import spent_today_and_this_month
 from job_finder.persistence.fact_sheets import fact_sheets, mark_outdated
@@ -36,9 +36,10 @@ WARNING_TITLE = "Job Finder · Steckbriefe"
 RUN_SECONDS = 35 * 60
 
 
-def agent_phase(run_id=None, values=USER_SETTINGS, environ=os.environ):
+def agent_phase(run_id=None, values=None, environ=os.environ):
     """Run the agent after the finder; say why when it does not run, never raise."""
     print("\nSteckbriefe (Agent)")
+    values = current_settings().mapping if values is None else values
     settings = agent_settings(values)
     if not settings.enabled:
         print(f"  Agent aus: {settings.reason}")

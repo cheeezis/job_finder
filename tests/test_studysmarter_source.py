@@ -48,8 +48,8 @@ class StudySmarterTests(unittest.TestCase):
         self.assertEqual(
             searches[0],
             {
-                "city": studysmarter.STUDYSMARTER_LOCAL_SEARCH_LOCATION,
-                "radius": studysmarter.LOCAL_SEARCH_RADIUS_KM,
+                "city": studysmarter.studysmarter_search_location(),
+                "radius": studysmarter.local_search_radius_km(),
                 "job_listing_category": ",".join(studysmarter.IT_CATEGORIES),
             },
         )

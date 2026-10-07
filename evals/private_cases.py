@@ -22,7 +22,7 @@ from dotenv import dotenv_values
 from job_finder.agent.profile import configured_profile
 from job_finder.agent.run import shown_by_default
 from job_finder.agent.tools import DECISION_LABELS
-from job_finder.matching.user_settings import USER_SETTINGS
+from job_finder.matching.user_settings import current_settings
 from job_finder.paths import JOBS_FILE, PROJECT_DIR
 from job_finder.persistence.decisions import decided_jobs
 from job_finder.persistence.postgres_store import read_jobs
@@ -85,9 +85,13 @@ def private_cases(today=None, limit=None, seed=1):
         "version": today.isoformat(),
         "today": today,
         "settings": {
-            "search": {key: USER_SETTINGS.get("search", {}).get(key) for key in ("local_location", "local_radius_km")},
+            "search": {
+                key: current_settings().mapping.get("search", {}).get(key)
+                for key in ("local_location", "local_radius_km")
+            },
             "matching": {
-                key: USER_SETTINGS.get("matching", {}).get(key) for key in ("local_places", "commuter_locations")
+                key: current_settings().mapping.get("matching", {}).get(key)
+                for key in ("local_places", "commuter_locations")
             },
         },
         "profile": profile_text,

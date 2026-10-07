@@ -13,7 +13,7 @@ from urllib.parse import quote, urlencode, urljoin, urlsplit
 
 from job_finder.console import print_progress, progress_checkpoint
 from job_finder.http import fetch_text
-from job_finder.matching.config import LOCAL_SEARCH_RADIUS_KM, STEPSTONE_SEARCH_LOCATIONS, STEPSTONE_SEARCH_TERMS
+from job_finder.matching.config import local_search_radius_km, stepstone_search_locations, stepstone_search_terms
 from job_finder.models import Job
 from job_finder.paths import cache_file
 from job_finder.persistence.storage import read_versioned, write_versioned
@@ -134,10 +134,11 @@ def search_links(client=None):
     links = {}
     search_errors = 0
     requested_pages = 0
-    planned_queries = len(STEPSTONE_SEARCH_TERMS) * len(STEPSTONE_SEARCH_LOCATIONS)
+    terms, locations = stepstone_search_terms(), stepstone_search_locations()
+    planned_queries = len(terms) * len(locations)
     record_total_segments(planned_queries)
 
-    queries = product(STEPSTONE_SEARCH_TERMS, STEPSTONE_SEARCH_LOCATIONS)
+    queries = product(terms, locations)
     for processed_queries, (term, location) in enumerate(queries, start=1):
         page = 1
         query_seen = set()
@@ -177,7 +178,7 @@ def build_search_url(term, location, page=1):
     base_url = f"{SEARCH_BASE_URL}/{quote(term.replace(' ', '-'))}/in-{quote(location)}"
     query = {"page": page}
     if location.lower() != "remote":
-        query["radius"] = LOCAL_SEARCH_RADIUS_KM
+        query["radius"] = local_search_radius_km()
     return f"{base_url}?{urlencode(query)}"
 
 

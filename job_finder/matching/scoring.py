@@ -4,7 +4,7 @@ import re
 from datetime import date, timedelta
 
 from job_finder.matching import location_rules
-from job_finder.matching.config import LOCAL_SEARCH_RADIUS_KM
+from job_finder.matching.config import local_search_radius_km
 from job_finder.matching.experience import analyze_experience, extract_required_years, strong_experience_is_required
 from job_finder.matching.location_rules import is_hybrid, remote_possible_from_germany
 from job_finder.matching.matching_rules import (
@@ -20,17 +20,11 @@ from job_finder.matching.matching_text import contains_any, contains_keyword, is
 from job_finder.matching.ranking_weights import ROLE_POINTS, SCORE_LIMITS, SKILL_GROUPS
 from job_finder.matching.remote import detect_remote
 from job_finder.matching.salary import extract_annual_salary
-from job_finder.matching.user_settings import USER_SETTINGS
+from job_finder.matching.user_settings import current_settings
 from job_finder.models import Job
 from job_finder.text import normalize_text, text_is_mainly_english
 
 MAX_JOB_AGE_DAYS = 60
-MATCHING_SETTINGS = USER_SETTINGS["matching"]
-LOCAL_PLACES = MATCHING_SETTINGS["local_places"]
-COMMUTER_LOCATIONS = MATCHING_SETTINGS.get("commuter_locations", [])
-PROFILE_DOMAIN_KEYWORDS = MATCHING_SETTINGS["profile_domain_keywords"]
-SALARY_TARGET = MATCHING_SETTINGS["salary_target_eur"]
-SALARY_MINIMUM = MATCHING_SETTINGS["salary_minimum_eur"]
 BOILERPLATE = (
     "bei dieser jobboerse erstellen wir fuer stellen",
     "mithilfe von kuenstlicher intelligenz (ki) automatisch generierte zusammenfassungen",
@@ -254,18 +248,19 @@ def format_skill_reason(points, labels):
 
 def score_profile_connection(text):
     """Award profile points when normalized text matches a domain keyword."""
-    return SCORE_LIMITS["profile"] if contains_any(text, PROFILE_DOMAIN_KEYWORDS) else 0
+    return SCORE_LIMITS["profile"] if contains_any(text, current_settings().matching.profile_domain_keywords) else 0
 
 
 def analyze_location_for_role(title, location, remote, description):
     """Allow explicit entry roles with hybrid work to reach manual review."""
+    matching = current_settings().matching
     result = location_rules.analyze_location(
         location,
         remote,
         description,
-        local_places=LOCAL_PLACES,
-        commuter_locations=COMMUTER_LOCATIONS,
-        radius=LOCAL_SEARCH_RADIUS_KM,
+        local_places=matching.local_places,
+        commuter_locations=[item.model_dump() for item in matching.commuter_locations],
+        radius=local_search_radius_km(),
     )
     if result["allowed"]:
         return result
@@ -314,9 +309,10 @@ def score_preferences(full_text):
         penalties.append({"points": 2, "label": "ueberwiegend englischsprachige Stelle"})
 
     salary = extract_annual_salary(full_text)
-    if salary and SALARY_MINIMUM is not None and salary[1] < SALARY_MINIMUM:
+    minimum, target = current_settings().matching.salary_minimum_eur, current_settings().matching.salary_target_eur
+    if salary and minimum is not None and salary[1] < minimum:
         penalties.append({"points": 5, "label": "Gehalt unter persoenlichem Minimum"})
-    elif salary and SALARY_TARGET is not None and salary[1] < SALARY_TARGET:
+    elif salary and target is not None and salary[1] < target:
         penalties.append({"points": 3, "label": "Gehalt unter Wunschgehalt"})
 
     return penalties

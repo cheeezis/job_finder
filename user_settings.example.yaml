@@ -4,6 +4,11 @@ search:
   local_location: Musterstadt
   local_postal_code: "00000"
   local_radius_km: 25
+  # Optional: eigene Suchbegriffe statt der eingebauten
+  # (job_finder/matching/config.py). Ohne Eintrag gelten diese.
+  # terms: [Junior Python Developer, Data Analyst]
+  # stepstone_terms: [Python Developer, Data Analyst]
+  # commuter_terms: [Junior IT, Trainee IT]
 
 matching:
   # Lesbare Ortsbezeichnung für Review und StudySmarter-Suche.
@@ -24,6 +29,12 @@ matching:
   # Optionale Jahresbrutto-Präferenzen in Euro.
   salary_target_eur: null
   salary_minimum_eur: null
+
+# Optional: nur diese Karriereseiten einzelner Firmen durchsuchen. Ohne Eintrag
+# alle: compose_it, bytewerk, rhoenenergie, jumo, edag, css, proemion, nethinks.
+# Ausgelassene behalten ihre bisherigen Stellen wie eine übersprungene Quelle.
+# sources:
+#   companies: [jumo, edag]
 
 # Optionaler KI-Agent für Steckbriefe. Ohne diesen Abschnitt, mit
 # enabled: false oder bei einem ungültigen Wert ruft der Finder kein

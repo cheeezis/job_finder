@@ -1,26 +1,26 @@
-# Der verwaltete Server übernimmt Betrieb, Updates und Serverbackups.
-# Der Suffix macht den DNS-Namen subscriptionspezifisch und reproduzierbar.
+# The managed server takes care of operation, updates and server backups.
+# The suffix makes the DNS name subscription-specific and reproducible.
 resource "azurerm_postgresql_flexible_server" "jobfinder" {
   name                = "psql-jobfinder-${substr(sha256(var.subscription_id), 0, 8)}"
   resource_group_name = azurerm_resource_group.jobfinder.name
   location            = azurerm_resource_group.jobfinder.location
   version             = "18"
 
-  # Kleine Burstable-Instanz für den Einstieg: 1 vCPU, 2 GiB RAM, 32 GiB SSD.
-  # Der Server verursacht auch zwischen Finder-Läufen laufende Kosten.
+  # Small burstable instance to start with: 1 vCPU, 2 GiB RAM, 32 GiB SSD.
+  # The server causes running costs between finder runs as well.
   sku_name          = "B_Standard_B1ms"
   storage_mb        = 32768
   storage_tier      = "P4"
   auto_grow_enabled = false
 
-  # Gemeinsames Wiederherstellungsfenster mit Blob-/Container-Soft-Delete.
-  # Das begrenzt alte Sicherungsstände, nicht die gespeicherten Bewerbungen.
+  # Shared recovery window with blob/container soft delete.
+  # It limits old backup states, not the stored applications.
   backup_retention_days         = 14
   geo_redundant_backup_enabled  = false
   public_network_access_enabled = true
 
-  # Nur für Einrichtung/Verwaltung; Laufzeiten verwenden eigene eingeschränkte
-  # Rollen. Dieser administrative Rückkehrweg bleibt während Entra erhalten.
+  # Only for setup/administration; runtimes use their own restricted
+  # roles. This administrative way back stays during Entra.
   administrator_login               = "jobfinder_admin"
   administrator_password_wo         = var.postgres_admin_password
   administrator_password_wo_version = 1
@@ -31,10 +31,10 @@ resource "azurerm_postgresql_flexible_server" "jobfinder" {
     tenant_id                     = local.database_entra_prepared ? data.azurerm_client_config.current.tenant_id : null
   }
 
-  # Azure wählt die verfügbare Zone bei der Erstellung. Diese Wahl beibehalten,
-  # statt beim nächsten Plan eine Änderung auf einen leeren Wert zu verlangen.
-  # Einen Plan, der den Server löschen oder neu anlegen würde, bricht Terraform
-  # ab (docs/operations.md).
+  # Azure picks the available zone at creation. Keep this choice instead
+  # of asking for a change to an empty value in the next plan.
+  # Terraform aborts a plan that would delete or recreate the server
+  # (docs/operations.md).
   lifecycle {
     ignore_changes  = [zone]
     prevent_destroy = true
@@ -43,10 +43,10 @@ resource "azurerm_postgresql_flexible_server" "jobfinder" {
   tags = azurerm_resource_group.jobfinder.tags
 }
 
-# Öffentlicher Endpunkt bedeutet nicht Zugriff von überall: Diese Regel erlaubt
-# nur eine einzelne IP. Die Heim-IP wechselt oft; scripts/run_local_hybrid.py
-# setzt die Regel vor jedem Lauf (oder mit --allow-ip) auf die aktuelle Adresse.
-# Terraform legt die Regel an und lässt die Adresse danach dem Skript.
+# A public endpoint does not mean access from everywhere: this rule allows
+# only a single IP. The home IP changes often; scripts/run_local_hybrid.py
+# points the rule at the current address before every run (or with --allow-ip).
+# Terraform creates the rule and leaves the address to the script afterwards.
 resource "azurerm_postgresql_flexible_server_firewall_rule" "local_review" {
   name             = "local-review"
   server_id        = azurerm_postgresql_flexible_server.jobfinder.id
@@ -58,12 +58,12 @@ resource "azurerm_postgresql_flexible_server_firewall_rule" "local_review" {
   }
 }
 
-# Der Worker läuft als Container Apps Job ohne feste ausgehende IP. Privater
-# Zugriff bräuchte eine neu angelegte, VNet-integrierte Umgebung mit Private
-# Endpoint und ist für diesen Umfang bewusst nicht umgesetzt; die Abwägung steht
-# in docs/operations.md. Start/End 0.0.0.0 ist Azures Sonderwert für "beliebiger
-# Azure-Dienst", nicht nur diese Subscription. TLS (verify-full) und
-# die getrennten Rollen mit Passwort/Token bleiben die Zugriffsschranke.
+# The worker runs as a Container Apps job without a fixed outbound IP. Private
+# access would need a newly created, VNet-integrated environment with a private
+# endpoint and is deliberately not implemented for this scope; the trade-off is
+# in docs/operations.md. Start/end 0.0.0.0 is Azure's special value for "any
+# Azure service", not only this subscription. TLS (verify-full) and
+# the separate roles with password/token remain the access barrier.
 resource "azurerm_postgresql_flexible_server_firewall_rule" "allow_azure_services" {
   name             = "allow-azure-services"
   server_id        = azurerm_postgresql_flexible_server.jobfinder.id
@@ -71,19 +71,19 @@ resource "azurerm_postgresql_flexible_server_firewall_rule" "allow_azure_service
   end_ip_address   = "0.0.0.0"
 }
 
-# Erzwingt verschlüsselte Verbindungen. Der Client prüft zusätzlich Zertifikat
-# und Hostnamen mit sslmode=verify-full.
+# Enforces encrypted connections. The client additionally verifies the
+# certificate and host name with sslmode=verify-full.
 resource "azurerm_postgresql_flexible_server_configuration" "require_tls" {
   name      = "require_secure_transport"
   server_id = azurerm_postgresql_flexible_server.jobfinder.id
   value     = "on"
 }
 
-# Mindestens TLS 1.2, Anmeldeversuche und Checkpoints ins Serverlog: Das ist
-# heute schon Azures Voreinstellung. Festgeschrieben gilt es auch nach einer
-# geänderten Voreinstellung, und die Scans sehen es. Alle drei greifen ohne
-# Neustart. Lesbar wird das Serverlog erst mit Log-Download oder einer
-# Diagnoseeinstellung; beides ist derzeit aus.
+# At least TLS 1.2, sign-in attempts and checkpoints in the server log: that is
+# already Azure's default today. Written down, it holds even after a changed
+# default, and the scans see it. All three apply without a restart. The
+# server log only becomes readable with a log download or a diagnostic
+# setting; both are currently off.
 resource "azurerm_postgresql_flexible_server_configuration" "min_tls_version" {
   name      = "ssl_min_protocol_version"
   server_id = azurerm_postgresql_flexible_server.jobfinder.id
@@ -102,7 +102,7 @@ resource "azurerm_postgresql_flexible_server_configuration" "log_checkpoints" {
   value     = "on"
 }
 
-# Der Server ist der verwaltete Dienst; darin liegt die eigentliche Jobfinder-DB.
+# The server is the managed service; the actual job finder database lives in it.
 resource "azurerm_postgresql_flexible_server_database" "jobfinder" {
   name      = "jobfinder"
   server_id = azurerm_postgresql_flexible_server.jobfinder.id
@@ -114,10 +114,10 @@ resource "azurerm_postgresql_flexible_server_database" "jobfinder" {
   }
 }
 
-# Löschsperre für den Server mit den Review-Entscheidungen: Die Serverbackups
-# helfen gegen falsch geänderte Daten, nach dem Löschen des Servers aber nur
-# noch kurz und umständlich. IP-Wechsel an den Firewall-Regeln sind Änderungen
-# und laufen weiter. Anlegen und Entfernen wie in storage.tf nur lokal.
+# Delete lock for the server with the review decisions: the server backups
+# help against wrongly changed data, but after the server is deleted only
+# briefly and awkwardly. IP changes to the firewall rules are changes
+# and keep working. Created and removed only locally, as in storage.tf.
 resource "azurerm_management_lock" "postgres" {
   name       = "no-delete"
   scope      = azurerm_postgresql_flexible_server.jobfinder.id

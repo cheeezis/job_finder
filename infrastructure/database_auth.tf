@@ -1,41 +1,41 @@
-# F10: Entra ergänzen, separat prüfen und erst danach die Laufzeiten umschalten.
+# F10: add Entra, check it separately and only then switch the runtimes.
 variable "database_auth_phase" {
-  description = "password (bisherige Anmeldung), prepare (Entra zusätzlich), entra (abgenommene Token-Anmeldung)."
+  description = "password (earlier sign-in), prepare (Entra in addition), entra (accepted token sign-in)."
   type        = string
   default     = "password"
   validation {
     condition     = contains(["password", "prepare", "entra"], var.database_auth_phase)
-    error_message = "database_auth_phase muss password, prepare oder entra sein."
+    error_message = "database_auth_phase must be password, prepare or entra."
   }
   validation {
     condition     = var.database_auth_phase == "password" || (var.runtime_identity_phase == "split" && var.runtime_access_verified)
-    error_message = "Entra setzt die abgenommene Trennung der Laufzeitrechte voraus."
+    error_message = "Entra requires the accepted separation of runtime rights."
   }
 }
 
 variable "database_entra_verified" {
-  description = "Nach realer Token-/Rechte-/Erneuerungs- und Notzugangsprüfung aller drei Laufzeiten freigeben."
+  description = "Approve after a real check of token, rights, renewal and emergency access for all three runtimes."
   type        = bool
   default     = false
   validation {
     condition     = var.database_auth_phase != "entra" || var.database_entra_verified
-    error_message = "Die Token-Anmeldung muss vor entra separat in Azure abgenommen sein."
+    error_message = "The token sign-in must be accepted separately in Azure before entra."
   }
 }
 
 variable "postgres_entra_admin_name" {
-  description = "Anmeldename des persönlichen Entra-Administrators; nur lokale/CI-Konfiguration, keine Laufzeitidentität."
+  description = "Sign-in name of the personal Entra administrator; only local/CI configuration, no runtime identity."
   type        = string
   default     = ""
   validation {
     condition     = var.database_auth_phase == "password" || trimspace(var.postgres_entra_admin_name) != ""
-    error_message = "Für Entra muss der getrennte Administrator explizit benannt werden."
+    error_message = "For Entra the separate administrator must be named explicitly."
   }
   validation {
-    # PostgreSQL kürzt Rollennamen auf 63 Zeichen, Azure speichert den Namen ebenso; ein
-    # längerer Wert gilt sonst bei jedem Abgleich als geändert und erzwingt einen Ersatz.
+    # PostgreSQL shortens role names to 63 characters, and Azure stores the name the same
+    # way; a longer value counts as changed in every refresh and forces a replacement.
     condition     = length(var.postgres_entra_admin_name) <= 63
-    error_message = "Den Anmeldenamen auf 63 Zeichen gekürzt angeben, so wie Azure ihn speichert."
+    error_message = "Give the sign-in name shortened to 63 characters, as Azure stores it."
   }
 }
 
@@ -47,7 +47,7 @@ locals {
     review = "jobfinder_review_entra"
     hybrid = "jobfinder_hybrid_entra"
   }
-  # Host/DB/Rolle sind keine Geheimnisse. Token entstehen erst im Container.
+  # Host/database/role are no secrets. Tokens are created only in the container.
   entra_database_urls = {
     for component, role in local.entra_database_roles : component => "postgresql://${role}@${azurerm_postgresql_flexible_server.jobfinder.fqdn}:5432/${azurerm_postgresql_flexible_server_database.jobfinder.name}?sslmode=verify-full&sslrootcert=/etc/ssl/certs/ca-certificates.crt"
   }
@@ -63,7 +63,7 @@ resource "azurerm_postgresql_flexible_server_active_directory_administrator" "ow
   principal_type      = "User"
 
   lifecycle {
-    # Nach Aktivierung kontrolliert auf prepare zurückkehren, Entra nicht abbauen.
+    # After an activation return to prepare in a controlled way; do not remove Entra.
     prevent_destroy = true
     precondition {
       condition = (
@@ -71,13 +71,13 @@ resource "azurerm_postgresql_flexible_server_active_directory_administrator" "ow
         lower(var.owner_object_id) != lower(try(azurerm_user_assigned_identity.review[0].principal_id, "")) &&
         lower(var.owner_object_id) != lower(var.local_docker_sp_object_id)
       )
-      error_message = "Eine Laufzeitidentität darf nicht Entra-Datenbankadministrator werden."
+      error_message = "A runtime identity must not become the Entra database administrator."
     }
   }
 }
 
 output "entra_principals" {
-  description = "Geplante Object-ID-Zuordnung für den separaten SQL-Einrichtungshelfer; keine Tokens."
+  description = "Planned object ID assignment for the separate SQL setup helper; no tokens."
   value = local.runtime_split ? {
     tenant_id = data.azurerm_client_config.current.tenant_id
     worker    = azurerm_user_assigned_identity.jobfinder.principal_id
@@ -87,6 +87,6 @@ output "entra_principals" {
 }
 
 output "entra_database_urls" {
-  description = "Passwortfreie DSNs für gezielte Proben nach Rollen-Einrichtung; keine Laufzeitaktivierung."
+  description = "Password-free DSNs for targeted checks after the role setup; no runtime activation."
   value       = local.runtime_split ? local.entra_database_urls : null
 }

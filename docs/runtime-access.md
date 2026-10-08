@@ -1,157 +1,173 @@
-# Getrennte Laufzeitrechte (F09)
+# Separate runtime rights (F09)
 
-F09 wird in zwei Etappen eingeführt. Standard bleibt `legacy`; ein Merge allein
-schaltet keine Identität und keinen Datenbankzugang um. `prepare` ergänzt Zugänge,
-die vorhandenen Anwendungen laufen weiter mit ihren bisherigen Zugängen. Erst
-nach dokumentierter Abnahme folgt `split`. Während `prepare` besitzt die Review
-noch die bisherigen breiten Rechte; die Trennung ist dann noch nicht abgeschlossen.
+F09 is introduced in two stages. `legacy` stays the default; a merge alone
+switches no identity and no database login. `prepare` adds logins, while the
+existing applications keep running with their earlier logins. Only after a
+documented acceptance does `split` follow. During `prepare` the review still has
+the earlier broad rights; the separation is not complete then.
 
-## Rechte nach der Umschaltung
+## Rights after the switch
 
-| Bereich | Cloud-Worker | Review | Lokaler Hybrid-Worker |
+```mermaid
+flowchart LR
+    worker[Cloud worker<br/>managed identity] --> db[(PostgreSQL<br/>jobfinder_worker_access)]
+    hybrid[Local hybrid run<br/>service principal] --> db
+    review[Review<br/>own managed identity] --> dbr[(PostgreSQL<br/>jobfinder_review_access,<br/>row security on datasets)]
+    worker --> kvw[Key Vault: five worker secrets]
+    review --> kvr[Key Vault: three review secrets]
+    review --> blob[(Blob container<br/>application-documents)]
+    worker --> model[Azure OpenAI<br/>caller role]
+    hybrid --> model
+    worker & review --> acr[Registry: pull]
+```
+
+| Area | Cloud worker | Review | Local hybrid worker |
 | --- | --- | --- | --- |
-| Identität | bisherige Worker-MI | eigene Review-MI | bisheriger eigener Service Principal |
-| ACR | AcrPull | AcrPull | Pull über Host-Anmeldung |
-| Key Vault | fünf einzelne Worker-Secrets | drei einzelne Review-Secrets | keine Vault-Rolle; lokale ignorierte Konfiguration |
-| Modell | bestehende Aufrufrolle | keine Modellrolle | bestehende optionale Aufrufrolle |
-| Blob-Dokumente | kein Datenzugriff | Contributor nur auf Dokumentcontainer | kein Datenzugriff |
-| Terraform-State | kein Zugriff | kein Zugriff | kein Zugriff |
-| DB-Login | `jobfinder_worker` | `jobfinder_review` | `jobfinder_hybrid` |
-| DB-Gruppe | `jobfinder_worker_access` | `jobfinder_review_access` | `jobfinder_worker_access` |
+| Identity | earlier worker managed identity | own review managed identity | earlier own service principal |
+| ACR | AcrPull | AcrPull | pull through the host's sign-in |
+| Key Vault | five single worker secrets | three single review secrets | no vault role; local ignored configuration |
+| Model | existing caller role | no model role | existing optional caller role |
+| Blob documents | no data access | Contributor only on the document container | no data access |
+| Terraform state | no access | no access | no access |
+| Database login | `jobfinder_worker` | `jobfinder_review` | `jobfinder_hybrid` |
+| Database group | `jobfinder_worker_access` | `jobfinder_review_access` | `jobfinder_worker_access` |
 
-Worker-Secrets: `DiscordWebhookUrl`, `StartupJobsApiKey`,
+Worker secrets: `DiscordWebhookUrl`, `StartupJobsApiKey`,
 `JobfinderWorkerDatabaseUrl`, `JobfinderUserSettings`, `JobfinderProfile`.
-Review-Secrets: `JobfinderReviewDatabaseUrl`, `ReviewAadClientSecret`,
-`JobfinderUserSettings`. Insbesondere erhalten Worker und Review nach `split`
-keinen Zugriff auf die alte gemeinsame `JobfinderDatabaseUrl`; die Review erhält
-weder Discord-Webhook noch Profil oder Quellen-API-Key. Die Datenbankwerte werden
-außerhalb Terraform vorbereitet, damit keine Passwörter im State landen.
-Secret-Rollen liegen auf einzelnen Secret-Ressourcen des bestehenden Vaults.
-[Microsoft: Key-Vault-RBAC](https://learn.microsoft.com/en-us/azure/key-vault/general/rbac-guide)
+Review secrets: `JobfinderReviewDatabaseUrl`, `ReviewAadClientSecret`,
+`JobfinderUserSettings`. In particular, after `split` worker and review get no
+access to the old shared `JobfinderDatabaseUrl`; the review gets neither the
+Discord webhook nor the profile or a source API key. The database values are
+prepared outside Terraform, so no passwords end up in the state. Secret roles
+sit on single secret resources of the existing vault.
+[Microsoft: Key Vault RBAC](https://learn.microsoft.com/en-us/azure/key-vault/general/rbac-guide)
 
-Beide geplanten Worker setzen `JOBFINDER_SKIP_RUN_BACKUP=1`. Sie schreiben
-Dokumentmetadaten mit dem bestehenden Memory-Adapter, greifen aber nicht auf
-Dokument-Bytes zu. Deshalb entfallen ihre bisherigen Blob-Rollen. Manuelle
-Dokument-Backups und Restore laufen separat als Administrator/Owner. Wird das
-Laufzeit-Backup später wieder aktiviert, muss der tatsächliche Dokumentzugriff
-vorher neu bewertet werden. Entwickler- und CI-Berechtigungen bleiben getrennt.
+Both planned workers set `JOBFINDER_SKIP_RUN_BACKUP=1`. They write document
+metadata with the existing memory adapter but do not touch document bytes. Their
+earlier blob roles therefore go away. Manual document backups and restores run
+separately as administrator or owner. If the runtime backup is switched on again
+later, the actual document access has to be reassessed first. Developer and CI
+permissions stay separate.
 
-## PostgreSQL-Vertrag
+## PostgreSQL contract
 
-| Tabellen | Worker/Hybrid | Review |
+| Tables | Worker/hybrid | Review |
 | --- | --- | --- |
 | `job_state`, `workflow_history`, `application_documents` | SELECT/INSERT/UPDATE/DELETE | SELECT/INSERT/UPDATE/DELETE |
-| `datasets`, `jobs`, `recommendations`, `manual_sources` | SELECT/INSERT/UPDATE/DELETE | SELECT/INSERT/UPDATE/DELETE; Datensatzgrenze siehe unten |
-| `agent_usage`, `agent_fact_sheets` | SELECT/INSERT/UPDATE/DELETE | nur SELECT für Kostenübersicht und vorhandene Steckbriefe |
-| `notifications`, `source_cache` | SELECT/INSERT/UPDATE/DELETE | keine Rechte |
-| Versionsmarker, Importjournal und neue Tabellen | keine Rechte | keine Rechte |
-| DDL, TRUNCATE, Rollenverwaltung, Objektbesitz | keine Rechte | keine Rechte |
+| `datasets`, `jobs`, `recommendations`, `manual_sources` | SELECT/INSERT/UPDATE/DELETE | SELECT/INSERT/UPDATE/DELETE; row boundary see below |
+| `agent_usage`, `agent_fact_sheets` | SELECT/INSERT/UPDATE/DELETE | only SELECT for the cost overview and existing fact sheets |
+| `notifications`, `source_cache` | SELECT/INSERT/UPDATE/DELETE | no rights |
+| Version markers, import journal and new tables | no rights | no rights |
+| DDL, TRUNCATE, role management, object ownership | no rights | no rights |
 
-Die Listen sind ausdrücklich festgelegt. Neue Tabellen erhalten keine impliziten
-Laufzeitrechte. Die Vorbereitung verweigert privilegierte bestehende Rollen,
-Objektbesitz, unerwartete Mitgliedschaften und wirksame zusätzliche Rechte durch
-`PUBLIC`. Sie repariert keine fremden Rollen oder öffentlichen Rechte automatisch.
-Passwörter vorhandener Rollen werden nicht automatisch ersetzt.
+The lists are fixed explicitly. New tables get no implicit runtime rights. The
+preparation refuses privileged existing roles, object ownership, unexpected
+memberships and effective additional rights through `PUBLIC`. It repairs no
+foreign roles or public rights automatically. Passwords of existing roles are
+not replaced automatically.
 
-Revision `0002_runtime_boundaries` aktiviert Row Level Security auf `datasets`.
-Mitglieder der Review-Gruppe dürfen ausschließlich `internal/jobs.json`,
-`output/recommendations.json` und `internal/manual_jobs_cache.json` sehen/ändern.
-So können sie keinen Worker-Datensatz löschen und darüber dessen `notifications`
-oder `source_cache` per Fremdschlüssel-Kaskade entfernen. Die Mitgliedschaft wird
-auch bei `SET ROLE` auf die Capability-Gruppe erkannt. Tabellenbesitzer und
-BYPASSRLS-Principals dürfen deshalb niemals Laufzeitrollen sein.
-[PostgreSQL: Row Security](https://www.postgresql.org/docs/18/ddl-rowsecurity.html)
+Revision `0002_runtime_boundaries` enables row level security on `datasets`.
+Members of the review group may see and change only `internal/jobs.json`,
+`output/recommendations.json` and `internal/manual_jobs_cache.json`. So they
+cannot delete a worker data set and thereby remove its `notifications` or
+`source_cache` through a foreign key cascade. The membership is recognised also
+with `SET ROLE` to the capability group. Table owners and BYPASSRLS principals
+must therefore never be runtime roles.
+[PostgreSQL: row security](https://www.postgresql.org/docs/18/ddl-rowsecurity.html)
 
-Die Migration ändert keine Nutzdaten, legt keine clusterweiten Rollen an und
-erhält den bisherigen gemeinsamen Zugang. `schema-status` prüft die neue Policy
-technisch lesend; eine entfernte oder veränderte Policy wird nicht automatisch
-repariert. Die ursprüngliche Baseline bleibt unverändert. Ein Image-Rollback
-entfernt die Policy nicht; deren Downgrade wird verweigert. Administratoren
-verwenden nach der Migration die aktuelle Wartungsversion für Migration/Restore.
+The migration changes no user data, creates no cluster-wide roles and keeps the
+earlier shared login. `schema-status` checks the new policy, technically
+read-only; a removed or changed policy is not repaired automatically. The
+original baseline stays unchanged. An image rollback does not remove the policy;
+its downgrade is refused. After the migration, administrators use the current
+maintenance version for migration and restore.
 
-Die bestehenden Adapter teilen weiterhin Bestands- und Bewerbungszeilen. F09
-trennt Komponentenrechte, aber noch nicht einzelne Spalten oder fachliche
-Repository-Verträge. Die weitere Aufteilung folgt in F17. Die NOLOGIN-Gruppen
-können in F10 auch an getrennte Entra-DB-Principals vergeben werden.
-Der erste lokal vorbereitete Verbindungsbaustein und die noch erforderliche
-Cloud-Abnahme stehen in [Datenbankanmeldung mit Entra](database-auth.md).
+The existing adapters still share job and application rows. F09 separates
+component rights, but not yet single columns or domain repository contracts. The
+further split follows in F17. In F10 the NOLOGIN groups can also be granted to
+separate Entra database principals. The first locally prepared connection
+building block and the cloud acceptance still needed are in
+[database sign-in with Entra](database-auth.md).
 
-## Etappe 1: Vorbereiten und prüfen
+## Stage 1: prepare and check
 
-1. Sicherung und administratives `schema-status` vor der freigegebenen
-   Produktionsmigration. `job_finder.db migrate` übernimmt `0002_runtime_boundaries`
-   in einer Transaktion; Worker und Review führen keine Migrationen aus.
-2. `python scripts/create_runtime_roles.py --target azure` prüft zunächst nur,
-   welche Rollen existieren. Erst `--apply` erstellt drei Logins, die beiden
-   Gruppen und die festen Rechte. Das setzt die intakte Migration voraus.
-   Lokal entsprechend `--target local`; lokal prüfen heißt keine Produktion ändern.
-3. Der Helfer legt `.env.runtime-azure` beziehungsweise `.env.runtime-local` an.
-   Die Dateien sind ignoriert und enthalten Geheimnisse; Zugriffsrechte wie bei
-   den vorhandenen lokalen `.env`-Dateien begrenzen. Ein vorbereitetes File bleibt
-   auf `JOBFINDER_RUNTIME_ACCESS=legacy`. Der Ready-Marker wird erst nach erfolgreichen
-   eigenen Verbindungen und Prüfung der effektiven Rechte auf `1` gesetzt.
-   Ein abgebrochener Lauf mit Marker `0` darf keine Umschaltung auslösen.
-4. Die zwei Cloud-DSNs aus der Datei als neue Worker-/Review-Secrets im Vault
-   hinterlegen, ohne Werte im Terminal, in Shell-Argumenten oder im Terraform-State
-   auszugeben. Der Helfer schreibt weder Key Vault noch bestehende Runtime-Konfiguration.
-5. Terraform mit `runtime_identity_phase=prepare` planen und freigeben.
-   CI verwendet dafür die Repository-Variable `RUNTIME_IDENTITY_PHASE`;
-   `RUNTIME_ACCESS_VERIFIED` bleibt `false`. Die neue Review-MI wird zusätzlich
-   angehängt; Registry, aktive Secret-Verweise und Client-ID bleiben auf dem
-   bisherigen Zugang. Die neuen Rollen können vor der Umschaltung propagieren.
-6. Mit separat freigegebenen, kurzlebigen Probestarts und den neuen Identitäten
-   Image-Pull, Auflösung der eigenen Secret-Verweise und DB-Verbindung bestätigen.
-   Keine Finder-Vollausführung, Discord-Nachricht oder Modellgeneration zur Probe.
-   Review: Laden, Notiz/Entscheidung, manueller Import und Dokumentzugriff mit
-   synthetischen Testdaten; Worker: DB-/Quellkonfiguration ohne Modell-/Webhook-Aufruf.
-   Dokumentproben anschließend entfernen. Ergebnisse privat dokumentieren.
-7. Erlaubte und verbotene Cloud-Zugriffe getrennt prüfen: Review erhält kein
-   Modellrecht, keinen Webhook-/Profil-/Worker-DSN-Zugriff und keinen State-Zugriff;
-   Worker hat keine Dokumentrechte nach Entfernen des Übergangsrechts. Bestehende
-   Rollenzuweisungen einschließlich übergeordneter Scopes und Mitgliedschaften
-   prüfen. Secret-Metadaten und RBAC-/Modell-Konfiguration genügen für die
-   Negativprüfung, ohne fremde Secret-Werte zu lesen oder Modellaufrufe abzurechnen.
-   Die funktionale Auflösung eigener Secrets wird beim Probestart geprüft.
+1. Backup and administrative `schema-status` before the approved production
+   migration. `job_finder.db migrate` applies `0002_runtime_boundaries` in one
+   transaction; worker and review run no migrations.
+2. `python scripts/create_runtime_roles.py --target azure` first only checks
+   which roles exist. Only `--apply` creates three logins, the two groups and
+   the fixed rights. That requires the intact migration. Locally the same with
+   `--target local`; checking locally means changing no production.
+3. The helper creates `.env.runtime-azure` or `.env.runtime-local`. The files
+   are ignored and contain secrets; limit their access rights like those of the
+   existing local `.env` files. A prepared file stays on
+   `JOBFINDER_RUNTIME_ACCESS=legacy`. The ready marker is set to `1` only after
+   successful own connections and a check of the effective rights. An aborted
+   run with marker `0` must not trigger a switch.
+4. Store the two cloud DSNs from the file as new worker and review secrets in
+   the vault, without printing values in the terminal, in shell arguments or in
+   the Terraform state. The helper writes neither Key Vault nor the existing
+   runtime configuration.
+5. Plan and approve Terraform with `runtime_identity_phase=prepare`. CI uses the
+   repository variable `RUNTIME_IDENTITY_PHASE` for that;
+   `RUNTIME_ACCESS_VERIFIED` stays `false`. The new review managed identity is
+   attached in addition; registry, active secret references and client ID stay
+   on the earlier login. The new roles can propagate before the switch.
+6. With separately approved, short trial starts and the new identities, confirm
+   image pull, resolution of the own secret references and the database
+   connection. No complete finder run, Discord message or model generation for
+   the trial. Review: loading, note/decision, manual import and document access
+   with synthetic test data; worker: database and source configuration without
+   model or webhook calls. Remove the document trials afterwards. Document the
+   results privately.
+7. Check allowed and forbidden cloud access separately: the review gets no model
+   right, no webhook, profile or worker DSN access and no state access; the
+   worker has no document rights after the transitional right is removed. Check
+   existing role assignments including higher scopes and memberships. Secret
+   metadata and RBAC and model configuration are enough for the negative check,
+   without reading foreign secret values or paying for model calls. The
+   functional resolution of the own secrets is checked in the trial start.
 
-Lokale DB-Tests und simulierte Terraform-Pläne belegen den vorbereiteten Vertrag.
-Sie belegen weder Azure-Rollenpropagation noch einen echten Image-Pull. Darum ist
-`runtime_access_verified=true` eine separat dokumentierte menschliche Abnahme,
-kein Ergebnis von `terraform validate` oder `depends_on`.
+Local database tests and simulated Terraform plans prove the prepared contract.
+They prove neither Azure role propagation nor a real image pull. That is why
+`runtime_access_verified=true` is a separately documented human acceptance, not
+a result of `terraform validate` or `depends_on`.
 
-## Etappe 2: Umschalten und abnehmen
+## Stage 2: switch and accept
 
-1. Erst nach Etappe 1 `runtime_identity_phase=split` und
-   `runtime_access_verified=true` freigeben. In CI entsprechen dem die beiden
-   Repository-Variablen. Terraform verweigert einen Split ohne Abnahmemarker.
-2. Plan muss die Review vollständig von der Worker-MI trennen, alle drei
-   Review-Secret-Verweise und ihre Client-ID auf die neue MI umstellen und beide
-   Cloud-DSNs wechseln. Die bisherigen breiten Vault-/Worker-/Hybrid-Blob-Rollen
-   werden entfernt; Review bleibt auf ihren Dokumentcontainer beschränkt.
-   Easy Auth, Eigentümerbeschränkung, Ingress-Reihenfolge und Löschschutz bleiben
-   bestehen. Bei unerwarteten Ersatz-/Löschaktionen keinen Apply ausführen.
-3. Vor dem Entzug der Blob-Rollen die bestehende Storage-Löschsperre prüfen:
-   sie kann auch untergeordnete Verwaltungsaktionen blockieren. Falls nötig,
-   die exakt betroffenen Rollenzuweisungen in einem separat freigegebenen
-   Owner-Wartungsfenster entziehen und die Sperre sofort wiederherstellen;
-   anschließend State/Plan abgleichen. Kein automatisches Entfernen der Sperre.
-   [Microsoft: Resource Locks](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/lock-resources)
-4. Lokal erst nach DB-Abnahme `JOBFINDER_RUNTIME_ACCESS=split` im ignorierten
-   Runtime-File setzen. Der Hybrid-Runner nutzt dann den eigenen Hybrid-DSN;
-   ein fehlender Ready-Marker führt zum Abbruch. Die TLS-Zertifikatsprüfung wird
-   auch im Container erhalten. Die alte `.env.postgres-azure` bleibt als Rückkehrweg.
-5. Nach Umschaltung Review-Start/Anmeldung/Dokumentzugriff, ersten normalen
-   Worker-/Hybrid-Lauf und erneut die negativen Rechte prüfen. Erst danach F09
-   als produktiv abgeschlossen markieren. Nachträgliche Wartung eines bereits
-   aktivierten Runtime-Files wird vom Vorbereitungsskript verweigert.
+1. Only after stage 1, approve `runtime_identity_phase=split` and
+   `runtime_access_verified=true`. In CI the two repository variables correspond
+   to them. Terraform refuses a split without the acceptance marker.
+2. The plan must separate the review completely from the worker managed
+   identity, move all three review secret references and its client ID to the
+   new managed identity and change both cloud DSNs. The earlier broad vault,
+   worker and hybrid blob roles are removed; the review stays limited to its
+   document container. Easy Auth, owner restriction, ingress order and delete
+   protection stay. On unexpected replace or delete actions, do not apply.
+3. Before revoking the blob roles, check the existing storage delete lock: it
+   can also block subordinate management actions. If needed, revoke exactly the
+   affected role assignments in a separately approved owner maintenance window
+   and restore the lock right away; then reconcile state and plan. No automatic
+   removal of the lock.
+   [Microsoft: resource locks](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/lock-resources)
+4. Locally, set `JOBFINDER_RUNTIME_ACCESS=split` in the ignored runtime file
+   only after the database acceptance. The hybrid runner then uses its own
+   hybrid DSN; a missing ready marker aborts. TLS certificate verification is
+   kept in the container as well. The old `.env.postgres-azure` stays as the way
+   back.
+5. After the switch, check review start, sign-in and document access, the first
+   normal worker and hybrid run and the negative rights again. Only then mark F09
+   as complete in production. The preparation script refuses later maintenance
+   of a runtime file that is already activated.
 
-## Rückkehr
+## Way back
 
-Bei Fehlern zuerst die betroffene Komponente anhalten. Der alte gemeinsame
-DB-Login und dessen Secret bleiben erhalten. `prepare` kann die Übergangsrechte
-wiederherstellen; erst nach deren Propagation und Prüfung zurück auf alte
-Client-ID, Registry-Identität und DSNs wechseln. Die lokale Aktivierung kann
-kontrolliert auf `legacy` zurückgestellt werden. Das stellt vorübergehend auch
-die alten breiteren Rechte wieder her und ist als Rückkehr gesondert abzunehmen.
-Keine Datenbank-Downgrades, keine Passwortrotation und keine Entfernung der neuen
-Rollen sind dafür nötig. Probestarts und Produktionsumschaltung gehören zu einer
-separaten Freigabe nach dem lokalen PR, nicht zur lokalen Vorbereitung.
+On errors, first stop the affected component. The old shared database login and
+its secret are kept. `prepare` can restore the transitional rights; only after
+their propagation and a check switch back to the old client ID, registry
+identity and DSNs. The local activation can be set back to `legacy` in a
+controlled way. That temporarily restores the old broader rights as well and has
+to be accepted separately as a way back. No database downgrades, no password
+rotation and no removal of the new roles are needed for it. Trial starts and the
+production switch belong to a separate approval after the local PR, not to the
+local preparation.

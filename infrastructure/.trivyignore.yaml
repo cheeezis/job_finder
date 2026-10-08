@@ -1,81 +1,81 @@
-# Bewusste Abwägungen aus dem Trivy-Scan des Terraform-Codes, jede mit Grund.
-# Die CI liest diese Datei (.github/workflows/checks.yml); lokal im Ordner
+# Deliberate trade-offs from the Trivy scan of the Terraform code, each with its reason.
+# CI reads this file (.github/workflows/checks.yml); locally in the folder
 # infrastructure: trivy config --ignorefile .trivyignore.yaml .
-# Netz und Kosten im Detail: docs/operations.md.
+# Network and costs in detail: docs/operations.md.
 misconfigurations:
   - id: AZU-0012
     paths: ["**/storage.tf"]
     statement: >-
-      Keine Netzregeln: Worker und Review in Container Apps sowie die
-      GitHub-Pipeline (Terraform-State) haben keine feste ausgehende IP, und
-      privater Zugang über VNet, Private Endpoint oder NAT kostet laufend.
-      Zugriff nur über Entra ID mit eng gefassten Rollen; Kontoschlüssel und
-      anonymer Lesezugriff sind aus.
+      No network rules: worker and review in Container Apps and the GitHub
+      pipeline (Terraform state) have no fixed outbound IP, and private
+      access through a VNet, private endpoint or NAT costs money continuously.
+      Access only through Entra ID with narrowly scoped roles; account keys and
+      anonymous read access are off.
 
   - id: AZU-0013
     paths: ["**/keyvault.tf"]
     statement: >-
-      Keine Netzregeln, gleiche Abwägung wie beim Storage. Zugriff nur über
-      Entra ID und RBAC: Die Worker-Identität darf Secrets nur lesen, schreiben
-      darf nur der Owner.
+      No network rules, same trade-off as for the storage. Access only through
+      Entra ID and RBAC: the worker identity may only read secrets, only the
+      owner may write them.
 
   - id: AZU-0016
     paths: ["**/keyvault.tf"]
     statement: >-
-      Soft Delete ist immer aktiv und hält gelöschte Secrets 90 Tage
-      wiederherstellbar, prevent_destroy verhindert versehentliches Löschen per
-      Terraform. Purge Protection lässt sich nie wieder abschalten und würde
-      den Vault-Namen nach einem bewussten Abbau 90 Tage blockieren.
+      Soft delete is always active and keeps deleted secrets recoverable for 90
+      days; prevent_destroy prevents an accidental deletion through Terraform.
+      Purge protection can never be switched off again and would block the
+      vault name for 90 days after a deliberate teardown.
 
   - id: AZU-0021
     paths: ["**/postgresql.tf"]
     statement: >-
-      Die Prüfung sucht den Parameter connection_throttling des eingestellten
-      Single Servers. Flexible Server kennt ihn nicht (geprüft am 30.09.2026
-      mit az postgres flexible-server parameter list).
+      The check looks for the parameter connection_throttling of the retired
+      Single Server. Flexible Server does not know it (checked on 30.09.2026
+      with az postgres flexible-server parameter list).
 
   - id: AZU-0022
     paths: ["**/postgresql.tf"]
     statement: >-
-      Öffentlicher Endpunkt mit Firewall: eine Client-IP und Azure-Dienste. TLS
-      ist Pflicht, Clients prüfen mit verify-full, Worker und Review nutzen eine
-      eingeschränkte Rolle. Privater Zugang bräuchte eine VNet-integrierte
-      Container-Apps-Umgebung.
+      Public endpoint with a firewall: one client IP and Azure services. TLS is
+      required, clients verify with verify-full, worker and review use a
+      restricted role. Private access would need a VNet-integrated Container
+      Apps environment.
 
   - id: AZU-0026
     paths: ["**/postgresql.tf"]
     statement: >-
-      Der Server verlangt TLS 1.2 oder neuer (ssl_min_protocol_version und
-      require_secure_transport in postgresql.tf). Trivy 0.70 liest bei Flexible
-      Servern nur den MySQL-Parameter tls_version und meldet deshalb jeden
-      PostgreSQL Flexible Server.
+      The server requires TLS 1.2 or newer (ssl_min_protocol_version and
+      require_secure_transport in postgresql.tf). For flexible servers Trivy
+      0.70 reads only the MySQL parameter tls_version and therefore reports
+      every PostgreSQL flexible server.
 
   - id: AZU-0057
     paths: ["**/storage.tf"]
     statement: >-
-      Die Prüfung verlangt das klassische Logging des Queue-Dienstes; der
-      Account nutzt keine Queues. Blob-Zugriffe laufen nur über Entra ID mit eng
-      gefassten Rollen.
+      The check asks for the classic logging of the queue service; the account
+      uses no queues. Blob access runs only through Entra ID with narrowly
+      scoped roles.
 
   - id: AZU-0058
     paths: ["**/storage.tf"]
     statement: >-
-      LRS statt Geo-Redundanz: Wie bei der Datenbank (kein Geo-Backup) bleiben
-      die Daten in einer Region; einen regionalen Totalausfall nimmt das
-      Projekt in Kauf. Gegen Fehlbedienung schützen Versionierung, 14 Tage Soft
-      Delete und die Löschsperre.
+      LRS instead of geo-redundancy: as with the database (no geo backup) the
+      data stays in one region; the project accepts a complete regional
+      outage. Versioning, 14 days of soft delete and the delete lock protect
+      against operating mistakes.
 
   - id: AZU-0060
     paths: ["**/storage.tf"]
     statement: >-
-      Verschlüsselt mit von Microsoft verwalteten Schlüsseln. Eigene Schlüssel
-      bräuchten einen Key Vault mit Purge Protection (siehe AZU-0016) und eine
-      Schlüsselrotation; der Gewinn, Schlüssel selbst sperren zu können,
-      rechtfertigt das für ein Ein-Personen-Projekt nicht.
+      Encrypted with Microsoft-managed keys. Own keys would need a Key Vault
+      with purge protection (see AZU-0016) and key rotation; the gain of being
+      able to lock the keys oneself does not justify that for a one-person
+      project.
 
   - id: AZU-0061
     paths: ["**/storage.tf"]
     statement: >-
-      Die zweite Verschlüsselungsschicht lässt sich nur beim Anlegen setzen;
-      der Account mit Dokumenten und Terraform-State müsste neu entstehen. Die
-      Standardverschlüsselung (AES-256) ist aktiv.
+      The second encryption layer can only be set at creation; the account with
+      documents and Terraform state would have to be created anew. The default
+      encryption (AES-256) is active.

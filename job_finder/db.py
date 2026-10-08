@@ -16,7 +16,7 @@ from job_finder.workflow.memory import load_memory
 
 def main():
     """Run an explicit maintenance operation without printing connection secrets."""
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(prog="job-finder-db", description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("init")
     commands.add_parser("migrate", help="Leere DB anlegen, geprüfte Alt-DB übernehmen oder auf head migrieren.")

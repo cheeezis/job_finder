@@ -1,5 +1,5 @@
-# tflint-Regeln für den Terraform-Code; der azurerm-Regelsatz prüft
-# Azure-spezifische Werte wie SKUs, Regionen und Größen.
+# tflint rules for the Terraform code; the azurerm rule set checks
+# Azure-specific values such as SKUs, regions and sizes.
 plugin "azurerm" {
   enabled = true
   version = "0.32.0"

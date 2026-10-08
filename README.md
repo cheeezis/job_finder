@@ -6,8 +6,8 @@ the same job, filters out clear misfits with transparent rules and lets an LLM
 agent write a short fact sheet for the promising ones, within a hard cost limit.
 A small web app supports the review and tracks applications.
 
-The user interface and the detailed documentation are in German, because the tool
-serves a job search in Germany. This page is the English overview.
+The user interface is in German, because the tool serves a job search in Germany;
+the documentation is in English.
 
 ## Highlights
 
@@ -45,7 +45,7 @@ serves a job search in Germany. This page is the English overview.
   version-pinned application documents. A drill in Azure restored an older state
   into separate resources and had a signed-in review with document download
   working after about 22 minutes, against a 60-minute target
-  ([details](docs/backup-recovery.md#ergebnis-der-azure-probe)).
+  ([details](docs/backup-recovery.md#result-of-the-azure-drill)).
 - **Observable agent:** every job leaves a JSON log line and an OpenTelemetry
   trace in Application Insights (run → job → model and tool calls) with ids,
   tokens, cost and the verdict, but never profile, prompt or ad text; a test
@@ -184,12 +184,15 @@ frontend tests. From the repository root:
 uv sync
 uv run python scripts/setup_postgres.py
 docker compose --env-file .env.postgres up -d --wait
-uv run python -m job_finder.db init
-uv run python run_finder.py
-uv run python -m job_finder.review
+uv run job-finder-db init
+uv run job-finder
+uv run job-finder-review
 ```
 
-`uv sync` installs exactly the versions in `uv.lock` into `.venv`. The review
+`uv sync` installs exactly the versions in `uv.lock` into `.venv`, together with
+the project and its commands `job-finder` (a finder run), `job-finder-review`
+and `job-finder-db`; `python run_finder.py` and `python -m job_finder.review`
+still work as well. The review
 opens at `http://127.0.0.1:8765`. Without `user_settings.local.yaml`
 the anonymised example settings apply. The agent stays off until
 `agent.enabled: true` is set and an Azure OpenAI endpoint and a profile are
@@ -211,14 +214,22 @@ sheets the agent wrote for them, then opens the review at
 model. Each run empties the demo database first, and the script refuses any
 database server that is not local.
 
-## Documentation (German)
+## Documentation
 
-- [Bedienung](docs/bedienung.md): features, sources, review workflow, rules and
-  the agent's settings
-- [Betrieb](docs/operations.md): database, backups, Azure, the local job and
+- [Usage](docs/usage.md): features, sources, review workflow, rules and the
+  agent's settings
+- [Operations](docs/operations.md): database, backups, Azure, the local job and
   access paths
-- [Entwicklung](docs/development.md): structure, data flow of a run, adding a
+- [Development](docs/development.md): structure, data flow of a run, adding a
   source and code style
+- [Setting up the cloud from scratch](docs/bootstrap.md): identities, first
+  apply, secrets, database and GitHub settings for a rebuild
+- [Architecture decisions](docs/adr/README.md): why the project is built the
+  way it is, with the alternatives that were considered
+- [Backup and restore](docs/backup-recovery.md),
+  [runtime access](docs/runtime-access.md) and
+  [database sign-in with Entra](docs/database-auth.md): the details behind
+  operations
 
 ## License
 

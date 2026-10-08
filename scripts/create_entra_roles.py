@@ -9,7 +9,6 @@ administrator in the application database. Never activates a runtime or writes s
 import argparse
 import json
 import os
-import sys
 from pathlib import Path
 
 import psycopg
@@ -17,11 +16,10 @@ from azure.identity import AzureCliCredential
 from dotenv import dotenv_values
 from psycopg.conninfo import conninfo_to_dict
 
-PROJECT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(PROJECT))
+from job_finder.persistence.database_auth import POSTGRES_SCOPE, entra_parameters
+from job_finder.persistence.entra_permissions import prepare, validate_principals
 
-from job_finder.persistence.database_auth import POSTGRES_SCOPE, entra_parameters  # noqa: E402
-from job_finder.persistence.entra_permissions import prepare, validate_principals  # noqa: E402
+PROJECT = Path(__file__).resolve().parents[1]
 
 
 def targets(admin_url, entra_url):

@@ -1,8 +1,8 @@
-# Empfänger für Alerts; aktuell nur eine E-Mail-Adresse, da niemand sonst mitliest.
+# Recipient of alerts; currently a single email address, as nobody else reads along.
 resource "azurerm_monitor_action_group" "jobfinder_alerts" {
   name                = "ag-jobfinder-alerts"
   resource_group_name = azurerm_resource_group.jobfinder.name
-  # Max. 12 Zeichen; erscheint als Absenderkürzel in der Alert-Mail.
+  # At most 12 characters; appears as the sender short name in the alert mail.
   short_name = "jobfinder"
 
   email_receiver {
@@ -13,13 +13,13 @@ resource "azurerm_monitor_action_group" "jobfinder_alerts" {
   tags = azurerm_resource_group.jobfinder.tags
 }
 
-# Schlägt an, sobald eine geplante Ausführung des Finder-Jobs fehlschlägt.
+# Fires as soon as a scheduled execution of the finder job fails.
 #
-# Nutzt die native "Executions"-Metrik (Dimension state=Failed) statt einer
-# Log-Analytics-Abfrage über die strukturierten run_failed-Events aus
-# console.py: die Metrik erfasst auch Abstürze, bevor der Python-Prozess
-# überhaupt eine Log-Zeile schreiben konnte (z. B. Image-Pull-Fehler, OOM
-# beim Start) - ein Log-Text-Alert würde diesen Fall verpassen.
+# Uses the native "Executions" metric (dimension state=Failed) instead of a
+# Log Analytics query over the structured run_failed events from
+# console.py: the metric also catches crashes before the Python process
+# could write any log line at all (for example image pull errors, OOM
+# at start) - a log text alert would miss this case.
 resource "azurerm_monitor_metric_alert" "finder_run_failed" {
   name                = "alert-jobfinder-run-failed"
   resource_group_name = azurerm_resource_group.jobfinder.name
@@ -50,12 +50,12 @@ resource "azurerm_monitor_metric_alert" "finder_run_failed" {
   tags = azurerm_resource_group.jobfinder.tags
 }
 
-# Schneller Rauchmelder für den KI-Agenten: Die Token-Metrik des Modells liegt
-# nach Minuten vor, Kostendaten erst nach bis zu drei Tagen. Geprüft wird
-# stündlich über die letzten 24 Stunden. Ein normaler Tag liegt bei 0,6 bis
-# 1,6 Mio. Tokens, die Tagesgrenze im Code bei etwa 3 Mio.; 2 Mio. (etwa
-# 0,65 €) melden ungewöhnliche Tage, bevor die Tagesgrenze greift. Sinkt der
-# Wert wieder, folgt eine Entwarnung statt stündlicher Mails.
+# Fast smoke detector for the AI agent: the model's token metric is available
+# after minutes, cost data only after up to three days. It checks hourly
+# over the last 24 hours. A normal day is at 0.6 to 1.6 million tokens,
+# the daily limit in the code at about 3 million; 2 million (about
+# 0.65 €) report unusual days before the daily limit applies. When the
+# value drops again, an all-clear follows instead of hourly mails.
 resource "azurerm_monitor_metric_alert" "model_tokens_high" {
   name                = "alert-jobfinder-model-tokens"
   resource_group_name = azurerm_resource_group.jobfinder.name
@@ -67,7 +67,7 @@ resource "azurerm_monitor_metric_alert" "model_tokens_high" {
 
   criteria {
     metric_namespace = "Microsoft.CognitiveServices/accounts"
-    # "Processed Inference Tokens": Eingabe plus Ausgabe.
+    # "Processed Inference Tokens": input plus output.
     metric_name = "TokenTransaction"
     aggregation = "Total"
     operator    = "GreaterThan"
@@ -81,15 +81,15 @@ resource "azurerm_monitor_metric_alert" "model_tokens_high" {
   tags = azurerm_resource_group.jobfinder.tags
 }
 
-# Langsamer Rauchmelder für das ganze Projekt, also auch für die Produktion.
-# Kostendaten kommen mit bis zu 72 Stunden Verzögerung; die Hochrechnung warnt
-# oft früher, weil sie den Trend des Monats sieht. 25 € (Rechnungswährung des
-# Abos) sind das geplante Maximum, solange PostgreSQL im kostenlosen Kontingent
-# der Subscription läuft: Registry etwa 4,35 € plus höchstens 20 € für den
-# Agenten. Danach kommen etwa 15,55 € für den Server hinzu, und der Betrag muss
-# steigen (docs/operations.md, Abschnitt Kosten). Ein Budget warnt nur, es
-# stoppt nichts. Ein Budget für das ganze Abo könnte die Pipeline mangels Rechten
-# auf Abo-Ebene nicht verwalten; alle Projektressourcen liegen in dieser Gruppe.
+# Slow smoke detector for the whole project, so for production too.
+# Cost data arrives with up to 72 hours delay; the forecast often warns
+# earlier because it sees the month's trend. 25 € (billing currency of the
+# subscription) is the planned maximum while PostgreSQL runs on the free
+# grant of the subscription: registry about 4.35 € plus at most 20 € for the
+# agent. After that about 15.55 € for the server are added, and the amount has
+# to rise (docs/operations.md, section Costs). A budget only warns, it
+# stops nothing. The pipeline could not manage a budget for the whole subscription
+# for lack of rights at subscription level; all project resources are in this group.
 resource "azurerm_consumption_budget_resource_group" "jobfinder" {
   name              = "budget-jobfinder"
   resource_group_id = azurerm_resource_group.jobfinder.id
@@ -129,11 +129,11 @@ resource "azurerm_consumption_budget_resource_group" "jobfinder" {
   }
 }
 
-# Traces des KI-Agenten (job_finder/telemetry.py): je Lauf ein Baum aus Lauf,
-# Stellen, Modell- und Werkzeugaufrufen, nur mit IDs, Zahlen und Fazit-Stufe.
-# Die Daten landen im bestehenden Log-Analytics-Workspace. Das Tageslimit liegt
-# weit über dem erwarteten Bedarf von wenigen Kilobyte je Lauf und kappt nur
-# Ausreißer; danach fehlen die Traces bis zum nächsten Tag.
+# Traces of the AI agent (job_finder/telemetry.py): per run a tree of run,
+# jobs, model and tool calls, only with IDs, numbers and verdict level.
+# The data lands in the existing Log Analytics workspace. The daily cap is
+# far above the expected need of a few kilobytes per run and only cuts off
+# outliers; after that the traces are missing until the next day.
 resource "azurerm_application_insights" "jobfinder" {
   name                 = "appi-jobfinder"
   resource_group_name  = azurerm_resource_group.jobfinder.name
@@ -142,14 +142,14 @@ resource "azurerm_application_insights" "jobfinder" {
   application_type     = "other"
   retention_in_days    = 30
   daily_data_cap_in_gb = 0.1
-  # Nur Entra-ID-Anmeldung: Die Verbindungszeichenfolge allein darf nichts
-  # senden, deshalb steht sie als normaler Wert im Job statt im Key Vault.
+  # Entra ID sign-in only: the connection string alone may send nothing,
+  # which is why it is a normal value in the job instead of in Key Vault.
   local_authentication_enabled = false
 
   tags = azurerm_resource_group.jobfinder.tags
 }
 
-# Erlaubt dem Worker, mit seiner Managed Identity Traces zu senden.
+# Allows the worker to send traces with its managed identity.
 resource "azurerm_role_assignment" "monitoring_publisher_worker" {
   scope                = azurerm_application_insights.jobfinder.id
   role_definition_name = "Monitoring Metrics Publisher"
@@ -157,7 +157,7 @@ resource "azurerm_role_assignment" "monitoring_publisher_worker" {
   principal_type       = "ServicePrincipal"
 }
 
-# Ebenso der Review mit ihrer eigenen Identität (F09); bis dahin nutzt sie die des Workers.
+# The same for the review with its own identity (F09); until then it uses the worker's.
 resource "azurerm_role_assignment" "monitoring_publisher_review" {
   count                = local.runtime_prepared ? 1 : 0
   scope                = azurerm_application_insights.jobfinder.id
@@ -166,11 +166,11 @@ resource "azurerm_role_assignment" "monitoring_publisher_review" {
   principal_type       = "ServicePrincipal"
 }
 
-# Betriebs-Dashboard (Azure-Monitor-Arbeitsmappe): Läufe, Kennzahlen, Quellen,
-# Agentenkosten und Review-Ladezeiten aus dem Log-Analytics-Workspace. Kostenlos;
-# die Abfragen stehen in workbooks/operations.json, docs/operations.md erklärt sie.
+# Operations dashboard (Azure Monitor workbook): runs, key figures, sources,
+# agent cost and review loading times from the Log Analytics workspace. Free;
+# the queries are in workbooks/operations.json, docs/operations.md explains them.
 resource "azurerm_application_insights_workbook" "operations" {
-  # Arbeitsmappen brauchen eine GUID als Namen; uuidv5 hält sie über alle Pläne gleich.
+  # Workbooks need a GUID as name; uuidv5 keeps it the same across all plans.
   name                = uuidv5("url", "https://github.com/cheeezis/job_finder/workbooks/operations")
   resource_group_name = azurerm_resource_group.jobfinder.name
   location            = azurerm_resource_group.jobfinder.location

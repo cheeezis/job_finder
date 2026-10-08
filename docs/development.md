@@ -1,13 +1,14 @@
-# Entwicklung am Job Finder
+# Developing the Job Finder
 
-Diese Anleitung beschreibt Aufbau und Entwicklung. Einrichtung und Bedienung
-stehen in [Bedienung](bedienung.md), der Betrieb in [Betrieb](operations.md).
+This guide describes structure and development. Setup and use are in
+[Usage](usage.md), operation in [Operations](operations.md), and the reasons
+behind the main design choices in the [architecture decisions](adr/README.md).
 
-## Arbeitsumgebung und Prüfungen
+## Environment and checks
 
-Python 3.11 oder neuer und [uv](https://docs.astral.sh/uv/) werden benötigt.
-Die Befehle laufen im Repository-Stamm; `uv run` nutzt die `.venv`, ohne dass
-sie aktiviert werden muss:
+It needs Python 3.11 or newer and [uv](https://docs.astral.sh/uv/). The
+commands run from the repository root; `uv run` uses `.venv` without having to
+activate it:
 
 ```powershell
 uv sync
@@ -20,110 +21,114 @@ npm ci
 npm run check:types
 ```
 
-Die Abhängigkeiten stehen mit Versionsbereichen in `pyproject.toml`, die exakten
-Versionen in `uv.lock`; CI und Image installieren genau diese. Nach einer
-Änderung an `pyproject.toml` aktualisiert `uv lock` das Lockfile, sonst scheitert
-die CI. Die Gruppe `dev` enthält festgelegte Versionen von Ruff, pytest,
-pytest-cov, Pyright und Playwright, damit lokale Prüfung und CI dieselben Regeln verwenden.
-Node.js wird für die Frontend-Tests, die Typprüfung der Browser-Skripte und
-für Pyright benötigt; die CI verwendet Node.js 24.
+The dependencies are listed with version ranges in `pyproject.toml`, the exact
+versions in `uv.lock`; CI and the image install exactly those. `uv sync` also
+installs the project itself (editable) with its commands `job-finder`,
+`job-finder-review` and `job-finder-db`, so scripts import `job_finder` without
+changing `sys.path`; the image installs only the dependencies and runs from
+`/app`. After a change to
+`pyproject.toml`, `uv lock` updates the lock file, otherwise CI fails. The `dev`
+group pins Ruff, pytest, pytest-cov, Pyright and Playwright, so local checks and
+CI apply the same rules. Node.js is needed for the frontend tests, the type
+check of the browser scripts and for Pyright; CI uses Node.js 24.
 
-Die Browser-Skripte bleiben klassische Skripte ohne Build. `// @ts-check` und
-JSDoc lassen TypeScript sie trotzdem prüfen, je Seite für sich
-(`typecheck/`). Die Antworten der Lese-Schnittstellen beschreiben
-Pydantic-Modelle (`job_finder/api_models.py`); aus ihrem OpenAPI-Schema erzeugt
-`npm run types:api` die Datei `job_finder/api-types.d.ts`, und
-`job_finder/types.d.ts` gibt den Typen kurze Namen wie `ReviewCard`. Ändert sich
-eine Antwort, gehören Modell und neu erzeugte Typen in denselben Commit; die CI
-scheitert, wenn die Typen nicht mehr zum Server passen oder ein Skript ein Feld
-falsch liest.
+The browser scripts stay classic scripts without a build. `// @ts-check` and
+JSDoc still let TypeScript check them, each page on its own (`typecheck/`).
+Pydantic models (`job_finder/api_models.py`) describe the responses of the read
+endpoints; from their OpenAPI schema `npm run types:api` generates
+`job_finder/api-types.d.ts`, and `job_finder/types.d.ts` gives the types short
+names such as `ReviewCard`. When a response changes, model and regenerated
+types belong in the same commit; CI fails when the types no longer match the
+server or a script reads a field wrongly.
 
-Die Tests verwenden lokale Fixtures, temporäre Datenpfade, eine separate
-PostgreSQL-Testdatenbank ([Betrieb](operations.md#lokale-datenbank)) und
-ersetzte Netzwerkzugriffe; ein vollständiger Finder-Lauf gehört nicht dazu.
-`scripts/test_postgres.py` prüft die Testdatenbank und startet dann pytest, das
-die `unittest`-Klassen unverändert ausführt; weitere Argumente gehen an pytest.
-`--cov` misst, welche Zeilen und Verzweigungen in `job_finder/` die Tests
-erreichen. Die Zahl hilft, ungetestete Stellen zu finden, und ist kein Ziel für
-sich. Pyright prüft die Typen des ganzen Anwendungspakets `job_finder`; Tests,
-Skripte und Evals noch nicht (`[tool.pyright]` in `pyproject.toml`).
+The tests use local fixtures, temporary data paths, a separate PostgreSQL test
+database ([Operations](operations.md#local-database)) and replaced network
+access; a complete finder run is not part of them. `scripts/test_postgres.py`
+checks the test database and then starts pytest, which runs the `unittest`
+classes unchanged; further arguments go to pytest. `--cov` measures which lines
+and branches in `job_finder/` the tests reach. The number helps to find untested
+places and is not a goal in itself. Pyright checks the types of the whole
+application package `job_finder`; tests, scripts and evals not yet
+(`[tool.pyright]` in `pyproject.toml`).
 
-Grenztests prüfen Zusagen, die sonst niemand bemerkt, gegen die echte
-Testdatenbank: Die App-Rolle liest und schreibt Zeilen, ändert aber nie das
-Schema und sieht weder `schema_version` noch `alembic_version` (eine eigene Test-Rolle, damit eine
-echte `jobfinder_app` auf demselben Server unberührt bleibt), und ein zweiter
-gleichzeitiger Finder-Lauf wird abgewiesen (`tests/test_database_boundaries.py`).
+Boundary tests check promises that nobody would otherwise notice, against the
+real test database: the app role reads and writes rows but never changes the
+schema and sees neither `schema_version` nor `alembic_version` (a separate test
+role, so a real `jobfinder_app` on the same server stays untouched), and a
+second concurrent finder run is refused (`tests/test_database_boundaries.py`).
 
-`tests/test_schema_migrations.py` erzeugt eigene temporäre `_test`-Datenbanken auf
-der bereits isolierten Testinstanz und entfernt sie nach jedem Test. Der Testzugang
-braucht dafür `CREATEDB` und für die Rollenprüfung `CREATEROLE` (die lokale und die
-CI-Testinstanz verwenden einen Superuser). Frisch migrierte und übernommene Datenbanken
-werden anhand der PostgreSQL-Kataloge verglichen. Eine unabhängige historische DDL-Fixture
-prüft die Übernahme einschließlich unveränderter Entscheidungen, Dokumentreferenzen,
-Benachrichtigungen und Kostenbuch. Strukturabweichungen, unbekannte Versionen, ererbte
-App-Rechte und Abbrüche nach DDL oder Baseline-Markierung sind eigene Regressionen.
-Diese Tests laufen in der normalen PostgreSQL-Suite und damit auch in CI.
+`tests/test_schema_migrations.py` creates its own temporary `_test` databases on
+the already isolated test instance and removes them after each test. The test
+login needs `CREATEDB` for that and `CREATEROLE` for the role check (the local
+and the CI test instance use a superuser). Freshly migrated and adopted
+databases are compared through the PostgreSQL catalogs. An independent
+historical DDL fixture checks the adoption, including unchanged decisions,
+document references, notifications and cost ledger. Structure deviations,
+unknown versions, inherited app rights and aborts after DDL or the baseline
+stamp are regressions of their own. These tests run in the normal PostgreSQL
+suite and so in CI as well.
 
-`tests/test_runtime_permissions.py` prüft F09 mit jeweils eindeutigen lokalen
-Worker-/Review-/Hybrid-Rollen und Capability-Gruppen. Neben erlaubten tatsächlichen
-Review-Abläufen werden direkte Rechteverletzungen, indirektes Löschen über
-Datensatz-Kaskaden, `SET ROLE`, spätere Tabellen und unveränderte Passwörter geprüft.
-Die Tests entfernen ihre Rollen und stellen die Policy nach Abschluss wieder her.
-Die Terraform-Tests in `infrastructure/tests/runtime_access.tftest.hcl` prüfen
-`legacy`, `prepare`, verweigertes `split` und freigegebenes `split` mit vollständig
-simulierten Providern (`terraform test`). Sie erzeugen keine Azure-Ressourcen.
-Die notwendige spätere Cloud-Abnahme beschreibt [runtime-access.md](runtime-access.md).
+`tests/test_runtime_permissions.py` checks F09 with unique local worker, review
+and hybrid roles and capability groups for each test. Besides allowed real
+review flows, it checks direct rights violations, indirect deletion through
+record cascades, `SET ROLE`, later tables and unchanged passwords. The tests
+remove their roles and restore the policy afterwards. The Terraform tests in
+`infrastructure/tests/runtime_access.tftest.hcl` check `legacy`, `prepare`, a
+refused `split` and an approved `split` with fully simulated providers
+(`terraform test`). They create no Azure resources. The later cloud acceptance
+that is still needed is described in [runtime-access.md](runtime-access.md).
 
-Die Browser-Tests (`tests/test_review_browser.py`) klicken die Review in
-Chromium auf frisch befüllten Demo-Daten durch: Steckbrief, Entscheidung mit
-Notiz, Warteliste, Rückgängig und Bewerbung mit Dokument. Jeder Test startet
-seine eigene Demo-Review. Ohne `JOBFINDER_BROWSER_TESTS=1` werden sie
-übersprungen; lokal einmal Chromium laden, dann wie in der CI:
+The browser tests (`tests/test_review_browser.py`) click through the review in
+Chromium on freshly filled demo data: fact sheet, decision with note, waiting
+list, undo and application with a document. Each test starts its own demo
+review. Without `JOBFINDER_BROWSER_TESTS=1` they are skipped; locally, download
+Chromium once, then run them as in CI:
 
 ```powershell
 uv run playwright install chromium
 $env:JOBFINDER_BROWSER_TESTS = "1"; uv run python scripts/test_postgres.py tests/test_review_browser.py
 ```
 
-Der [GitHub-Workflow](../.github/workflows/checks.yml) testet Python 3.11 und
-3.13 auf Linux mit PostgreSQL und zeigt die Abdeckung in der Zusammenfassung des
-Laufs, prüft Stil, Typen, Frontend und ob `uv.lock` zu `pyproject.toml` passt; je ein
-eigener Job führt die Browser-Tests und den Quickstart aus dem README aus. Bei Pull Requests baut er außerdem das Image, startet es
-kurz als eingeschränkter Benutzer und prüft es mit Trivy auf bekannte Lücken;
-tflint und Trivy prüfen den Terraform-Code und brechen bei jedem neuen Befund
-ab (bewusste Abwägungen stehen mit Begründung in
-[.trivyignore.yaml](../infrastructure/.trivyignore.yaml)), und ein
-`terraform plan` gegen den gespeicherten State (`-refresh=false`) zeigt die
-Folgen für Azure (nicht für Forks und Dependabot, die keinen Azure-Zugang
-haben). CodeQL analysiert Python,
-JavaScript und die Workflows ([codeql.yml](../.github/workflows/codeql.yml)),
-Dependabot schlägt wöchentlich Updates vor, und alle Actions sind auf
-Commit-SHAs festgelegt. Nach einem Merge auf `main` baut er das Image, prüft es
-erneut und pusht es in die Registry. Danach erstellt er einen Terraform-Plan mit
-Abgleich gegen den echten Azure-Zustand, legt ihn privat neben dem State ab und
-zeigt im Lauf nur, welche Ressourcen sich wie ändern würden. Die manuelle Freigabe
-im Environment `production` gilt genau diesem Plan: Der Apply lädt ihn, prüft seine
-Prüfsumme und wendet ihn an; hat sich der State seither geändert, bricht Terraform
-ab. Anschließend rollt er das Image per Digest auf Worker und Review aus, prüft den
-Login-Schutz und wartet, bis die neue Review-Revision gesund läuft. Ein neuerer
-Deploy bricht einen älteren, noch wartenden ab, und nach der Freigabe rollt er nur
-aus, wenn sein Commit noch der aktuelle `main` ist. Terraform verwaltet die
-Image-Version nicht; ein lokales `terraform apply` setzt die App also nie
-zurück. Den Rückweg beschreibt [Betrieb](operations.md#deploy-und-rollback).
+The [GitHub workflow](../.github/workflows/checks.yml) tests Python 3.11 and
+3.13 on Linux with PostgreSQL and shows the coverage in the run's summary; it
+checks style, types, frontend and whether `uv.lock` matches `pyproject.toml`;
+separate jobs run the browser tests and the quickstart from the README. For
+pull requests it also builds the image, starts it briefly as a restricted user
+and scans it for known vulnerabilities with Trivy; tflint and Trivy check the
+Terraform code and fail on every new finding (deliberate trade-offs are listed
+with their reason in [.trivyignore.yaml](../infrastructure/.trivyignore.yaml)),
+and a `terraform plan` against the stored state (`-refresh=false`) shows the
+consequences for Azure (not for forks and Dependabot, which have no Azure
+access). CodeQL analyses Python, JavaScript and the workflows
+([codeql.yml](../.github/workflows/codeql.yml)), Dependabot proposes updates
+weekly, and all actions are pinned to commit SHAs. After a merge to `main` it
+builds the image, checks it again and pushes it to the registry. Then it creates
+a Terraform plan reconciled with the real Azure state, stores it privately next
+to the state and shows in the run only which resources would change how. The
+manual approval in the environment `production` applies to exactly this plan:
+the apply loads it, checks its checksum and applies it; if the state has changed
+since, Terraform aborts. Afterwards it rolls out the image by digest to worker
+and review, checks the sign-in protection and waits until the new review
+revision runs healthily. A newer deploy cancels an older one still waiting, and
+after the approval it rolls out only if its commit is still the current `main`.
+Terraform does not manage the image version; a local `terraform apply` therefore
+never resets the app. [Operations](operations.md#deploy-and-rollback) describes
+the way back.
 
-Neue allgemeine Änderungen beginnen auf einem aktuellen `main`, zum Beispiel
-auf `docs/...`, `fix/...` oder `feat/...`. Inhaltliche und große rein mechanische
-Änderungen getrennt committen. Die [PR-Vorlage](../.github/PULL_REQUEST_TEMPLATE.md)
-beschreibt Titel und Beschreibung. Das Repository ist öffentlich: Commit- und
-PR-Texte bleiben kurz und nennen keine persönlichen Daten, keine Firmen aus
-eigenen Bewerbungen, keine Zahlen aus dem eigenen Bestand und keine Azure-Namen.
+New general changes start on a current `main`, for example on `docs/...`,
+`fix/...` or `feat/...`. Commit content changes and large purely mechanical
+changes separately. The [PR template](../.github/PULL_REQUEST_TEMPLATE.md)
+asks for a short summary and what was tested, including what was not. The
+repository is public: commit and PR texts
+stay short and name no personal data, no companies from own applications, no
+figures from the own data and no Azure names.
 
-## Datenbankmigrationen
+## Database migrations
 
-Die Revisionen liegen in `job_finder/persistence/migrations/versions/`. Die Baseline
-und ihr eingefrorenes Schema in `migrations/baseline.py` bleiben unverändert;
-Schemaänderungen bekommen eine neue Revision. Die Datenzugriffe bleiben bei psycopg;
-SQLAlchemy wird für Migrationen und Strukturprüfung verwendet.
+The revisions are in `job_finder/persistence/migrations/versions/`. The baseline
+and its frozen schema in `migrations/baseline.py` stay unchanged; schema changes
+get a new revision. Data access stays with psycopg; SQLAlchemy is used for
+migrations and the structure check.
 
 ```powershell
 uv run python -m job_finder.db schema-status
@@ -132,331 +137,337 @@ uv run alembic history
 uv run alembic revision -m "describe schema change"
 ```
 
-Neue Revisionen manuell ausarbeiten und Upgrade, Bestandserhalt, App-Rechte und
-Kompatibilität testen. `migrate` ist der einzige unterstützte Ausführungspfad:
-ein direktes `alembic upgrade` oder `stamp` ohne geprüfte Admin-Transaktion wird
-abgewiesen. Verbindungsdaten stammen aus `JOBFINDER_ADMIN_DATABASE_URL`, nie aus
-`alembic.ini`; Azure-TLS-Optionen bleiben erhalten. Auch `init`, Demo und Restore
-verwenden denselben Migrationspfad. Es gibt keine automatische Migration beim App-Start.
+Work out new revisions by hand and test upgrade, data preservation, app rights
+and compatibility. `migrate` is the only supported way to run them: a direct
+`alembic upgrade` or `stamp` without the checked admin transaction is refused.
+Connection details come from `JOBFINDER_ADMIN_DATABASE_URL`, never from
+`alembic.ini`; Azure TLS options are kept. `init`, the demo and restore use the
+same migration path. There is no automatic migration at app start.
 
-## Orientierung im Code
+## Finding your way in the code
 
-| Bereich | Zuständigkeit |
+| Area | Responsibility |
 | --- | --- |
-| `run_finder.py` | CLI, Quellenkoordination und Reihenfolge der Pipeline |
-| `job_finder/workflow/main.py` | Vorhandene Jobs bewerten, Anzeigen einer Stelle zu einer Karte vereinen und Ergebnisse zusammenstellen |
-| `job_finder/sources/` | Quellen abrufen und in `Job`/`JobSource` umwandeln |
-| `job_finder/models.py` | Datenmodell, Statuswerte und Serialisierung |
-| `job_finder/matching/deduplication.py` | Gleiche Anzeigen verschiedener Quellen zusammenführen |
-| `job_finder/matching/scoring.py`, `matching_rules.py`, `remote.py` | Bewertungsablauf, Erkennungsregeln und Remote-Erkennung |
-| `job_finder/matching/experience.py`, `location_rules.py`, `salary.py`, `matching_text.py` | Zusammenhängende Analysen und normalisierte Textvergleiche |
-| `job_finder/workflow/memory.py` | PostgreSQL-Zustand, stabile IDs (eine je Stelle, auch über Portale und Läufe) und frühere Entscheidungen |
-| `job_finder/workflow/availability.py` | Fehlende interessante Stellen auf bestätigte Schließung prüfen |
-| `job_finder/review.py`, `job_finder/review_app.py`, `job_finder/workflow/review_data.py`, `review_actions.py` | Start der Review (uvicorn), FastAPI-App mit Pydantic-Modellen, OpenAPI unter `/openapi.json` und Swagger UI unter `/docs`, Review-Datenaufbereitung und transaktionale Aktionen |
-| `job_finder/workflow/applications.py`; `job_finder/persistence/application_documents.py`, `document_store.py` | Bewerbungsverlauf und Unterlagen (lokal oder im Blob Storage) |
-| `job_finder/app.js`, `landing.js`, `review.js`, `applications.js` und zugehörige HTML-Dateien | Gemeinsame Browser-Helfer, Seitenskripte und Arbeitsansichten |
-| `job_finder/workflow/reporting.py`, `notifications.py` | Review-Ausgabe und Discord-Warteschlange |
-| `job_finder/matching/user_settings.py`, `config.py`; `job_finder/paths.py` | Konfiguration, Suche und lokale Dateipfade |
-| `job_finder/agent/`; `job_finder/persistence/agent_usage.py`, `fact_sheets.py`, `decisions.py` | KI-Agent: Schalter und Grenzen, Profil, Preise und Kostenwächter, Anweisungen, Werkzeuge, Steckbrief-Struktur, LangGraph-Graph je Stelle und Einbindung in den Lauf; Kostenbuch, Steckbriefe und frühere Entscheidungen in PostgreSQL |
+| `run_finder.py` | CLI, source coordination and pipeline order |
+| `job_finder/workflow/main.py` | Score existing jobs, merge the listings of a job into one card and assemble the results |
+| `job_finder/sources/` | Fetch sources and turn them into `Job`/`JobSource`; `http.py` is the shared HTTP client, `registry.py` the source names |
+| `job_finder/models.py` | Data model, status values and serialisation |
+| `job_finder/matching/deduplication.py` | Merge the same listing from different sources |
+| `job_finder/matching/scoring.py`, `matching_rules.py`, `remote.py` | Scoring flow, detection rules and remote detection |
+| `job_finder/matching/experience.py`, `location_rules.py`, `salary.py`, `matching_text.py` | Related analyses and normalised text comparison |
+| `job_finder/workflow/memory.py` | PostgreSQL state, stable IDs (one per job, also across boards and runs) and earlier decisions |
+| `job_finder/workflow/availability.py` | Check missing interesting jobs for confirmed closing |
+| `job_finder/review.py`, `job_finder/review_app.py`, `job_finder/api_models.py`, `job_finder/workflow/review_data.py`, `review_actions.py` | Review start (uvicorn), FastAPI app with Pydantic models, OpenAPI at `/openapi.json` and Swagger UI at `/docs`, review data preparation and transactional actions |
+| `job_finder/workflow/applications.py`; `job_finder/persistence/application_documents.py`, `document_store.py` | Application timeline and documents (local or in Blob Storage) |
+| `job_finder/app.js`, `landing.js`, `review.js`, `applications.js` and their HTML files | Shared browser helpers, page scripts and working views |
+| `job_finder/workflow/reporting.py`, `notifications.py` | Review output and Discord queue |
+| `job_finder/matching/user_settings.py`, `config.py`; `job_finder/paths.py` | Configuration, search and local file paths |
+| `job_finder/agent/`; `job_finder/persistence/agent_usage.py`, `fact_sheets.py`, `decisions.py` | AI agent: switch and limits, profile, prices and cost guard, instructions, tools, fact sheet structure, LangGraph graph per job and its place in the run; cost ledger, fact sheets and earlier decisions in PostgreSQL |
 
-### Datenfluss eines Finder-Laufs
+### Data flow of a finder run
 
-1. Lokal wird zuerst der Datenbestand gesichert; in Containern entfällt
-   dieses Backup. Danach liefern Quellen Treffer und Abdeckungsangaben; URLs
-   und quellenübergreifende Duplikate werden zusammengeführt. Sind mehr als
-   die Hälfte der Quellen unbrauchbar, stoppt der Lauf vor dem Ersetzen von
-   Job-Snapshot und Review-Ausgabe.
-2. Ein erster Vorfilter bestimmt die Kandidaten für optionale Detailabrufe.
-   Quellen dürfen deren Job-Objekte ersetzen oder bestätigte geschlossene
-   Anzeigen aus der Liste entfernen.
-3. Die angereicherten Jobs werden endgültig bewertet. Diese Ergebnisse
-   bleiben mit den Job-Objekten verbunden, während das Gedächtnis anschließend
-   IDs, Erstfund-Merkmale und bestehende Workflow-Entscheidungen zuordnet.
-   Alte Portalnamen im Arbeitgeberfeld von StudySmarter-Einträgen werden dabei
-   entfernt, auch wenn die Anzeige in diesem Lauf nicht erneut gefunden wurde.
-   Der StudySmarter-Adapter entfernt solche Platzhalter auch aus wiederverwendeten
-   Detail-Caches und frisch geladenen Detailseiten, bevor sie das Gedächtnis erreichen.
-   Tatsächliche Arbeitgebernamen und manuelle Entscheidungen bleiben erhalten.
-   Anzeigen mit gleichem Titel und passender Firma erhalten dabei dieselbe ID,
-   auch über Portale und Läufe hinweg; eine schon entschiedene Stelle nur ohne
-   neuen Ort oder wenn beide komplett remote sind. Danach werden sie zu einer
-   Karte, angeführt von der bestbewerteten Anzeige.
-   Bei abgeschlossenen Bewerbungen werden andere Anzeigen nur übernommen,
-   wenn ihre Veröffentlichungsdaten höchstens 30 Tage auseinanderliegen.
-   Ältere gespeicherte Einträge verwenden ersatzweise das Erstfund-Datum;
-   das Datum des letzten Abrufs zählt nicht. Laufende Bewerbungen und
-   Zuordnungen über dieselbe Anzeigen-ID oder URL behalten ihre Zuordnung.
-4. Die Offline-Prüfung betrachtet fehlende interessante Stellen ohne
-   Bewerbungsverlauf, und nur wenn alle bekannten Quellen der Stelle, die
-   dieser Lauf abfragt, vollständig erfolgreich waren; ebenso zählt das
-   Gedächtnis Fehlläufe. Netzwerkabrufe erfolgen außerhalb der
-   PostgreSQL-Schreibtransaktionen; vor einer Statusänderung wird der aktuelle
-   Nutzerentscheid erneut geprüft.
-5. Job-Snapshot und Empfehlungen werden geschrieben; Anzeigen übersprungener
-   Quellen bleiben erhalten, auch an Stellen, die dieser Lauf erneut gefunden
-   hat. Die Discord-Warteschlange wird aktualisiert und bei jedem Lauf direkt
-   versendet.
+```mermaid
+flowchart TD
+    sources[Sources, up to four at a time:<br/>job boards, feeds, career pages, manual imports] --> merge[Merge URLs and duplicates]
+    merge --> gate{More than half of<br/>the sources usable?}
+    gate -- no --> stop([Stop, keep the previous state])
+    gate -- yes --> score[Prefilter, detail pages for candidates,<br/>final scoring]
+    score --> memory[Memory: IDs, decisions, one card per job;<br/>offline check of missing interesting jobs]
+    memory --> publish[Publish in one transaction:<br/>memory, snapshot, review, Discord jobs]
+    publish --> after[Send to Discord, agent writes fact sheets,<br/>run_summary and runs table]
+```
 
-`is_new` beschreibt einen Erstfund im Suchlauf. `workflow_status="new"`
-bedeutet dagegen, dass die Stelle noch nicht bearbeitet wurde. Der Review-
-Filter „Neu“ richtet sich nach dem Workflow-Status und seinen Sichtbarkeitsfiltern.
-Diese Merkmale dürfen bei Änderungen nicht gleichgesetzt werden: Ein Abbruch
-nach dem Speichern des Gedächtnisses und ein Neustart entfernen unbearbeitete
-Stellen deshalb nicht aus „Neu“.
+1. Locally the data is backed up first; in containers this backup is skipped.
+   Then the sources deliver matches and coverage details, up to four at a time;
+   URLs and duplicates across sources are merged. If more than half of the
+   sources are unusable, the run stops before replacing the job snapshot and the
+   review output.
+2. A first prefilter determines the candidates for optional detail fetches.
+   Sources may replace their job objects or remove confirmed closed listings
+   from the list.
+3. The enriched jobs are scored finally. These results stay attached to the job
+   objects while the memory afterwards assigns IDs, first-seen attributes and
+   existing workflow decisions. Old board names in the employer field of
+   StudySmarter entries are removed on the way, even if the listing was not
+   found again in this run. The StudySmarter adapter also removes such
+   placeholders from reused detail caches and freshly loaded detail pages
+   before they reach the memory. Real employer names and manual decisions are
+   kept. Listings with the same title and a matching company get the same ID,
+   also across boards and runs; an already decided job only without a new place
+   or when both are fully remote. Then they become one card, led by the
+   best-scored listing. For completed applications, other listings are taken
+   over only if their publication dates are at most 30 days apart. Older
+   stored entries use the first-seen date instead; the date of the last fetch
+   does not count. Running applications and assignments through the same
+   listing ID or URL keep their assignment.
+4. The offline check looks at missing interesting jobs without an application
+   timeline, and only if all known sources of the job that this run queries
+   were completely successful; the memory counts missed runs the same way.
+   Network requests happen outside the PostgreSQL write transactions; before a
+   status change the current user decision is checked again.
+5. Job snapshot and recommendations are written; listings of skipped sources
+   are kept, also for jobs this run found again. The Discord queue is updated
+   and sent straight away in every run.
 
-### Offline-Prüfung
+`is_new` describes a first find in the search run. `workflow_status="new"`
+means instead that the job has not been worked on yet. The review filter "Neu"
+follows the workflow status and its visibility filters. These attributes must
+not be equated when changing things: an abort after saving the memory and a
+restart therefore do not remove unhandled jobs from "Neu".
 
-Geprüft werden nur fehlende interessante Stellen ohne Bewerbungsverlauf, nicht
-unbearbeitete Stellen mit Status Neu. Aktuelle Treffer werden übersprungen,
-veraltete Cache-Treffer gelten als fehlend. Die Anfragen laufen sequenziell,
-höchstens 200 URLs pro Lauf; nach zwei Minuten beginnt keine neue mehr, eine
-laufende darf fertig werden. Ergebnisse gelten 24 Stunden, auch unklare; offene
-Prüfungen verteilen sich auf spätere Läufe und ändern den Status nicht. Eine
-Stelle wird nur „Nicht interessant“, wenn alle ihre URLs in den letzten 24
-Stunden eindeutig als geschlossen bestätigt wurden; fehlende Suchtreffer,
-Login-Weiterleitungen und Abruffehler reichen nicht.
+### Offline check
 
-### Laufausgabe
+Only missing interesting jobs without an application timeline are checked, not
+unhandled jobs with status new. Current matches are skipped, outdated cache
+matches count as missing. The requests run one after the other, at most 200 URLs
+per run; after two minutes no new one starts, a running one may finish. Results
+count for 24 hours, unclear ones too; open checks spread over later runs and do
+not change the status. A job becomes "Nicht interessant" only if all its URLs
+were clearly confirmed as closed in the last 24 hours; missing search matches,
+sign-in redirects and fetch errors are not enough.
 
-Jede Quelle erhält eine Ergebniszeile mit Treffern, Dauer und gegebenenfalls
-Teilergebnis oder Fehler. Konsole und Laufprotokoll zeigen außerdem die Dauer
-der Detailanreicherung und der Pipeline-Schritte, bei abgebrochenen Schritten
-die bis dahin verstrichene Zeit; verschachtelte Zeiten überlappen und ergeben
-addiert nicht die Gesamtlaufzeit. Im Terminal werden Fortschrittszeilen
-ersetzt, ohne Terminal erscheinen zeitgestempelte Zwischenstände höchstens alle
-30 Sekunden je Vorgang. Die Offline-Prüfung zeigt erledigte und geplante
-eindeutige URLs, aber keine URLs oder Stelleninhalte. Die Review-Diagnose trennt
-erstmals gespeicherte und bekannte Treffer, passende und ausgeschlossene neue
-Treffer sowie den Status Neu vom Standardfilter Neu.
+### Run output
 
-### Veröffentlichung und Discord-Outbox
+Every source gets a result line with matches, duration and, if so, a partial
+result or an error. Console and run log also show the duration of the detail
+enrichment and the pipeline steps, for aborted steps the time elapsed until
+then; nested times overlap and do not add up to the total run time. In a
+terminal, progress lines are replaced; without a terminal, timestamped
+intermediate states appear at most every 30 seconds per activity. Sources run in
+threads, so their lines interleave; the run log writes one line at a time, and
+JSON events stay whole. The offline check shows done and planned unique URLs,
+but no URLs or job contents. The review diagnosis separates first-stored and
+known matches, matching and excluded new matches, and the status new from the
+default filter "Neu".
 
-Der Finder sammelt und bewertet zuerst alle Quellen und prüft fehlende
-interessante Anzeigen außerhalb von Schreibtransaktionen. Dabei ermittelt eine
-Kopie des Gedächtnisses die voraussichtlichen kanonischen IDs. Vor dem Speichern
-wird der aktuelle Bestand erneut gelesen: zwischenzeitliche Review-Entscheidungen
-und neue Links haben Vorrang vor älteren Prüfergebnissen.
+### Publishing and Discord outbox
 
-Danach werden Gedächtnis einschließlich bestätigter Schließungen, Job-Snapshot,
-Empfehlungen und Benachrichtigungsaufträge in einer PostgreSQL-Transaktion
-gespeichert. Die Sperrreihenfolge ist Veröffentlichung, Gedächtnis, Datensätze,
-wie beim manuellen Import. Jeder Auftrag enthält kompakte Kartendaten und einen
-stabilen `event_key` (`job-found:<ID des Erstfunds>`); bei einer Zusammenführung
-werden Auftrag und Versandstatus der kanonischen Stellen-ID zugeordnet. Bereits
-versendete Funde werden dabei nicht erneut eingeplant.
+The finder first collects and scores all sources and checks missing interesting
+listings outside write transactions. A copy of the memory determines the
+expected canonical IDs. Before saving, the current data is read again: review
+decisions and new links made in the meantime take precedence over older check
+results.
 
-Die bestehende Tabelle `notifications` speichert Kartendaten und Ereignisschlüssel
-in ihrem vorhandenen JSONB-Feld. Deshalb benötigt diese Änderung keine neue
-Tabelle oder Alembic-Revision. Das Backup-Format und Revision `0001_baseline`
-bleiben kompatibel; Anwendungs-Backups enthalten auch die vollständige Outbox.
+Then memory including confirmed closings, job snapshot, recommendations and
+notification jobs are saved in one PostgreSQL transaction. The lock order is
+publishing, memory, records, as for the manual import. Every job holds compact
+card data and a stable `event_key` (`job-found:<ID of the first find>`); on a
+merge, job and delivery state are assigned to the canonical job ID. Finds
+already sent are not scheduled again.
 
-Erst nach Commit ruft `deliver_notifications` Discord auf. Eine Sitzungssperre
-verhindert parallele Sender; Netzaufrufe halten keine Schreibtransaktion offen.
-Vor jedem Teilversand werden aktuelle Entscheidungen geprüft und die Nachrichten
-erneut nach Discords Größenlimits aufgeteilt. Aufträge werden auch dann wiederholt,
-wenn der aktuelle Lauf ihre Quelle überspringt oder sie nicht erneut findet.
-Fehler behalten Versuchszähler und Fehlertext, erfolgreiche Teilversände werden
-einzeln quittiert. Alte offene Einträge ohne Kartendaten werden aus veröffentlichten
-Empfehlungen oder beim nächsten passenden Fund ergänzt. Statusentscheidungen und
-Ausschlüsse können einen noch offenen Auftrag verwerfen.
+The existing table `notifications` stores card data and event keys in its
+existing JSONB field. This change therefore needs no new table or Alembic
+revision. The backup format and revision `0001_baseline` stay compatible;
+application backups contain the complete outbox as well.
 
-Die Zustellung erfolgt mindestens einmal, solange der Auftrag weiterhin zulässig
-ist: Nach Discord-Erfolg und einem Abbruch vor Quittierung kann ein Hinweis doppelt
-erscheinen. Die kompakte Laufstatistik bleibt ein unmittelbarer Betriebsbericht.
-Ein Rollback auf ein früheres Image ist ohne Schema-Downgrade möglich, bietet aber
-nicht die neue Garantie gemeinsamer Veröffentlichung und wiederholbaren Versands.
-Ausdrückliche JSON-Exportpfade besitzen keine gemeinsame Transaktion mit PostgreSQL.
+Only after the commit does `deliver_notifications` call Discord. A session lock
+prevents parallel senders; network calls hold no write transaction open. Before
+each partial delivery, current decisions are checked and the messages are split
+again by Discord's size limits. Jobs are retried even when the current run skips
+their source or does not find them again. Errors keep their attempt counter and
+error text, successful partial deliveries are acknowledged one by one. Old open
+entries without card data are completed from published recommendations or with
+the next matching find. Status decisions and exclusions can discard a job still
+open.
 
-`tests/test_notification_outbox.py` prüft Abbrüche vor/nach Commit und vor/nach
-Versand, Teilversände, parallele Sender, Review-Änderungen, kanonische IDs und die
-Sichtbarkeit für eine zweite Datenbankverbindung ausschließlich auf Testdaten.
-Auch die Wiederherstellung offener Aufträge aus einem Anwendungs-Backup und
-Größenänderungen von Karten zwischen zwei Teilversänden sind abgesichert.
+Delivery happens at least once as long as the job stays allowed: after Discord
+succeeded and an abort before the acknowledgement, a message can appear twice.
+The compact run summary stays an immediate operational report. A rollback to an
+earlier image is possible without a schema downgrade, but does not offer the new
+guarantee of joint publishing and repeatable delivery. Explicit JSON export
+paths have no joint transaction with PostgreSQL.
 
-### Review-API
+`tests/test_notification_outbox.py` checks aborts before/after commit and
+before/after delivery, partial deliveries, parallel senders, review changes,
+canonical IDs and the visibility for a second database connection, on test data
+only. Restoring open jobs from an application backup and size changes of cards
+between two partial deliveries are covered as well.
 
-Bewerbungsunterlagen kommen als Formular-Upload (`multipart/form-data`, zwei
-Dateien zu höchstens 15 MB). Weil ein Browser Formulare ohne Vorabprüfung an fremde
-Seiten schicken darf, verlangt dieser Weg zusätzlich den Header `X-Jobfinder-Upload`
-und einen passenden `Origin`; eine fremde Seite bräuchte für den Header eine
-CORS-Freigabe, die die App nicht erteilt.
+### Review API
 
-`job_finder/review_app.py` beschreibt jede Schnittstelle mit einem Pydantic-Modell;
-Fehler kommen einheitlich als `{"error": "…"}`. Vor jeder Anfrage prüft die App Host,
-Ursprung, bei Änderungen JSON und Größe (1 MB) und setzt die Sicherheits-Header
-samt strenger Content-Security-Policy. Ausnahme ist nur `/docs`: Swagger UI kommt
-von jsDelivr, mit fester Version und SRI-Prüfsumme in `job_finder/docs.html`, und
-die Policy dieser Seite erlaubt genau diese zwei Dateien. Für ein Update Version
-und beide `sha384`-Prüfsummen in `docs.html` sowie die Version in `SWAGGER`
-(`review_app.py`) gemeinsam ändern; ein Test prüft, dass jede fremde Datei eine
-Prüfsumme hat und in der Policy steht.
+Application documents arrive as a form upload (`multipart/form-data`, two files
+of at most 15 MB). Because a browser may send forms to other sites without a
+preflight check, this path also requires the header `X-Jobfinder-Upload` and a
+matching `Origin`; another site would need a CORS permission for the header,
+which the app does not grant.
 
-### Manueller Import
+`job_finder/review_app.py` describes every endpoint with a Pydantic model;
+errors come uniformly as `{"error": "…"}`. Before every request the app checks
+host, origin, JSON for changes and size (1 MB) and sets the security headers
+including a strict Content Security Policy. The only exception is `/docs`:
+Swagger UI comes from jsDelivr, with a fixed version and SRI checksum in
+`job_finder/docs.html`, and that page's policy allows exactly these two files.
+For an update, change the version and both `sha384` checksums in `docs.html`
+together with the version in `SWAGGER` (`review_app.py`); a test checks that
+every external file has a checksum and is in the policy.
 
-`manual_import.import_manual_url` verarbeitet genau die eingereichte URL und
-behält die übrigen Empfehlungen. Ein Vorfilterkonflikt bleibt als Warnung
-sichtbar; er verhindert die manuelle Sichtung nicht. Im Standardbetrieb lädt
-sie die Seite vor jeder Sperre und schreibt danach manuelle Quelle, Gedächtnis,
-Job-Snapshot und Empfehlungen in einer gemeinsamen PostgreSQL-Transaktion.
-Mit ausdrücklich anderen Dateipfaden, etwa in Tests, laufen diese
-Schreibvorgänge nacheinander ohne gemeinsame Transaktion.
+### Manual import
 
-Der Seitenparser bevorzugt `JobPosting`-Daten und sonst `main`, `article`
-oder `role="main"`. Fehlen diese Bereiche, akzeptiert er den Seiteninhalt
-nur mit einer sichtbaren H1-Überschrift und erkannten Überschriften für
-Aufgaben und Profil beziehungsweise Anforderungen. Navigation, Formulare
-und Footer werden beim Sammeln des lesbaren Textes übersprungen.
+`manual_import.import_manual_url` processes exactly the submitted URL and keeps
+the other recommendations. A prefilter conflict stays visible as a warning; it
+does not prevent the manual review. In standard operation it loads the page
+before any lock and then writes manual source, memory, job snapshot and
+recommendations in one PostgreSQL transaction. With explicitly different file
+paths, for example in tests, these writes run one after the other without a
+joint transaction.
 
-Manuelle Anzeigen-IDs werden aus der vollständigen kanonischen URL gebildet,
-auch bei vorhandenen Schema-IDs. Gleiche URL-Enden verschiedener Arbeitgeber
-dürfen keine Bewerbungszustände teilen. Frische alte Cache-Einträge erhalten
-ebenfalls diese URL-ID; das Gedächtnis erkennt vorhandene Bewerbungen weiter
-über ihre Herkunftslinks und behält deren bisherige ID und Verlauf.
+The page parser prefers `JobPosting` data and otherwise `main`, `article` or
+`role="main"`. If these areas are missing, it accepts the page content only with
+a visible H1 heading and recognised headings for tasks and profile or
+requirements. Navigation, forms and footer are skipped when collecting the
+readable text.
 
-Explizit hinzugefügte Anzeigen bleiben trotz der optionalen Filter für
-internationale Anzeigen und Junior-Hybrid-Sonderfälle sichtbar. Direkte
-Review-Links setzen zusätzlich Status, Bereich und Suche passend zurück.
+Manual listing IDs are built from the complete canonical URL, even when schema
+IDs exist. The same URL endings of different employers must not share
+application states. Fresh old cache entries get this URL ID as well; the memory
+still recognises existing applications by their source links and keeps their
+earlier ID and timeline.
 
-`linked_listings.link_listing_to_application` ordnet eine zusätzliche Anzeige
-unter Veröffentlichungs- und Gedächtnissperre einer bestehenden Bewerbung zu.
-Die bisherige Sichtungsnotiz und der Sichtungsverlauf bleiben als
-Zuordnungsdaten erhalten; die Bewerbung behält Identität, Status, Gehalt,
-Unterlagen und ihren Verlauf. Gespeicherte Anzeigen-ID-Aliase und Herkunftslinks
-halten die Zuordnung auch bei späteren Suchläufen aufrecht. Zwei Bewerbungen
-werden über diese Aktion nicht zusammengeführt.
+Explicitly added listings stay visible despite the optional filters for
+international listings and junior-hybrid special cases. Direct review links also
+reset status, area and search accordingly.
 
-### KI-Agent
+`linked_listings.link_listing_to_application` attaches an additional listing to
+an existing application under the publishing and memory lock. The earlier
+review note and review timeline are kept as assignment data; the application
+keeps its identity, status, salary, documents and timeline. Stored listing ID
+aliases and source links keep the assignment in later search runs as well. Two
+applications are not merged through this action. On the applications page the
+links of attached listings appear in the card's links section, next to the pages
+the agent used; title and company can be corrected there and are then kept by
+later runs (`details_edited`).
 
-Der Steckbrief einer Stelle entsteht in einem LangGraph-Graphen
-(`job_finder/agent/runner.py`). Der Knoten `model` prüft den Kostenwächter,
-ruft das Modell über `ChatOpenAI` (LangChain, Responses-API des eigenen Azure
-OpenAI) und bucht die Kosten; fordert das Modell Werkzeuge an, führt `tools` sie
-aus und gibt die Ergebnisse zurück. Antwortet das Modell ohne Werkzeugaufruf,
-ist das der Steckbrief; er wird geprüft, seine Quellen werden gegen die
-tatsächlich gesehenen Links abgeglichen und dann gespeichert.
+### AI agent
+
+A job's fact sheet is written in a LangGraph graph
+(`job_finder/agent/runner.py`). The node `model` checks the cost guard, calls
+the model through `ChatOpenAI` (LangChain, the Responses API of the own Azure
+OpenAI) and books the cost; if the model requests tools, `tools` runs them and
+returns the results. If the model answers without a tool call, that is the fact
+sheet; it is checked, its sources are compared with the links actually seen,
+and then it is saved.
 
 ```mermaid
 graph TD
-    start([Stelle]) --> model[model: Kostenwächter, Modellaufruf, Kosten buchen]
-    model -- Werkzeugaufrufe --> tools[tools: past_decisions]
+    start([job]) --> model[model: cost guard, model call, book cost]
+    model -- tool calls --> tools[tools: past_decisions]
     tools --> model
-    model -- Steckbrief --> ende([prüfen, Quellen abgleichen, speichern])
+    model -- fact sheet --> finish([check, compare sources, save])
 ```
 
-Die Bing-Suche läuft als eingebautes Werkzeug im Modellaufruf selbst. Die
-abgerechnete Zahl der Suchen reicht LangChain nicht weiter; `agent_model` liest
-sie deshalb aus der HTTP-Antwort mit, über den HTTP-Client der openai-Bibliothek
-(httpx2). Die Tests schicken das echte LangChain-Modell gegen einen simulierten
-Endpunkt (`httpx2.MockTransport`).
+Bing search runs as a built-in tool within the model call itself. LangChain does
+not pass on the billed number of searches; `agent_model` therefore reads it from
+the HTTP response, through the HTTP client of the openai library (httpx2). The
+tests send the real LangChain model against a simulated endpoint
+(`httpx2.MockTransport`).
 
-Ein Pydantic-Modell beschreibt den Steckbrief (`job_finder/agent/fact_sheet.py`):
-Aus ihm entstehen das Format der strukturierten Ausgabe und die Prüfung der
-Antwort. Ein Test hält das Format Byte für Byte gleich zum früheren,
-handgeschriebenen (`tests/fixtures/fact_sheet_format.json`), damit sich die
-Anfrage an das Modell nicht unbemerkt ändert.
+A Pydantic model describes the fact sheet (`job_finder/agent/fact_sheet.py`): it
+yields the format of the structured output and the check of the answer. A test
+keeps the format byte for byte equal to the earlier hand-written one
+(`tests/fixtures/fact_sheet_format.json`), so the request to the model does not
+change unnoticed.
 
-Jeder Steckbrief speichert Versuch und Grundlage (`job_finder/agent/basis.py`):
-Hashes von Profil (geparst, ohne Kommentare), Regeln und Anzeige sowie Modell mit
-Denkaufwand und `GRAPH_VERSION`. Ändern sich Graph, Werkzeuge oder die Anfrage je
-Stelle so, dass Steckbriefe anders ausfallen, `GRAPH_VERSION` in `runner.py`
-erhöhen; die Review zeigt ältere dann als veraltet. Wiederholt wird höchstens
-einmal (`MAX_ATTEMPTS`) und nur bei `incomplete` oder `unusable`. „Neu bewerten“
-setzt in der Review das Feld `fact_sheet_rerun_requested_at` am gemerkten Job;
-der Agent arbeitet solche Stellen zuerst ab und entfernt das Feld danach.
-LangSmith-Tracing ist nicht eingerichtet; ohne gesetzte `LANGSMITH_*`-Variablen
-verlässt nichts den eigenen Rechner beziehungsweise Azure.
+Every fact sheet stores its attempt and basis (`job_finder/agent/basis.py`):
+hashes of profile (parsed, without comments), rules and listing, plus model with
+reasoning effort and `GRAPH_VERSION`. If graph, tools or the per-job request
+change so that fact sheets turn out differently, raise `GRAPH_VERSION` in
+`runner.py`; the review then shows older ones as outdated. A retry happens at
+most once (`MAX_ATTEMPTS`) and only on `incomplete` or `unusable`. "Neu
+bewerten" in the review sets the field `fact_sheet_rerun_requested_at` on the
+remembered job; the agent handles such jobs first and removes the field
+afterwards. LangSmith tracing is not set up; without `LANGSMITH_*` variables
+nothing leaves the own computer or Azure.
 
 ### Evals
 
-Die Evals in `evals/` messen, wie gut die Steckbriefe zu beschrifteten Fällen
-passen. `evals/cases/synthetic.yaml` enthält eine erfundene Person mit Profil
-und Orten, zwei frühere Entscheidungen und 24 erfundene Anzeigen; auch Firmen
-und Links sind erfunden. Je Fall stehen die erlaubten Fazit-Stufen, erwartete
-Ampeln und ein Satz zur maßgeblichen Regel aus `job_finder/agent/instructions.py`.
-Zwei Varianten schreiben die Steckbriefe: `agent` ist der Graph aus dem Betrieb
-mit `past_decisions`, das die Entscheidungen der Falldatei durchsucht;
-`einzelaufruf` ist ein einziger strukturierter Aufruf mit denselben Regeln, aber
-ohne Graph und Werkzeuge. Die Websuche ist in beiden aus, weil sie zu erfundenen
-Firmen nichts findet, aber Geld kostet.
+The evals in `evals/` measure how well the fact sheets match labelled cases.
+`evals/cases/synthetic.yaml` holds a made-up person with profile and places, two
+earlier decisions and 24 made-up listings; companies and links are made up too.
+Each case lists the allowed verdict levels, the expected traffic lights and a
+sentence on the governing rule from `job_finder/agent/instructions.py`. Two
+variants write the fact sheets: `agent` is the graph from operation with
+`past_decisions`, which searches the case file's decisions; `einzelaufruf`
+(single call) is one structured call with the same rules, but without graph and
+tools. Web search is off in both, because it finds nothing on made-up companies
+but costs money.
 
-Geprüft wird ohne Modell, Feld für Feld: das Fazit unter den erlaubten Stufen,
-die Richtung (bewerben oder erst klären gegenüber eher streichen oder
-streichen), die erwarteten Ampeln und ob die Texte Geldbeträge nennen, die die
-Anzeige nicht enthält. Dazu zählen Abbrüche, verworfene Links (Quellen, die das
-Modell nie gesehen hat), Werkzeugaufrufe, Kosten und Laufzeit. Ein Abbruch zählt
-als falsches Urteil. Lehnt Azures Inhaltsfilter eine Anfrage ab, bevor das
-Modell sie sieht, steht der Fall als „blockiert“ im Bericht; nur Fälle mit
-`blockade_ok` (die Angriffe) zählen das als abgewehrt.
+Checking happens without a model, field by field: the verdict among the allowed
+levels, the direction (apply or clarify first versus rather drop or drop), the
+expected traffic lights and whether the texts name amounts of money the listing
+does not contain. Aborts, discarded links (sources the model never saw), tool
+calls, cost and run time are counted as well. An abort counts as a wrong
+verdict. If Azure's content filter refuses a request before the model sees it,
+the case appears as "blockiert" (blocked) in the report; only cases with
+`blockade_ok` (the attacks) count that as fended off.
 
-Ein Lauf kostet echtes Geld beim Azure-OpenAI-Deployment und startet deshalb nur
-von Hand, angemeldet wie der lokale Agent (`az login`):
+A run costs real money at the Azure OpenAI deployment and therefore starts only
+by hand, signed in like the local agent (`az login`):
 
 ```powershell
 $env:JOBFINDER_OPENAI_ENDPOINT = az cognitiveservices account list --resource-group rg-jobfinder --query "[0].properties.endpoint" -o tsv
 uv run python -m evals --budget 1.00
 ```
 
-`--budget` ist ein hartes Limit für den ganzen Lauf, höchstens 5 €. Die Kosten
-führt der Lauf nur im Speicher: Tages- und Monatsgrenze des Agenten im Betrieb
-bleiben unberührt, das Azure-Budget sieht sie trotzdem. `--variant`, `--only`,
-`--repeat` (mehrere Durchgänge, weil Modellantworten schwanken) und `--effort`
-grenzen den Lauf ein; `--searches 1-3` erlaubt dem Agenten die bezahlte
-Websuche. Bericht und Rohdaten landen in `evals/results/`, als Markdown und als
-JSON mit Commit, Datensatz- und Regel-Hash. Ins Repository kommt nur der Bericht
-synthetischer Läufe; die Rohdaten mit allen Steckbriefen bleiben lokal.
+`--budget` is a hard limit for the whole run, at most 5 €. The run keeps its
+costs only in memory: the agent's daily and monthly limits in operation stay
+untouched, the Azure budget sees them anyway. `--variant`, `--only`, `--repeat`
+(several passes, because model answers vary) and `--effort` narrow the run;
+`--searches 1-3` allows the agent the paid web search. Report and raw data go to
+`evals/results/`, as Markdown and as JSON with commit, data set and rule hash.
+Only the report of synthetic runs goes into the repository; the raw data with
+all fact sheets stays local.
 
-Bekannte Schwächen (Lauf v3 vom 01.10.2026): Zwei Fälle scheitern in beiden
-Varianten und allen Durchgängen. Bei `ausgeschlossene-rolle-vertrieb` wertet das
-Modell Vertrieb als lernbare Lücke statt als ausgeschlossene Rolle; „Engineer“
-und „Cloud“ im Titel und die Regel zum Nahbereich ziehen zu „Bewerben –
-Stretch“. Bei `auslaendische-firma-germany` reicht ihm „Location: Germany
-(remote)“ für grün; den Firmensitz im Ausland nennt es nur als Punkt zum Klären.
-Beide Fälle behalten ihr strenges Soll, damit ein späterer Regel- oder
-Modellwechsel zeigt, ob sich das bessert.
+Known weaknesses (run v3 of 01.10.2026): two cases fail in both variants and
+all passes. In `ausgeschlossene-rolle-vertrieb` the model rates sales as a
+learnable gap instead of an excluded role; "Engineer" and "Cloud" in the title
+and the rule on the near area pull it to "Bewerben – Stretch". In
+`auslaendische-firma-germany`, "Location: Germany (remote)" is enough for green;
+it names the company's seat abroad only as a point to clarify. Both cases keep
+their strict target, so a later rule or model change shows whether this
+improves.
 
-Echte Fälle aus der eigenen Review bleiben lokal. `python -m evals.private_cases
---azure [--limit 40]` liest lesend die entschiedenen Stellen, die der Agent im
-Betrieb bekäme, samt Anzeige, eigenem Profil und Orten, und schreibt sie nach
-`evals/private/` (von Git ignoriert). Soll ist die Richtung der eigenen
-Entscheidung: interessant, Rückfrage oder beworben heißt bewerben oder erst
-klären, nicht interessant heißt eher streichen oder streichen. Das Werkzeug
-`past_decisions` sieht je Fall nur Entscheidungen, die davor lagen. Gestartet
-wird wie oben mit `--cases evals/private/faelle.yaml --out
-evals/private/results`. Die Tests prüfen Falldatei, Bewertung und einen ganzen
-Lauf gegen einen simulierten Endpunkt, ohne Kosten.
+Real cases from the own review stay local. `python -m evals.private_cases
+--azure [--limit 40]` reads the decided jobs the agent would get in operation,
+read-only, with listing, own profile and places, and writes them to
+`evals/private/` (ignored by Git). The target is the direction of the own
+decision: interesting, inquiry or applied means apply or clarify first, not
+interesting means rather drop or drop. The tool `past_decisions` sees only
+decisions that came before each case. It starts as above with
+`--cases evals/private/faelle.yaml --out evals/private/results`. The tests check
+case file, scoring and a whole run against a simulated endpoint, without cost.
 
-### Demo-Daten
+### Demo data
 
-`scripts/demo_data.py` füllt eine eigene lokale Datenbank `jobfinder_demo` mit
-den erfundenen Anzeigen aus `evals/cases/synthetic.yaml` und den Angaben aus
-`demo/demo.yaml`: Sucheinstellungen der erfundenen Person, eine zweite Stelle
-für die Warteliste, Entscheidungen und Bewerbungen (in Tagen vor heute, damit
-die Demo nicht altert) und drei Steckbriefe aus einem Eval-Lauf. Den Vorfilter
-durchlaufen die Anzeigen wie im Betrieb; das Modell wird nicht aufgerufen.
-`--serve` startet danach die Review unter `http://127.0.0.1:8770`. Das Skript
-leert die Demo-Datenbank bei jedem Lauf und verweigert jeden Datenbankserver,
-der nicht lokal läuft. Die Bilder in `docs/images/` stammen aus dieser Demo.
+`scripts/demo_data.py` fills a separate local database `jobfinder_demo` with the
+made-up listings from `evals/cases/synthetic.yaml` and the details from
+`demo/demo.yaml`: search settings of the made-up person, a second job for the
+waiting list, decisions and applications (in days before today, so the demo does
+not age) and three fact sheets from an eval run. The listings pass the prefilter
+as in operation; the model is not called. `--serve` then starts the review at
+`http://127.0.0.1:8770`. The script empties the demo database on every run and
+refuses any database server that is not local. The pictures in `docs/images/`
+come from this demo.
 
-## Eine Quelle ergänzen
+## Adding a source
 
-Eine Quelle liegt unter `job_finder/sources/<name>.py` und liefert Instanzen
-des gemeinsamen Modells statt eigener Job-Dictionaries. Zunächst eine vorhandene
-ähnliche Quelle prüfen. Eine Karriereseite, deren Detailseiten JSON-LD liefern
-und einem gemeinsamen URL-Muster folgen, braucht kein eigenes Modul: Dafür
-genügt ein `CareerPage`-Eintrag in `sources/company_careers.py`, bei
-nummerierten Seiten `PaginatedCareerPage`.
+A source lives in `job_finder/sources/<name>.py` and returns instances of the
+shared model instead of its own job dictionaries. First look at an existing
+similar source. A career page whose detail pages provide JSON-LD and follow a
+common URL pattern needs no module of its own: a `CareerPage` entry in
+`sources/company_careers.py` is enough, for numbered pages
+`PaginatedCareerPage`.
 
-Der vom Runner erwartete Vertrag:
+The contract the runner expects:
 
-| Schnittstelle | Verhalten |
+| Interface | Behaviour |
 | --- | --- |
-| `SOURCE_NAME` | Stabiler Quellenname für IDs, Cache und Laufdiagnose |
-| `fetch_jobs()` | Liefert eine Liste von `Job`; bei einem vollständigen Quellenfehler darf eine Exception propagieren |
-| `enrich_candidate_jobs(jobs, candidate_ids)` (optional) | Verändert die übergebene Liste beziehungsweise ihre Jobs und liefert die Anzahl betroffener Anzeigen; nicht ladbare Kandidatendetails meldet sie über `record_candidate_failure()` |
+| `SOURCE_NAME` | Stable source name for IDs, cache and run diagnosis |
+| `fetch_jobs()` | Returns a list of `Job`; on a complete source failure an exception may propagate |
+| `enrich_candidate_jobs(jobs, candidate_ids)` (optional) | Changes the given list or its jobs and returns the number of affected listings; candidate details that cannot be loaded are reported through `record_candidate_failure()` |
 
-Eine Quelle mit mehreren Suchen meldet ihre Abdeckung während `fetch_jobs()`;
-der Runner sammelt diese Meldungen je Quelle (`collecting_diagnostics()`) und
-bildet daraus ein `SourceResult` mit Status, Details und Dauer:
+A source with several searches reports its coverage during `fetch_jobs()`; the
+runner collects these reports per source (`collecting_diagnostics()`) and builds
+a `SourceResult` with status, details and duration from them:
 
 ```python
 from job_finder.sources.common import record_partial_failure, record_total_segments
@@ -465,183 +476,170 @@ record_total_segments(len(searches))
 record_partial_failure(failed_searches)
 ```
 
-Bei einem abgefangenen Teilfehler muss die Quelle diesen über
-`record_partial_failure()` melden. Ein stilles `[]`
-könnte sonst als vollständig erfolgreiche Suche ohne Treffer interpretiert
-werden. Der Runner verwendet die Zustände `success`, `empty`, `partial` und
-`failed`, um fehlende Treffer richtig zu behandeln.
+A caught partial failure must be reported by the source through
+`record_partial_failure()`. A silent `[]` could otherwise be read as a
+completely successful search without matches. The runner uses the states
+`success`, `empty`, `partial` and `failed` to handle missing matches correctly.
 
-Scheitert nach dem Vorfilter die Detailseite eines Kandidaten, meldet die
-Quelle das über `record_candidate_failure()`. Der Quellenstatus bleibt dabei
-unverändert, weil die Suche selbst vollständig war. Die Discord-Laufstatistik
-und das Logereignis `enrichment_completed` weisen die fehlenden Details aus.
+If a candidate's detail page fails after the prefilter, the source reports that
+through `record_candidate_failure()`. The source status stays unchanged, because
+the search itself was complete. The Discord run summary and the log event
+`enrichment_completed` show the missing details.
 
-Für Details übernimmt `fetch_cached_details` den gemeinsamen Cache: sieben
-Tage frisch, bei Abruffehlern höchstens 14 Tage als markierter Fallback.
-`ListingUnavailableError` kennzeichnet eindeutig geschlossene Anzeigen und
-entfernt ihren Detailcache. Andere Fehler sind kein Schließungsnachweis.
-Quellenspezifische Suchfenster oder Cache-Regeln können davon abweichen und
-gehören in den jeweiligen Modul-Docstring.
+For details, `fetch_cached_details` takes care of the shared cache: seven days
+fresh, on fetch errors at most 14 days as a marked fallback.
+`ListingUnavailableError` marks clearly closed listings and removes their detail
+cache. Other errors are no proof of closing. Source-specific search windows or
+cache rules may deviate and belong in the module's docstring.
 
-Beim Ergänzen einer Quelle:
+When adding a source:
 
-1. Herkunft in `JobSource` erhalten; Anzeigen-URL und gegebenenfalls direkte
-   Bewerbungs-URL unterscheiden. IDs stabil erzeugen. Unbekannte Datums- und
-   Gehaltsangaben nicht schätzen. Gehälter im Modell sind EUR-Jahresbrutto.
-2. Gemeinsame HTTP-, Text-, JSON-LD- und Remote-Helfer verwenden, soweit sie
-   zur Seite passen. Bei manuell eingegebenen URLs auch Weiterleitungen durch
-   `validate_public_url` prüfen lassen.
-3. Das Modul beziehungsweise den `CareerPage`-Eintrag in `run_finder.py`
-   importieren und in `SOURCES` registrieren, den Anzeigenamen in
-   `job_finder/sources/registry.py` eintragen (Konsole, Discord und Review lesen
-   ihn dort). Optionale Zugangsdaten nur über
-   Umgebungsvariablen beziehen; bei Bedarf die Quelle nur bei vorhandener
-   Konfiguration aktivieren.
-4. Parser und Quellenausfälle mit kleinen Fixtures testen: reguläre Anzeige,
-   fehlende optionale Felder, Teilfehler und Cache-/Schließungsfälle. Keine
-   kompletten fremden Webseiten mit Trackingdaten als Fixtures übernehmen.
-5. Quelle und besondere Einschränkungen in [Bedienung](bedienung.md) ergänzen.
+1. Keep the origin in `JobSource`; distinguish the listing URL and, if any, the
+   direct application URL. Create IDs stably. Do not guess unknown dates and
+   salaries. Salaries in the model are annual gross in EUR.
+2. Use the shared HTTP, text, JSON-LD and remote helpers where they fit the
+   page. For manually entered URLs, have redirects checked by
+   `validate_public_url` as well.
+3. Import the module or the `CareerPage` entry in `run_finder.py` and register
+   it in `SOURCES`, and enter its display name in
+   `job_finder/sources/registry.py` (console, Discord and review read it there).
+   Take optional credentials only from environment variables; if needed,
+   activate the source only when it is configured.
+4. Test parser and source failures with small fixtures: a regular listing,
+   missing optional fields, partial failures and cache/closing cases. Do not
+   take over complete third-party web pages with tracking data as fixtures.
+5. Add the source and any special restrictions to [Usage](usage.md).
 
-Adapter erhalten weder Datenbankverantwortung noch persönliche
-Workflow-Entscheidungen. Sie liefern Anzeigen und ihre Herkunft; Filter und
-Speicherung bleiben in den gemeinsamen Modulen.
+Adapters get neither database responsibility nor personal workflow decisions.
+They deliver listings and their origin; filtering and saving stay in the shared
+modules.
 
-## Zustandsänderungen und Konfiguration
+## State changes and configuration
 
-`paths.py` legt alle Pfade relativ zum Projekt fest. Es gibt keinen allgemeinen
-`DATA_DIR`-Umgebungsvariablen-Schalter; nur der Dokumentordner lässt sich über
-`JOBFINDER_DOCUMENTS_DIR` verlegen. Tests reichen abweichende Pfade über
-Funktionsparameter oder gezielte Patches ein.
+`paths.py` defines all paths relative to the project. There is no general
+`DATA_DIR` environment switch; only the document folder can be moved through
+`JOBFINDER_DOCUMENTS_DIR`. Tests pass different paths through function
+parameters or targeted patches.
 
-- Der dauerhafte Stellen- und Bewerbungszustand liegt in PostgreSQL.
-  `MEMORY_FILE` (`data/internal/job_finder.sqlite3`) ist nur noch der Schlüssel
-  dieses Bestands; andere Pfade sind allein in isolierten Tests erlaubt. Für
-  Änderungen `edit_memory` verwenden, damit Lesen, Ändern und Speichern
-  gemeinsam gesperrt sind. `update_memory` verändert die übergebenen Objekte,
-  schreibt allein aber nicht in die Datenbank.
-- JSON-Pfade direkt unter `data/internal` und `data/output` benennen
-  PostgreSQL-Datensätze (`storage.dataset_name`), keine Dateien; nur andere
-  Pfade werden als JSON-Datei gelesen oder geschrieben. `jobs.json` und
-  `recommendations.json` sind neu erzeugbare Ausgaben; `*_cache.json` enthält
-  wiederverwendbare Quelldetails.
-- `notifications.json` enthält die Discord-Warteschlange und den Versandstatus.
-  Auch `process_notifications(send=False)` verändert diesen Datensatz.
-- Bewerbungsunterlagen liegen je nach `JOBFINDER_DOCUMENTS_BACKEND` im
-  Dokumentordner (`local`, Standard) oder im Blob Storage (`blob`); ihre
-  Metadaten stehen in PostgreSQL. `python -m job_finder.db backup` und das
-  automatische Backup vor lokalen Finder-Läufen enthalten die referenzierten
-  Dokumente samt Prüfsummen.
+- The permanent job and application state lives in PostgreSQL. `MEMORY_FILE`
+  (`data/internal/job_finder.sqlite3`) is now only the key of this data; other
+  paths are allowed only in isolated tests. For changes use `edit_memory`, so
+  reading, changing and saving are locked together. `update_memory` changes the
+  objects passed in but does not write to the database by itself.
+- JSON paths directly under `data/internal` and `data/output` name PostgreSQL
+  data sets (`storage.dataset_name`), not files; only other paths are read or
+  written as JSON files. `jobs.json` and `recommendations.json` are outputs that
+  can be regenerated; `*_cache.json` holds reusable source details.
+- `notifications.json` holds the Discord queue and the delivery state.
+  `process_notifications(send=False)` changes this data set as well.
+- Application documents live, depending on `JOBFINDER_DOCUMENTS_BACKEND`, in
+  the document folder (`local`, the default) or in Blob Storage (`blob`); their
+  metadata is in PostgreSQL. `python -m job_finder.db backup` and the automatic
+  backup before local finder runs contain the referenced documents with
+  checksums.
 
-Pydantic-Modelle in `job_finder/matching/user_settings.py` prüfen die
-Einstellungen; `current_settings()` liest sie beim ersten Gebrauch, nicht beim
-Import. Ohne `user_settings.local.yaml` gilt die anonymisierte
-Beispielkonfiguration. Ist `JOBFINDER_USER_SETTINGS` gesetzt (in Azure aus dem
-Key Vault), hat deren YAML-Inhalt Vorrang; `current_settings().source` nennt die
-tatsächliche Quelle. Suche, Bewertung und Quellen lesen ihre Werte zur Laufzeit
-über die Funktionen in `job_finder/matching/config.py`. Tests setzen eigene
-Einstellungen mit `use_settings()` bzw. `tests/settings_helpers.py`
-(`with_settings(matching={...})`), ohne Umgebungsvariablen. Der Agent liest
-seinen Abschnitt aus `current_settings().mapping`. Nach Änderungen laufende
-Prozesse neu starten. Persönliche Konfiguration,
-Dokumente, Datenbanken und Zugangsdaten bleiben außerhalb von Git.
+Pydantic models in `job_finder/matching/user_settings.py` check the settings;
+`current_settings()` reads them on first use, not on import. Without
+`user_settings.local.yaml` the anonymised example configuration applies. If
+`JOBFINDER_USER_SETTINGS` is set (in Azure from Key Vault), its YAML content
+takes precedence; `current_settings().source` names the actual source. Search,
+scoring and sources read their values at run time through the functions in
+`job_finder/matching/config.py`. Tests set their own settings with
+`use_settings()` or `tests/settings_helpers.py` (`with_settings(matching={...})`),
+without environment variables. The agent reads its section from
+`current_settings().mapping`. Restart running processes after changes. Personal
+configuration, documents, databases and credentials stay outside Git.
 
-`score_job` liefert ein Ergebnis-Dictionary, keine einzelne Prozentzahl.
-Ausgeschlossene Ergebnisse enthalten einen Score von 0 und den ersten
-Ausschlussgrund; nur regulär eingeschlossene Ergebnisse besitzen zusätzlich
-`role_group` und `location_precheck`. `score_for_pipeline` ergänzt die
-Sonderbehandlung manueller Einträge. Diese Ergebnisse sind Sortierhilfen,
-keine Vorhersagen einer Einstellungschance.
+`score_job` returns a result dictionary, not a single percentage. Excluded
+results contain a score of 0 and the first exclusion reason; only regularly
+included results also carry `role_group` and `location_precheck`.
+`score_for_pipeline` adds the special handling of manual entries. These results
+are sorting aids, not predictions of a chance to be hired.
 
-Die Bewertung prüft zuerst das Anzeigenalter, danach die Anforderungen und
-zuletzt den Standort. Die erste Ablehnung bleibt der sichtbare Ausschlussgrund.
-Erfahrungsjahre und Standortanalyse werden anschließend für die Punktevergabe
-wiederverwendet. Bei Änderungen diese Reihenfolge und die Grenzwerte erhalten.
+Scoring checks the listing's age first, then the requirements and finally the
+location. The first rejection stays the visible exclusion reason. Years of
+experience and the location analysis are then reused for the points. Keep this
+order and the thresholds when changing things.
 
-### Eigenständiger Vorfilter und persönliche Präferenzen
+### Independent prefilter and personal preferences
 
-`matching_rules.py` enthält Rollenbegriffe, Kontextbedingungen und
-Ausschlussmerkmale ohne persönliche Werte oder Punkte. Die erste passende
-Rollengruppe gewinnt; ihre Reihenfolge ist fachliche Erkennungspriorität und
-wird nicht durch persönliche Vorlieben umsortiert.
+`matching_rules.py` holds role terms, context conditions and exclusion features
+without personal values or points. The first matching role group wins; its order
+is the domain's detection priority and is not re-sorted by personal
+preferences.
 
-`user_settings.local.yaml` steuert Standort, Gehalt und über
-`matching.profile_domain_keywords` den Bezug zu Projekten oder Weiterbildungen.
-Unbekannte Schlüssel werden beim Laden ignoriert. `profile.local.yaml` ist die
-Faktenbasis des KI-Agenten; der Vorfilter liest es nicht.
+`user_settings.local.yaml` controls location, salary and, through
+`matching.profile_domain_keywords`, the relation to projects or further
+training. Unknown keys are ignored on loading. `profile.local.yaml` is the AI
+agent's base of facts; the prefilter does not read it.
 
-Die Bewertung bleibt eine vollständige, regelbasierte Sortierhilfe:
+The scoring stays a complete, rule-based sorting aid:
 
-| Bestandteil | Punkte |
+| Component | Points |
 | --- | --- |
-| Klare Einstiegsstelle oder erste Erfahrung ausreichend | 25 |
-| Erfahrung nur wünschenswert / keine klare Anforderung | 18 / 20 |
-| Ein / zwei / drei Jahre gefordert | 14 / 8 / 3 |
-| Technologische Vorerfahrung / mehrjährige Erfahrung ohne Jahreszahl | 8 / 6 |
-| Vollständig remote / lokal hybrid / lokal vor Ort / erlaubter Pendelort | 15 / 13 / 10 / 8 |
-| Erkannte IT-Richtung | 10 bis 30, nach Rolle |
-| Technologien im Titel oder Beschreibung | bis 25 insgesamt |
-| Mindestens ein konfigurierter Profilbegriff im Anzeigentext | 5 insgesamt |
+| Clear entry-level position or first experience sufficient | 25 |
+| Experience only desirable / no clear requirement | 18 / 20 |
+| One / two / three years required | 14 / 8 / 3 |
+| Prior technology experience / several years without a number | 8 / 6 |
+| Fully remote / local hybrid / local on site / allowed commuter place | 15 / 13 / 10 / 8 |
+| Detected IT direction | 10 to 30, by role |
+| Technologies in title or description | up to 25 in total |
+| At least one configured profile term in the listing text | 5 in total |
 
-Die Junior-Hybrid-Ausnahme außerhalb des Suchgebiets bleibt mit null
-Standortpunkten sichtbar zuschaltbar. Bestehende Präferenzabzüge folgen auf
-die Summe; das Ergebnis bleibt auf 0 bis 100 begrenzt. Es gibt keinen
-Mindestscore für die Aufnahme ins Review. Das Wort „Weiterbildung“ in einer
-Beschreibung ist kein Ausbildungsmerkmal. `ranking_weights.py` enthält die
-Rollen- und Technologiegewichte, getrennt von Erkennungsregeln und persönlichen
-Einstellungen.
+The junior-hybrid exception outside the search area stays visible with zero
+location points when switched on. Existing preference deductions follow the
+sum; the result stays limited to 0 to 100. There is no minimum score for being
+included in the review. The word "Weiterbildung" (further training) in a
+description is no sign of an apprenticeship. `ranking_weights.py` holds the role
+and technology weights, separate from detection rules and personal settings.
 
-Die 32 festen Vergleichsfälle in `tests/fixtures/scoring_parity.json` halten
-vollständige Bewertungsergebnisse fest. Änderungen an einzelnen
-Erkennungsfehlern werden separat getestet; persönliche Anzeigen und Bewertungen
-bleiben dabei außerhalb des Repositories.
+The 32 fixed comparison cases in `tests/fixtures/scoring_parity.json` record
+complete scoring results. Changes to single detection errors are tested
+separately; personal listings and ratings stay outside the repository.
 
-Die Review-API ordnet POST-Routen kurzen Aktionsmethoden zu. Host-/Origin-Prüfung,
-Größenlimit und JSON-Objektprüfung erfolgen gemeinsam vor dem Aufruf der Aktion;
-Fehlerantworten und Antwortheader bleiben zentral. Im Browser verwenden die
-Bewerbungsformulare denselben Speicherablauf, der ihre Aktionsbuttons auch nach
-einem Fehler wieder freigibt.
+The review API maps POST routes to short action methods. Host/origin check,
+size limit and JSON object check happen together before the action is called;
+error responses and response headers stay central. In the browser, the
+application forms use the same saving flow, which also releases their action
+buttons after an error.
 
-Fachliche Funktionen werden aus ihrem zuständigen Modul importiert.
-Standortregeln bekommen lokale Einstellungen explizit vom Scoring-Einstiegspunkt
-übergeben.
+Domain functions are imported from their responsible module. Location rules get
+local settings passed in explicitly from the scoring entry point.
 
-## Python-Stil und hilfreiche Dokumentation
+## Python style and helpful documentation
 
-Orientierung geben [PEP 8](https://peps.python.org/pep-0008/) und
-[PEP 257](https://peps.python.org/pep-0257/). Die konkrete, reproduzierbare
-Konfiguration steht in [pyproject.toml](../pyproject.toml).
+[PEP 8](https://peps.python.org/pep-0008/) and
+[PEP 257](https://peps.python.org/pep-0257/) give the direction. The concrete,
+reproducible configuration is in [pyproject.toml](../pyproject.toml).
 
-- Vier Leerzeichen einrücken; englische Bezeichner, Kommentare und Docstrings
-  verwenden. Nutzertexte und Projektanleitungen bleiben deutsch.
-- Ruff formatiert mit 120 Zeichen als Richtwert und setzt alles auf eine Zeile,
-  was hineinpasst; ein Komma am Ende erzwingt keinen Umbruch. Lange URLs,
-  Regex-Ausdrücke oder Testdaten können länger bleiben, wenn Aufteilen die
-  Lesbarkeit verschlechtert. `E501` wird deshalb nicht pauschal erzwungen; lange
-  Kommentar- und Docstring-Absätze von Hand auf etwa 72 Zeichen umbrechen.
-- Imports nach Standardbibliothek, Fremdpaketen und Projektcode gruppieren.
-  Änderungen an Importreihenfolgen bei Modulen mit Initialisierungseffekten
-  zusätzlich inhaltlich prüfen.
-- Ein Docstring steht dort, wo er mehr sagt als der Name: Zweck, Grund,
-  Randfälle oder Zustandsänderungen. Einer, der nur den Namen wiederholt,
-  entfällt; Ruff verlangt deshalb keine Docstrings (`D1xx` ist aus). Er beginnt
-  mit einer kurzen Handlungsbeschreibung und einem Punkt; weitere Absätze folgen
-  nach einer Leerzeile.
-- Bei komplexen Funktionen Eingaben, Rückgaben, Zustandsänderungen und relevante
-  Fehler beschreiben. Insbesondere `None`, leere Werte und das Verändern
-  übergebener Objekte erklären. Selbstverständliche Parameter nicht nur unter
-  anderen Worten wiederholen. Ein festes Google-/NumPy-Abschnittsschema ist
-  nicht vorgeschrieben.
-- Kommentare begründen Sonderfälle oder Voraussetzungen. Sie sollen nicht
-  jede Schleife und Zuweisung nacherzählen. Veraltete Kommentare beim Ändern
-  des Verhaltens gleichzeitig aktualisieren.
-- Testfälle erhalten sprechende Namen. Konstruktoren und
-  Standard-Protokollmethoden brauchen keine bloße Wiederholung; abweichendes
-  Verhalten gehört trotzdem dokumentiert.
-- Typannotationen sind bei Datenmodellen und neuen klaren Schnittstellen
-  hilfreich. Eine flächendeckende Typmigration ist keine Voraussetzung für
-  eine Dokumentationsänderung.
+- Indent with four spaces; use English identifiers, comments, docstrings and
+  documentation. Texts the user sees (review, console, Discord) and the agent's
+  rules stay German.
+- Ruff formats with 120 characters as a guide and puts everything on one line
+  that fits; a trailing comma does not force a line break. Long URLs, regular
+  expressions or test data can stay longer when splitting would hurt
+  readability. `E501` is therefore not enforced across the board; wrap long
+  comment and docstring paragraphs by hand at about 72 characters.
+- Group imports into standard library, third-party packages and project code.
+  For modules with initialisation side effects, check changes to the import
+  order for their content as well.
+- A docstring belongs where it says more than the name: purpose, reason, edge
+  cases or state changes. One that only repeats the name is left out; Ruff
+  therefore does not require docstrings (`D1xx` is off). It starts with a short
+  description of what the code does and a full stop; further paragraphs follow
+  after a blank line.
+- For complex functions, describe inputs, return values, state changes and
+  relevant errors. Explain especially `None`, empty values and changing the
+  objects passed in. Do not merely repeat obvious parameters in other words. A
+  fixed Google or NumPy section scheme is not required.
+- Comments justify special cases or preconditions. They should not retell every
+  loop and assignment. Update outdated comments together with the behaviour.
+- Test cases get descriptive names. Constructors and standard protocol methods
+  need no mere repetition; deviating behaviour is still documented.
+- Type annotations help for data models and new clear interfaces. A complete
+  type migration is no precondition for a documentation change.
 
-Automatisch formatieren und anschließend prüfen:
+Format automatically and check afterwards:
 
 ```powershell
 uv run ruff check --select I --fix .
@@ -649,5 +647,6 @@ uv run ruff format .
 uv run ruff check .
 ```
 
-Der Linter prüft Form und häufige Fehler. Ob ein Docstring das tatsächliche
-Verhalten erklärt und ob eine Fachregel sinnvoll ist, bleibt Teil des Reviews.
+The linter checks form and common mistakes. Whether a docstring explains the
+actual behaviour and whether a domain rule makes sense remains part of the
+review.

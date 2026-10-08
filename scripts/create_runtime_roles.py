@@ -7,18 +7,14 @@ Credentials remain in an ignored local file, outside Terraform and console outpu
 import argparse
 import os
 import secrets
-import sys
-from pathlib import Path
 from urllib.parse import quote, urlsplit, urlunsplit
 
 import psycopg
 from dotenv import dotenv_values
 from psycopg.conninfo import conninfo_to_dict
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from create_app_role import _azure_target, _local_target  # noqa: E402
-from job_finder.persistence.runtime_permissions import (  # noqa: E402
+from create_app_role import _azure_target, _local_target
+from job_finder.persistence.runtime_permissions import (
     REVIEW_GROUP,
     RUNTIME_ROLES,
     WORKER_GROUP,

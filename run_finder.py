@@ -112,7 +112,7 @@ def require_usable_source_snapshot(source_reports):
 
 def parse_args():
     """Parse command-line options for one Job Finder run."""
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(prog="job-finder", description=__doc__)
     selection = parser.add_mutually_exclusive_group()
     selection.add_argument(
         "--exclude-sources",

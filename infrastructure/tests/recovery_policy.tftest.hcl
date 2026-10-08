@@ -1,4 +1,4 @@
-# Alle Provider sind simuliert: keine Azure-Zugriffe oder Produktionsänderungen.
+# All providers are simulated: no Azure access or production changes.
 mock_provider "azurerm" {
   override_during = plan
   mock_data "azurerm_client_config" {
@@ -50,7 +50,7 @@ run "database_and_document_recovery_windows_match" {
       azurerm_storage_account.jobfinder.blob_properties[0].delete_retention_policy[0].days >= azurerm_postgresql_flexible_server.jobfinder.backup_retention_days &&
       azurerm_storage_account.jobfinder.blob_properties[0].container_delete_retention_policy[0].days >= azurerm_postgresql_flexible_server.jobfinder.backup_retention_days
     )
-    error_message = "Gelöschte Dokumente und Container müssen mindestens das gewählte 14-Tage-Datenbankfenster abdecken."
+    error_message = "Deleted documents and containers must cover at least the chosen 14-day database window."
   }
 }
 
@@ -65,7 +65,7 @@ run "lifecycle_deletion_is_limited_to_state_versions" {
         rule.actions[0].version[0].delete_after_days_since_creation == 30
       )
     ])
-    error_message = "Altersbedingtes Löschen darf ausschließlich alte Versionen im echten tfstate-Container treffen; Bewerbungsdokumente und aktuelle Blobs bleiben erhalten."
+    error_message = "Deletion by age may only hit old versions in the real tfstate container; application documents and current blobs are kept."
   }
 }
 
@@ -80,6 +80,6 @@ run "document_history_and_delete_locks_remain_enabled" {
       azurerm_management_lock.postgres.lock_level == "CanNotDelete" &&
       azurerm_management_lock.postgres.scope == azurerm_postgresql_flexible_server.jobfinder.id
     )
-    error_message = "Dokumentversionen, privater Zugriff und die bestehenden Löschsperren für Datenbank und Storage müssen erhalten bleiben."
+    error_message = "Document versions, private access and the existing delete locks for database and storage must be kept."
   }
 }

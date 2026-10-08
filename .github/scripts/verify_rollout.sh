@@ -1,27 +1,27 @@
 #!/usr/bin/env bash
-# Prüft nach dem Ausrollen: Worker und Review zeigen auf das erwartete Image, und
-# die neueste Review-Revision läuft gesund. Sonst endet der Lauf mit Fehler. Eine gesunde
-# Revision darf schon wieder schlafen (ScaledToZero); die Review skaliert auf null.
+# Checks after the rollout: worker and review point to the expected image, and
+# the newest review revision runs healthily. Otherwise the run ends with an error. A healthy
+# revision may already be asleep again (ScaledToZero); the review scales to zero.
 set -euo pipefail
 image="$1"
 worker=$(az containerapp job show --name jobfinder-worker --resource-group rg-jobfinder \
   --query "properties.template.containers[0].image" -o tsv)
 if [ "$worker" != "$image" ]; then
-  echo "::error::Der Worker zeigt nicht auf das erwartete Image."
+  echo "::error::The worker does not point to the expected image."
   exit 1
 fi
 for attempt in $(seq 1 20); do
   revision=$(az containerapp show --name jobfinder-review --resource-group rg-jobfinder \
     --query properties.latestRevisionName -o tsv)
-  # Here-String statt Prozess-Ersetzung: Ohne abschließenden Zeilenumbruch meldet read
-  # sonst Dateiende, und set -e beendet das Skript wortlos.
+  # A here-string instead of process substitution: without a final newline read
+  # reports end of file otherwise, and set -e ends the script silently.
   read -r revision_image state health <<< "$(az containerapp revision show --name jobfinder-review \
     --resource-group rg-jobfinder --revision "$revision" \
     --query "[properties.template.containers[0].image, properties.runningState, properties.healthState]" \
     -o tsv | tr '\n' ' ')"
   if [ "$revision_image" = "$image" ] && [ "$health" = "Healthy" ] \
     && case "$state" in Running | RunningAtMaxScale | ScaledToZero) true ;; *) false ;; esac; then
-    echo "Review-Revision $revision läuft gesund auf dem erwarteten Image; der Worker ebenso."
+    echo "Review revision $revision runs healthily on the expected image; so does the worker."
     exit 0
   fi
   case "$state" in
@@ -30,8 +30,8 @@ for attempt in $(seq 1 20); do
       exit 1
       ;;
   esac
-  echo "Versuch $attempt: Revision $revision ist $state/$health, neuer Versuch in 15 Sekunden"
+  echo "Attempt $attempt: revision $revision is $state/$health, next attempt in 15 seconds"
   sleep 15
 done
-echo "::error::Die neue Review-Revision lief nicht rechtzeitig gesund."
+echo "::error::The new review revision did not become healthy in time."
 exit 1

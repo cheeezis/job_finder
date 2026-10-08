@@ -40,10 +40,23 @@ dev = [
     "ruff==0.16.10",
 ]
 
+[project.scripts]
+job-finder = "run_finder:main"
+job-finder-review = "job_finder.review:main"
+job-finder-db = "job_finder.db:main"
+
 [tool.uv]
-# The code runs from the checkout (run_finder.py, python -m job_finder.review),
-# so uv installs only the dependencies, not the project itself.
-package = false
+# uv sync installs the project itself (editable), so the commands above and the
+# scripts in scripts/ import job_finder without changing sys.path. The image
+# installs only the dependencies and runs from /app (see the Dockerfile).
+package = true
+
+[tool.setuptools]
+# The repository root also holds tests, evals and scripts; only these ship.
+py-modules = ["run_finder"]
+
+[tool.setuptools.packages.find]
+include = ["job_finder*"]
 
 [tool.setuptools.package-data]
 job_finder = ["*.html", "*.css", "*.js"]

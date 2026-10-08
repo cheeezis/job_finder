@@ -1,22 +1,25 @@
-# Lokale Python-Umgebung, Bytecode und Werkzeug-Caches
+# Local Python environment, bytecode and tool caches
 .venv/
 __pycache__/
 *.pyc
 .ruff_cache/
 
-# Git-Metadaten werden für die Ausführung im Container nicht benötigt.
+# Git metadata is not needed to run in the container.
 .git/
 
-# Persönliche Konfiguration wird dem Container zur Laufzeit übergeben.
+# Personal configuration is passed to the container at run time.
 .env
 .env.*
 *.local.yaml
 *.local.yml
 profile.yaml
 
-# Lokale Laufzeitdaten und temporäre Auswertungen gehören nicht ins Image.
+# Local run data and temporary analyses do not belong in the image.
 data/
 tmp/
 
-# Terraform-Konfiguration und lokale Zustandsdateien gehören nicht ins Image.
+# Terraform configuration and local state files do not belong in the image.
 infrastructure/
+
+# Build metadata of the editable install (uv sync)
+*.egg-info/

@@ -1,11 +1,11 @@
-# Berechtigungen für die GitHub-Actions-Identitäten (OIDC-Anmeldung, siehe
-# .github/workflows/checks.yml). Die App-Registrierungen/SPs selbst legt
-# Terraform nicht an: Es kann sich nicht selbst die Berechtigungen erteilen,
-# die es braucht, um zu laufen (Henne-Ei-Problem). Sie wurden einmalig per
-# az ad app/sp create erstellt, ihre Objekt-IDs stehen in variables.tf.
+# Permissions of the GitHub Actions identities (OIDC sign-in, see
+# .github/workflows/checks.yml). Terraform does not create the app
+# registrations/SPs itself: it cannot grant itself the permissions it
+# needs to run (chicken-and-egg problem). They were created once with
+# az ad app/sp create; their object IDs are in variables.tf.
 
-# Erlaubt terraform plan/apply aus der Pipeline: Ressourcen in dieser
-# Resource Group anlegen, ändern und löschen.
+# Allows terraform plan/apply from the pipeline: create, change and delete
+# resources in this resource group.
 resource "azurerm_role_assignment" "contributor_github_actions" {
   scope                = azurerm_resource_group.jobfinder.id
   role_definition_name = "Contributor"
@@ -13,9 +13,9 @@ resource "azurerm_role_assignment" "contributor_github_actions" {
   principal_type       = "ServicePrincipal"
 }
 
-# Contributor allein darf keine Rollen zuweisen; unsere Konfiguration enthält
-# aber selbst mehrere azurerm_role_assignment-Ressourcen (ACR-Pull,
-# Key-Vault-Zugriff, ...), die terraform apply sonst nicht verwalten könnte.
+# Contributor alone may not assign roles; our configuration itself contains
+# several azurerm_role_assignment resources (ACR pull, Key Vault access,
+# ...), which terraform apply could not manage otherwise.
 resource "azurerm_role_assignment" "rbac_admin_github_actions" {
   scope                = azurerm_resource_group.jobfinder.id
   role_definition_name = "Role Based Access Control Administrator"
@@ -23,9 +23,9 @@ resource "azurerm_role_assignment" "rbac_admin_github_actions" {
   principal_type       = "ServicePrincipal"
 }
 
-# Datenebenen-Zugriff auf den State-Blob selbst; getrennt von Contributor
-# (das deckt nur die Verwaltungsebene ab) und bewusst nur auf den
-# tfstate-Container beschränkt, nicht den ganzen Storage-Account.
+# Data plane access to the state blob itself; separate from Contributor
+# (which covers only the management plane) and deliberately limited to the
+# tfstate container, not the whole storage account.
 resource "azurerm_role_assignment" "state_access_github_actions" {
   scope                = "${azurerm_storage_account.jobfinder.id}/blobServices/default/containers/tfstate"
   role_definition_name = "Storage Blob Data Contributor"
@@ -33,7 +33,7 @@ resource "azurerm_role_assignment" "state_access_github_actions" {
   principal_type       = "ServicePrincipal"
 }
 
-# Build-Identität: darf nur Images in die Registry hochladen, sonst nichts.
+# Build identity: may only push images to the registry, nothing else.
 resource "azurerm_role_assignment" "acr_push_github_build" {
   scope                = azurerm_container_registry.jobfinder.id
   role_definition_name = "AcrPush"
@@ -41,9 +41,9 @@ resource "azurerm_role_assignment" "acr_push_github_build" {
   principal_type       = "ServicePrincipal"
 }
 
-# az acr login schlägt die Registry vorher über die Verwaltungsebene nach, die
-# AcrPush nicht abdeckt. Reader erlaubt nur dieses Nachschlagen - weder Zugriff
-# auf Images noch Änderungen an der Registry.
+# az acr login first looks the registry up through the management plane,
+# which AcrPush does not cover. Reader allows only this lookup - neither
+# access to images nor changes to the registry.
 resource "azurerm_role_assignment" "acr_reader_github_build" {
   scope                = azurerm_container_registry.jobfinder.id
   role_definition_name = "Reader"
@@ -51,9 +51,9 @@ resource "azurerm_role_assignment" "acr_reader_github_build" {
   principal_type       = "ServicePrincipal"
 }
 
-# Plan-Identität für Pull Requests: sieht Ressourcen, ändert nichts. Bewusst
-# ohne listSecrets - das gäbe die echten Geheimniswerte der Container Apps
-# heraus. Der PR-Plan lädt deshalb nichts aus Azure nach (-refresh=false).
+# Plan identity for pull requests: sees resources, changes nothing. Deliberately
+# without listSecrets - that would reveal the real secret values of the
+# container apps. The PR plan therefore loads nothing from Azure (-refresh=false).
 resource "azurerm_role_assignment" "reader_github_plan" {
   scope                = azurerm_resource_group.jobfinder.id
   role_definition_name = "Reader"
@@ -61,8 +61,8 @@ resource "azurerm_role_assignment" "reader_github_plan" {
   principal_type       = "ServicePrincipal"
 }
 
-# Liest den State; der Plan läuft ohne Sperre (-lock=false), weil schon das
-# Sperren ein Schreibvorgang auf dem State-Container wäre.
+# Reads the state; the plan runs without a lock (-lock=false), because the lock
+# itself would already be a write to the state container.
 resource "azurerm_role_assignment" "state_reader_github_plan" {
   scope                = "${azurerm_storage_account.jobfinder.id}/blobServices/default/containers/tfstate"
   role_definition_name = "Storage Blob Data Reader"

@@ -37,13 +37,12 @@ from pathlib import Path
 import psycopg
 from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
-PROJECT_DIR = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(PROJECT_DIR))
+from job_finder.http import fetch_text
+from job_finder.persistence.database_auth import entra_parameters
+from job_finder.persistence.entra_permissions import ENTRA_ROLES
+from job_finder.workflow.notifications import DiscordWebhookClient, NotificationError
 
-from job_finder.http import fetch_text  # noqa: E402
-from job_finder.persistence.database_auth import entra_parameters  # noqa: E402
-from job_finder.persistence.entra_permissions import ENTRA_ROLES  # noqa: E402
-from job_finder.workflow.notifications import DiscordWebhookClient, NotificationError  # noqa: E402
+PROJECT_DIR = Path(__file__).resolve().parent.parent
 
 REGISTRY = "acrjobfinder"
 RESOURCE_GROUP = "rg-jobfinder"

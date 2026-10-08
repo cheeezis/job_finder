@@ -1,6 +1,7 @@
 """Arbeitnow source adapter using its free public job-board API."""
 
 import time
+from dataclasses import replace
 from datetime import UTC, datetime
 from html.parser import HTMLParser
 from urllib.parse import parse_qs, urlencode, urlsplit
@@ -141,7 +142,11 @@ def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE):
             source.application_url = target_url
             job.description_raw = html
             job.description_clean = description
-            cache[canonical_detail_url(source.url)] = job
+            key = canonical_detail_url(source.url)
+            # Only Arbeitnow's own listing: a rate-limited run returns these entries as Arbeitnow's
+            # jobs, and the card may carry other portals' listings and places since deduplication.
+            previous = cache.get(key)
+            cache[key] = replace(job, sources=[source], locations=previous.locations if previous else job.locations)
             enriched += 1
         except Exception:
             enrichment_errors += 1

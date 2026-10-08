@@ -17,7 +17,7 @@ from job_finder.matching.config import (
 )
 from job_finder.models import Job, JobSource, WorkMode
 from job_finder.sources import arbeitsagentur, get_in_it, stepstone
-from job_finder.sources.common import save_detail_cache
+from job_finder.sources.common import load_detail_cache, save_detail_cache
 from job_finder.sources.stepstone import build_search_url
 
 
@@ -282,6 +282,33 @@ class SharedDetailCacheTests(unittest.TestCase):
         self.assertEqual(jobs, [refreshed_job])
         self.assertEqual(enriched, 1)
         fetch_job.assert_called_once_with("https://www.get-in-it.de/jobsuche/p1")
+
+    def test_detail_keeps_the_listings_other_portals_added_to_the_card(self):
+        now = datetime(2026, 7, 17, 12, tzinfo=UTC)
+        url = "https://www.get-in-it.de/jobsuche/p1"
+        # After deduplication: get-in-IT leads, StepStone adds its listing and place.
+        card = self.make_job(get_in_it.SOURCE_NAME, url, None)
+        card.id = "get_in_it:card"
+        card.locations = ["Remote", "Hamburg"]
+        card.sources.append(JobSource(source="stepstone", url="https://www.stepstone.de/job/1"))
+        detailed = self.make_job(get_in_it.SOURCE_NAME, url, now)
+        detailed.locations = ["Berlin"]
+        detailed.description_clean = "Python und Cloud-Aufgaben"
+
+        with tempfile.TemporaryDirectory() as directory:
+            cache_path = Path(directory) / "details.json"
+            jobs = [card]
+            with patch.object(get_in_it, "fetch_job", return_value=detailed):
+                enriched = get_in_it.enrich_candidate_jobs(jobs, {card.id}, cache_path=cache_path, now=now)
+            cached = load_detail_cache(cache_path)
+
+        self.assertEqual(enriched, 1)
+        self.assertEqual(jobs[0].id, "get_in_it:card")
+        self.assertEqual(jobs[0].description_clean, "Python und Cloud-Aufgaben")
+        self.assertEqual([source.source for source in jobs[0].sources], ["get_in_it", "stepstone"])
+        self.assertEqual(jobs[0].locations, ["Berlin", "Remote", "Hamburg"])
+        self.assertEqual([source.source for source in cached[url].sources], ["get_in_it"])
+        self.assertEqual(cached[url].locations, ["Berlin"])
 
     def test_failed_refresh_falls_back_to_stale_detail(self):
         now = datetime(2026, 7, 17, 12, tzinfo=UTC)

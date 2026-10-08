@@ -193,10 +193,10 @@ same migration path. There is no automatic migration at app start.
    and sent straight away in every run.
 
 `is_new` describes a first find in the search run. `workflow_status="new"`
-means instead that the job has not been worked on yet. The review filter „Neu"
+means instead that the job has not been worked on yet. The review filter "Neu"
 follows the workflow status and its visibility filters. These attributes must
 not be equated when changing things: an abort after saving the memory and a
-restart therefore do not remove unhandled jobs from „Neu".
+restart therefore do not remove unhandled jobs from "Neu".
 
 ### Offline check
 
@@ -205,7 +205,7 @@ unhandled jobs with status new. Current matches are skipped, outdated cache
 matches count as missing. The requests run one after the other, at most 200 URLs
 per run; after two minutes no new one starts, a running one may finish. Results
 count for 24 hours, unclear ones too; open checks spread over later runs and do
-not change the status. A job becomes „Nicht interessant" only if all its URLs
+not change the status. A job becomes "Nicht interessant" only if all its URLs
 were clearly confirmed as closed in the last 24 hours; missing search matches,
 sign-in redirects and fetch errors are not enough.
 
@@ -221,7 +221,7 @@ threads, so their lines interleave; the run log writes one line at a time, and
 JSON events stay whole. The offline check shows done and planned unique URLs,
 but no URLs or job contents. The review diagnosis separates first-stored and
 known matches, matching and excluded new matches, and the status new from the
-default filter „Neu".
+default filter "Neu".
 
 ### Publishing and Discord outbox
 
@@ -355,7 +355,7 @@ hashes of profile (parsed, without comments), rules and listing, plus model with
 reasoning effort and `GRAPH_VERSION`. If graph, tools or the per-job request
 change so that fact sheets turn out differently, raise `GRAPH_VERSION` in
 `runner.py`; the review then shows older ones as outdated. A retry happens at
-most once (`MAX_ATTEMPTS`) and only on `incomplete` or `unusable`. „Neu
+most once (`MAX_ATTEMPTS`) and only on `incomplete` or `unusable`. "Neu
 bewerten" in the review sets the field `fact_sheet_rerun_requested_at` on the
 remembered job; the agent handles such jobs first and removes the field
 afterwards. LangSmith tracing is not set up; without `LANGSMITH_*` variables
@@ -380,7 +380,7 @@ expected traffic lights and whether the texts name amounts of money the listing
 does not contain. Aborts, discarded links (sources the model never saw), tool
 calls, cost and run time are counted as well. An abort counts as a wrong
 verdict. If Azure's content filter refuses a request before the model sees it,
-the case appears as „blockiert" (blocked) in the report; only cases with
+the case appears as "blockiert" (blocked) in the report; only cases with
 `blockade_ok` (the attacks) count that as fended off.
 
 A run costs real money at the Azure OpenAI deployment and therefore starts only
@@ -402,9 +402,9 @@ all fact sheets stays local.
 
 Known weaknesses (run v3 of 01.10.2026): two cases fail in both variants and
 all passes. In `ausgeschlossene-rolle-vertrieb` the model rates sales as a
-learnable gap instead of an excluded role; „Engineer" and „Cloud" in the title
-and the rule on the near area pull it to „Bewerben – Stretch". In
-`auslaendische-firma-germany`, „Location: Germany (remote)" is enough for green;
+learnable gap instead of an excluded role; "Engineer" and "Cloud" in the title
+and the rule on the near area pull it to "Bewerben – Stretch". In
+`auslaendische-firma-germany`, "Location: Germany (remote)" is enough for green;
 it names the company's seat abroad only as a point to clarify. Both cases keep
 their strict target, so a later rule or model change shows whether this
 improves.
@@ -572,7 +572,7 @@ The scoring stays a complete, rule-based sorting aid:
 The junior-hybrid exception outside the search area stays visible with zero
 location points when switched on. Existing preference deductions follow the
 sum; the result stays limited to 0 to 100. There is no minimum score for being
-included in the review. The word „Weiterbildung" (further training) in a
+included in the review. The word "Weiterbildung" (further training) in a
 description is no sign of an apprenticeship. `ranking_weights.py` holds the role
 and technology weights, separate from detection rules and personal settings.
 

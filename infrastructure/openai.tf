@@ -1,8 +1,8 @@
-# Sprachmodell für den KI-Agenten. Bezahlt wird nur pro Token; ohne
-# Aufrufe kostet die Ressource nichts. Die Kostenbremsen im Code
-# (job_finder/agent/cost_guard.py) greifen vor jedem Aufruf; die Drossel an der
-# Bereitstellung und der Token-Alarm (monitoring.tf) wirken auch dann, wenn der
-# Code einen Fehler hat.
+# Language model for the AI agent. Only tokens are paid for; without
+# calls the resource costs nothing. The cost brakes in the code
+# (job_finder/agent/cost_guard.py) apply before every call; the throttle on the
+# deployment and the token alert (monitoring.tf) work even when the code
+# has a bug.
 resource "azurerm_cognitive_account" "openai" {
   name                = "oai-jobfinder-${substr(sha256(var.subscription_id), 0, 8)}"
   resource_group_name = azurerm_resource_group.jobfinder.name
@@ -10,8 +10,8 @@ resource "azurerm_cognitive_account" "openai" {
   kind                = "OpenAI"
   sku_name            = "S0"
 
-  # Keine API-Schlüssel, wie beim Storage-Account: Aufrufe nur über Entra ID
-  # mit den Rollen unten. Entra ID braucht dafür eine eigene Subdomain.
+  # No API keys, as for the storage account: calls only through Entra ID
+  # with the roles below. Entra ID needs a subdomain of its own for that.
   local_auth_enabled    = false
   custom_subdomain_name = "oai-jobfinder-${substr(sha256(var.subscription_id), 0, 8)}"
 
@@ -22,9 +22,9 @@ resource "azurerm_cognitive_deployment" "gpt_5_mini" {
   name                 = "gpt-5-mini"
   cognitive_account_id = azurerm_cognitive_account.openai.id
 
-  # Feste Version: Ein automatisches Upgrade könnte Verhalten und Preis ändern,
-  # ohne dass die Preistabelle (job_finder/agent/pricing.py) davon weiß.
-  # Microsoft stellt diese Version am 09.02.2027 ein.
+  # Fixed version: an automatic upgrade could change behaviour and price
+  # without the price table (job_finder/agent/pricing.py) knowing about it.
+  # Microsoft retires this version on 09.02.2027.
   version_upgrade_option = "NoAutoUpgrade"
 
   model {
@@ -33,22 +33,22 @@ resource "azurerm_cognitive_deployment" "gpt_5_mini" {
     version = "2025-08-07"
   }
 
-  # Global Standard: Bezahlung pro Token, gerechnet in einem beliebigen
-  # Azure-Rechenzentrum. capacity ist die Drossel in tausend Tokens pro Minute.
-  # Azure prüft sie vorab mit einer Schätzung aus Zeichenzahl und maximaler
-  # Antwortlänge, die zwei- bis dreimal über dem echten Verbrauch liegt: Eine
-  # Anfrage mit langer Anzeige schätzt es auf über 30.000, bei 30 kam sie nie
-  # durch. 60 lässt etwa zwei Anfragen pro Minute zu und begrenzt einen Fehler
-  # im echten Verbrauch auf grob 0,40 bis 3 € pro Stunde. Das Kontingent des
-  # Abos erlaubte bis zu 1.000.
+  # Global Standard: paid per token, computed in any Azure data centre.
+  # capacity is the throttle in thousands of tokens per minute.
+  # Azure checks it in advance with an estimate from character count and maximum
+  # answer length, which is two to three times above the real consumption: a
+  # request with a long listing is estimated at over 30,000; at 30 it never
+  # got through. 60 allows about two requests per minute and limits an error
+  # in the real consumption to roughly 0.40 to 3 € per hour. The subscription's
+  # quota allowed up to 1,000.
   sku {
     name     = "GlobalStandard"
     capacity = 60
   }
 }
 
-# Nur Aufrufe, keine Verwaltung: Der Worker darf das Modell nutzen, aber weder
-# Bereitstellungen noch die Drossel ändern.
+# Calls only, no management: the worker may use the model, but change neither
+# deployments nor the throttle.
 resource "azurerm_role_assignment" "openai_user_worker" {
   scope                = azurerm_cognitive_account.openai.id
   role_definition_name = "Cognitive Services OpenAI User"
@@ -56,8 +56,8 @@ resource "azurerm_role_assignment" "openai_user_worker" {
   principal_type       = "ServicePrincipal"
 }
 
-# Der lokale Hybrid-Lauf schreibt die Steckbriefe seiner Stellen gleich selbst,
-# statt bis zum nächsten Azure-Lauf zu warten; ebenfalls nur Aufrufe.
+# The local hybrid run writes the fact sheets of its jobs itself instead of
+# waiting for the next Azure run; calls only as well.
 resource "azurerm_role_assignment" "openai_user_local_docker" {
   scope                = azurerm_cognitive_account.openai.id
   role_definition_name = "Cognitive Services OpenAI User"
@@ -65,7 +65,7 @@ resource "azurerm_role_assignment" "openai_user_local_docker" {
   principal_type       = "ServicePrincipal"
 }
 
-# Eigener Zugriff für Tests vom lokalen Rechner (az login), ebenfalls ohne Schlüssel.
+# Own access for tests from the local computer (az login), also without keys.
 resource "azurerm_role_assignment" "openai_user_dev" {
   scope                = azurerm_cognitive_account.openai.id
   role_definition_name = "Cognitive Services OpenAI User"

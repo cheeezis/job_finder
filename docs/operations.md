@@ -308,7 +308,7 @@ terraform -chdir=infrastructure apply -replace=azurerm_container_app.review -rep
 
 A deploy after a merge runs in three stages:
 
-1. **Plan:** The job „Release plan" creates the Terraform plan against the real
+1. **Plan:** The job "Release plan" creates the Terraform plan against the real
    Azure state and stores it privately in the state container
    (`release-plans/<commit>`). Plans can contain secret values; the run's
    summary therefore names only resources and actions. The environment
@@ -318,14 +318,14 @@ A deploy after a merge runs in three stages:
    (state changed since) aborts; then start the run again. A run for an older
    commit than the current `main` aborts too. The plan is deleted afterwards.
 3. **Roll out and verify:** The summary notes the previous image under
-   „Rückweg" (way back). Then the job rolls out the new image by digest, checks
+   "Way back". Then the job rolls out the new image by digest, checks
    that the review answers only with 302 (redirect to the sign-in) or 401
    without sign-in, and waits until worker and newest review revision run the
    new image and the revision is healthy
    ([verify_rollout.sh](../.github/scripts/verify_rollout.sh)).
 
-**Rollback:** Under Actions, start the workflow „Rollback" from `main` and enter
-the image noted under „Rückweg" (`…/jobfinder@sha256:…`). It also runs only
+**Rollback:** Under Actions, start the workflow "Rollback" from `main` and enter
+the image noted under "Way back" (`…/jobfinder@sha256:…`). It also runs only
 after approval in `production`, resets only the image of worker and review and
 runs the same checks. Terraform and database stay unchanged.
 
@@ -409,7 +409,7 @@ The same figures go to Application Insights as traces (`appi-jobfinder`,
 `job_finder/telemetry.py`): a tree of `agent_run`, one `agent_job` per job and
 below it `model_call` and `tool_call` with their duration. The attributes of
 the model calls follow the OpenTelemetry names for generative AI
-(`gen_ai.usage.input_tokens` and so on). In the portal, „Transaction search"
+(`gen_ai.usage.input_tokens` and so on). In the portal, "Transaction search"
 shows a run's tree; in the workspace the spans are in `AppDependencies`:
 
 ```kusto
@@ -460,8 +460,8 @@ whole run is also a trace `finder_run` with the phases (`collect_sources` with
 one `source` step each, `prefilter`, `enrich_details`, `evaluate`,
 `availability_checks`, `publish`, `notifications`) and `agent_run` below.
 
-The workbook „Job Finder – Betrieb" (Azure portal, Application Insights
-`appi-jobfinder` or Log Analytics, „Workbooks"; Terraform:
+The workbook "Job Finder – Betrieb" (Azure portal, Application Insights
+`appi-jobfinder` or Log Analytics, "Workbooks"; Terraform:
 `infrastructure/workbooks/operations.json`) shows on one page the run duration,
 these key figures, status and hits per source, new jobs per source, the agent's
 cost per day and the review's loading times with their steps, for a selectable

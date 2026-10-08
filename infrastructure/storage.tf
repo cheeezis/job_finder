@@ -1,25 +1,25 @@
-# Dauerhafte Ablage für Bewerbungsdokumente, getrennt von der Datenbank.
-# Der Name muss global eindeutig sein; gleiches Hash-Muster wie beim Postgres-Server.
+# Permanent store for application documents, separate from the database.
+# The name must be globally unique; same hash pattern as for the Postgres server.
 resource "azurerm_storage_account" "jobfinder" {
   name                = "stjobfinder${substr(sha256(var.subscription_id), 0, 8)}"
   resource_group_name = azurerm_resource_group.jobfinder.name
   location            = azurerm_resource_group.jobfinder.location
 
-  # Kleinste Redundanzstufe für den Einstieg; ausreichend für dieses Lernprojekt.
+  # Lowest redundancy level to start with; enough for this learning project.
   account_tier             = "Standard"
   account_replication_type = "LRS"
   account_kind             = "StorageV2"
 
   min_tls_version                 = "TLS1_2"
   allow_nested_items_to_be_public = false
-  # Kein Zugriff über die Account-Schlüssel: Wer sie abfragen kann (etwa mit
-  # Contributor), bekommt damit trotzdem keinen Datenzugriff. Alle Zugriffe
-  # laufen über Entra ID und die eng gefassten Rollen unten.
+  # No access through the account keys: whoever can query them (for example
+  # with Contributor) still gets no data access that way. All access
+  # runs through Entra ID and the narrowly scoped roles below.
   shared_access_key_enabled = false
 
-  # Der Account hält die einzigen Cloud-Kopien der Bewerbungsdokumente und den
-  # Terraform-State. Überschriebene Blobs bleiben als Version erhalten,
-  # gelöschte Blobs und Container lassen sich 14 Tage lang wiederherstellen.
+  # The account holds the only cloud copies of the application documents and the
+  # Terraform state. Overwritten blobs remain as versions,
+  # deleted blobs and containers can be restored for 14 days.
   blob_properties {
     versioning_enabled = true
 
@@ -34,17 +34,17 @@ resource "azurerm_storage_account" "jobfinder" {
 
   tags = azurerm_resource_group.jobfinder.tags
 
-  # Zusätzlich zur Löschsperre unten: Einen Plan, der den Account löschen oder
-  # neu anlegen würde, bricht Terraform schon vor dem Apply ab.
+  # In addition to the delete lock below: Terraform aborts a plan that would
+  # delete or recreate the account already before the apply.
   lifecycle {
     prevent_destroy = true
   }
 }
 
-# Ohne Aufräumen sammelt sich bei jedem Terraform-Apply eine State-Version an.
-# Nur State-Versionen aufräumen: Eine spätere Datenbankwiederherstellung kann
-# alte, weiterhin referenzierte Bewerbungsdokumente benötigen. Deren Versionen
-# dürfen deshalb nicht nach ihrem Erstellungsalter pauschal verschwinden.
+# Without cleanup, every Terraform apply adds a state version.
+# Clean up only state versions: a later database restore can need old
+# application documents that are still referenced. Their versions must
+# therefore not disappear across the board by their creation age.
 resource "azurerm_storage_management_policy" "jobfinder" {
   storage_account_id = azurerm_storage_account.jobfinder.id
 
@@ -65,12 +65,12 @@ resource "azurerm_storage_management_policy" "jobfinder" {
   }
 }
 
-# Löschsperre für den ganzen Account: Soft Delete rettet nur einzelne Blobs und
-# Container, nicht einen gelöschten Account samt Dokumenten und Terraform-State.
-# Ändern bleibt erlaubt, Löschen nicht - auch nicht für Container und
-# Rollenzuweisungen darunter. Sperren darf nur ein Owner anlegen oder entfernen,
-# die Pipeline nicht: Fehlt die Sperre, scheitert deshalb der nächste CI-Apply,
-# bis sie lokal wieder angelegt ist.
+# Delete lock for the whole account: soft delete rescues only single blobs and
+# containers, not a deleted account with its documents and Terraform state.
+# Changing stays allowed, deleting does not - also not for containers and
+# role assignments below it. Only an owner may create or remove locks,
+# not the pipeline: if the lock is missing, the next CI apply therefore fails
+# until it has been created again locally.
 resource "azurerm_management_lock" "storage" {
   name       = "no-delete"
   scope      = azurerm_storage_account.jobfinder.id
@@ -78,8 +78,8 @@ resource "azurerm_management_lock" "storage" {
   notes      = "Bewerbungsdokumente und Terraform-State. Entfernen nur bewusst und lokal."
 }
 
-# Enthält die Bewerbungsdokumente. "private" heißt: kein anonymer Lesezugriff,
-# nur über eine authentifizierte Entra-ID-Identität (Kontoschlüssel sind aus).
+# Holds the application documents. "private" means: no anonymous read access,
+# only through an authenticated Entra ID identity (account keys are off).
 resource "azurerm_storage_container" "application_documents" {
   name                  = "application-documents"
   storage_account_id    = azurerm_storage_account.jobfinder.id
@@ -90,9 +90,9 @@ resource "azurerm_storage_container" "application_documents" {
   }
 }
 
-# Übergangsrecht der bisherigen gemeinsamen Identität. In split übernimmt die
-# Review den Dokumentzugriff. Beide geplanten Worker überspringen das ZIP-Backup
-# und benötigen deshalb keine Dokument-Bytes; Metadaten bleiben in PostgreSQL.
+# Transitional right of the earlier shared identity. In split the review
+# takes over the document access. Both planned workers skip the ZIP backup
+# and therefore need no document bytes; metadata stays in PostgreSQL.
 resource "azurerm_role_assignment" "storage_blob_data_contributor" {
   count                = local.runtime_split ? 0 : 1
   scope                = azurerm_storage_container.application_documents.id
@@ -101,13 +101,13 @@ resource "azurerm_role_assignment" "storage_blob_data_contributor" {
   principal_type       = "ServicePrincipal"
 }
 
-# Liefert nur noch die Tenant-ID (keyvault.tf, review.tf); object_id wird
-# bewusst NICHT mehr von hier gelesen, siehe var.owner_object_id.
+# Provides only the tenant ID now (keyvault.tf, review.tf); object_id is
+# deliberately NOT read from here any more, see var.owner_object_id.
 data "azurerm_client_config" "current" {}
 
-# Eigener Zugriff für lokale Entwicklung und manuelle Prüfungen ohne
-# Kontoschlüssel. Bleibt bewusst auf dem ganzen Account: Das lokale
-# terraform braucht darüber Zugriff auf den tfstate-Container.
+# Own access for local development and manual checks without
+# account keys. Deliberately stays on the whole account: the local
+# terraform needs access to the tfstate container through it.
 resource "azurerm_role_assignment" "storage_blob_data_contributor_dev" {
   scope                = azurerm_storage_account.jobfinder.id
   role_definition_name = "Storage Blob Data Contributor"

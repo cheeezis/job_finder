@@ -1,4 +1,4 @@
-# Lokale Python-Umgebung, Bytecode und Werkzeug-Caches
+# Local Python environment, bytecode and tool caches
 .venv/
 __pycache__/
 *.pyc
@@ -7,7 +7,7 @@ __pycache__/
 .coverage
 htmlcov/
 
-# Persönliche Konfiguration; die gemeinsame .env.example bleibt versioniert.
+# Personal configuration; the shared .env.example stays versioned.
 profile.yaml
 *.local.yaml
 *.local.yml
@@ -15,43 +15,43 @@ profile.yaml
 .env.*
 !.env.example
 
-# Laufzeitdaten, lokale Datenbanken, Logs und temporäre Auswertungen
+# Run data, local databases, logs and temporary analyses
 data/
 tmp/
-# Eval-Fälle und -Ergebnisse aus der eigenen Review: Profil, Notizen, echte Anzeigen
+# Eval cases and results from the own review: profile, notes, real listings
 evals/private/
-# Rohdaten der Eval-Läufe mit allen Steckbriefen; lesbar ist der Markdown-Bericht.
+# Raw data of the eval runs with all fact sheets; the Markdown report is the readable one.
 evals/results/*.json
 *.log
 *.sqlite
 *.sqlite3
 *.db
 
-# Lokale Schlüssel und Zertifikate
+# Local keys and certificates
 *.pem
 *.key
 *.p12
 *.pfx
 
-# Lokale Bewerbungsunterlagen und andere Dokumentdateien
+# Local application documents and other document files
 *.pdf
 *.doc
 *.docx
 *.odt
 *.rtf
 
-# Lokale Terraform-Downloads und Zustandsdateien
+# Local Terraform downloads and state files
 **/.terraform/
 *.tfstate
 *.tfstate.*
 
-# Lokale Eingabewerte und gespeicherte Ausführungspläne
+# Local input values and saved execution plans
 *.tfvars
 *.tfvars.json
 *.tfplan
 
-# Terraform-Quellcode (.tf) und .terraform.lock.hcl bleiben versioniert.
+# Terraform source code (.tf) and .terraform.lock.hcl stay versioned.
 
-# Werkzeuge der Typprüfung (npm ci) und das Zwischenprodukt von npm run types:api
+# Type check tools (npm ci) and the intermediate file of npm run types:api
 node_modules/
 openapi.json

@@ -1,21 +1,21 @@
-# F09: Die erste Etappe ergänzt Zugänge; erst eine getrennte Abnahme erlaubt split.
+# F09: the first stage adds logins; only a separate acceptance allows split.
 variable "runtime_identity_phase" {
-  description = "F09-Etappe: legacy (unverändert), prepare (zusätzliche Rechte), split (getrennte Laufzeiten)."
+  description = "F09 stage: legacy (unchanged), prepare (additional rights), split (separate runtimes)."
   type        = string
   default     = "legacy"
   validation {
     condition     = contains(["legacy", "prepare", "split"], var.runtime_identity_phase)
-    error_message = "runtime_identity_phase muss legacy, prepare oder split sein."
+    error_message = "runtime_identity_phase must be legacy, prepare or split."
   }
 }
 
 variable "runtime_access_verified" {
-  description = "Erst nach dokumentierter Image-Pull-, Secret-, DB- und Negativprüfung true setzen."
+  description = "Set to true only after documented image pull, secret, database and negative checks."
   type        = bool
   default     = false
   validation {
     condition     = var.runtime_identity_phase != "split" || var.runtime_access_verified
-    error_message = "Vor split müssen die wirksamen Zugriffe in prepare abgenommen sein."
+    error_message = "Before split, the effective access in prepare must be accepted."
   }
 }
 
@@ -38,7 +38,7 @@ locals {
   ] : name if !local.database_entra_active || name != "JobfinderReviewDatabaseUrl"] : [])
 }
 
-# Die bisherige Identität bleibt beim Worker; kein Austausch eines laufenden Principals.
+# The earlier identity stays with the worker; no swap of a running principal.
 resource "azurerm_user_assigned_identity" "review" {
   count               = local.runtime_prepared ? 1 : 0
   name                = "id-jobfinder-review"
@@ -79,7 +79,7 @@ resource "azurerm_role_assignment" "storage_blob_data_contributor_review" {
   principal_type       = "ServicePrincipal"
 }
 
-# Adressänderungen erhalten bestehende Zuweisungen in legacy/prepare.
+# Address changes keep existing assignments in legacy/prepare.
 moved {
   from = azurerm_role_assignment.keyvault_secrets_user_worker
   to   = azurerm_role_assignment.keyvault_secrets_user_worker[0]

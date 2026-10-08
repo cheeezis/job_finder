@@ -1,5 +1,5 @@
-# Die Review läuft als eigene, dauerhaft erreichbare Container App
-# (anders als der Worker-Job, der nur bei Bedarf startet und wieder endet).
+# The review runs as its own, permanently reachable container app
+# (unlike the worker job, which starts only when needed and ends again).
 resource "azurerm_container_app" "review" {
   name                         = "jobfinder-review"
   resource_group_name          = azurerm_resource_group.jobfinder.name
@@ -17,7 +17,7 @@ resource "azurerm_container_app" "review" {
     identity = local.review_identity
   }
 
-  # Verweise auf Key-Vault-Adressen, nie auf die Werte selbst.
+  # References to Key Vault addresses, never to the values themselves.
   dynamic "secret" {
     for_each = local.database_entra_active ? [] : [1]
     content {
@@ -31,17 +31,17 @@ resource "azurerm_container_app" "review" {
     key_vault_secret_id = "${azurerm_key_vault.jobfinder.vault_uri}secrets/ReviewAadClientSecret"
     identity            = local.review_identity
   }
-  # Persönliche Sucheinstellungen (Inhalt von user_settings.local.yaml); sie
-  # gehören weder ins öffentliche Repo noch ins Image.
+  # Personal search settings (content of user_settings.local.yaml); they
+  # belong neither in the public repo nor in the image.
   secret {
     name                = "jobfinder-user-settings"
     key_vault_secret_id = "${azurerm_key_vault.jobfinder.vault_uri}secrets/JobfinderUserSettings"
     identity            = local.review_identity
   }
 
-  # Beim Anlegen nur innerhalb der Umgebung erreichbar. Öffentlich (HTTPS,
-  # von Azure bereitgestellt) schaltet sie erst azapi_resource_action.review_public,
-  # nachdem die Anmeldung (azapi_resource.review_auth) steht.
+  # On creation reachable only within the environment. azapi_resource_action.review_public
+  # makes it public (HTTPS, provided by Azure) only after the sign-in
+  # (azapi_resource.review_auth) is in place.
   ingress {
     external_enabled = false
     target_port      = 8765
@@ -62,9 +62,9 @@ resource "azurerm_container_app" "review" {
       cpu    = 0.25
       memory = "0.5Gi"
 
-      # 0.0.0.0 statt des lokalen Standards 127.0.0.1, sonst erreicht der
-      # Container-Ingress den Prozess nicht; --no-browser passt für einen
-      # Container ohne Anzeige.
+      # 0.0.0.0 instead of the local default 127.0.0.1, otherwise the container
+      # ingress cannot reach the process; --no-browser fits a container
+      # without a display.
       command = ["python", "-m", "job_finder.review", "--host", "0.0.0.0", "--no-browser"]
 
       env {
@@ -107,7 +107,7 @@ resource "azurerm_container_app" "review" {
         name  = "JOBFINDER_MANAGED_IDENTITY_CLIENT_ID"
         value = local.review_client_id
       }
-      # Zeiten je API-Anfrage (job_finder/telemetry.py), nur Route, Status und Dauern.
+      # Timings per API request (job_finder/telemetry.py), only route, status and durations.
       env {
         name  = "APPLICATIONINSIGHTS_CONNECTION_STRING"
         value = azurerm_application_insights.jobfinder.connection_string
@@ -117,11 +117,11 @@ resource "azurerm_container_app" "review" {
 
   tags = azurerm_resource_group.jobfinder.tags
 
-  # Wie beim Worker: Die App-Version setzt die CI/CD-Pipeline, nicht Terraform.
-  # Den öffentlichen Zugang setzt review_public; Terraform dreht ihn hier nicht
-  # zurück. Ein Löschen oder Neuanlegen verweigert Terraform: Ohne die
-  # Anmeldung wären Bewerbungsdaten kurz öffentlich. Einen bewussten Neuaufbau
-  # beschreibt docs/operations.md.
+  # As for the worker: the CI/CD pipeline sets the app version, not Terraform.
+  # review_public sets the public access; Terraform does not turn it back
+  # here. Terraform refuses a deletion or recreation: without the sign-in
+  # application data would be public for a moment. docs/operations.md
+  # describes a deliberate rebuild.
   lifecycle {
     ignore_changes  = [template[0].container[0].image, ingress[0].external_enabled]
     prevent_destroy = true
@@ -136,9 +136,9 @@ resource "azurerm_container_app" "review" {
   ]
 }
 
-# Easy Auth (Microsoft-Entra-ID-Anmeldung). azurerm bildet diese Ressource
-# noch nicht ab; azapi spricht dafür direkt die Azure-Resource-Manager-API an.
-# Terraform legt sie nach der App an; öffentlich wird die App erst danach
+# Easy Auth (Microsoft Entra ID sign-in). azurerm does not cover this
+# resource yet; azapi talks to the Azure Resource Manager API directly for it.
+# Terraform creates it after the app; the app becomes public only afterwards
 # (review_public).
 resource "azapi_resource" "review_auth" {
   type      = "Microsoft.App/containerApps/authConfigs@2024-03-01"
@@ -162,9 +162,9 @@ resource "azapi_resource" "review_auth" {
             clientSecretSettingName = "aad-client-secret"
             openIdIssuer            = "https://sts.windows.net/${data.azurerm_client_config.current.tenant_id}/"
           }
-          # Beschränkt den Zugriff explizit auf diese eine Person statt auf
-          # "irgendwer aus dem Tenant" - relevant, falls dem Tenant später
-          # weitere Konten (Gäste, Mitglieder) hinzugefügt werden.
+          # Restricts access explicitly to this one person instead of
+          # "anyone in the tenant" - relevant if further accounts (guests,
+          # members) are added to the tenant later.
           validation = {
             defaultAuthorizationPolicy = {
               allowedPrincipals = {
@@ -177,17 +177,17 @@ resource "azapi_resource" "review_auth" {
     }
   }
 
-  # Wie bei der App: Ohne diese Konfiguration wäre die Review offen.
+  # As for the app: without this configuration the review would be open.
   lifecycle {
     prevent_destroy = true
   }
 }
 
-# Schaltet die Review erst öffentlich, wenn die Anmeldung konfiguriert ist; so
-# gibt es beim Neuaufbau keinen Moment ohne Login. Bei der bestehenden,
-# schon öffentlichen App ändert dieser PATCH nichts. Läuft die Aktion nicht,
-# bleibt die App intern: Das Deploy scheitert dann an der Zugangsprüfung,
-# statt die Daten offenzulegen.
+# Makes the review public only once the sign-in is configured; so a
+# rebuild has no moment without sign-in. For the existing, already
+# public app this PATCH changes nothing. If the action does not run,
+# the app stays internal: the deploy then fails at the access check
+# instead of exposing the data.
 resource "azapi_resource_action" "review_public" {
   type        = "Microsoft.App/containerApps@2024-03-01"
   resource_id = azurerm_container_app.review.id

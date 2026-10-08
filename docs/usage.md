@@ -30,9 +30,9 @@ an English gloss where the meaning is not obvious.
   note; if an application at the same company is already running, the card
   names it with its status
 - waiting list for jobs at a company where another application is still open:
-  the job stays visible under the status filter „Warteliste“ (waiting list), and
+  the job stays visible under the status filter "Warteliste" (waiting list), and
   once that application has ended (rejection, no response, withdrawn) the card
-  says „jetzt entscheiden“ (decide now)
+  says "jetzt entscheiden" (decide now)
 - optional AI agent (LangGraph and LangChain on Azure OpenAI) that writes a fact
   sheet with traffic lights, verdict and short reason for prefiltered jobs,
   limited by a multi-level cost guard
@@ -104,7 +104,7 @@ Vault secret `JobfinderUserSettings`, which is set again after changes:
 
 On Windows, `az keyvault secret set --file` otherwise reads the file in the
 Windows encoding (cp1252) instead of UTF-8, even with `--encoding utf-8`:
-„München“ turns into „MÃ¼nchen“ in the secret. The call above starts the Azure
+"München" turns into "MÃ¼nchen" in the secret. The call above starts the Azure
 CLI's Python in UTF-8 mode; `az.cmd` starts it isolated and therefore ignores
 an environment variable such as `PYTHONUTF8`. On Linux and macOS
 `az keyvault secret set` with the same arguments is enough. `--output none`
@@ -130,7 +130,7 @@ interface at `http://127.0.0.1:8765`: a landing page with the manual import,
 `/review` for reviewing and `/applications` for applications and statistics.
 Changed scoring rules take effect from the next finder run.
 
-- **Review:** The filter „Neu“ (new) shows every job not yet decided,
+- **Review:** The filter "Neu" (new) shows every job not yet decided,
   regardless of the run that found it. International and junior-hybrid jobs
   have their own filters, off by default. Cards are sorted by the agent's
   verdict, and by prefilter score within the same verdict.
@@ -138,12 +138,12 @@ Changed scoring rules take effect from the next finder run.
   international or junior-hybrid special cases. After the import the matching
   card opens directly.
 - **Another listing for an application:** If a card belongs to an application
-  already saved, choose „Bestehender Bewerbung zuordnen“ (attach to existing
+  already saved, choose "Bestehender Bewerbung zuordnen" (attach to existing
   application) and the application. This also works with differing company
   names, for example with recruiters. The application keeps its employer,
   timeline, salary and documents; the additional listing's links appear there
-  under „Links“.
-- **Note:** „Meine Notiz“ (my note) records the reason for a decision (up to
+  under "Links".
+- **Note:** "Meine Notiz" (my note) records the reason for a decision (up to
   2,000 characters) and is saved when leaving the card. For similar jobs the
   agent reads its first 300 characters.
 - **One card per job:** Listings with the same title and company form one card
@@ -151,19 +151,19 @@ Changed scoring rules take effect from the next finder run.
   all. A job already decided takes over a new listing only without a new place
   or when both are fully remote.
 - **Interviews:** The card highlights the next interview; once it is over, it
-  shows „Letztes Gespräch“ (last interview) until a new event is entered.
-  „Gespräch absagen“ (cancel interview) ends the application as withdrawn; that
+  shows "Letztes Gespräch" (last interview) until a new event is entered.
+  "Gespräch absagen" (cancel interview) ends the application as withdrawn; that
   counts neither as a rejection nor as no response.
 - **Order of applications:** Upcoming interviews come first, the next date at
   the top. Past interviews follow, the most recent first. The other open
   applications come below, still by application date with the newest first.
-- **Links:** „Links“ on the card lists every listing the finder found for the
+- **Links:** "Links" on the card lists every listing the finder found for the
   job, also on other boards, and the pages the agent opened for the fact sheet
   (such as the company page or the applicant portal).
 - **Company and title:** If the company is missing or the title is wrong, both
   can be corrected on the card; later runs no longer overwrite them.
 - **No response:** If nothing new happens 14 days after the application, a
-  response or the last interview, the overview shows „Keine Rückmeldung“ (no
+  response or the last interview, the overview shows "Keine Rückmeldung" (no
   response); a later event reopens the application. The status can also be
   entered by hand. The response rate counts only completed applications.
 
@@ -220,13 +220,13 @@ per-job limit is not retried, because it would only cost money again.
 Every fact sheet remembers what it was based on: the profile (by content,
 comments do not count), the rules, the listing, the model with its reasoning
 effort and the agent's flow. If any of it has changed since, the review shows
-„Veraltet“ (outdated) with the changed parts; nothing is evaluated again
-because of it. The button „Neu bewerten“ (evaluate again) on the fact sheet
+"Veraltet" (outdated) with the changed parts; nothing is evaluated again
+because of it. The button "Neu bewerten" (evaluate again) on the fact sheet
 marks the job, and the next agent run rewrites its fact sheet before all
 others, even if the job is already decided. The review itself never calls a
 model.
 
-Every run reports in its section „Steckbriefe (Agent)“ why the agent did not
+Every run reports in its section "Steckbriefe (Agent)" why the agent did not
 run, or how many fact sheets are done, aborted, open or outdated and what the
 day has cost. If the agent aborts or stops before the last job, for example at
 the daily limit, a warning goes to Discord as well. `agent.reasoning_effort`
@@ -258,14 +258,14 @@ course of a run.
   than 60 days ago drop out; a missing date alone does not. Old listings
   imported by hand stay reviewable with a warning.
 - **Notifications:** New jobs can go to Discord. Later text changes trigger
-  neither a new message nor a new „Neu“.
+  neither a new message nor a new "Neu".
 - **Offline check:** Interesting and waiting jobs stay marked even without a
   search hit. If they are missing in a run whose sources were all complete, the
   run checks their URLs. Only when all of them are clearly closed (HTTP 404/410
-  or a closing notice) does the job switch to „Nicht interessant“ (not
+  or a closing notice) does the job switch to "Nicht interessant" (not
   interesting), with date and reason; applications are left alone. The review
-  loads these cards only when the filter „Alle Status“ (all statuses) or „Nicht
-  interessant“ is chosen or a link points to such a job; the usual list stays
+  loads these cards only when the filter "Alle Status" (all statuses) or "Nicht
+  interessant" is chosen or a link points to such a job; the usual list stays
   small that way.
 - **Caches:** Details count as fresh for seven days. On a network error an
   entry at most 14 days old may appear as a marked fallback. A partly failed

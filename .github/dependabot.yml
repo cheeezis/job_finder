@@ -1,8 +1,8 @@
-# Wöchentliche Update-PRs, je Ökosystem gebündelt: Die festen Versionen aus
-# uv.lock, die SHA-Pins der Actions und die Image-Digests bleiben so aktuell.
-# Hauptversionen und den Wechsel auf ein neues Python schlägt Dependabot nicht
-# vor: Solche Sprünge (etwa azurerm 5 oder openai 3) brauchen Tests, einen
-# Terraform-Plan mit Azure-Zugang und oft Codeänderungen, also einen eigenen PR.
+# Weekly update PRs, bundled per ecosystem: this keeps the pinned versions
+# in uv.lock, the actions' SHA pins and the image digests current.
+# Dependabot proposes no major versions and no switch to a new Python:
+# such jumps (for example azurerm 5 or openai 3) need tests, a
+# Terraform plan with Azure access and often code changes, so a PR of their own.
 version: 2
 updates:
   - package-ecosystem: uv
@@ -48,8 +48,8 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
-      # CI und die lokale .venv laufen mit 3.13; neue Builds von 3.13-slim
-      # kommen weiter, der Tag bleibt dabei 3.13.
+      # CI and the local .venv run on 3.13; new builds of 3.13-slim
+      # keep coming, the tag stays 3.13.
       - dependency-name: "python"
         versions: [">= 3.14"]
 

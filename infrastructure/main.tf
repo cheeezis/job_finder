@@ -1,42 +1,42 @@
-# Gemeinsame Ressourcengruppe für die von Terraform verwaltete Jobfinder-Infrastruktur.
-# Verweise auf andere Ressourcen machen deren Werte und Abhängigkeiten nutzbar.
+# Shared resource group for the job finder infrastructure managed by Terraform.
+# References to other resources make their values and dependencies usable.
 resource "azurerm_resource_group" "jobfinder" {
   name     = "rg-jobfinder"
   location = var.location
 
-  # Diese Kennzeichnungen werden von den übrigen Ressourcen übernommen.
+  # The other resources take over these tags.
   tags = {
     project    = "jobfinder"
     managed_by = "terraform"
   }
 }
 
-# Speichert die Docker-Images, die die CI-Pipeline baut und hochlädt.
+# Stores the Docker images the CI pipeline builds and pushes.
 resource "azurerm_container_registry" "jobfinder" {
   name                = "acrjobfinder"
   resource_group_name = azurerm_resource_group.jobfinder.name
   location            = azurerm_resource_group.jobfinder.location
   sku                 = "Basic"
-  # Der Finder erhält Zugriff über eine Managed Identity statt über das Admin-Konto.
+  # The finder gets access through a managed identity instead of the admin account.
   admin_enabled = false
 
   tags = azurerm_resource_group.jobfinder.tags
 }
 
-# Speichert Betriebslogs der Container; Jobdaten liegen in PostgreSQL und Blob Storage.
+# Stores the containers' operational logs; job data lives in PostgreSQL and Blob Storage.
 resource "azurerm_log_analytics_workspace" "jobfinder" {
   name                = "law-jobfinder"
   resource_group_name = azurerm_resource_group.jobfinder.name
   location            = azurerm_resource_group.jobfinder.location
-  # Abrechnungstarif für aufgenommene Logs; keine reservierte Speichergröße.
+  # Billing tier for ingested logs; no reserved storage size.
   sku = "PerGB2018"
-  # Aufbewahrungsdauer der Logs in Tagen.
+  # Log retention in days.
   retention_in_days = 30
 
   tags = azurerm_resource_group.jobfinder.tags
 }
 
-# Ausführungsumgebung für die Container-Jobs; der Finder wird separat definiert.
+# Execution environment for the container jobs; the finder is defined separately.
 resource "azurerm_container_app_environment" "jobfinder" {
   name                = "cae-jobfinder"
   resource_group_name = azurerm_resource_group.jobfinder.name
@@ -45,8 +45,8 @@ resource "azurerm_container_app_environment" "jobfinder" {
   logs_destination           = "log-analytics"
   log_analytics_workspace_id = azurerm_log_analytics_workspace.jobfinder.id
 
-  # Consumption-Profil innerhalb einer Workload-Profiles-Umgebung.
-  # Damit vermeiden wir die zuvor für Jobs ungeeignete Express-Umgebung.
+  # Consumption profile inside a workload profiles environment.
+  # This avoids the Express environment, which was unsuitable for jobs before.
   workload_profile {
     name                  = "Consumption"
     workload_profile_type = "Consumption"
@@ -55,7 +55,7 @@ resource "azurerm_container_app_environment" "jobfinder" {
   tags = azurerm_resource_group.jobfinder.tags
 }
 
-# Identität, mit der der Finder sein Image ohne Registry-Passwort abrufen kann.
+# Identity the finder uses to pull its image without a registry password.
 resource "azurerm_user_assigned_identity" "jobfinder" {
   name                = "id-jobfinder-pull"
   resource_group_name = azurerm_resource_group.jobfinder.name
@@ -64,8 +64,8 @@ resource "azurerm_user_assigned_identity" "jobfinder" {
   tags = azurerm_resource_group.jobfinder.tags
 }
 
-# Erlaubt der Identität das Herunterladen von Images aus genau dieser Registry.
-# Das Hochladen von Images ist in dieser Rolle nicht enthalten.
+# Allows the identity to pull images from exactly this registry.
+# Pushing images is not part of this role.
 resource "azurerm_role_assignment" "acr_pull" {
   scope                = azurerm_container_registry.jobfinder.id
   role_definition_name = "AcrPull"
@@ -73,7 +73,7 @@ resource "azurerm_role_assignment" "acr_pull" {
   principal_type       = "ServicePrincipal"
 }
 
-# Definiert den Finder-Job; er startet per Zeitplan (siehe schedule_trigger_config).
+# Defines the finder job; it starts on a schedule (see schedule_trigger_config).
 resource "azurerm_container_app_job" "finder" {
   name                         = "jobfinder-worker"
   resource_group_name          = azurerm_resource_group.jobfinder.name
@@ -81,34 +81,34 @@ resource "azurerm_container_app_job" "finder" {
   container_app_environment_id = azurerm_container_app_environment.jobfinder.id
   workload_profile_name        = "Consumption"
 
-  # Laufzeit auf eine Stunde begrenzen und fehlgeschlagene Läufe nicht automatisch wiederholen.
+  # Limit the run time to one hour and do not retry failed runs automatically.
   replica_timeout_in_seconds = 3600
   replica_retry_limit        = 0
 
-  # 08:00 und 18:00 MESZ = 06:00 und 16:00 UTC. Läuft ganzjährig auf fixer
-  # UTC-Zeit; die tatsächliche lokale Uhrzeit verschiebt sich beim Wechsel
-  # zwischen MESZ und MEZ um eine Stunde.
+  # 08:00 and 18:00 CEST = 06:00 and 16:00 UTC. Runs all year on a fixed
+  # UTC time; the actual local time shifts by one hour when switching
+  # between CEST and CET.
   schedule_trigger_config {
     cron_expression = "0 6,16 * * *"
-    # Pro Ausführung eine Replik; ihr erfolgreicher Abschluss beendet die Ausführung.
+    # One replica per execution; its successful completion ends the execution.
     parallelism              = 1
     replica_completion_count = 1
   }
 
-  # Weist die bereits angelegte Identität diesem Job zu.
+  # Assigns the identity created above to this job.
   identity {
     type         = "UserAssigned"
     identity_ids = [azurerm_user_assigned_identity.jobfinder.id]
   }
 
-  # Nutzt diese Identität zur Anmeldung beim Abrufen des privaten Images.
+  # Uses this identity to sign in when pulling the private image.
   registry {
     server   = azurerm_container_registry.jobfinder.login_server
     identity = azurerm_user_assigned_identity.jobfinder.id
   }
 
-  # Verweist nur auf die Key-Vault-Adresse, nie auf den Secret-Wert selbst;
-  # Azure löst das bei jedem Start über die zugewiesene Identität auf.
+  # Refers only to the Key Vault address, never to the secret value itself;
+  # Azure resolves it on every start through the assigned identity.
   secret {
     name                = "discord-webhook-url"
     key_vault_secret_id = "${azurerm_key_vault.jobfinder.vault_uri}secrets/DiscordWebhookUrl"
@@ -127,45 +127,45 @@ resource "azurerm_container_app_job" "finder" {
       identity            = azurerm_user_assigned_identity.jobfinder.id
     }
   }
-  # Persönliche Sucheinstellungen (Inhalt von user_settings.local.yaml); sie
-  # gehören weder ins öffentliche Repo noch ins Image.
+  # Personal search settings (content of user_settings.local.yaml); they
+  # belong neither in the public repo nor in the image.
   secret {
     name                = "jobfinder-user-settings"
     key_vault_secret_id = "${azurerm_key_vault.jobfinder.vault_uri}secrets/JobfinderUserSettings"
     identity            = azurerm_user_assigned_identity.jobfinder.id
   }
-  # Persönliches Profil für den KI-Agenten (Inhalt von profile.local.yaml).
-  # Nur der Worker schreibt Steckbriefe; die Review braucht es nicht. Das
-  # Secret muss vor dem ersten Apply mit diesem Verweis existieren.
+  # Personal profile for the AI agent (content of profile.local.yaml).
+  # Only the worker writes fact sheets; the review does not need it. The
+  # secret must exist before the first apply with this reference.
   secret {
     name                = "jobfinder-profile"
     key_vault_secret_id = "${azurerm_key_vault.jobfinder.vault_uri}secrets/JobfinderProfile"
     identity            = azurerm_user_assigned_identity.jobfinder.id
   }
 
-  # Hybrid-Aufteilung: StepStone und Remotely liefern aus Azure heraus keine
-  # Treffer (Bot-Abwehr blockiert bekannte Cloud-IP-Bereiche); diese beiden
-  # laufen stattdessen einmal täglich vom lokalen Rechner aus gegen dieselbe
-  # Datenbank. Ohne diesen command-Block gälte der Startbefehl aus dem Image:
+  # Hybrid split: StepStone and Remotely return no matches to Azure
+  # (bot protection blocks known cloud IP ranges); these two run instead
+  # once a day from the local computer against the same database.
+  # Without this command block the image's start command would apply:
   # python run_finder.py.
   template {
     container {
       name    = "jobfinder-worker"
       command = ["python", "run_finder.py", "--exclude-sources", "stepstone,remotely"]
-      # Nur für den Erstaufbau; danach setzt die CI/CD-Pipeline das Image
-      # (siehe lifecycle unten).
+      # Only for the initial setup; afterwards the CI/CD pipeline sets the image
+      # (see lifecycle below).
       image  = "${azurerm_container_registry.jobfinder.login_server}/jobfinder:${var.image_tag}"
       cpu    = 0.5
       memory = "1Gi"
 
-      # Python-Ausgaben direkt ausgeben, damit Fortschritt zeitnah in den Azure-Logs erscheint.
+      # Print Python output straight away, so progress appears promptly in the Azure logs.
       env {
         name  = "PYTHONUNBUFFERED"
         value = "1"
       }
 
-      # Kontoname/Container sind keine Geheimnisse; der Zugriff läuft über die
-      # oben zugewiesene Managed Identity, kein gespeichertes Passwort nötig.
+      # Account name/container are no secrets; access runs through the managed
+      # identity assigned above, no stored password needed.
       env {
         name  = "JOBFINDER_DOCUMENTS_BACKEND"
         value = "blob"
@@ -186,8 +186,8 @@ resource "azurerm_container_app_job" "finder" {
         name  = "JOBFINDER_REVIEW_HOST"
         value = var.review_fqdn
       }
-      # Das ZIP-Backup vor jedem Lauf verschwände mit dem Container; die Daten
-      # sichern hier Point-in-Time-Restore (Postgres) und Blob-Versionierung.
+      # The ZIP backup before every run would vanish with the container; here
+      # point-in-time restore (Postgres) and blob versioning protect the data.
       env {
         name  = "JOBFINDER_SKIP_RUN_BACKUP"
         value = "1"
@@ -218,13 +218,13 @@ resource "azurerm_container_app_job" "finder" {
         name        = "JOBFINDER_PROFILE"
         secret_name = "jobfinder-profile"
       }
-      # Adresse des Sprachmodells für den KI-Agenten; ohne sie überspringt ein
-      # Lauf den Agenten, so wie der lokale Hybrid-Lauf, der sie nicht setzt.
+      # Address of the language model for the AI agent; without it a run skips
+      # the agent, like the local hybrid run that does not set it.
       env {
         name  = "JOBFINDER_OPENAI_ENDPOINT"
         value = azurerm_cognitive_account.openai.endpoint
       }
-      # Ziel der Agent-Traces; ohne diesen Wert schreibt der Agent keine.
+      # Target of the agent traces; without this value the agent writes none.
       env {
         name  = "APPLICATIONINSIGHTS_CONNECTION_STRING"
         value = azurerm_application_insights.jobfinder.connection_string
@@ -243,15 +243,15 @@ resource "azurerm_container_app_job" "finder" {
 
   tags = azurerm_resource_group.jobfinder.tags
 
-  # Die App-Version gehört der CI/CD-Pipeline (az containerapp job update).
-  # Verwaltete Terraform sie mit, setzte jedes lokale Apply auf den
-  # Default von var.image_tag zurück.
+  # The app version belongs to the CI/CD pipeline (az containerapp job update).
+  # If Terraform managed it as well, every local apply would reset it to the
+  # default of var.image_tag.
   lifecycle {
     ignore_changes = [template[0].container[0].image]
   }
 
-  # Die Pull- und Key-Vault-Berechtigungen müssen vor dem Job angelegt werden.
-  # Die Referenz auf die Identität allein stellt diese Reihenfolge nicht sicher.
+  # The pull and Key Vault permissions must be created before the job.
+  # The reference to the identity alone does not ensure this order.
   depends_on = [
     azurerm_role_assignment.acr_pull,
     azurerm_role_assignment.keyvault_secrets_user_worker,

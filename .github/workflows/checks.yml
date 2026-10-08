@@ -40,10 +40,10 @@ jobs:
         with:
           version: "0.12.21"
           python-version: ${{ matrix.python }}
-      # Genau die Versionen aus uv.lock; --frozen ändert das Lockfile nie.
+      # Exactly the versions in uv.lock; --frozen never changes the lock file.
       - run: uv sync --frozen
-      # pytest gegen die Test-Datenbank; die Abdeckung je Datei steht in der
-      # Zusammenfassung des Laufs und dient zum Finden von Lücken, nicht als Ziel.
+      # pytest against the test database; the coverage per file is in the run's
+      # summary and serves to find gaps, not as a goal.
       - run: >-
           uv run --frozen python scripts/test_postgres.py
           --cov --cov-report=term --cov-report=markdown-append:$GITHUB_STEP_SUMMARY
@@ -58,27 +58,27 @@ jobs:
         with:
           version: "0.12.21"
           python-version: "3.13"
-      # Scheitert, wenn pyproject.toml ohne passendes uv.lock geändert wurde.
+      # Fails when pyproject.toml was changed without a matching uv.lock.
       - run: uv lock --check
       - run: uv sync --frozen
       - run: uv run --frozen ruff check .
       - run: uv run --frozen ruff format --check .
-      # Typprüfung; welche Pakete sie schon abdeckt, steht in pyproject.toml.
+      # Type check; pyproject.toml says which packages it covers so far.
       - run: uv run --frozen pyright
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24"
           package-manager-cache: false
       - run: node --test tests/frontend.test.cjs
-      # Typprüfung der Browser-Skripte gegen die Typen aus dem OpenAPI-Schema;
-      # scheitert auch, wenn api-types.d.ts nicht mehr zum Server passt.
+      # Type check of the browser scripts against the types from the OpenAPI schema;
+      # also fails when api-types.d.ts no longer matches the server.
       - run: npm ci --no-audit --no-fund
       - run: npm run check:types
       - run: npm run types:api && git diff --exit-code job_finder/api-types.d.ts
 
-  # Klickt die Kernabläufe der Review in Chromium durch, auf frisch befüllten
-  # Demo-Daten: Steckbrief, Entscheidung mit Notiz, Warteliste, Rückgängig,
-  # Bewerbung mit Dokument (tests/test_review_browser.py).
+  # Clicks through the review's core flows in Chromium, on freshly filled
+  # demo data: fact sheet, decision with note, waiting list, undo,
+  # application with a document (tests/test_review_browser.py).
   browser:
     name: Browser tests
     runs-on: ubuntu-latest
@@ -106,14 +106,14 @@ jobs:
           version: "0.12.21"
           python-version: "3.13"
       - run: uv sync --frozen
-      # Der zur Playwright-Version aus uv.lock passende Chromium samt Systembibliotheken.
+      # The Chromium matching the Playwright version in uv.lock, with its system libraries.
       - run: uv run --frozen playwright install --with-deps chromium
       - run: uv run --frozen python scripts/test_postgres.py tests/test_review_browser.py
 
-  # Führt "Quickstart (local)" und "Demo" aus dem README auf einem frischen
-  # Runner aus, damit die Anleitung nicht unbemerkt veraltet. Der Finder läuft
-  # nur mit der Quelle manual, die ohne Internet auskommt: Fremde Jobbörsen
-  # sollen diese Prüfung nicht kippen. Ohne DISCORD_WEBHOOK_URL sendet nichts.
+  # Runs "Quickstart (local)" and "Demo" from the README on a fresh runner,
+  # so the instructions do not go stale unnoticed. The finder runs only with
+  # the source manual, which needs no internet: third-party job boards
+  # should not break this check. Without DISCORD_WEBHOOK_URL nothing is sent.
   quickstart:
     name: Quickstart from the README
     runs-on: ubuntu-latest
@@ -129,21 +129,21 @@ jobs:
       - run: docker compose --env-file .env.postgres up -d --wait
       - run: uv run --frozen python -m job_finder.db init
       - run: uv run --frozen python run_finder.py --only-sources manual
-      - name: Review antwortet
+      - name: Review answers
         run: |
           uv run --frozen python -m job_finder.review --no-browser &
           curl --retry 15 --retry-connrefused --retry-delay 1 -fsS -o /dev/null http://127.0.0.1:8765/
-      - name: Demo antwortet
+      - name: Demo answers
         run: |
           uv run --frozen python scripts/demo_data.py --serve &
           curl --retry 30 --retry-connrefused --retry-delay 1 -fsS -o /dev/null http://127.0.0.1:8770/
 
-  # Prüft den Terraform-Code ohne Azure-Zugang: tflint auf Fehler und
-  # Warnungen, Trivy auf unsichere Einstellungen; jeder neue Befund bricht ab.
-  # Bewusste Abwägungen stehen mit Begründung in infrastructure/.trivyignore.yaml.
-  # Trivy läuft ohne Cache und ohne Regel-Update, also mit den Regeln seiner
-  # festen Version (daher die Log-Zeile "Falling back to embedded checks"):
-  # Neue Regeln kommen nur mit einem Update der Action, nicht in fremden PRs.
+  # Checks the Terraform code without Azure access: tflint for errors and
+  # warnings, Trivy for insecure settings; every new finding fails.
+  # Deliberate trade-offs are listed with their reason in infrastructure/.trivyignore.yaml.
+  # Trivy runs without cache and without a rule update, so with the rules of its
+  # fixed version (hence the log line "Falling back to embedded checks"):
+  # new rules come only with an update of the action, not in other people's PRs.
   infrastructure-checks:
     name: Infrastructure checks
     runs-on: ubuntu-latest
@@ -161,7 +161,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
       - run: tflint --format compact --minimum-failure-severity=warning
-      - name: Unsichere Einstellungen prüfen
+      - name: Check for insecure settings
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         env:
           TRIVY_SKIP_CHECK_UPDATE: "true"
@@ -172,10 +172,10 @@ jobs:
           cache: "false"
           exit-code: "1"
 
-  # Nur bei Pull Requests: zeigt, was ein Merge an der Infrastruktur ändern
-  # würde. Rein lesend, kein apply - unabhängig vom Testergebnis interessant.
-  # Pull Requests aus Forks und von Dependabot haben keinen Azure-Zugang; für
-  # sie entfällt der Plan, das Apply nach dem Merge plant ohnehin vollständig.
+  # Pull requests only: shows what a merge would change in the infrastructure.
+  # Read-only, no apply - of interest regardless of the test result.
+  # Pull requests from forks and from Dependabot have no Azure access; for
+  # them the plan is skipped, the apply after the merge plans completely anyway.
   terraform-plan:
     name: Terraform plan
     runs-on: ubuntu-latest
@@ -195,11 +195,11 @@ jobs:
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
           terraform_version: "1.16.2"
-      # Eigene Identität, die nur lesen darf. Ohne Sperre (-lock=false), weil
-      # schon das Sperren ein Schreibvorgang auf dem State wäre. Ohne
-      # Nachladen aus Azure (-refresh=false): azurerm liest die Container Apps
-      # per listSecrets, und das liefert die echten Geheimniswerte. Der Plan
-      # vergleicht Code mit dem State; das Apply lädt weiterhin vollständig nach.
+      # Own identity that may only read. Without a lock (-lock=false), because
+      # the lock itself would already be a write to the state. Without
+      # refreshing from Azure (-refresh=false): azurerm reads the container apps
+      # through listSecrets, which returns the real secret values. The plan
+      # compares code with the state; the apply still refreshes completely.
       - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID_PLAN }}
@@ -208,7 +208,7 @@ jobs:
       - run: terraform fmt -check
       - run: terraform init -input=false
       - run: terraform validate
-      # Nur simulierte Provider; unabhängig von Azure-State und echten Secrets.
+      # Only simulated providers; independent of Azure state and real secrets.
       - run: terraform test -no-color
       - run: terraform plan -input=false -lock=false -refresh=false
         env:
@@ -221,12 +221,12 @@ jobs:
           TF_VAR_runtime_access_verified: ${{ vars.RUNTIME_ACCESS_VERIFIED || 'false' }}
           TF_VAR_database_auth_phase: ${{ vars.DATABASE_AUTH_PHASE || 'password' }}
           TF_VAR_database_entra_verified: ${{ vars.DATABASE_ENTRA_VERIFIED || 'false' }}
-          # Secret, nicht Variable: Der Anmeldename kann eine E-Mail-Adresse enthalten, und
-          # Variablen erscheinen ungeschwärzt in den öffentlichen Logs.
+          # A secret, not a variable: the sign-in name can contain an email address, and
+          # variables appear unmasked in the public logs.
           TF_VAR_postgres_entra_admin_name: ${{ secrets.POSTGRES_ENTRA_ADMIN_NAME }}
 
-  # Baut das Image schon im Pull Request, startet es kurz als Probe und prüft
-  # es auf bekannte Lücken; ein kaputtes Dockerfile fällt so vor dem Merge auf.
+  # Builds the image already in the pull request, starts it briefly as a trial and
+  # scans it for known vulnerabilities; a broken Dockerfile shows up before the merge.
   container:
     name: Container image
     runs-on: ubuntu-latest
@@ -235,17 +235,17 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: docker build -t jobfinder:check .
-      - name: Probestart als eingeschränkter Benutzer
+      - name: Trial start as a restricted user
         run: >-
           docker run --rm --entrypoint sh jobfinder:check -c
           'test "$(id -u)" != 0 && touch data/probe && python -c "import run_finder, job_finder.review"'
-      - name: Lücken melden (hoch und kritisch)
+      - name: Report vulnerabilities (high and critical)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: jobfinder:check
           severity: HIGH,CRITICAL
           exit-code: "0"
-      - name: Bei behebbaren kritischen Lücken abbrechen
+      - name: Fail on fixable critical vulnerabilities
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: jobfinder:check
@@ -254,9 +254,9 @@ jobs:
           exit-code: "1"
           skip-setup-trivy: true
 
-  # Baut und pusht nur, wenn die Tests auf main erfolgreich waren.
-  # Tag = Commit-SHA statt manueller Versionsnummer: eindeutig, kein
-  # Koordinationsaufwand, direkt auf den erzeugenden Commit rückführbar.
+  # Builds and pushes only when the tests on main passed.
+  # Tag = commit SHA instead of a manual version number: unique, no
+  # coordination effort, directly traceable to the commit that produced it.
   docker-build-push:
     name: Build and push image
     runs-on: ubuntu-latest
@@ -273,7 +273,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: tag
         run: echo "tag=sha-${GITHUB_SHA:0:12}" >> "$GITHUB_OUTPUT"
-      # Eigene Identität, die nur Images hochladen darf - nicht die des Applys.
+      # Own identity that may only push images - not the apply's.
       - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID_BUILD }}
@@ -281,11 +281,11 @@ jobs:
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       - run: az acr login --name acrjobfinder
       - run: docker build -t acrjobfinder.azurecr.io/jobfinder:${{ steps.tag.outputs.tag }} .
-      - name: Probestart als eingeschränkter Benutzer
+      - name: Trial start as a restricted user
         run: >-
           docker run --rm --entrypoint sh acrjobfinder.azurecr.io/jobfinder:${{ steps.tag.outputs.tag }} -c
           'test "$(id -u)" != 0 && touch data/probe && python -c "import run_finder, job_finder.review"'
-      - name: Bei behebbaren kritischen Lücken abbrechen
+      - name: Fail on fixable critical vulnerabilities
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: acrjobfinder.azurecr.io/jobfinder:${{ steps.tag.outputs.tag }}
@@ -293,22 +293,22 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
       - run: docker push acrjobfinder.azurecr.io/jobfinder:${{ steps.tag.outputs.tag }}
-      # Ausgerollt wird der unveränderliche Digest, nicht der Tag.
+      # The immutable digest is rolled out, not the tag.
       - id: digest
-        name: Digest des Images festhalten
+        name: Record the image digest
         run: |
           ref=$(docker inspect --format='{{index .RepoDigests 0}}' acrjobfinder.azurecr.io/jobfinder:${{ steps.tag.outputs.tag }})
           case "$ref" in
             acrjobfinder.azurecr.io/jobfinder@sha256:*) echo "ref=$ref" >> "$GITHUB_OUTPUT" ;;
-            *) echo "::error::Kein Digest für das neue Image gefunden."; exit 1 ;;
+            *) echo "::error::No digest found for the new image."; exit 1 ;;
           esac
 
-  # Erstellt nach dem Merge den Plan mit Abgleich gegen den echten Azure-Zustand
-  # und legt ihn privat neben dem Terraform-State ab: Pläne können geheime Werte
-  # enthalten und gehören nicht in die öffentlichen Artefakte. Die Zusammenfassung
-  # im Lauf nennt nur Ressourcen und Aktionen. Die Freigabe von production gilt
-  # danach genau diesem Plan. production-plan ist auf main beschränkt und hat
-  # keine Freigabe-Pause; die Apply-Identität ist dafür eigens freigeschaltet.
+  # After the merge, creates the plan reconciled with the real Azure state
+  # and stores it privately next to the Terraform state: plans can contain secret
+  # values and do not belong in the public artifacts. The run's summary
+  # names only resources and actions. The approval of production then applies
+  # to exactly this plan. production-plan is limited to main and has no
+  # approval pause; the apply identity is cleared for it specifically.
   release-plan:
     name: Release plan
     runs-on: ubuntu-latest
@@ -350,11 +350,11 @@ jobs:
           TF_VAR_runtime_access_verified: ${{ vars.RUNTIME_ACCESS_VERIFIED || 'false' }}
           TF_VAR_database_auth_phase: ${{ vars.DATABASE_AUTH_PHASE || 'password' }}
           TF_VAR_database_entra_verified: ${{ vars.DATABASE_ENTRA_VERIFIED || 'false' }}
-          # Secret, nicht Variable: Der Anmeldename kann eine E-Mail-Adresse enthalten, und
-          # Variablen erscheinen ungeschwärzt in den öffentlichen Logs.
+          # A secret, not a variable: the sign-in name can contain an email address, and
+          # variables appear unmasked in the public logs.
           TF_VAR_postgres_entra_admin_name: ${{ secrets.POSTGRES_ENTRA_ADMIN_NAME }}
-      # Nur Adressen und Aktionen; die JSON-Ausgabe selbst enthielte Werte.
-      - name: Zusammenfassung ohne Werte
+      # Only addresses and actions; the JSON output itself would contain values.
+      - name: Summary without values
         run: |
           terraform show -json release.tfplan | python3 -c '
           import json, sys
@@ -362,29 +362,29 @@ jobs:
           rows = [(" + ".join(change["change"]["actions"]), change["address"])
                   for change in plan.get("resource_changes", [])
                   if change["change"]["actions"] not in (["no-op"], ["read"])]
-          print("### Terraform-Plan für die Freigabe\n")
-          print("\n".join("- `%s` %s" % row for row in rows) or "Keine Änderung an der Infrastruktur.")
+          print("### Terraform plan for approval\n")
+          print("\n".join("- `%s` %s" % row for row in rows) or "No change to the infrastructure.")
           ' >> "$GITHUB_STEP_SUMMARY"
       - id: store
-        name: Plan privat ablegen
+        name: Store the plan privately
         run: |
           sha=$(sha256sum release.tfplan | cut -d" " -f1)
           az storage blob upload --auth-mode login --account-name stjobfindere64bfdce --container-name tfstate \
             --name "$PLAN_BLOB" --file release.tfplan --overwrite --only-show-errors --output none
           rm release.tfplan
           echo "sha256=$sha" >> "$GITHUB_OUTPUT"
-          printf '\nPrüfsumme des Plans: `%s`\n' "$sha" >> "$GITHUB_STEP_SUMMARY"
+          printf '\nPlan checksum: `%s`\n' "$sha" >> "$GITHUB_STEP_SUMMARY"
 
-  # Wendet nach der manuellen Freigabe im production-Environment genau den
-  # geprüften Plan an und rollt das Image per Digest aus. Terraform verweigert
-  # einen Plan, dessen State sich seit dem Erstellen geändert hat.
+  # After the manual approval in the production environment, applies exactly
+  # the checked plan and rolls out the image by digest. Terraform refuses
+  # a plan whose state has changed since it was created.
   terraform-apply:
     name: Terraform apply
     runs-on: ubuntu-latest
     needs: [docker-build-push, release-plan]
     environment: production
-    # Nie zwei Deploys gleichzeitig; ein neu ankommender verdrängt einen noch
-    # auf Freigabe wartenden.
+    # Never two deploys at once; a newly arriving one displaces one still
+    # waiting for approval.
     concurrency:
       group: production-deploy
       cancel-in-progress: false
@@ -397,14 +397,14 @@ jobs:
         working-directory: infrastructure
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # Die Concurrency-Gruppe ordnet nach Ankunft, nicht nach Commit: Ein
-      # älterer Lauf, dessen Image später fertig wird, käme nach dem neueren
-      # an. Geprüft wird nach der Freigabe, direkt vor dem Ausrollen.
-      - name: Nur den aktuellen main-Stand ausrollen
+      # The concurrency group orders by arrival, not by commit: an older run
+      # whose image is ready later would arrive after the newer one.
+      # The check happens after the approval, right before the rollout.
+      - name: Roll out only the current main
         run: |
           latest=$(git ls-remote origin refs/heads/main | cut -f1)
           if [ "$latest" != "$GITHUB_SHA" ]; then
-            echo "::error::Veralteter Stand ${GITHUB_SHA::12}, main steht auf ${latest::12}. Deploy abgebrochen."
+            echo "::error::Outdated commit ${GITHUB_SHA::12}, main is at ${latest::12}. Deploy aborted."
             exit 1
           fi
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
@@ -416,7 +416,7 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       - run: terraform init -input=false
-      - name: Freigegebenen Plan laden und prüfen
+      - name: Load and verify the approved plan
         env:
           PLAN_BLOB: release-plans/${{ github.sha }}.tfplan
           EXPECTED_SHA256: ${{ needs.release-plan.outputs.plan_sha256 }}
@@ -424,12 +424,12 @@ jobs:
           az storage blob download --auth-mode login --account-name stjobfindere64bfdce --container-name tfstate \
             --name "$PLAN_BLOB" --file release.tfplan --only-show-errors --output none
           echo "$EXPECTED_SHA256  release.tfplan" | sha256sum --check --status \
-            || { echo "::error::Der abgelegte Plan weicht vom geprüften ab."; exit 1; }
+            || { echo "::error::The stored plan differs from the checked one."; exit 1; }
       - run: terraform apply -input=false -lock-timeout=2m release.tfplan
         env:
-          # Flüchtige Variablen stehen nicht im gespeicherten Plan; der Apply braucht sie erneut.
+          # Ephemeral variables are not in the saved plan; the apply needs them again.
           TF_VAR_postgres_admin_password: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
-      - name: Abgelegten Plan entfernen
+      - name: Remove the stored plan
         if: always()
         env:
           PLAN_BLOB: release-plans/${{ github.sha }}.tfplan
@@ -437,39 +437,39 @@ jobs:
           rm -f release.tfplan
           az storage blob delete --auth-mode login --account-name stjobfindere64bfdce --container-name tfstate \
             --name "$PLAN_BLOB" --only-show-errors --output none || true
-      - name: Bisheriges Image als Rückweg festhalten
+      - name: Record the previous image as the way back
         run: |
           az extension add --name containerapp --upgrade --only-show-errors
           worker=$(az containerapp job show --name jobfinder-worker --resource-group rg-jobfinder --query "properties.template.containers[0].image" -o tsv)
           review=$(az containerapp show --name jobfinder-review --resource-group rg-jobfinder --query "properties.template.containers[0].image" -o tsv)
-          printf '### Rückweg\n\nBisheriges Image Worker: `%s`\nBisheriges Image Review: `%s`\n\nZurück mit dem Workflow „Rollback“ und diesem Image.\n' "$worker" "$review" >> "$GITHUB_STEP_SUMMARY"
-      # Terraform ignoriert das Image (lifecycle.ignore_changes); die
-      # App-Version wird ausschließlich hier gesetzt, unveränderlich per Digest.
-      - name: Image ausrollen
+          printf '### Way back\n\nPrevious worker image: `%s`\nPrevious review image: `%s`\n\nReturn with the workflow "Rollback" and this image.\n' "$worker" "$review" >> "$GITHUB_STEP_SUMMARY"
+      # Terraform ignores the image (lifecycle.ignore_changes); the
+      # app version is set only here, immutably by digest.
+      - name: Roll out the image
         env:
           IMAGE: ${{ needs.docker-build-push.outputs.image_ref }}
         run: |
           az containerapp job update --name jobfinder-worker --resource-group rg-jobfinder --image "$IMAGE" --output none
           az containerapp update --name jobfinder-review --resource-group rg-jobfinder --image "$IMAGE" --output none
-      # Ohne Anmeldung darf die Review nichts ausliefern: Ein Aufruf muss auf
-      # den Login umleiten (302) oder abgewiesen werden (401). Die App startet
-      # beim ersten Aufruf erst (Scale to Zero), daher mehrere Versuche.
-      - name: Review ohne Anmeldung prüfen
+      # Without sign-in the review must serve nothing: a request must redirect
+      # to the sign-in (302) or be refused (401). The app only starts with
+      # the first request (scale to zero), hence several attempts.
+      - name: Check the review without sign-in
         env:
           REVIEW_FQDN: ${{ secrets.REVIEW_FQDN }}
         run: |
           for attempt in 1 2 3 4 5 6; do
             status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 60 "https://$REVIEW_FQDN/api/recommendations" || true)
             case "$status" in
-              302|401) echo "Ohne Anmeldung: HTTP $status"; exit 0 ;;
-              200) echo "::error::Die Review liefert ohne Anmeldung Daten aus."; exit 1 ;;
+              302|401) echo "Without sign-in: HTTP $status"; exit 0 ;;
+              200) echo "::error::The review serves data without sign-in."; exit 1 ;;
             esac
-            echo "Versuch $attempt: HTTP $status, neuer Versuch in 20 Sekunden"
+            echo "Attempt $attempt: HTTP $status, next attempt in 20 seconds"
             sleep 20
           done
-          echo "::error::Die Review war nach dem Deploy nicht erreichbar."
+          echo "::error::The review was not reachable after the deploy."
           exit 1
-      - name: Versionen und Zustand prüfen
+      - name: Check versions and health
         working-directory: .
         env:
           IMAGE: ${{ needs.docker-build-push.outputs.image_ref }}

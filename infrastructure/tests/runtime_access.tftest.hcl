@@ -1,4 +1,4 @@
-# Alle Provider sind simuliert: kein Azure-Zugriff, keine Ressourcen oder Modellkosten.
+# All providers are simulated: no Azure access, no resources or model costs.
 mock_provider "azurerm" {
   override_during = plan
   mock_data "azurerm_client_config" {
@@ -60,7 +60,7 @@ run "legacy_retains_current_access" {
       local.review_identity == azurerm_user_assigned_identity.jobfinder.id &&
       local.review_database_secret == "JobfinderDatabaseUrl" && local.worker_database_secret == "JobfinderDatabaseUrl"
     )
-    error_message = "legacy muss die laufenden Zugänge erhalten."
+    error_message = "legacy must keep the running logins."
   }
 }
 
@@ -77,7 +77,7 @@ run "prepare_adds_without_switching" {
       local.review_identity == azurerm_user_assigned_identity.jobfinder.id &&
       local.review_database_secret == "JobfinderDatabaseUrl" && local.worker_database_secret == "JobfinderDatabaseUrl"
     )
-    error_message = "prepare muss die zusätzliche Review-Identität ohne Zugangswechsel ergänzen."
+    error_message = "prepare must add the additional review identity without switching logins."
   }
   assert {
     condition = (
@@ -85,7 +85,7 @@ run "prepare_adds_without_switching" {
       !contains(keys(azurerm_role_assignment.keyvault_review_secret), "DiscordWebhookUrl") &&
       !contains(keys(azurerm_role_assignment.keyvault_review_secret), "JobfinderProfile")
     )
-    error_message = "Review darf nur ihre drei eigenen Secrets erhalten."
+    error_message = "The review may only get its own three secrets."
   }
 }
 
@@ -113,7 +113,7 @@ run "split_removes_shared_capabilities" {
       azurerm_role_assignment.storage_blob_data_contributor_review[0].scope == azurerm_storage_container.application_documents.id &&
       azurerm_role_assignment.openai_user_worker.principal_id != azurerm_user_assigned_identity.review[0].principal_id
     )
-    error_message = "split muss Review und Worker trennen und überflüssige Dokument-/Vault-Rechte entfernen."
+    error_message = "split must separate review and worker and remove superfluous document/vault rights."
   }
   assert {
     condition = (
@@ -124,7 +124,7 @@ run "split_removes_shared_capabilities" {
       one([for secret in azurerm_container_app_job.finder.secret : secret.key_vault_secret_id if secret.name == "jobfinder-database-url"]) == "https://example.vault.azure.net/secrets/JobfinderWorkerDatabaseUrl" &&
       one([for env in azurerm_container_app.review.template[0].container[0].env : env.value if env.name == "JOBFINDER_MANAGED_IDENTITY_CLIENT_ID"]) == azurerm_user_assigned_identity.review[0].client_id
     )
-    error_message = "Die echten Container-Bindungen müssen zur getrennten Identität und DB-Rolle zeigen."
+    error_message = "The real container bindings must point to the separate identity and database role."
   }
 }
 
@@ -145,7 +145,7 @@ run "password_auth_keeps_existing_container_access" {
       !contains([for env in azurerm_container_app_job.finder.template[0].container[0].env : env.name], "JOBFINDER_DATABASE_AUTH") &&
       !contains([for env in azurerm_container_app.review.template[0].container[0].env : env.name], "JOBFINDER_DATABASE_AUTH")
     )
-    error_message = "Ein Merge darf ohne F10-Freigabe keine Anmeldung oder Secret-Verweise umschalten."
+    error_message = "A merge must not switch any sign-in or secret references without F10 approval."
   }
 }
 
@@ -171,7 +171,7 @@ run "entra_prepare_preserves_password_runtimes" {
       one([for secret in azurerm_container_app.review.secret : secret.key_vault_secret_id if secret.name == "jobfinder-database-url"]) == "https://example.vault.azure.net/secrets/JobfinderReviewDatabaseUrl" &&
       !contains([for env in azurerm_container_app.review.template[0].container[0].env : env.name], "JOBFINDER_DATABASE_AUTH")
     )
-    error_message = "prepare muss Entra ergänzen und beide bisherigen Laufzeitzugänge erhalten."
+    error_message = "prepare must add Entra and keep both earlier runtime logins."
   }
   assert {
     condition = (
@@ -180,7 +180,7 @@ run "entra_prepare_preserves_password_runtimes" {
       output.entra_principals.hybrid == var.local_docker_sp_object_id &&
       output.entra_database_urls.hybrid == "postgresql://jobfinder_hybrid_entra@example.postgres.database.azure.com:5432/jobfinder?sslmode=verify-full&sslrootcert=/etc/ssl/certs/ca-certificates.crt"
     )
-    error_message = "Einrichtungsoutputs müssen die eigenen Object-IDs und passwortfreien Rollen liefern."
+    error_message = "Setup outputs must provide the own object IDs and password-free roles."
   }
 }
 
@@ -264,7 +264,7 @@ run "accepted_entra_switches_only_database_credentials" {
       length(azurerm_role_assignment.storage_blob_data_contributor) == 0 &&
       length(azurerm_role_assignment.storage_blob_data_contributor_review) == 1
     )
-    error_message = "entra muss nur DB-Zugänge umschalten, eigene MIs verwenden und F09-Rechte erhalten."
+    error_message = "entra must only switch database logins, use own managed identities and keep F09 rights."
   }
 }
 

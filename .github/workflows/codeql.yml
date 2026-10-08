@@ -1,6 +1,6 @@
 name: CodeQL
 
-# Statische Sicherheitsanalyse für Python, JavaScript und die Workflow-Dateien
+# Static security analysis for Python, JavaScript and the workflow files
 # selbst. Befunde erscheinen unter Security > Code scanning.
 on:
   pull_request:

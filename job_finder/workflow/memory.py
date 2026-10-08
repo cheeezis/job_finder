@@ -20,6 +20,8 @@ from job_finder.persistence.database import lock, memory_scope, snapshot, transa
 from job_finder.persistence.postgres_store import read_memory, read_review_memory, write_memory
 
 INACTIVE_AFTER_MISSED_RUNS = 3
+# Set once the user corrected title or company; runs then keep both.
+DETAILS_EDITED = "details_edited"
 COMPLETED_APPLICATION_REPOST_DAYS = 30
 
 
@@ -135,8 +137,9 @@ def update_memory(jobs, memory, successful_sources=None, run_sources=None, *, al
             job.last_seen_at = now
             job.workflow_status = WorkflowStatus(entry["workflow_status"])
             # Explicit associations may name a recruiter rather than the
-            # employer. Later crawls must keep the application's identity.
-            if entry.get("linked_job_ids") and has_application_state(entry):
+            # employer, and the user may have corrected title or company.
+            # Later crawls must keep the application's identity.
+            if (entry.get("linked_job_ids") and has_application_state(entry)) or entry.get(DETAILS_EDITED):
                 job.title = entry.get("title") or job.title
                 job.company = entry.get("company") or job.company
             entry["last_seen_at"] = now.isoformat()
@@ -205,6 +208,8 @@ def clear_studysmarter_board_companies(memory):
 
 def studysmarter_board_company(job_id, entry):
     """Recognize the source adapter's employer placeholders using saved provenance."""
+    if entry.get(DETAILS_EDITED):
+        return False
     sources = entry.get("source_names") or inferred_sources(job_id)
     return "studysmarter" in sources and str(entry.get("company") or "").strip().casefold() in BOARD_NAMES
 

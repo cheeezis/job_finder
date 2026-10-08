@@ -4,7 +4,7 @@
   /** @type {HTMLElement | null} */
   let focusedApplicationCard = null;
 
-  const {element, make, addOptions, appendSourceLinks, postJson, showError} = JobFinder;
+  const {element, make, addOptions, externalLink, safeUrl, postJson, showError} = JobFinder;
 
   function formatDate(value) {
     if (!value) return "unbekannt";
@@ -278,6 +278,57 @@
     return details;
   }
 
+  function detailsEditor(application) {
+    const details = make("details");
+    details.append(make("summary", "Firma und Titel bearbeiten"));
+    const form = make("form", null, "history-form");
+    const fields = [["Firma", application.company], ["Titel", application.title]].map(([text, value]) => {
+      const label = make("label", text);
+      const input = make("input");
+      input.required = true;
+      input.maxLength = 200;
+      input.value = value || "";
+      label.append(input);
+      form.append(label);
+      return input;
+    });
+    const save = make("button", "Speichern");
+    save.type = "submit";
+    form.append(save);
+    form.addEventListener("submit", async event => {
+      event.preventDefault();
+      const [company, title] = fields.map(input => input.value);
+      await saveChange([save], "/api/application-details", {job_id: application.id, company, title},
+        "Firma und Titel konnten nicht gespeichert werden");
+    });
+    details.append(form);
+    return details;
+  }
+
+  /** The listings the finder found and the pages the agent used, each opened in a new tab. */
+  function linksSection(application) {
+    const labels = {...JobFinder.sourceLabels, original: "Originalanzeige"};
+    const groups = [
+      ["Vom Finder gefunden", (application.source_links || []).map(link => [link.url, labels[link.source] || "Anzeige"])],
+      ["Vom Agenten genutzt", (application.agent_sources || []).map(url => [url, safeUrl(url) ? new URL(url).hostname : url])]
+    ].map(([title, links]) => [title, links.filter(([url]) => safeUrl(url))]);
+    const count = groups.reduce((total, [, links]) => total + links.length, 0);
+    if (!count) return null;
+    const details = make("details", null, "application-links");
+    details.append(make("summary", `Links (${count})`));
+    for (const [title, links] of groups) {
+      if (!links.length) continue;
+      const list = make("ul");
+      links.forEach(([url, text]) => {
+        const item = make("li");
+        item.append(externalLink(safeUrl(url), text));
+        list.append(item);
+      });
+      details.append(make("p", title, "link-group"), list);
+    }
+    return details;
+  }
+
   function renderApplications(applications, containerId) {
     const container = element(containerId);
     container.replaceChildren();
@@ -302,19 +353,11 @@
       if (application.days_to_response != null) meta.append(make("span", `${application.days_to_response} Tag(e) bis zur Antwort`));
       if (application.next_interview_at) meta.append(make("span", `Nächstes Gespräch: ${formatDateTime(application.next_interview_at)}`, "appointment"));
       else if (application.last_interview_at) meta.append(make("span", `Letztes Gespräch: ${formatDateTime(application.last_interview_at)}`, "appointment"));
-      appendSourceLinks(meta, application);
       card.append(meta);
       if (application.workflow_status === "interview") card.append(withdrawButton(application));
       if (application.review_note) card.append(make("p", application.review_note, "note"));
-      if (application.linked_listings?.length) {
-        const linked = make("details");
-        linked.append(make("summary", `Zugeordnete Anzeigen (${application.linked_listings.length})`));
-        application.linked_listings.forEach(listing => {
-          linked.append(make("p", `${listing.title} · ${listing.company}`));
-          if (listing.review_note) linked.append(make("p", listing.review_note, "note"));
-        });
-        card.append(linked);
-      }
+      const links = linksSection(application);
+      if (links) card.append(links);
       const salaryExpectation = formatSalaryExpectation(application.salary_expectation_eur);
       if (salaryExpectation) {
         const salary = make("p", null, "salary-note");
@@ -324,7 +367,7 @@
         );
         card.append(salary);
       }
-      card.append(salaryEditor(application));
+      card.append(detailsEditor(application), salaryEditor(application));
       appendDocuments(card, application);
       renderTimeline(application, card);
       container.append(card);

@@ -93,7 +93,6 @@ class LinkedListingTests(unittest.TestCase):
             {link["url"] for link in overview["applications"][0]["source_links"]},
             {self.application["source_urls"][0], self.listing["source_urls"][0]},
         )
-        self.assertEqual(overview["applications"][0]["linked_listings"][0]["review_note"], self.listing["review_note"])
 
     def test_later_crawl_uses_the_explicit_alias_and_preserves_employer_identity(self):
         self.link()

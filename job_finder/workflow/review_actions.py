@@ -12,7 +12,7 @@ from job_finder.workflow.applications import (
     synchronize_current_status,
     update_history_event,
 )
-from job_finder.workflow.memory import edit_job, load_job
+from job_finder.workflow.memory import DETAILS_EDITED, edit_job, load_job
 
 MAX_REVIEW_NOTE_CHARS = 2000
 
@@ -164,6 +164,27 @@ def update_application_salary(job_id, value, period="year", memory_path=MEMORY_F
         else:
             entry["salary_expectation_eur"] = salary
     return {"salary_expectation_eur": salary}
+
+
+MAX_DETAIL_LENGTH = 200
+
+
+def update_application_details(job_id, title, company, memory_path=MEMORY_FILE):
+    """Correct an application's title and company; later runs keep the corrected values."""
+    values = {}
+    for field, value, label in (("title", title, "Titel"), ("company", company, "Firma")):
+        text = " ".join(str(value or "").split())
+        if not text:
+            raise ValueError(f"{label} darf nicht leer sein")
+        if len(text) > MAX_DETAIL_LENGTH:
+            raise ValueError(f"{label} ist länger als {MAX_DETAIL_LENGTH} Zeichen")
+        values[field] = text
+    with edit_job(job_id, memory_path) as entry:
+        if not is_application(entry):
+            raise ValueError("Für diese Stelle ist noch keine Bewerbung gespeichert")
+        entry.update(values)
+        entry[DETAILS_EDITED] = True
+    return values
 
 
 def update_workflow_history(

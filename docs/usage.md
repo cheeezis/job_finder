@@ -72,9 +72,13 @@ StepStone only requests addresses its robots.txt allows: search pages without
 parameters, so only the first result page per search term and place, without a
 radius. In return StepStone searches with all general search terms. Two
 requests are 1.5 seconds apart; if HTTP 403 or 429 persists, the source stops
-and uses its last cache instead of working around the block. Exception:
-Remotely checks linked LinkedIn originals for closed jobs with a browser user
-agent, at most once a day per job.
+and uses its last cache instead of working around the block. Remotely checks
+linked LinkedIn originals for closed jobs with the same user agent, at most
+once a day per job. Only LinkedIn's closed message or a redirect to another job
+or to the job search closes a listing; a sign-in wall or another unclear answer
+keeps it. The run prints how the answers turned out ("Remotely
+LinkedIn-Prüfung"); if LinkedIn mostly gives no clear answer, the check has no
+use and can go.
 
 ## Setup
 
@@ -324,8 +328,10 @@ course of a run.
 - **Sources:** Arbeitnow loads the original listing only for the known
   placeholder text; review and Discord then prefer its URL. Remotely takes only
   listings of the last seven days and leaves out LinkedIn originals that no
-  longer accept applications. get-in-IT and StudySmarter load detail pages only
-  after the first, generous prefilter; StudySmarter searches within the radius
+  longer accept applications; a job other portals still list keeps their
+  listings. get-in-IT and StudySmarter load detail pages only after the first,
+  generous prefilter, and a card from several portals keeps the others' links
+  and places; StudySmarter searches within the radius
   and Germany-wide for remote jobs. Salary ranges from GermanTechJobs count as
   euros gross per year.
 

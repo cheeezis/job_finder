@@ -1,8 +1,10 @@
 """Tests for the public Remotely.de source adapter."""
 
+import io
 import json
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -299,6 +301,36 @@ class RemotelySourceTests(unittest.TestCase):
         self.assertEqual([job.id for job in jobs], ["remotely:shared"])
         self.assertEqual([source.source for source in jobs[0].sources], ["stepstone"])
         self.assertEqual(jobs[0].locations, ["Remote", "Berlin"])
+
+    def test_check_uses_the_finders_own_user_agent_and_counts_the_answers(self):
+        urls = [f"https://de.linkedin.com/jobs/view/job-at-example-11{number}" for number in range(3)]
+        answers = {
+            urls[0]: (urls[0], "No longer accepting applications"),
+            urls[1]: (urls[1], "Jetzt bewerben"),
+            urls[2]: ("https://www.linkedin.com/authwall", "Anmelden"),
+        }
+        headers_sent = []
+
+        def fetcher(url, headers=None):
+            headers_sent.append(headers)
+            return answers[url]
+
+        jobs = [self.remotely_job(f"job{number}", url) for number, url in enumerate(urls)]
+        output = io.StringIO()
+        with tempfile.TemporaryDirectory() as directory, redirect_stdout(output):
+            remotely.enrich_candidate_jobs(
+                jobs,
+                {job.id for job in jobs},
+                status_cache_path=Path(directory) / "linkedin.json",
+                fetcher=fetcher,
+                now=datetime(2026, 8, 29, 12, tzinfo=UTC),
+                sleeper=lambda _seconds: None,
+            )
+
+        self.assertTrue(all("User-Agent" not in headers for headers in headers_sent))
+        self.assertIn(
+            "3 Bewerbung(en) · 1 geschlossen · 1 offen · 1 ohne klare Antwort · 0 nicht erreichbar", output.getvalue()
+        )
 
     def test_status_cache_of_the_previous_version_is_not_trusted(self):
         url = "https://de.linkedin.com/jobs/view/open-at-example-109"

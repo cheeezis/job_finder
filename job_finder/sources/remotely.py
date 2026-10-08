@@ -2,6 +2,7 @@
 
 import re
 import time
+from collections import Counter
 from datetime import date, datetime, timedelta
 from html import unescape
 from html.parser import HTMLParser
@@ -33,10 +34,8 @@ LINKEDIN_REQUEST_DELAY_SECONDS = 0.4
 LINKEDIN_STATUS_MAX_AGE = timedelta(days=1)
 # v2: a sign-in wall no longer counts as closed; older entries may hold that error.
 LINKEDIN_STATUS_VERSION = 2
-LINKEDIN_HEADERS = {
-    "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/128 Safari/537.36"),
-    "Accept-Language": "de-DE,de;q=0.9,en;q=0.7",
-}
+# The finder's own user agent from job_finder.http, as for every other request (ADR 0005).
+LINKEDIN_HEADERS = {"Accept-Language": "de-DE,de;q=0.9,en;q=0.7"}
 # Key facts list employment type, location, salary and category side by side; only the
 # location carries a tooltip (data-state), and full time is not labelled at all.
 EMPLOYMENT_LABELS = {"teilzeit", "vollzeit", "werkstudent", "praktikum", "minijob", "freelance", "ausbildung"}
@@ -101,14 +100,17 @@ def enrich_candidate_jobs(
     checks = read_versioned(status_cache_path, LINKEDIN_STATUS_VERSION).get("checks", {})
     cache_changed = False
     closed_urls = {}
-    errors = unclear = 0
+    # How the answers turn out with the finder's own user agent decides whether the check stays.
+    outcomes = Counter()
     requests_made = 0
 
     for position, (job_index, url) in enumerate(targets, 1):
         key = linkedin_job_key(url)
         cached = checks.get(key)
         closed = fresh_linkedin_status(cached, checked_at)
-        if closed is None:
+        if closed is not None:
+            outcomes["cached"] += 1
+        else:
             if requests_made:
                 sleeper(LINKEDIN_REQUEST_DELAY_SECONDS)
             requests_made += 1
@@ -116,13 +118,15 @@ def enrich_candidate_jobs(
                 final_url, html = fetcher(url, headers=LINKEDIN_HEADERS)
                 closed = linkedin_listing_is_closed(url, final_url, html)
             except Exception:
-                errors += 1
+                outcomes["unreachable"] += 1
             else:
                 if closed is None:
-                    unclear += 1
+                    outcomes["unclear"] += 1
                 else:
                     checks[key] = {"closed": closed, "checked_at": checked_at.isoformat()}
                     cache_changed = True
+        if closed is not None:
+            outcomes["closed" if closed else "open"] += 1
         if closed:
             closed_urls[job_index] = url
         if progress_checkpoint(position, len(targets)):
@@ -135,11 +139,13 @@ def enrich_candidate_jobs(
         print(f"HINWEIS Remotely: {removed} geschlossene LinkedIn-Bewerbung(en) aus dem Review entfernt")
     if kept := len(closed_urls) - removed:
         print(f"HINWEIS Remotely: {kept} Stelle(n) mit geschlossener LinkedIn-Bewerbung bleiben über andere Portale")
-    if errors or unclear:
-        print(
-            f"WARNUNG Remotely: {errors} LinkedIn-Statusprüfung(en) nicht erreichbar, {unclear} ohne klare Antwort; "
-            "Stellen vorsichtshalber behalten"
-        )
+    print(
+        f"Remotely LinkedIn-Prüfung: {len(targets)} Bewerbung(en) · {outcomes['closed']} geschlossen · "
+        f"{outcomes['open']} offen · {outcomes['unclear']} ohne klare Antwort · "
+        f"{outcomes['unreachable']} nicht erreichbar ({outcomes['cached']} aus dem Tagesspeicher)"
+    )
+    if outcomes["unclear"] or outcomes["unreachable"]:
+        print("WARNUNG Remotely: unklare LinkedIn-Bewerbungen vorsichtshalber behalten")
     return len(closed_urls)
 
 

@@ -38,6 +38,7 @@ from job_finder.workflow.review_actions import (
     request_fact_sheet_rerun,
     start_application,
     undo_ignored_decision,
+    update_application_details,
     update_application_salary,
     update_review_decision,
     update_review_note,
@@ -119,6 +120,11 @@ class ApplicationListing(JobRequest):
 class ApplicationSalary(JobRequest):
     salary_expectation_eur: Any = None
     salary_period: str = "year"
+
+
+class ApplicationDetails(JobRequest):
+    title: Any = None
+    company: Any = None
 
 
 class ReviewDecision(JobRequest):
@@ -288,6 +294,11 @@ def create_app(paths=ReviewPaths(), *, deployed_host="", manual_importer=import_
     def application_salary(body: ApplicationSalary):
         """Change the salary expectation of an application."""
         return update_application_salary(body.job_id, body.salary_expectation_eur, body.salary_period, paths.memory)
+
+    @app.post("/api/application-details")
+    def application_details(body: ApplicationDetails):
+        """Correct the title and company of an application."""
+        return update_application_details(body.job_id, body.title, body.company, paths.memory)
 
     @app.post("/api/application-listing")
     def application_listing(body: ApplicationListing):

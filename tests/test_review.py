@@ -724,7 +724,7 @@ class ReviewTests(unittest.TestCase):
                 with self.subTest(route=route), urlopen(base_url + route) as response:
                     page = response.read().decode("utf-8")
                     self.assertIn(marker, page)
-                    self.assertIn('href="/app.css?v=8"', page)
+                    self.assertIn('href="/app.css?v=9"', page)
                     self.assertIn('src="/app.js"', page)
                     self.assertNotIn("<style", page)
                     self.assertNotIn("style=", page)
@@ -779,6 +779,19 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(overview["statistics"]["total"], 1)
         self.assertEqual(overview["applications"][0]["id"], "job:1")
         self.assertEqual(overview["applications"][0]["salary_expectation_eur"], 58_000)
+
+    def test_application_details_api_corrects_title_and_company(self):
+        with self.server_context() as base_url:
+            post_form(f"{base_url}/api/applications", {"job_id": "job:1"})
+            result = post_json(
+                f"{base_url}/api/application-details", {"job_id": "job:1", "title": "Admin", "company": "Example GmbH"}
+            )
+            overview = get_json(f"{base_url}/api/applications")
+
+        self.assertEqual(result, {"title": "Admin", "company": "Example GmbH"})
+        application = overview["applications"][0]
+        self.assertEqual((application["title"], application["company"]), ("Admin", "Example GmbH"))
+        self.assertEqual(application["agent_sources"], [])
 
     def test_documents_arrive_as_a_form_upload_and_can_be_downloaded(self):
         documents = self.directory / "application_documents"

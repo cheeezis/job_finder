@@ -1,0 +1,13 @@
+{
+  "name": "job-finder-review-ui",
+  "private": true,
+  "description": "Type checks for the review's browser scripts; no build step.",
+  "scripts": {
+    "types:api": "uv run python scripts/export_openapi.py openapi.json && openapi-typescript openapi.json -o job_finder/api-types.d.ts",
+    "check:types": "tsc -p typecheck/landing.json && tsc -p typecheck/review.json && tsc -p typecheck/applications.json"
+  },
+  "devDependencies": {
+    "openapi-typescript": "7.13.0",
+    "typescript": "5.9.3"
+  }
+}

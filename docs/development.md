@@ -16,6 +16,8 @@ uv run ruff format --check .
 uv run pyright
 uv run python scripts/test_postgres.py --cov
 node --test tests/frontend.test.cjs
+npm ci
+npm run check:types
 ```
 
 Die Abhängigkeiten stehen mit Versionsbereichen in `pyproject.toml`, die exakten
@@ -23,8 +25,18 @@ Versionen in `uv.lock`; CI und Image installieren genau diese. Nach einer
 Änderung an `pyproject.toml` aktualisiert `uv lock` das Lockfile, sonst scheitert
 die CI. Die Gruppe `dev` enthält festgelegte Versionen von Ruff, pytest,
 pytest-cov, Pyright und Playwright, damit lokale Prüfung und CI dieselben Regeln verwenden.
-Node.js wird für die Frontend-Tests und für Pyright benötigt; die CI verwendet
-Node.js 24.
+Node.js wird für die Frontend-Tests, die Typprüfung der Browser-Skripte und
+für Pyright benötigt; die CI verwendet Node.js 24.
+
+Die Browser-Skripte bleiben klassische Skripte ohne Build. `// @ts-check` und
+JSDoc lassen TypeScript sie trotzdem prüfen, je Seite für sich
+(`typecheck/`). Die Antworten der Lese-Schnittstellen beschreiben
+Pydantic-Modelle (`job_finder/api_models.py`); aus ihrem OpenAPI-Schema erzeugt
+`npm run types:api` die Datei `job_finder/api-types.d.ts`, und
+`job_finder/types.d.ts` gibt den Typen kurze Namen wie `ReviewCard`. Ändert sich
+eine Antwort, gehören Modell und neu erzeugte Typen in denselben Commit; die CI
+scheitert, wenn die Typen nicht mehr zum Server passen oder ein Skript ein Feld
+falsch liest.
 
 Die Tests verwenden lokale Fixtures, temporäre Datenpfade, eine separate
 PostgreSQL-Testdatenbank ([Betrieb](operations.md#lokale-datenbank)) und

@@ -21,6 +21,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
+from job_finder.api_models import ApplicationsResponse, RecommendationsResponse, RunsResponse, SourcesResponse
 from job_finder.matching.config import route_origin as configured_route_origin
 from job_finder.models import WorkflowStatus
 from job_finder.paths import APPLICATION_DOCUMENTS_DIR, JOBS_FILE, MANUAL_CACHE_FILE, MEMORY_FILE, RECOMMENDATIONS_JSON
@@ -208,32 +209,31 @@ def create_app(paths=ReviewPaths(), *, deployed_host="", manual_importer=import_
     for path, (name, content_type) in STATIC_FILES.items():
         app.add_api_route(path, page(PACKAGE / name, content_type), methods=["GET"], include_in_schema=False)
 
-    @app.get("/api/recommendations")
+    # Optional fields a card or application lacks stay missing instead of becoming null.
+    @app.get("/api/recommendations", response_model=RecommendationsResponse, response_model_exclude_unset=True)
     def recommendations(archived: str | None = None):
         """Return the review's cards; archived=1 returns only those of listings that went offline."""
         jobs = load_review_jobs(paths.recommendations, paths.memory, archived=archived == "1")
-        return JSONResponse(
-            {
-                "recommendations": attach_fact_sheets(jobs),
-                "workflow_statuses": [status.value for status in WorkflowStatus],
-                "route_origin": route_origin,
-            }
-        )
+        return {
+            "recommendations": attach_fact_sheets(jobs),
+            "workflow_statuses": [status.value for status in WorkflowStatus],
+            "route_origin": route_origin,
+        }
 
-    @app.get("/api/sources")
+    @app.get("/api/sources", response_model=SourcesResponse)
     def sources():
         """Return the display name of every source, keyed by its internal name."""
-        return JSONResponse({"labels": SOURCE_LABELS})
+        return {"labels": SOURCE_LABELS}
 
-    @app.get("/api/runs")
+    @app.get("/api/runs", response_model=RunsResponse)
     def runs():
         """Return the newest finder run of each runner (cloud, hybrid, local) with its key figures."""
-        return JSONResponse({"runs": latest_runs()})
+        return {"runs": latest_runs()}
 
-    @app.get("/api/applications")
+    @app.get("/api/applications", response_model=ApplicationsResponse, response_model_exclude_unset=True)
     def applications():
         """Return open and completed applications with their statistics."""
-        return JSONResponse(load_application_overview(paths.memory, recommendations_path=paths.recommendations))
+        return load_application_overview(paths.memory, recommendations_path=paths.recommendations)
 
     @app.get("/api/application-document")
     def application_document(request: Request):

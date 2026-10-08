@@ -176,6 +176,26 @@ class ReviewTests(unittest.TestCase):
             labels = get_json(base_url + "/api/sources")["labels"]
         self.assertEqual(labels, SOURCE_LABELS)
 
+    def test_read_endpoints_publish_their_response_shapes(self):
+        with self.server_context() as base_url:
+            schema = get_json(base_url + "/openapi.json")
+            card = get_json(f"{base_url}/api/recommendations")["recommendations"][0]
+
+        shapes = {
+            "/api/recommendations": "RecommendationsResponse",
+            "/api/applications": "ApplicationsResponse",
+            "/api/runs": "RunsResponse",
+            "/api/sources": "SourcesResponse",
+        }
+        for path, name in shapes.items():
+            with self.subTest(path):
+                content = schema["paths"][path]["get"]["responses"]["200"]["content"]["application/json"]
+                self.assertEqual(content["schema"]["$ref"], f"#/components/schemas/{name}")
+        card_fields = schema["components"]["schemas"]["ReviewCard"]["properties"]
+        self.assertIn("fact_sheet", card_fields)
+        # A card without a fact sheet lacks the field instead of carrying null.
+        self.assertNotIn("fact_sheet", card)
+
     def test_the_api_page_loads_only_two_pinned_swagger_files(self):
         with self.server_context() as base_url:
             with urlopen(base_url + "/docs") as response:

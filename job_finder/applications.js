@@ -1,5 +1,7 @@
+// @ts-check
   const statusLabels = {...JobFinder.statusLabels, interview: "Gespräch", offer: "Zusage"};
   const terminalStatuses = new Set(["rejected", "no_response", "offer", "withdrawn"]);
+  /** @type {HTMLElement | null} */
   let focusedApplicationCard = null;
 
   const {element, make, addOptions, appendSourceLinks, postJson, showError} = JobFinder;
@@ -354,6 +356,7 @@
     try {
       const [response] = await Promise.all([fetch("/api/applications"), JobFinder.loadSourceLabels()]);
       if (!response.ok) throw new Error("Bewerbungen konnten nicht geladen werden");
+      /** @type {ApplicationsResponse} */
       const result = await response.json();
       window.applicationStatuses = result.application_statuses;
       window.workflowStatuses = result.workflow_statuses;

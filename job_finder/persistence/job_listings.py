@@ -1,62 +1,101 @@
-"""Listings, links and sighting columns of remembered jobs, derived from job_state.extra.
+"""Listings and links of remembered jobs, stored in their own tables.
 
-While the JSONB fields are still the source (F17, stage 1), these tables are
-rebuilt from them in SQL whenever a job is written; drift() shows whether
-anything got out of step, e.g. through an earlier image, and resync() repairs it.
+A memory entry keeps its listing URLs, source names and linked job ids as
+lists (source_urls, source_names, linked_job_ids). Since F17 stage 4 the
+tables job_listings and job_links are their only store: write() turns the
+lists into rows, attach() turns the rows back into lists. The two lists of a
+listing share one row per position, so lists of different length survive.
 """
 
-from job_finder.persistence.migrations.job_listings import (
-    DERIVE_COLUMNS,
-    DERIVE_LINKS,
-    DERIVE_LISTINGS,
-    LINKS_FROM_EXTRA,
-    LISTINGS_FROM_EXTRA,
-)
-
-SELECTED = "s.scope = %(scope)s AND s.job_id = ANY(%(job_ids)s)"
-EVERY = "s.scope = %(scope)s"
+LISTING_FIELDS = ("source_urls", "source_names")
+LINK_FIELD = "linked_job_ids"
+FIELDS = (*LISTING_FIELDS, LINK_FIELD)
 
 
-def derive(connection, scope, job_ids=None):
-    """Rebuild the tables and columns of the given jobs (all of the scope without ids) from their JSONB fields."""
-    params = {"scope": scope, "job_ids": list(job_ids or [])}
-    where = EVERY if job_ids is None else SELECTED
+def rows(scope, job_id, entry):
+    """Return the job_listings and job_links rows of one memory entry."""
+    urls, names = (_strings(entry.get(field)) for field in LISTING_FIELDS)
+    listings = [
+        (scope, job_id, position, url, name)
+        for position, (url, name) in enumerate(_zip_longest(urls, names))
+        if url is not None or name is not None
+    ]
+    links = [
+        (scope, job_id, position, linked)
+        for position, linked in enumerate(_strings(entry.get(LINK_FIELD)))
+        if linked is not None
+    ]
+    return listings, links
+
+
+def write(connection, scope, entries):
+    """Replace the listing and link rows of the given {job_id: entry}."""
+    if not entries:
+        return
+    job_ids = list(entries)
     for table in ("job_listings", "job_links"):
-        condition = "scope = %(scope)s" + ("" if job_ids is None else " AND job_id = ANY(%(job_ids)s)")
-        connection.execute(f"DELETE FROM {table} WHERE {condition}", params)
-    for statement in (DERIVE_LISTINGS, DERIVE_LINKS, DERIVE_COLUMNS):
-        connection.execute(statement.format(where=where), params)
+        connection.execute(f"DELETE FROM {table} WHERE scope=%s AND job_id=ANY(%s)", (scope, job_ids))
+    listings, links = [], []
+    for job_id, entry in entries.items():
+        entry_listings, entry_links = rows(scope, job_id, entry)
+        listings += entry_listings
+        links += entry_links
+    with connection.cursor() as cursor:
+        if listings:
+            cursor.executemany(
+                "INSERT INTO job_listings (scope, job_id, position, url, source_name) VALUES (%s,%s,%s,%s,%s)", listings
+            )
+        if links:
+            cursor.executemany(
+                "INSERT INTO job_links (scope, job_id, position, linked_job_id) VALUES (%s,%s,%s,%s)", links
+            )
 
 
-def drift(connection, scope="default"):
-    """Count rows of the tables and jobs whose columns differ from what the JSONB fields say; zeros mean in step."""
-    params = {"scope": scope}
-    listings = LISTINGS_FROM_EXTRA.format(where=EVERY)
-    links = LINKS_FROM_EXTRA.format(where=EVERY)
-    counts = {}
-    for name, derived, stored in (
-        ("listings", listings, "scope, job_id, position, url, source_name FROM job_listings WHERE scope = %(scope)s"),
-        ("links", links, "scope, job_id, position, linked_job_id FROM job_links WHERE scope = %(scope)s"),
+def attach(connection, memory, present, where, params):
+    """Add the lists back to the entries that had them, from their rows.
+
+    present maps job_id to the fields an entry had when it was written, so a
+    list that was empty or absent stays empty or absent.
+    """
+    lists = {job_id: {field: [] for field in FIELDS} for job_id in memory}
+    for job_id, position, url, name in connection.execute(
+        f"SELECT job_id, position, url, source_name FROM job_listings WHERE {where} ORDER BY job_id, position", params
     ):
-        counts[name] = connection.execute(
-            f"SELECT count(*) FROM (({derived} EXCEPT SELECT {stored}) UNION ALL (SELECT {stored} EXCEPT {derived})) d",
-            params,
-        ).fetchone()[0]
-    counts["columns"] = connection.execute(
-        """
-        SELECT count(*) FROM job_state s WHERE s.scope = %(scope)s AND (
-            s.first_seen_at IS DISTINCT FROM (s.extra->>'first_seen_at')::timestamptz
-            OR s.last_seen_at IS DISTINCT FROM (s.extra->>'last_seen_at')::timestamptz
-            OR s.locations IS DISTINCT FROM CASE WHEN jsonb_typeof(s.extra->'locations') = 'array'
-                THEN ARRAY(SELECT jsonb_array_elements_text(s.extra->'locations')) END)
-        """,
-        params,
-    ).fetchone()[0]
-    return counts
+        if job_id in lists:
+            _put(lists[job_id]["source_urls"], position, url)
+            _put(lists[job_id]["source_names"], position, name)
+    for job_id, position, linked in connection.execute(
+        f"SELECT job_id, position, linked_job_id FROM job_links WHERE {where} ORDER BY job_id, position", params
+    ):
+        if job_id in lists:
+            _put(lists[job_id][LINK_FIELD], position, linked)
+    for job_id, entry in memory.items():
+        for field in FIELDS:
+            if field in present.get(job_id, ()):
+                entry[field] = _trimmed(lists[job_id][field])
+    return memory
 
 
-def resync(connection, scope="default"):
-    """Rebuild everything from the JSONB fields; return the drift before."""
-    before = drift(connection, scope)
-    derive(connection, scope)
-    return before
+def _strings(values):
+    return list(values) if isinstance(values, list) else []
+
+
+def _zip_longest(first, second):
+    length = max(len(first), len(second))
+    return [(_at(first, i), _at(second, i)) for i in range(length)]
+
+
+def _at(values, index):
+    return values[index] if index < len(values) else None
+
+
+def _put(values, position, value):
+    values.extend([None] * (position + 1 - len(values)))
+    values[position] = value
+
+
+def _trimmed(values):
+    """Drop the padding a shorter list of a listing pair gets."""
+    while values and values[-1] is None:
+        values.pop()
+    return values

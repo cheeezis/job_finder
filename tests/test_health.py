@@ -36,13 +36,7 @@ class BacklogTests(unittest.TestCase):
 
         self.assertEqual(
             backlog(now),
-            {
-                "outbox_pending": 2,
-                "outbox_oldest_hours": 30.0,
-                "fact_sheets_aborted": 2,
-                "fact_sheets_retryable": 1,
-                "listing_drift": 0,
-            },
+            {"outbox_pending": 2, "outbox_oldest_hours": 30.0, "fact_sheets_aborted": 2, "fact_sheets_retryable": 1},
         )
 
     def test_ages_without_a_zone_count_as_utc_and_none_as_zero(self):

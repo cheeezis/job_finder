@@ -4,7 +4,6 @@ from datetime import UTC, datetime
 
 from psycopg import errors
 
-from job_finder.persistence import job_listings
 from job_finder.persistence.database import snapshot
 
 
@@ -19,16 +18,8 @@ def backlog(now=None):
             sheets = connection.execute(
                 "SELECT count(*) FILTER (WHERE NOT complete), count(*) FILTER (WHERE retryable) FROM agent_fact_sheets"
             ).fetchone()
-            # Should stay 0 while the JSONB fields and the listing tables are written together (F17, stage 1).
-            listing_drift = sum(job_listings.drift(connection).values())
     except (errors.UndefinedTable, errors.UndefinedColumn):
-        return {
-            "outbox_pending": 0,
-            "outbox_oldest_hours": 0,
-            "fact_sheets_aborted": 0,
-            "fact_sheets_retryable": 0,
-            "listing_drift": 0,
-        }
+        return {"outbox_pending": 0, "outbox_oldest_hours": 0, "fact_sheets_aborted": 0, "fact_sheets_retryable": 0}
     # Aggregates always return a row; the fallbacks only satisfy the type checker.
     pending, oldest = outbox or (0, None)
     aborted, retryable = sheets or (0, 0)
@@ -37,7 +28,6 @@ def backlog(now=None):
         "outbox_oldest_hours": age_hours(oldest, now),
         "fact_sheets_aborted": aborted,
         "fact_sheets_retryable": retryable,
-        "listing_drift": listing_drift,
     }
 
 

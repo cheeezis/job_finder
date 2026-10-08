@@ -1,7 +1,7 @@
 """Relational core records with JSONB only for additional source attributes."""
 
 from copy import deepcopy
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 
 from psycopg import sql
 from psycopg.types.json import Jsonb
@@ -18,6 +18,10 @@ STATE_FIELDS = (
     "salary_expectation_eur",
     "personal_rating",
     "review_note",
+    # Columns since F17 (revision 0005); the store since stage 4 (revision 0007).
+    "first_seen_at",
+    "last_seen_at",
+    "locations",
 )
 HISTORY_FIELDS = ("status", "occurred_on", "scheduled_for")
 DOCUMENT_FIELDS = ("id", "name", "kind", "stored_name", "folder_name")
@@ -38,12 +42,16 @@ def prune_cache(days=30):
         ).rowcount
 
 
-def parts(record, fields):
-    """Retain missing-vs-null distinctions and unknown fields in stored records."""
+def parts(record, fields, elsewhere=()):
+    """Retain missing-vs-null distinctions and unknown fields in stored records.
+
+    Fields in elsewhere live in other tables: they count as present but stay
+    out of the JSONB column.
+    """
     return (
         *[record.get(field) for field in fields],
         list(record),
-        Jsonb({key: value for key, value in record.items() if key not in fields}),
+        Jsonb({key: value for key, value in record.items() if key not in fields and key not in elsewhere}),
     )
 
 
@@ -55,6 +63,9 @@ def unpack(row, fields):
         if field in present:
             if isinstance(value, datetime) and field == "scheduled_for":
                 value = value.isoformat(timespec="minutes")
+            elif isinstance(value, datetime):
+                # Sightings are stored as timestamptz and come back in UTC.
+                value = value.astimezone(UTC).isoformat()
             elif isinstance(value, date):
                 value = value.isoformat()
             result[field] = value
@@ -92,13 +103,13 @@ def read_memory(connection, scope, job_id=None, *, for_update=False):
         f"SELECT job_id,{','.join(STATE_FIELDS)},present,extra FROM job_state "
         f"WHERE {where}" + (" FOR UPDATE" if for_update else ""),
         params,
-    )
+    ).fetchall()
     memory = {row[0]: unpack(row[1:], STATE_FIELDS) for row in rows}
-    return read_children(connection, memory, where, params)
+    return read_children(connection, memory, {row[0]: row[-2] for row in rows}, where, params)
 
 
-def read_children(connection, memory, where, params):
-    """Attach the ordered history and document metadata of the given records."""
+def read_children(connection, memory, present, where, params):
+    """Attach the ordered history, document metadata, listings and links of the given records."""
     for table, fields in CHILD_TABLES:
         rows = connection.execute(
             f"SELECT job_id,{','.join(fields)},present,extra FROM {table} WHERE {where} ORDER BY job_id,position",
@@ -106,7 +117,7 @@ def read_children(connection, memory, where, params):
         )
         for row in rows:
             memory[row[0]].setdefault(table, []).append(unpack(row[1:], fields))
-    return memory
+    return job_listings.attach(connection, memory, present, where, params)
 
 
 def read_review_memory(connection, scope, job_ids, urls, statuses, history_statuses, *, archived=False):
@@ -137,9 +148,11 @@ def read_review_memory(connection, scope, job_ids, urls, statuses, history_statu
             "history": list(history_statuses),
             "archived": archived,
         },
-    )
+    ).fetchall()
     memory = {row[0]: unpack(row[1:], STATE_FIELDS) for row in rows}
-    return read_children(connection, memory, "scope=%s AND job_id=ANY(%s)", (scope, list(memory)))
+    return read_children(
+        connection, memory, {row[0]: row[-2] for row in rows}, "scope=%s AND job_id=ANY(%s)", (scope, list(memory))
+    )
 
 
 def write_memory(connection, scope, before, after):
@@ -161,15 +174,13 @@ def write_memory(connection, scope, before, after):
                     if not isinstance(value, dict):
                         raise ValueError(f"Ungültiger Eintrag in {field}")
                     children[field].append((scope, job_id, position, *parts(value, fields)))
-        records.append((scope, job_id, *parts(core, STATE_FIELDS)))
+        records.append((scope, job_id, *parts(core, STATE_FIELDS, job_listings.FIELDS)))
     upsert_records(connection, "job_state", ("scope", "job_id"), STATE_FIELDS, records)
     for table, fields in CHILD_TABLES:
         if changed:
             connection.execute(f"DELETE FROM {table} WHERE scope=%s AND job_id=ANY(%s)", (scope, list(changed)))
         upsert_records(connection, table, ("scope", "job_id", "position"), fields, children[table])
-    if changed:
-        # Listings, links and sighting columns follow the JSONB fields just written (F17, stage 1).
-        job_listings.derive(connection, scope, list(changed))
+    job_listings.write(connection, scope, changed)
 
 
 def read_jobs(name, job_ids):

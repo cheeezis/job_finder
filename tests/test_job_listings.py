@@ -1,12 +1,9 @@
-"""Listings, links and sighting columns derived from the remembered jobs (F17, stage 1)."""
+"""Listings, links and sighting columns of the remembered jobs, stored in their own tables (F17)."""
 
 import os
 import unittest
 from datetime import UTC, datetime
 
-from psycopg.types.json import Jsonb
-
-from job_finder.persistence import job_listings
 from job_finder.persistence.database import transaction
 from job_finder.persistence.postgres_store import read_memory, read_review_memory, write_memory
 
@@ -61,8 +58,14 @@ class JobListingsTests(unittest.TestCase):
         first_seen, locations = self.rows("SELECT first_seen_at, locations FROM job_state WHERE job_id = 'c'")[0]
         self.assertEqual(first_seen, datetime(2026, 10, 1, 8, 0, 0, 123456, tzinfo=UTC))
         self.assertEqual(locations, ["Fulda", "Remote"])
-        with transaction() as connection:
-            self.assertEqual(job_listings.drift(connection), {"listings": 0, "links": 0, "columns": 0})
+        # The JSONB column keeps none of them any more.
+        self.assertEqual(
+            self.rows(
+                "SELECT count(*) FROM job_state WHERE extra ?| array['source_urls',"
+                "'source_names','linked_job_ids','first_seen_at','last_seen_at','locations']"
+            ),
+            [(0,)],
+        )
 
     def test_a_changed_or_removed_job_updates_its_rows_and_the_memory_reads_as_before(self):
         before = {
@@ -82,15 +85,19 @@ class JobListingsTests(unittest.TestCase):
             found = read_review_memory(connection, "default", [], ["https://x.test/5"], [], [])
         self.assertEqual(list(found), ["a"])
 
-    def test_drift_from_an_older_writer_is_found_and_repaired(self):
-        self.write({"a": entry(source_urls=["https://x.test/1"], source_names=["stepstone"])})
-        # An earlier image changes only the JSONB fields.
+    def test_lists_and_times_read_back_as_written(self):
+        memory = {
+            # Different list lengths, an empty list, a missing list and a local time.
+            "a": entry(source_urls=["https://x.test/1", "https://x.test/2"], source_names=["stepstone"], locations=[]),
+            "b": entry(source_urls=[], source_names=["arbeitnow", "jobicy"], linked_job_ids=["old:1", "old:2"]),
+            "c": {"title": "Manual", "workflow_status": "applied", "first_seen_at": "2026-06-05T09:30:00+02:00"},
+        }
+        self.write(memory)
+
         with transaction() as connection:
-            connection.execute(
-                "UPDATE job_state SET extra = extra || %s WHERE job_id = 'a'",
-                (Jsonb({"source_urls": ["https://x.test/9"], "last_seen_at": "2026-10-08T06:00:00+00:00"}),),
-            )
-            self.assertEqual(job_listings.drift(connection), {"listings": 2, "links": 0, "columns": 1})
-            job_listings.resync(connection)
-            self.assertEqual(job_listings.drift(connection), {"listings": 0, "links": 0, "columns": 0})
-            self.assertEqual(connection.execute("SELECT url FROM job_listings").fetchall(), [("https://x.test/9",)])
+            read = read_memory(connection, "default")
+        self.assertEqual(read["a"], memory["a"])
+        self.assertEqual(read["b"], memory["b"])
+        # The same moment, now written in UTC; the date the review derives stays the same.
+        self.assertEqual(read["c"], {**memory["c"], "first_seen_at": "2026-06-05T07:30:00+00:00"})
+        self.assertNotIn("source_urls", read["c"])

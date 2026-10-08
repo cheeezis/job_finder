@@ -1,5 +1,6 @@
 """Tests for the public Remotely.de source adapter."""
 
+import json
 import tempfile
 import unittest
 from datetime import UTC, date, datetime, timedelta
@@ -243,6 +244,78 @@ class RemotelySourceTests(unittest.TestCase):
 
         self.assertEqual(removed, 2)
         self.assertEqual([job.id for job in jobs], ["remotely:active", "remotely:not-prefiltered"])
+
+    def check_linkedin(self, jobs, candidate_ids, fetcher, status_path):
+        with patch("builtins.print"):
+            return remotely.enrich_candidate_jobs(
+                jobs,
+                candidate_ids,
+                status_cache_path=status_path,
+                fetcher=fetcher,
+                now=datetime(2026, 8, 29, 12, tzinfo=UTC),
+                sleeper=lambda _seconds: None,
+            )
+
+    def test_sign_in_wall_or_other_site_keeps_the_candidate_and_is_asked_again(self):
+        url = "https://de.linkedin.com/jobs/view/junior-at-example-106"
+        answers = [
+            "https://www.linkedin.com/authwall?trk=public_jobs&sessionRedirect=https%3A%2F%2Fde.linkedin.com",
+            "https://www.linkedin.com/checkpoint/challenge/abc",
+            "https://example.test/blocked",
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            status_path = Path(directory) / "linkedin.json"
+            for answer in answers:
+                jobs = [self.remotely_job("open", url)]
+                fetcher = Mock(return_value=(answer, "<main>Bitte anmelden</main>"))
+                removed = self.check_linkedin(jobs, {"remotely:open"}, fetcher, status_path)
+
+                self.assertEqual(removed, 0, answer)
+                self.assertEqual([job.id for job in jobs], ["remotely:open"])
+                fetcher.assert_called_once()
+
+    def test_linkedin_job_url_without_title_is_recognized(self):
+        url = "https://www.linkedin.com/jobs/view/4012345678/"
+        self.assertEqual(remotely.linkedin_job_id(url), "4012345678")
+        self.assertFalse(remotely.linkedin_listing_is_closed(url, url, "<main>Jetzt bewerben</main>"))
+        self.assertTrue(remotely.linkedin_listing_is_closed(url, "https://www.linkedin.com/jobs/view/4099/", ""))
+
+    def test_closed_linkedin_listing_leaves_a_card_other_portals_still_list(self):
+        url = "https://de.linkedin.com/jobs/view/closed-at-example-107"
+        card = self.remotely_job("shared", url, locations=["Remote", "Berlin"])
+        card.sources.append(JobSource(source="stepstone", url="https://www.stepstone.de/job/107"))
+        alone = self.remotely_job("alone", "https://de.linkedin.com/jobs/view/closed-at-example-108")
+        jobs = [card, alone]
+
+        with tempfile.TemporaryDirectory() as directory:
+            removed = self.check_linkedin(
+                jobs,
+                {"remotely:shared", "remotely:alone"},
+                lambda checked, headers=None: (checked, "No longer accepting applications"),
+                Path(directory) / "linkedin.json",
+            )
+
+        self.assertEqual(removed, 2)
+        self.assertEqual([job.id for job in jobs], ["remotely:shared"])
+        self.assertEqual([source.source for source in jobs[0].sources], ["stepstone"])
+        self.assertEqual(jobs[0].locations, ["Remote", "Berlin"])
+
+    def test_status_cache_of_the_previous_version_is_not_trusted(self):
+        url = "https://de.linkedin.com/jobs/view/open-at-example-109"
+        with tempfile.TemporaryDirectory() as directory:
+            status_path = Path(directory) / "linkedin.json"
+            checked_at = datetime(2026, 8, 29, 11, tzinfo=UTC).isoformat()
+            status_path.write_text(
+                json.dumps({"version": 1, "checks": {"109": {"closed": True, "checked_at": checked_at}}}),
+                encoding="utf-8",
+            )
+            jobs = [self.remotely_job("open", url)]
+            removed = self.check_linkedin(
+                jobs, {"remotely:open"}, lambda checked, headers=None: (checked, "Jetzt bewerben"), status_path
+            )
+
+        self.assertEqual(removed, 0)
+        self.assertEqual(len(jobs), 1)
 
     def test_linkedin_status_is_reused_for_one_day(self):
         url = "https://de.linkedin.com/jobs/view/closed-at-example-105"

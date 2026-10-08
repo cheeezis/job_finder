@@ -31,6 +31,8 @@ DETAIL_REFRESH_DAYS = 7
 REQUEST_DELAY_SECONDS = 1.0
 LINKEDIN_REQUEST_DELAY_SECONDS = 0.4
 LINKEDIN_STATUS_MAX_AGE = timedelta(days=1)
+# v2: a sign-in wall no longer counts as closed; older entries may hold that error.
+LINKEDIN_STATUS_VERSION = 2
 LINKEDIN_HEADERS = {
     "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/128 Safari/537.36"),
     "Accept-Language": "de-DE,de;q=0.9,en;q=0.7",
@@ -80,7 +82,13 @@ def enrich_candidate_jobs(
     now=None,
     sleeper=time.sleep,
 ):
-    """Remove prefiltered candidates whose LinkedIn application is closed."""
+    """Drop Remotely listings whose LinkedIn application is confirmed closed.
+
+    A card that other portals still list keeps them and only loses its
+    Remotely listing; a card left without listings leaves the run. Only
+    known closure evidence counts: a sign-in wall or another unclear answer
+    keeps the listing and is checked again in the next run.
+    """
     targets = [
         (index, url)
         for index, job in enumerate(jobs)
@@ -90,10 +98,10 @@ def enrich_candidate_jobs(
         return 0
 
     checked_at = now or utc_now()
-    checks = read_versioned(status_cache_path, 1).get("checks", {})
+    checks = read_versioned(status_cache_path, LINKEDIN_STATUS_VERSION).get("checks", {})
     cache_changed = False
-    closed_indices = set()
-    errors = 0
+    closed_urls = {}
+    errors = unclear = 0
     requests_made = 0
 
     for position, (job_index, url) in enumerate(targets, 1):
@@ -107,26 +115,51 @@ def enrich_candidate_jobs(
             try:
                 final_url, html = fetcher(url, headers=LINKEDIN_HEADERS)
                 closed = linkedin_listing_is_closed(url, final_url, html)
-                checks[key] = {"closed": closed, "checked_at": checked_at.isoformat()}
-                cache_changed = True
             except Exception:
                 errors += 1
-                closed = False
+            else:
+                if closed is None:
+                    unclear += 1
+                else:
+                    checks[key] = {"closed": closed, "checked_at": checked_at.isoformat()}
+                    cache_changed = True
         if closed:
-            closed_indices.add(job_index)
+            closed_urls[job_index] = url
         if progress_checkpoint(position, len(targets)):
-            print_progress("Remotely LinkedIn", position, len(targets), f"{len(closed_indices)} geschlossen")
+            print_progress("Remotely LinkedIn", position, len(targets), f"{len(closed_urls)} geschlossen")
 
     if cache_changed:
-        write_versioned(status_cache_path, 1, checks=checks)
-    if closed_indices:
-        jobs[:] = [job for index, job in enumerate(jobs) if index not in closed_indices]
-        print(f"HINWEIS Remotely: {len(closed_indices)} geschlossene LinkedIn-Bewerbung(en) aus dem Review entfernt")
-    if errors:
+        write_versioned(status_cache_path, LINKEDIN_STATUS_VERSION, checks=checks)
+    removed = drop_closed_listings(jobs, closed_urls)
+    if removed:
+        print(f"HINWEIS Remotely: {removed} geschlossene LinkedIn-Bewerbung(en) aus dem Review entfernt")
+    if kept := len(closed_urls) - removed:
+        print(f"HINWEIS Remotely: {kept} Stelle(n) mit geschlossener LinkedIn-Bewerbung bleiben über andere Portale")
+    if errors or unclear:
         print(
-            f"WARNUNG Remotely: {errors} LinkedIn-Statusprüfung(en) nicht erreichbar; Stellen vorsichtshalber behalten"
+            f"WARNUNG Remotely: {errors} LinkedIn-Statusprüfung(en) nicht erreichbar, {unclear} ohne klare Antwort; "
+            "Stellen vorsichtshalber behalten"
         )
-    return len(closed_indices)
+    return len(closed_urls)
+
+
+def drop_closed_listings(jobs, closed_urls):
+    """Remove the closed Remotely listings from their cards; return how many cards left the run.
+
+    closed_urls maps a position in jobs to the closed LinkedIn application URL.
+    """
+    removed = set()
+    for index, url in closed_urls.items():
+        job = jobs[index]
+        job.sources = [
+            source
+            for source in job.sources
+            if source.source != SOURCE_NAME or str(source.application_url or "").strip() != url
+        ]
+        if not job.sources:
+            removed.add(index)
+    jobs[:] = [job for index, job in enumerate(jobs) if index not in removed]
+    return len(removed)
 
 
 def linkedin_application_url(job):
@@ -136,26 +169,44 @@ def linkedin_application_url(job):
             continue
         url = str(source.application_url or "").strip()
         parts = urlsplit(url)
-        host = (parts.hostname or "").casefold()
-        if (host == "linkedin.com" or host.endswith(".linkedin.com")) and "/jobs/view/" in parts.path.casefold():
+        if is_linkedin_host(parts.hostname) and "/jobs/view/" in parts.path.casefold():
             return url
     return ""
 
 
 def linkedin_listing_is_closed(original_url, final_url, html):
-    """Recognize LinkedIn's closed message and expired-job redirects."""
+    """Return True on closure evidence, False for the open job, None when the answer proves nothing.
+
+    Closure evidence is LinkedIn's closed message or a redirect to another
+    job or to LinkedIn's job search. A sign-in wall, a security check or
+    another site says nothing about the job.
+    """
+    final = urlsplit(str(final_url or ""))
+    if not is_linkedin_host(final.hostname):
+        return None
     original_id = linkedin_job_id(original_url)
     final_id = linkedin_job_id(final_url)
-    if not final_id or (original_id and final_id != original_id):
+    if final_id:
+        if original_id and final_id != original_id:
+            return True
+        text = str(html or "").casefold()
+        return any(marker in text for marker in LINKEDIN_CLOSED_MARKERS)
+    path = final.path.casefold().rstrip("/")
+    if path.startswith("/jobs") and not path.startswith("/jobs/view"):
         return True
-    text = str(html or "").casefold()
-    return any(marker in text for marker in LINKEDIN_CLOSED_MARKERS)
+    return None
+
+
+def is_linkedin_host(host):
+    """Tell whether a host belongs to LinkedIn."""
+    host = (host or "").casefold()
+    return host == "linkedin.com" or host.endswith(".linkedin.com")
 
 
 def linkedin_job_id(url):
-    """Read trailing digits after a hyphen in a LinkedIn job URL path."""
+    """Read the trailing digits of a LinkedIn job URL path, as /jobs/view/123 or /jobs/view/title-123."""
     path = urlsplit(str(url or "")).path.rstrip("/")
-    match = re.search(r"-(\d+)$", path)
+    match = re.search(r"[-/](\d+)$", path)
     return match.group(1) if match else ""
 
 

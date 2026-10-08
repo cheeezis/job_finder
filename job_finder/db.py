@@ -5,12 +5,12 @@ import json
 from datetime import UTC, datetime, timedelta
 
 from job_finder.paths import APPLICATION_DOCUMENTS_DIR
-from job_finder.persistence import document_store, job_listings
+from job_finder.persistence import document_store
 from job_finder.persistence.application_documents import orphaned_documents
 from job_finder.persistence.database import initialize, transaction
 from job_finder.persistence.postgres_backup import create_postgres_backup, restore_backup
 from job_finder.persistence.postgres_store import prune_cache
-from job_finder.persistence.schema_migrations import migrate, schema_status
+from job_finder.persistence.schema_migrations import downgrade, migrate, schema_status
 from job_finder.workflow.memory import load_memory
 
 
@@ -32,10 +32,10 @@ def main():
     orphans.add_argument("--hours", type=int, default=24)
     orphans.add_argument("--delete", action="store_true")
     orphans.add_argument("--documents-dir", default=str(APPLICATION_DOCUMENTS_DIR))
-    listings = commands.add_parser(
-        "listings-drift", help="Anzeigen-Tabellen mit den JSON-Feldern vergleichen; --repair leitet sie neu ab."
+    back = commands.add_parser(
+        "downgrade", help="Auf eine frühere Revision zurück, etwa 0006_runs vor einem Image-Rollback."
     )
-    listings.add_argument("--repair", action="store_true")
+    back.add_argument("revision")
     restore = commands.add_parser("restore")
     restore.add_argument("archive")
     restore.add_argument("--documents-dir", required=True)
@@ -53,15 +53,8 @@ def main():
         result = restore_backup(args.archive, args.documents_dir)
     elif args.command == "orphaned-documents":
         result = clean_orphaned_documents(args.documents_dir, timedelta(hours=args.hours), delete=args.delete)
-    elif args.command == "listings-drift":
-        with transaction() as connection:
-            if args.repair:
-                result = {
-                    "drift_before": job_listings.resync(connection),
-                    "drift_after": job_listings.drift(connection),
-                }
-            else:
-                result = {"drift": job_listings.drift(connection)}
+    elif args.command == "downgrade":
+        result = downgrade(args.revision)
     elif args.command == "prune-cache":
         result = {"removed_cache_entries": prune_cache(args.days)}
     else:

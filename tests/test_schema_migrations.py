@@ -8,6 +8,7 @@ from unittest.mock import patch
 from uuid import uuid4
 
 import psycopg
+import psycopg.types.json
 from alembic import command
 from psycopg import errors, sql
 from psycopg.conninfo import conninfo_to_dict, make_conninfo
@@ -16,7 +17,7 @@ from job_finder.persistence import schema_migrations as migrations
 
 LEGACY_SCHEMA = (Path(__file__).with_name("fixtures") / "schema_v2.sql").read_text(encoding="utf-8")
 # The newest revision; a test adds a later one of its own.
-HEAD = "0006_runs"
+HEAD = "0007_job_state_contract"
 ADDED_COLUMNS = {
     "agent_fact_sheets": ["retryable", "attempts", "versions", "outdated"],
     "job_state": ["first_seen_at", "last_seen_at", "locations"],
@@ -170,6 +171,10 @@ class SchemaMigrationTests(unittest.TestCase):
                 self.execute("DROP SCHEMA public CASCADE")
                 self.execute("CREATE SCHEMA public")
 
+    def upgrade_to(self, revision):
+        with migrations.admin_connection() as connection:
+            command.upgrade(migrations.migration_config(connection), revision)
+
     def test_changed_review_indexes_are_detected_readonly_without_repair(self):
         for change in (
             "DROP INDEX job_state_source_urls",
@@ -177,12 +182,58 @@ class SchemaMigrationTests(unittest.TestCase):
             "DROP INDEX job_state_source_urls; CREATE INDEX job_state_source_urls ON job_state ((extra -> 'source_urls'))",
         ):
             with self.subTest(change=change):
-                migrations.migrate()
+                # Revisions 0004 to 0006 have the indexes; 0007 removes them again.
+                self.upgrade_to("0006_runs")
                 self.execute(change)
                 with self.assertRaisesRegex(RuntimeError, "Struktur"):
                     migrations.schema_status()
                 self.execute("DROP SCHEMA public CASCADE")
                 self.execute("CREATE SCHEMA public")
+
+    def test_a_returned_jsonb_index_is_detected_after_the_contract(self):
+        migrations.migrate()
+        self.execute("CREATE INDEX job_state_source_urls ON job_state USING gin ((extra -> 'source_urls'))")
+        with self.assertRaisesRegex(RuntimeError, "Struktur"):
+            migrations.schema_status()
+
+    def test_contract_moves_the_fields_into_tables_and_downgrade_writes_them_back(self):
+        self.upgrade_to("0006_runs")
+        fields = {
+            "source_urls": ["https://x.test/1", "https://x.test/2"],
+            "source_names": ["stepstone"],
+            "linked_job_ids": ["old:1"],
+            "first_seen_at": "2026-10-01T08:00:00.123456+00:00",
+            "last_seen_at": "2026-10-07T06:00:00+00:00",
+            "locations": ["Fulda"],
+        }
+        # Written as an image before stage 4 writes it: everything in extra, the tables not yet derived.
+        self.execute(
+            "INSERT INTO job_state (scope,job_id,workflow_status,present,extra) VALUES "
+            "('default','test:1','new',%s,%s::jsonb)",
+            (["workflow_status", "note", *fields], psycopg.types.json.Jsonb({"note": "kept", **fields})),
+        )
+
+        self.assertEqual(migrations.migrate()["action"], "upgraded")
+        self.assertEqual(self.execute("SELECT extra FROM job_state"), [({"note": "kept"},)])
+        self.assertEqual(
+            self.execute("SELECT position, url, source_name FROM job_listings ORDER BY position"),
+            [(0, "https://x.test/1", "stepstone"), (1, "https://x.test/2", None)],
+        )
+        self.assertEqual(self.execute("SELECT linked_job_id FROM job_links"), [("old:1",)])
+        self.assertEqual(self.execute("SELECT locations FROM job_state"), [(["Fulda"],)])
+        self.assertEqual(self.execute("SELECT indexname FROM pg_indexes WHERE indexname LIKE 'job_state_%%urls'"), [])
+
+        result = migrations.downgrade("0006_runs")
+        self.assertEqual(
+            (result["action"], result["revision"], result["state"]), ("downgraded", "0006_runs", "outdated")
+        )
+        self.assertEqual(self.execute("SELECT extra FROM job_state"), [({"note": "kept", **fields},)])
+
+    def test_downgrade_refuses_targets_that_are_not_earlier(self):
+        migrations.migrate()
+        for target in (HEAD, "9999_unknown"):
+            with self.subTest(target=target), self.assertRaisesRegex(RuntimeError, "Downgrade|Ziel"):
+                migrations.downgrade(target)
 
     def test_new_and_adopted_database_have_identical_structures(self):
         migrations.migrate()

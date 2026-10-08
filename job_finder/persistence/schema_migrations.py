@@ -20,6 +20,7 @@ from job_finder.persistence.database import admin_database_url
 from job_finder.persistence.migrations.baseline import legacy_metadata, metadata
 from job_finder.persistence.migrations.fact_sheet_state import REVISION as FACT_SHEET_REVISION, added_columns
 from job_finder.persistence.migrations.job_listings import REVISION as LISTINGS_REVISION, define as define_listings
+from job_finder.persistence.migrations.job_state_contract import REVISION as CONTRACT_REVISION
 from job_finder.persistence.migrations.review_indexes import (
     INDEXES as REVIEW_INDEXES,
     REVISION as INDEX_REVISION,
@@ -37,6 +38,7 @@ KNOWN_REVISIONS = (
     INDEX_REVISION,
     LISTINGS_REVISION,
     RUNS_REVISION,
+    CONTRACT_REVISION,
 )
 
 
@@ -236,7 +238,8 @@ def _status(connection):
                 connection,
                 runtime_boundaries=level >= 1,
                 fact_sheet_state=level >= 2,
-                review_indexes=level >= 3,
+                # Revision 0007 drops the two GIN indexes again.
+                review_indexes=3 <= level < KNOWN_REVISIONS.index(CONTRACT_REVISION),
                 job_listings=level >= 4,
                 runs=level >= 5,
             )
@@ -273,11 +276,28 @@ def _protect_version_tables(connection):
             connection.exec_driver_sql(f"REVOKE ALL ON TABLE public.{quote(table)} FROM {recipient}")
 
 
+def _lock_schema(connection):
+    key = int.from_bytes(hashlib.sha256(b"jobfinder-schema").digest()[:8], "big", signed=True)
+    connection.exec_driver_sql("SELECT pg_advisory_xact_lock(%s)", (key,))
+
+
+def downgrade(target):
+    """Go back to target in one checked admin transaction; revisions that cannot go back refuse."""
+    with admin_connection() as connection:
+        _lock_schema(connection)
+        before = _status(connection)
+        if before["revision"] is None or target not in KNOWN_REVISIONS:
+            raise RuntimeError("Downgrade nur von einem bekannten Migrationsstand auf eine bekannte Revision.")
+        if KNOWN_REVISIONS.index(target) >= KNOWN_REVISIONS.index(before["revision"]):
+            raise RuntimeError("Das Ziel liegt nicht vor dem aktuellen Migrationsstand.")
+        command.downgrade(migration_config(connection), target)
+        return {**_status(connection), "action": "downgraded", "from": before["revision"]}
+
+
 def migrate():
     """Atomically create, adopt or upgrade; failed validation never repairs legacy drift."""
     with admin_connection() as connection:
-        key = int.from_bytes(hashlib.sha256(b"jobfinder-schema").digest()[:8], "big", signed=True)
-        connection.exec_driver_sql("SELECT pg_advisory_xact_lock(%s)", (key,))
+        _lock_schema(connection)
         # Keep legacy validation and stamping safe from concurrent DDL, while allowing DML.
         tables = set(sa.inspect(connection).get_table_names(schema="public")) & (
             metadata.tables.keys() | legacy_metadata.tables.keys()

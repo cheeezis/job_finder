@@ -20,3 +20,6 @@ tmp/
 
 # Terraform configuration and local state files do not belong in the image.
 infrastructure/
+
+# Build metadata of the editable install (uv sync)
+*.egg-info/

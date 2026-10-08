@@ -5,9 +5,6 @@ Extra arguments go to pytest, for example --cov for the coverage report in CI.
 
 import os
 import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import pytest
 from psycopg.conninfo import conninfo_to_dict

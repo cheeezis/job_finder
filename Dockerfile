@@ -1,5 +1,6 @@
-# uv installs exactly the versions in uv.lock. It is only mounted for that step
-# and stays out of the image. Both images are pinned by digest; Dependabot
+# uv installs exactly the versions in uv.lock, without the project itself: the
+# image runs the code from /app. uv is only mounted for that step and stays out
+# of the image. Both images are pinned by digest; Dependabot
 # proposes updates.
 FROM ghcr.io/astral-sh/uv:0.12.23@sha256:61d393e44e249f2e4b526b6c7ddcecce245946826e608e11c93ad4f5bba55b21 AS uv
 
@@ -16,7 +17,7 @@ ENV TZ=Europe/Berlin \
 
 COPY pyproject.toml uv.lock ./
 RUN --mount=from=uv,source=/uv,target=/usr/local/bin/uv \
-    uv sync --frozen --no-dev --no-cache
+    uv sync --frozen --no-dev --no-cache --no-install-project
 
 # Nothing runs pip, and its vendored copies of msgpack and setuptools are old
 # enough for image scans to report them. PATH already starts with the venv,

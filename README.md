@@ -184,12 +184,15 @@ frontend tests. From the repository root:
 uv sync
 uv run python scripts/setup_postgres.py
 docker compose --env-file .env.postgres up -d --wait
-uv run python -m job_finder.db init
-uv run python run_finder.py
-uv run python -m job_finder.review
+uv run job-finder-db init
+uv run job-finder
+uv run job-finder-review
 ```
 
-`uv sync` installs exactly the versions in `uv.lock` into `.venv`. The review
+`uv sync` installs exactly the versions in `uv.lock` into `.venv`, together with
+the project and its commands `job-finder` (a finder run), `job-finder-review`
+and `job-finder-db`; `python run_finder.py` and `python -m job_finder.review`
+still work as well. The review
 opens at `http://127.0.0.1:8765`. Without `user_settings.local.yaml`
 the anonymised example settings apply. The agent stays off until
 `agent.enabled: true` is set and an Azure OpenAI endpoint and a profile are

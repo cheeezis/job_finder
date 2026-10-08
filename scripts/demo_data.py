@@ -10,7 +10,6 @@ on every run, so it never touches real data.
 
 import argparse
 import os
-import sys
 import webbrowser
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
@@ -23,7 +22,6 @@ from psycopg import sql
 from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(PROJECT_DIR))
 
 DEMO_FILE = PROJECT_DIR / "demo" / "demo.yaml"
 CASES_FILE = PROJECT_DIR / "evals" / "cases" / "synthetic.yaml"

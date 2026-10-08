@@ -894,7 +894,7 @@ wheels = [
 [[package]]
 name = "job-finder"
 version = "0.2.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "alembic" },
     { name = "azure-identity" },

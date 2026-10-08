@@ -22,7 +22,11 @@ npm run check:types
 ```
 
 The dependencies are listed with version ranges in `pyproject.toml`, the exact
-versions in `uv.lock`; CI and the image install exactly those. After a change to
+versions in `uv.lock`; CI and the image install exactly those. `uv sync` also
+installs the project itself (editable) with its commands `job-finder`,
+`job-finder-review` and `job-finder-db`, so scripts import `job_finder` without
+changing `sys.path`; the image installs only the dependencies and runs from
+`/app`. After a change to
 `pyproject.toml`, `uv lock` updates the lock file, otherwise CI fails. The `dev`
 group pins Ruff, pytest, pytest-cov, Pyright and Playwright, so local checks and
 CI apply the same rules. Node.js is needed for the frontend tests, the type
@@ -114,7 +118,8 @@ the way back.
 New general changes start on a current `main`, for example on `docs/...`,
 `fix/...` or `feat/...`. Commit content changes and large purely mechanical
 changes separately. The [PR template](../.github/PULL_REQUEST_TEMPLATE.md)
-describes title and description. The repository is public: commit and PR texts
+asks for a short summary and what was tested, including what was not. The
+repository is public: commit and PR texts
 stay short and name no personal data, no companies from own applications, no
 figures from the own data and no Azure names.
 

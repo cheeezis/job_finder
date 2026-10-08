@@ -8,7 +8,6 @@ import argparse
 import base64
 import json
 import os
-import sys
 import tempfile
 import uuid
 from contextlib import contextmanager
@@ -21,19 +20,13 @@ from dotenv import dotenv_values
 from psycopg import sql
 from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from job_finder.persistence import document_store  # noqa: E402
-from job_finder.persistence.application_documents import (  # noqa: E402
-    find_document,
-    resolve_document_key,
-    store_documents,
-)
-from job_finder.persistence.database import initialize  # noqa: E402
-from job_finder.persistence.postgres_backup import create_postgres_backup, restore_backup  # noqa: E402
-from job_finder.persistence.postgres_store import read_dataset, write_dataset  # noqa: E402
-from job_finder.workflow.memory import load_memory, save_memory  # noqa: E402
-from job_finder.workflow.review_data import load_review_jobs  # noqa: E402
+from job_finder.persistence import document_store
+from job_finder.persistence.application_documents import find_document, resolve_document_key, store_documents
+from job_finder.persistence.database import initialize
+from job_finder.persistence.postgres_backup import create_postgres_backup, restore_backup
+from job_finder.persistence.postgres_store import read_dataset, write_dataset
+from job_finder.workflow.memory import load_memory, save_memory
+from job_finder.workflow.review_data import load_review_jobs
 
 PROJECT = Path(__file__).resolve().parents[1]
 JOB_ID = "synthetic:restore-drill"

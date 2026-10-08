@@ -55,3 +55,6 @@ evals/results/*.json
 # Type check tools (npm ci) and the intermediate file of npm run types:api
 node_modules/
 openapi.json
+
+# Build metadata of the editable install (uv sync)
+*.egg-info/

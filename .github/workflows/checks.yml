@@ -127,11 +127,11 @@ jobs:
       - run: uv sync --frozen
       - run: uv run --frozen python scripts/setup_postgres.py
       - run: docker compose --env-file .env.postgres up -d --wait
-      - run: uv run --frozen python -m job_finder.db init
-      - run: uv run --frozen python run_finder.py --only-sources manual
+      - run: uv run --frozen job-finder-db init
+      - run: uv run --frozen job-finder --only-sources manual
       - name: Review answers
         run: |
-          uv run --frozen python -m job_finder.review --no-browser &
+          uv run --frozen job-finder-review --no-browser &
           curl --retry 15 --retry-connrefused --retry-delay 1 -fsS -o /dev/null http://127.0.0.1:8765/
       - name: Demo answers
         run: |

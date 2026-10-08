@@ -25,7 +25,7 @@ DEPLOYED_HOST_ENV = "JOBFINDER_REVIEW_HOST"
 
 def parse_args():
     """Parse local server options."""
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(prog="job-finder-review", description=__doc__)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--no-browser", action="store_true")

@@ -23,6 +23,15 @@ possible.
 
 ## Decision
 
+```mermaid
+flowchart LR
+    s0[JSON documents<br/>in PostgreSQL] --> s1[Stage 1<br/>tables next to JSON,<br/>derived on every write]
+    s1 --> s3[Stage 3<br/>new tables such as runs]
+    s3 --> s4[Stage 4<br/>tables become the source,<br/>JSON fields removed]
+    s1 -. listing_drift .-> check{{drift 0<br/>for stable days?}}
+    check -. yes .-> s4
+```
+
 Option 3, in stages:
 
 1. Stable identities and constraints: tables `job_listings` and `job_links` and

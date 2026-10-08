@@ -2,7 +2,8 @@
 
 Database setup, backups, Azure, the local hybrid run and the access paths.
 [Usage](usage.md) covers using the finder, the [developer guide](development.md)
-its structure and development.
+its structure and development, and [Setting up the cloud from scratch](bootstrap.md)
+a rebuild in a new subscription.
 
 PostgreSQL is the only runtime store for jobs, decisions, application
 timelines, recommendations, Discord delivery state, source caches and the
@@ -305,6 +306,21 @@ terraform -chdir=infrastructure apply -replace=azurerm_container_app.review -rep
 ```
 
 ## Deploy and rollback
+
+```mermaid
+flowchart TD
+    merge([Merge to main]) --> tests[Tests, browser tests, quickstart]
+    tests --> build[Build image, scan, push]
+    build --> plan[Release plan against live Azure, stored privately]
+    plan --> approve{Approval in production}
+    approve --> current{Still the current main?}
+    current -- no --> abort([Abort])
+    current -- yes --> apply[Apply exactly the saved plan]
+    apply --> note[Note the previous image as the way back]
+    note --> roll[Roll out by digest]
+    roll --> check[Review refuses access without sign-in,<br/>revision healthy]
+    rollback([Workflow Rollback with the noted image]) -. after approval .-> roll
+```
 
 A deploy after a merge runs in three stages:
 

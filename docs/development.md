@@ -161,6 +161,17 @@ same migration path. There is no automatic migration at app start.
 
 ### Data flow of a finder run
 
+```mermaid
+flowchart TD
+    sources[Sources, up to four at a time:<br/>job boards, feeds, career pages, manual imports] --> merge[Merge URLs and duplicates]
+    merge --> gate{More than half of<br/>the sources usable?}
+    gate -- no --> stop([Stop, keep the previous state])
+    gate -- yes --> score[Prefilter, detail pages for candidates,<br/>final scoring]
+    score --> memory[Memory: IDs, decisions, one card per job;<br/>offline check of missing interesting jobs]
+    memory --> publish[Publish in one transaction:<br/>memory, snapshot, review, Discord jobs]
+    publish --> after[Send to Discord, agent writes fact sheets,<br/>run_summary and runs table]
+```
+
 1. Locally the data is backed up first; in containers this backup is skipped.
    Then the sources deliver matches and coverage details, up to four at a time;
    URLs and duplicates across sources are merged. If more than half of the

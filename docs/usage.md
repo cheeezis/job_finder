@@ -130,6 +130,31 @@ interface at `http://127.0.0.1:8765`: a landing page with the manual import,
 `/review` for reviewing and `/applications` for applications and statistics.
 Changed scoring rules take effect from the next finder run.
 
+The way of a job through the review and the application overview; the
+German labels in brackets are what the interface shows:
+
+```mermaid
+flowchart LR
+    new([new<br/>Neu]) --> decide{review}
+    decide --> interesting[interesting<br/>Interessant]
+    decide --> inquiry[inquiry<br/>Rückfrage offen]
+    decide --> waiting[waiting list<br/>Warteliste]
+    decide --> ignored([not interesting<br/>Nicht interessant])
+    interesting --> applied
+    inquiry --> applied
+    waiting --> applied
+    decide --> applied[applied<br/>Beworben]
+    applied --> response[response<br/>Antwort erhalten]
+    applied --> interview[interview<br/>Gespräch]
+    response --> interview
+    interview --> offer([offer<br/>Zusage])
+    applied --> rejected([rejected<br/>Absage])
+    response --> rejected
+    interview --> rejected
+    applied -. 14 days without news .-> noresponse([no response<br/>Keine Rückmeldung])
+    interview --> withdrawn([withdrawn<br/>Selbst abgesagt])
+```
+
 - **Review:** The filter "Neu" (new) shows every job not yet decided,
   regardless of the run that found it. International and junior-hybrid jobs
   have their own filters, off by default. Cards are sorted by the agent's
@@ -168,6 +193,32 @@ Changed scoring rules take effect from the next finder run.
   entered by hand. The response rate counts only completed applications.
 
 ## Operation
+
+```mermaid
+flowchart TB
+    boards[Job boards, feeds, career pages]
+    boards --> worker
+    boards --> hybrid
+    subgraph azure[Azure]
+        worker[Finder job<br/>06:00 and 16:00 UTC]
+        review[Review app<br/>Entra ID sign-in]
+        model[Azure OpenAI<br/>agent]
+        db[(PostgreSQL)]
+        blob[(Blob Storage<br/>documents)]
+    end
+    subgraph local[Own computer]
+        hybrid[Hybrid run in Docker<br/>StepStone, Remotely]
+    end
+    worker --> model
+    hybrid --> model
+    worker --> db
+    hybrid --> db
+    review --> db
+    review --> blob
+    you((You)) --> review
+    worker --> discord[Discord]
+    hybrid --> discord
+```
 
 - **Local:** Finder and review run on the own computer, PostgreSQL in Docker
   Compose, documents under `data/internal/application_documents`. Every finder

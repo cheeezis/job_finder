@@ -8,6 +8,19 @@ the earlier broad rights; the separation is not complete then.
 
 ## Rights after the switch
 
+```mermaid
+flowchart LR
+    worker[Cloud worker<br/>managed identity] --> db[(PostgreSQL<br/>jobfinder_worker_access)]
+    hybrid[Local hybrid run<br/>service principal] --> db
+    review[Review<br/>own managed identity] --> dbr[(PostgreSQL<br/>jobfinder_review_access,<br/>row security on datasets)]
+    worker --> kvw[Key Vault: five worker secrets]
+    review --> kvr[Key Vault: three review secrets]
+    review --> blob[(Blob container<br/>application-documents)]
+    worker --> model[Azure OpenAI<br/>caller role]
+    hybrid --> model
+    worker & review --> acr[Registry: pull]
+```
+
 | Area | Cloud worker | Review | Local hybrid worker |
 | --- | --- | --- | --- |
 | Identity | earlier worker managed identity | own review managed identity | earlier own service principal |

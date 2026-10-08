@@ -15,6 +15,10 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      # pyproject.toml keeps SQLAlchemy below 2.1 (migrations and the schema
+      # check use it); the step to 2.1 is a PR of its own with tests.
+      - dependency-name: "sqlalchemy"
+        versions: [">= 2.1"]
 
   - package-ecosystem: github-actions
     directory: /

@@ -1,15 +1,15 @@
 <!--
-Titel: <typ>: <kurze Beschreibung auf Englisch>
-Typen: feat, fix, refactor, docs, test, chore
-Branch: <typ>/<kurze-beschreibung>, niemals mit dem Präfix codex/.
-Eine zusammenhängende Änderung pro PR; unabhängige Änderungen separat halten.
-Die Beschreibung ist auf Deutsch. Ersetze die Hinweise durch konkrete Angaben.
-Nur den Abschnitt Zusammenfassung verwenden; keinen Abschnitt Prüfung ergänzen.
-Kurz halten (zwei bis vier Stichpunkte). Das Repository ist öffentlich: keine
-persönlichen Daten, keine Firmen aus eigenen Bewerbungen, keine Zahlen aus dem
-eigenen Bestand und keine Azure-Namen.
+Title: <type>: <short description>
+Types: feat, fix, refactor, docs, test, chore
+Branch: <type>/<short-description>, never with the prefix codex/.
+One coherent change per PR; keep independent changes apart.
+Write the description in English. Replace the hints with concrete details.
+Use only the Summary section; do not add a Testing section.
+Keep it short (two to four bullet points). The repository is public: no
+personal data, no companies from own applications, no figures from the own
+data and no Azure names.
 -->
 
-## Zusammenfassung
+## Summary
 
-<!-- Welches Problem wird gelöst und wie verhält sich das Projekt danach? -->
+<!-- Which problem is solved, and how does the project behave afterwards? -->

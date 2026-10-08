@@ -1,17 +1,17 @@
-# Betrieb
+# Operations
 
-Einrichtung der Datenbank, Backups, Azure, der lokale Hybrid-Lauf und die
-Zugriffswege. Bedienung steht in [Bedienung](bedienung.md), Aufbau und
-Entwicklung in der [Entwickleranleitung](development.md).
+Database setup, backups, Azure, the local hybrid run and the access paths.
+[Usage](usage.md) covers using the finder, the [developer guide](development.md)
+its structure and development.
 
-PostgreSQL ist der einzige Laufzeitspeicher für Stellenbestand, Entscheidungen,
-Bewerbungsverläufe, Empfehlungen, Discord-Versandstatus, Quellencaches und die
-Steckbriefe des Agenten. Dokumentinhalte bleiben separate Dateien (lokal oder im
-Blob Storage), ihre Metadaten und Zuordnung stehen in PostgreSQL.
+PostgreSQL is the only runtime store for jobs, decisions, application
+timelines, recommendations, Discord delivery state, source caches and the
+agent's fact sheets. Document contents stay separate files (local or in Blob
+Storage); their metadata and assignment are in PostgreSQL.
 
-## Lokale Datenbank
+## Local database
 
-Aus dem Repository-Stamm in PowerShell:
+From the repository root in PowerShell:
 
 ```powershell
 uv sync
@@ -20,153 +20,153 @@ docker compose --env-file .env.postgres up -d --wait
 uv run python -m job_finder.db init
 ```
 
-Der Setup-Befehl erzeugt einmalig ein zufälliges Passwort in `.env.postgres`.
-Die Datei ist von Git und Docker-Builds ausgeschlossen. Vorhandene Einstellungen
-werden nicht überschrieben. Die Anwendung lädt sie automatisch; bereits gesetzte
-Umgebungsvariablen haben Vorrang.
+The setup command creates a random password in `.env.postgres` once. The file
+is excluded from Git and Docker builds. Existing settings are not overwritten.
+The application loads it automatically; environment variables already set take
+precedence.
 
-Die Datenbank ist nur unter `127.0.0.1:55432` erreichbar. Der separate Compose-Name
-`jobfinder` vermeidet Konflikte mit anderen Projekten. Das Docker-Volume
-`jobfinder_postgres_data` (Mount `/var/lib/postgresql`) übersteht das Ersetzen
-des Containers. `docker compose down` erhält das Volume; `down -v` würde es
-löschen und gehört nicht zum normalen Ablauf.
+The database is reachable only at `127.0.0.1:55432`. The separate Compose name
+`jobfinder` avoids conflicts with other projects. The Docker volume
+`jobfinder_postgres_data` (mounted at `/var/lib/postgresql`) survives replacing
+the container. `docker compose down` keeps the volume; `down -v` would delete
+it and is not part of the normal routine.
 
-Worker und Review verbinden sich nicht mit dem Admin-Benutzer `jobfinder`,
-sondern über die Rolle `jobfinder_app` mit eingeschränkten Rechten (kein Zugriff
-auf `schema_version` oder `alembic_version`). Einmalig einrichten:
+Worker and review do not connect as the admin user `jobfinder` but through the
+role `jobfinder_app` with restricted rights (no access to `schema_version` or
+`alembic_version`). Set it up once:
 
 ```powershell
 .\.venv\Scripts\python.exe scripts/create_app_role.py
 ```
 
-Der Befehl legt die Rolle an beziehungsweise aktualisiert ihre Rechte, setzt
-`JOBFINDER_DATABASE_URL` in `.env.postgres` auf die neue Rolle und ist beliebig
-oft wiederholbar. Passwörter werden dabei nie ausgegeben.
+The command creates the role or updates its rights, points
+`JOBFINDER_DATABASE_URL` in `.env.postgres` at the new role and can be repeated
+any number of times. It never prints passwords.
 
-Für die Tests einmalig die getrennte Testdatenbank anlegen:
+For the tests, create the separate test database once:
 
 ```powershell
 docker compose --env-file .env.postgres exec postgres createdb -U jobfinder jobfinder_test
 ```
 
-Der Teststarter `scripts/test_postgres.py` verlangt `JOBFINDER_TEST_DATABASE_URL`
-mit einem eigenen Datenbanknamen auf `_test`, verweigert den konfigurierten
-Produktivnamen und leert nur die Anwendungstabellen dieser Testdatenbank.
+The test runner `scripts/test_postgres.py` requires
+`JOBFINDER_TEST_DATABASE_URL` with its own database name ending in `_test`,
+refuses the configured production name and empties only the application tables
+of this test database.
 
-## Daten, Dokumente und Caches
+## Data, documents and caches
 
-- `job_state`: feste Spalten für ID, Titel, Firma, Status, Aktivität, Fehlläufe,
-  Gehaltsvorstellung, persönliche Bewertung und Notiz; weitere Attribute als JSONB.
-- `workflow_history`: geordnete Ereignisse mit Status, Datum und Gesprächstermin.
-- `application_documents`: Metadaten und Referenzen, keine Dokumentbytes.
-- `jobs` / `recommendations`: eigene Datensätze pro Snapshot-Eintrag mit festen
-  Kernspalten; mehrere Quellendarstellungen einer Job-ID bleiben erhalten, die
-  Position ist Teil des Schlüssels.
-- `notifications`: getrennte ausstehende und bereits versendete Einträge.
-- `manual_sources`: dauerhaft hinzugefügte URLs und ihre Quelldaten; ein
-  veralteter Cache-Schreibstand entfernt sie nicht.
-- `source_cache`: einzeln gespeicherte Cache-Inhalte mit JSONB und Speicherzeit.
-- `datasets`: kleine Header und Formatangaben für die rekonstruierten Ansichten.
-- `agent_usage` / `agent_fact_sheets`: Kostenbuch und Steckbriefe des Agenten.
+- `job_state`: fixed columns for ID, title, company, status, activity, missed
+  runs, salary expectation, personal rating and note; further attributes as
+  JSONB.
+- `workflow_history`: ordered events with status, date and interview time.
+- `application_documents`: metadata and references, no document bytes.
+- `jobs` / `recommendations`: one row per snapshot entry with fixed core
+  columns; several source representations of a job ID are kept, the position is
+  part of the key.
+- `notifications`: pending and already sent entries, kept apart.
+- `manual_sources`: permanently added URLs and their source data; an outdated
+  cache write does not remove them.
+- `source_cache`: individually stored cache contents as JSONB with their write
+  time.
+- `datasets`: small headers and format details for the reconstructed views.
+- `agent_usage` / `agent_fact_sheets`: the agent's cost ledger and fact sheets.
 
-Einzelne Review-Änderungen sperren die betroffene Stelle; Status und Verlauf
-werden gemeinsam gespeichert. Finder-Abgleiche sperren die Bestandsänderungen
-und schreiben nur veränderte Datensätze zurück; ein Lock verhindert zwei
-gleichzeitige Finder. Der manuelle Import schreibt
-Quellen, Gedächtnis und Ergebnisse in einer Transaktion, der HTTP-Abruf erfolgt
-davor. Der Finder schreibt Gedächtnis, bestätigte Schließungen, beide
-Ergebnisansichten und Discord-Aufträge gemeinsam in einer Transaktion. Versand
-und Quittierung folgen nach Commit. Die bestehende Tabelle `notifications`
-enthält die Kartendaten, einen stabilen Ereignisschlüssel und den Versandstatus;
-für diese Outbox ist keine Schemaänderung erforderlich.
+Single review changes lock the affected job; status and timeline are saved
+together. Finder reconciliations lock the changes to the job stock and write
+back only changed records; a lock prevents two finders at once. The manual
+import writes sources, memory and results in one transaction, with the HTTP
+fetch before it. The finder writes memory, confirmed closings, both result
+views and Discord jobs together in one transaction. Sending and acknowledging
+follow after the commit. The existing table `notifications` holds the card
+data, a stable event key and the delivery state; this outbox needed no schema
+change.
 
-Offene Aufträge werden im nächsten erfolgreichen Finder-Lauf auch ohne erneuten
-Fund wiederholt. Quellen-Ausfälle und geteilte Zeitpläne entfernen sie nicht.
-Eine neu gesetzte Review-Entscheidung oder ein Vorfilterausschluss kann den
-Auftrag verwerfen. Erfolgreiche Teilversände werden einzeln gespeichert. Bei
-einem Abbruch nach Discord-Erfolg, aber vor Quittierung ist ein doppelter Hinweis
-möglich. Die Laufstatistik wird weiterhin unmittelbar gesendet. Einzelheiten
-und Abbruchtests: [Entwickler-Doku](development.md#veröffentlichung-und-discord-outbox).
+Open jobs are retried in the next successful finder run, even without a new
+find. Source failures and split schedules do not remove them. A newly set
+review decision or a prefilter exclusion can discard the job. Successful
+partial deliveries are saved one by one. An abort after Discord succeeded but
+before the acknowledgement can cause a duplicate message. The run summary is
+still sent straight away. Details and abort tests:
+[developer docs](development.md#publishing-and-discord-outbox).
 
-Dokumente liegen standardmäßig unter `data/internal/application_documents`;
-`JOBFINDER_DOCUMENTS_DIR` kann auf eine andere dauerhafte Ablage zeigen. Mit
-`JOBFINDER_DOCUMENTS_BACKEND=blob` liegen sie in dem Blob-Container, den
-`JOBFINDER_STORAGE_ACCOUNT` und `JOBFINDER_STORAGE_CONTAINER` benennen; so
-arbeiten Worker, Review und Hybrid-Lauf.
+Documents are kept under `data/internal/application_documents` by default;
+`JOBFINDER_DOCUMENTS_DIR` can point at another permanent location. With
+`JOBFINDER_DOCUMENTS_BACKEND=blob` they live in the blob container named by
+`JOBFINDER_STORAGE_ACCOUNT` and `JOBFINDER_STORAGE_CONTAINER`; worker, review
+and hybrid run work that way.
 
-Beim Start einer Bewerbung schreibt die Review die Dokumente zuerst unter neuen
-Schlüsseln und trägt sie danach in einer kurzen Transaktion ein; scheitert diese,
-löscht sie die neuen Dateien wieder. Nur ein Absturz genau dazwischen hinterlässt
-eine Datei ohne Verweis. Solche Dateien, die älter als 24 Stunden sind, listet
-der folgende Befehl; gelöscht wird nur mit `--delete`. Gegen Azure mit denselben
-Umgebungsvariablen wie die Review (`JOBFINDER_DOCUMENTS_BACKEND=blob`, Konto,
-Container) und einer Datenbank-URL mit Lesezugriff:
+When an application starts, the review first writes the documents under new
+keys and then records them in a short transaction; if that fails, it deletes
+the new files again. Only a crash exactly in between leaves a file without a
+reference. The following command lists such files older than 24 hours; it
+deletes only with `--delete`. Against Azure, use the same environment variables
+as the review (`JOBFINDER_DOCUMENTS_BACKEND=blob`, account, container) and a
+database URL with read access:
 
 ```powershell
 .\.venv\Scripts\python.exe -m job_finder.db orphaned-documents
 .\.venv\Scripts\python.exe -m job_finder.db orphaned-documents --delete
 ```
 
-Automatische Cache-Einträge, die seit mindestens 30 Tagen nicht neu gespeichert
-oder geändert wurden, lassen sich aufräumen; unverändertes erneutes Schreiben
-setzt die Frist nicht zurück. Manuelle Quellen, Stellen, Bewerbungen,
-Versandstatus und Dokumente bleiben davon unberührt:
+Automatic cache entries not saved again or changed for at least 30 days can be
+pruned; writing them again unchanged does not reset the period. Manual sources,
+jobs, applications, delivery state and documents are not affected:
 
 ```powershell
 .\.venv\Scripts\python.exe -m job_finder.db prune-cache --days 30
 ```
 
-## Backup und Wiederherstellung
+## Backup and restore
 
 ```powershell
 .\.venv\Scripts\python.exe -m job_finder.db backup
 ```
 
-Das ZIP enthält einen konsistenten Anwendungsstand samt Steckbriefen und
-Kostenbuch des Agenten, alle referenzierten Dokumentdateien und Prüfsummen. Vor
-jedem lokalen Finder-Lauf entsteht ebenfalls ein solches Backup; die Rotation
-behält sieben Archive. In Containern (Azure-Worker, Hybrid-Lauf) entfällt es
-(`JOBFINDER_SKIP_RUN_BACKUP=1`), weil ihr Dateisystem den Lauf nicht überdauert.
-Dort sichern der Point-in-Time-Restore des Servers (14 Tage) und die
-Versionierung samt Soft Delete im Blob Storage (14 Tage).
+The ZIP holds a consistent application state including the agent's fact sheets
+and cost ledger, all referenced document files and checksums. Every local
+finder run also writes such a backup first; the rotation keeps seven archives.
+In containers (Azure worker, hybrid run) it is skipped
+(`JOBFINDER_SKIP_RUN_BACKUP=1`) because their file system does not outlive the
+run. There the server's point-in-time restore (14 days) and the versioning with
+soft delete in Blob Storage (14 days) protect the data.
 
-Eine Wiederherstellung braucht eine leere, separat konfigurierte Datenbank und
-ein leeres Dokumentziel. Zuerst `JOBFINDER_DATABASE_URL` auf dieses Ziel setzen:
+A restore needs an empty, separately configured database and an empty document
+target. First point `JOBFINDER_DATABASE_URL` at that target:
 
 ```powershell
-.\.venv\Scripts\python.exe -m job_finder.db restore "PFAD_ZUM_BACKUP.zip" --documents-dir "PFAD_ZUM_LEEREN_DOKUMENTORDNER"
+.\.venv\Scripts\python.exe -m job_finder.db restore "PATH_TO_BACKUP.zip" --documents-dir "PATH_TO_EMPTY_DOCUMENT_FOLDER"
 ```
 
-Die Anwendung prüft die Prüfsummen, vergleicht die zurückgeschriebenen Daten und
-überschreibt nichts. Das ist ein Anwendungsbackup, kein Ersatz für die
-Azure-Serverbackups, Rollen- oder Infrastruktur-Sicherungen.
+The application verifies the checksums, compares the data written back and
+overwrites nothing. This is an application backup, not a replacement for the
+Azure server backups or for backups of roles or infrastructure.
 
-Die gemeinsame Planung für Datenbank und historische Dokumentversionen steht
-unter [Backup und Wiederherstellung](backup-recovery.md). Eine Probe mit
-erfundenen Daten auf dem lokalen PostgreSQL-Testcontainer läuft mit
-`python scripts/restore_drill.py`; sie erstellt und entfernt eigene
-Testdatenbanken und prüft die Dokumentverweise. Sie ersetzt keine Azure-PITR-
-und Blob-Restore-Abnahme; diese ist am 05.10.2026 bestanden
-([Ergebnis](backup-recovery.md#ergebnis-der-azure-probe)).
+The joint plan for the database and historical document versions is in
+[Backup and restore](backup-recovery.md). A drill with made-up data on the
+local PostgreSQL test container runs with `python scripts/restore_drill.py`; it
+creates and removes its own test databases and checks the document references.
+It does not replace the acceptance of Azure PITR and blob restore; that passed
+on 05.10.2026 ([result](backup-recovery.md#result-of-the-azure-drill)).
 
 ## Azure
 
-`infrastructure/postgresql.tf` verwaltet den produktiven Server: einen
-PostgreSQL-Flexible-Server (`B_Standard_B1ms`, 32 GiB, France Central), die
-Datenbank `jobfinder`, die Firewallregeln und `require_secure_transport`.
-Im F09-Modus `split` nutzen Worker, Review und Hybrid eigene eingeschränkte
-DB-Rollen; die Cloud-URLs liegen in den jeweiligen Worker-/Review-DB-Secrets,
-die jede Komponente mit ihrer eigenen Managed Identity liest. Nur der bisherige
-Modus `legacy` verwendet gemeinsam `jobfinder_app` und `JobfinderDatabaseUrl`.
-Rechte und Phasen: [Laufzeitzugänge](runtime-access.md). Die gesonderte Umstellung
-auf Token-Anmeldung ist in [Datenbankanmeldung mit Entra](database-auth.md)
-beschrieben; Standard bleibt Passwortauthentifizierung. Die folgenden Schritte
-betreffen den administrativen Zugriff vom eigenen Rechner.
+`infrastructure/postgresql.tf` manages the production server: a PostgreSQL
+flexible server (`B_Standard_B1ms`, 32 GiB, France Central), the database
+`jobfinder`, the firewall rules and `require_secure_transport`. In the `split`
+mode, worker, review and hybrid run use their own restricted database roles;
+the cloud URLs are in the worker and review database secrets, which each
+component reads with its own managed identity. Only the earlier `legacy` mode
+shares `jobfinder_app` and `JobfinderDatabaseUrl`. Rights and phases:
+[runtime access](runtime-access.md). The separate switch to token sign-in is
+described in [database sign-in with Entra](database-auth.md); password
+authentication stays the default. The following steps concern administrative
+access from the own computer.
 
-Admin-Passwort und die freizugebende IP liegen lokal in
-`infrastructure/postgres.auto.tfvars.json`, weitere private Werte in
-`infrastructure/terraform.tfvars` (beide von Git ausgeschlossen). Planen und
-anwenden aus dem Repository-Stamm:
+The admin password and the IP to allow are kept locally in
+`infrastructure/postgres.auto.tfvars.json`, further private values in
+`infrastructure/terraform.tfvars` (both excluded from Git). Plan and apply from
+the repository root:
 
 ```powershell
 terraform -chdir=infrastructure fmt -check
@@ -181,79 +181,83 @@ try {
 }
 ```
 
-Die Firewallregel `local-review` lässt genau eine Adresse zu, auch für den
-Hybrid-Lauf. Weil die Heim-IP oft wechselt, setzt `scripts/run_local_hybrid.py`
-die Regel vor jedem Lauf über die angemeldete `az`-Sitzung auf die aktuelle
-öffentliche IP (ermittelt über `api.ipify.org`). Vor einer lokalen Review gegen
-Azure genügt `uv run python scripts/run_local_hybrid.py --allow-ip`. Terraform
-legt die Regel mit `postgres_client_ipv4` an und ignoriert danach ihre Adresse. Lesender Zugriffstest mit Zertifikatsprüfung, der
-nichts verändert:
+The firewall rule `local-review` allows exactly one address, also for the
+hybrid run. Because the home IP changes often, `scripts/run_local_hybrid.py`
+points the rule at the current public IP (looked up via `api.ipify.org`)
+through the signed-in `az` session before every run. Before a local review
+against Azure, `uv run python scripts/run_local_hybrid.py --allow-ip` is
+enough. Terraform creates the rule with `postgres_client_ipv4` and ignores its
+address afterwards. A read-only access test with certificate verification that
+changes nothing:
 
 ```powershell
 .\.venv\Scripts\python.exe scripts/check_azure_postgres.py
 ```
 
-Den gemeinsamen Zugang nur für die Ersteinrichtung im Modus `legacy` anlegen.
-Getrennte Worker-/Review-/Hybrid-Zugänge, Rechte-Matrix und der Ablauf mit zwei Etappen
-stehen in [runtime-access.md](runtime-access.md). Nach `split` deren Wartungsweg
-verwenden, nicht den folgenden alten App-Rollen-Befehl erneut ausführen.
+Create the shared login only for the initial setup in `legacy` mode. Separate
+worker, review and hybrid logins, the rights matrix and the two-stage procedure
+are in [runtime-access.md](runtime-access.md). After `split`, use their
+maintenance path instead of running the old app role command below again.
 
 ```powershell
 .\.venv\Scripts\python.exe scripts/create_app_role.py --azure
 ```
 
-Neue Tabellen und Spalten werden ausschließlich mit expliziten Alembic-Migrationen
-über `job_finder.db migrate` angelegt; `init` ist ein kompatibler Alias für denselben
-Pfad. Worker und Review ändern das Schema nie. Eine leere Datenbank erhält das Schema
-über die unveränderte Baseline-Revision `0001_baseline` und die folgenden Revisionen
-bis `head`. Eine bestehende Datenbank ohne Alembic-Stand
-wird erst nach Prüfung der vollständigen Baseline-Struktur und des bisherigen
-Versionsmarkers übernommen. Abweichungen führen zum Abbruch; fehlende Tabellen oder
-Spalten werden bei der Übernahme nicht automatisch repariert.
-Die bekannte alte Import-Protokolltabelle `migration_runs` darf mit ihrer ursprünglichen,
-ebenfalls geprüften Struktur vorhanden sein. Sie und ihre Daten bleiben erhalten;
-frische Datenbanken bekommen sie seit der abgeschlossenen Datenübernahme nicht mehr.
+New tables and columns are created only by explicit Alembic migrations through
+`job_finder.db migrate`; `init` is a compatible alias for the same path. Worker
+and review never change the schema. An empty database gets the schema through
+the unchanged baseline revision `0001_baseline` and the following revisions up
+to `head`. An existing database without an Alembic version is adopted only
+after the complete baseline structure and the earlier version marker have been
+checked. Deviations abort; missing tables or columns are not repaired
+automatically on adoption. The known old import log table `migration_runs` may
+exist with its original structure, which is checked as well. It and its data
+are kept; fresh databases no longer get it since the data migration has ended.
 
-`schema-status` prüft Struktur und Migrationsstand mit dem Admin-Zugang, technisch
-schreibgeschützt. Es zeigt `empty`, `legacy`, `current` oder `outdated`, den aktuellen
-Stand und das Ziel `head`, ohne Zeilenzahlen oder Verbindungsdaten. `migrate` übernimmt
-Prüfung, Baseline-Markierung, Upgrade und Schutz der Versionstabellen in einer
-Transaktion unter der bisherigen Schema-Sperre. Auch ererbte Tabellenrechte werden
-für die Versionstabellen entzogen; Anwendungstabellen behalten ihre Rechte.
+`schema-status` checks structure and migration state with the admin login,
+technically read-only. It shows `empty`, `legacy`, `current` or `outdated`, the
+current revision and the target `head`, without row counts or connection
+details. `migrate` performs the check, the baseline stamp, the upgrade and the
+protection of the version tables in one transaction under the existing schema
+lock. Inherited table rights are revoked for the version tables as well;
+application tables keep their rights.
 
-Vor einer Produktionsmigration Bestand sichern und `schema-status` prüfen. Bei einer
-Abweichung Ursache und tatsächlichen Bestand untersuchen; kein ungeprüftes `alembic
-stamp`. Die Baseline erhält die bisherige `schema_version = 2` und alle vorhandenen
-Daten. Ein Rollback auf das vorherige App-Image benötigt keinen Schema-Downgrade;
-ein Baseline-Downgrade wird bewusst abgelehnt, weil er den gesamten Bestand löschen
-würde. Neue Revisionen brauchen einen eigenen Kompatibilitäts- und Rückkehrplan.
-`0003_agent_fact_sheet_state` ergänzt nur Spalten mit Standardwerten an
-`agent_fact_sheets` (Wiederholung, Versuche, Grundlage, veraltete Teile): Das
-vorherige Image schreibt weiter wie bisher, ein Image-Rollback braucht also keinen
-Downgrade. Die Migration läuft vor dem Merge des passenden Releases, weil das neue
-Image die Spalten liest.
-`0004_review_lookup_indexes` legt zwei GIN-Indizes auf `job_state.extra` an (Listen-URLs und
-verknüpfte IDs), über die die Review gemerkte Stellen einer Anzeige findet; ohne sie liest
-PostgreSQL für jede Stellenliste die ganze Tabelle. Die Strukturprüfung erwartet genau diese
-beiden Definitionen. Auch diese Migration läuft vor dem Merge des passenden Releases.
-`0005_job_listings` (F17, Etappe 1) legt die Tabellen `job_listings` (Anzeigen einer
-Stelle: Position, URL, Quelle) und `job_links` (verknüpfte Stellen) sowie die Spalten
-`first_seen_at`, `last_seen_at` und `locations` an `job_state` an, übernimmt die Werte
-aus `job_state.extra` und gibt den Tabellen dieselben Rechte wie `job_state`. Bis zum
-Abbau in einer späteren Etappe bleiben die JSON-Felder die Quelle: Jedes Speichern
-leitet Tabellen und Spalten daraus neu ab, ein älteres Image läuft also unverändert
-weiter. Abweichungen, etwa nach einem Rollback, meldet `listing_drift` in der
-Laufzeile `run_summary`; prüfen und reparieren:
+Before a production migration, back up the data and check `schema-status`. On a
+deviation, investigate the cause and the actual data; no unchecked
+`alembic stamp`. The baseline keeps the earlier `schema_version = 2` and all
+existing data. A rollback to the previous app image needs no schema downgrade;
+a baseline downgrade is refused on purpose because it would delete all data.
+New revisions need their own compatibility and return plan.
+`0003_agent_fact_sheet_state` only adds columns with defaults to
+`agent_fact_sheets` (retry, attempts, basis, outdated parts): the previous image
+keeps writing as before, so an image rollback needs no downgrade. The migration
+runs before the merge of the matching release, because the new image reads the
+columns.
+`0004_review_lookup_indexes` creates two GIN indexes on `job_state.extra`
+(listing URLs and linked IDs) that the review uses to find remembered jobs of a
+listing; without them PostgreSQL reads the whole table for every job list. The
+structure check expects exactly these two definitions. This migration also runs
+before the merge of the matching release.
+`0005_job_listings` (F17, stage 1) creates the tables `job_listings` (a job's
+listings: position, URL, source) and `job_links` (linked jobs) and the columns
+`first_seen_at`, `last_seen_at` and `locations` on `job_state`, takes over the
+values from `job_state.extra` and gives the tables the same rights as
+`job_state`. Until their removal in a later stage the JSON fields stay the
+source: every save derives tables and columns from them again, so an older image
+keeps running unchanged. Deviations, for example after a rollback, are reported
+by `listing_drift` in the `run_summary` line; check and repair:
 
 ```powershell
 .\.venv\Scripts\python.exe -m job_finder.db listings-drift
 .\.venv\Scripts\python.exe -m job_finder.db listings-drift --repair
 ```
-Migrationen laufen bewusst getrennt vom Deploy (siehe [Deploy und Rollback](#deploy-und-rollback)).
 
-Nach einer freigegebenen Schemaänderung läuft der Befehl einmal gegen Azure, mit
-den nur für diesen Aufruf gesetzten Verbindungsdaten aus `.env.postgres-azure`.
-`check` zählt danach als App-Rolle die Zeilen und prüft damit den Datenzugriff:
+Migrations run separately from the deploy on purpose (see
+[Deploy and rollback](#deploy-and-rollback)).
+
+After an approved schema change, the command runs once against Azure, with the
+connection details from `.env.postgres-azure` set only for this call. `check`
+then counts the rows as the app role and so tests the data access:
 
 ```powershell
 $azure = Get-Content .env.postgres-azure -Raw | ConvertFrom-StringData
@@ -268,254 +272,254 @@ try {
 }
 ```
 
-Der Server läuft auch zwischen den Finder-Läufen (Preise unter
-[Kosten](#kosten)). Pausieren spart nur Rechenleistung, nicht den Speicher; ein
-gestoppter Server startet nach sieben Tagen von selbst wieder:
+The server also runs between finder runs (prices under [Costs](#costs)).
+Pausing saves only compute, not storage; a stopped server starts again by
+itself after seven days:
 
 ```powershell
 $jobfinderPostgresServer = terraform -chdir=infrastructure output -raw postgres_server_name
 az postgres flexible-server stop --resource-group rg-jobfinder --name $jobfinderPostgresServer
-# Für die Weiterarbeit:
+# To continue working:
 az postgres flexible-server start --resource-group rg-jobfinder --name $jobfinderPostgresServer
 ```
 
-Server und Storage-Account tragen eine Löschsperre (`no-delete`): Jedes
-Löschen, auch per `terraform destroy`, scheitert, bis die Sperre bewusst lokal
-mit Owner-Rechten entfernt wurde. `terraform destroy` betrifft die gesamte
-Infrastruktur im Ordner und braucht vorher eine geprüfte Datensicherung.
+Server and storage account carry a delete lock (`no-delete`): every deletion,
+also through `terraform destroy`, fails until the lock has been removed
+deliberately and locally with Owner rights. `terraform destroy` affects the
+whole infrastructure in the folder and needs a verified backup first.
 
-Was Daten oder den Zugangsschutz trägt, schützt Terraform zusätzlich mit
-`prevent_destroy`: Server und Datenbank, Storage-Account und Dokumente-Container,
-den Key Vault sowie die Review-App und ihre Anmeldekonfiguration. Ein Plan, der
-eines davon löschen oder neu anlegen würde, bricht vor dem Apply ab, auch
-`terraform destroy`; ein bewusster Abbau braucht erst eine Codeänderung.
+What carries data or the access protection is also protected by Terraform with
+`prevent_destroy`: server and database, storage account and document container,
+the Key Vault, and the review app with its sign-in configuration. A plan that
+would delete or recreate one of them aborts before the apply, also
+`terraform destroy`; a deliberate teardown first needs a code change.
 
-Eine neu angelegte Review ist zunächst nur intern erreichbar; öffentlich
-schaltet sie erst `review_public`, nachdem die Anmeldung steht. Für einen
-bewussten Neuaufbau `prevent_destroy` an App und Anmeldekonfiguration lokal
-entfernen und die drei Teile zusammen ersetzen, mit denselben lokalen Werten
-wie oben:
+A newly created review is at first reachable only internally;
+`review_public` makes it public only once the sign-in is in place. For a
+deliberate rebuild, remove `prevent_destroy` from the app and the sign-in
+configuration locally and replace the three parts together, with the same local
+values as above:
 
 ```powershell
 terraform -chdir=infrastructure apply -replace=azurerm_container_app.review -replace=azapi_resource.review_auth -replace=azapi_resource_action.review_public
 ```
 
-## Deploy und Rollback
+## Deploy and rollback
 
-Ein Deploy nach dem Merge läuft in drei Stufen:
+A deploy after a merge runs in three stages:
 
-1. **Plan:** Der Job „Release plan“ erstellt den Terraform-Plan gegen den echten
-   Azure-Zustand und legt ihn privat im State-Container ab (`release-plans/<commit>`).
-   Pläne können geheime Werte enthalten; die Zusammenfassung im Lauf nennt deshalb
-   nur Ressourcen und Aktionen. Das Environment `production-plan` ist auf `main`
-   beschränkt und braucht keine Freigabe.
-2. **Freigabe und Apply:** Nach der Freigabe in `production` wendet der Apply genau
-   diesen Plan an, nach Prüfung seiner Prüfsumme. Ein veralteter Plan (State seither
-   geändert) bricht ab; dann den Lauf neu starten. Der Plan wird danach gelöscht.
-3. **Ausrollen und prüfen:** Die Zusammenfassung notiert unter „Rückweg“ das
-   bisherige Image. Danach rollt der Job das neue Image per Digest aus, prüft, dass
-   die Review ohne Anmeldung nur mit 302 (Umleitung zum Login) oder 401 antwortet,
-   und wartet, bis Worker und neueste Review-Revision auf dem neuen Image stehen und
-   die Revision gesund läuft ([verify_rollout.sh](../.github/scripts/verify_rollout.sh)).
+1. **Plan:** The job „Release plan" creates the Terraform plan against the real
+   Azure state and stores it privately in the state container
+   (`release-plans/<commit>`). Plans can contain secret values; the run's
+   summary therefore names only resources and actions. The environment
+   `production-plan` is limited to `main` and needs no approval.
+2. **Approval and apply:** After the approval in `production`, the apply
+   applies exactly this plan, after checking its checksum. An outdated plan
+   (state changed since) aborts; then start the run again. A run for an older
+   commit than the current `main` aborts too. The plan is deleted afterwards.
+3. **Roll out and verify:** The summary notes the previous image under
+   „Rückweg" (way back). Then the job rolls out the new image by digest, checks
+   that the review answers only with 302 (redirect to the sign-in) or 401
+   without sign-in, and waits until worker and newest review revision run the
+   new image and the revision is healthy
+   ([verify_rollout.sh](../.github/scripts/verify_rollout.sh)).
 
-**Rollback:** Unter Actions den Workflow „Rollback“ von `main` starten und das unter
-„Rückweg“ notierte Image (`…/jobfinder@sha256:…`) eintragen. Er läuft ebenfalls erst
-nach Freigabe in `production`, setzt nur das Image von Worker und Review zurück und
-führt dieselben Prüfungen aus. Terraform und Datenbank bleiben unverändert.
+**Rollback:** Under Actions, start the workflow „Rollback" from `main` and enter
+the image noted under „Rückweg" (`…/jobfinder@sha256:…`). It also runs only
+after approval in `production`, resets only the image of worker and review and
+runs the same checks. Terraform and database stay unchanged.
 
-Das geht nur, solange das Schema zum alten Image passt. Migrationen sind deshalb
-erweiternd (neue Tabellen und Spalten, nichts entfernen) und laufen vor dem Deploy
-getrennt, wie oben unter Azure beschrieben; Aufräummigrationen folgen erst, wenn
-kein Rückweg mehr auf ein älteres Image nötig ist. Nach einer inkompatiblen
-Schemaänderung ist ein altes Image kein Rückweg mehr; dann gilt die Wiederherstellung
-aus [Backup und Wiederherstellung](backup-recovery.md).
+That works only as long as the schema fits the old image. Migrations are
+therefore additive (new tables and columns, nothing removed) and run before the
+deploy, separately, as described above under Azure; cleanup migrations follow
+only once no way back to an older image is needed. After an incompatible schema
+change an old image is no longer a way back; then the restore from
+[Backup and restore](backup-recovery.md) applies.
 
-## Lokaler Hybrid-Lauf (StepStone/Remotely)
+## Local hybrid run (StepStone/Remotely)
 
-StepStone und Remotely liefern aus Azure keine Treffer; sie laufen einmal
-täglich über einen lokalen Windows-Task gegen dieselbe Azure-Datenbank
-(`scripts/run_local_hybrid.py`). Der Task startet genau das Image, das der
-Azure-Worker gerade nutzt: Er fragt es über die lokale `az`-Anmeldung ab, meldet
-sich an der Registry an und holt es per `docker pull`. Antwortet Docker nicht,
-startet das Skript Docker Desktop und beendet es nach dem Lauf wieder; lief es
-schon, bleibt es an. Die Datenbank-URL der App-Rolle liegt in
-`.env.postgres-azure`. `user_settings.local.yaml` und `profile.local.yaml` gibt es als
-`JOBFINDER_USER_SETTINGS` und `JOBFINDER_PROFILE` an den Container weiter; mit
-der Modell-Adresse aus `.env.docker-local` schreibt der Agent danach die
-Steckbriefe der neuen Stellen. Eine native Windows-Verbindung lieferte zeitweise
-veraltete Lesezustände gegenüber Azure; der Container umgeht das, die Ursache
-ist ungeklärt.
+StepStone and Remotely return nothing to Azure; they run once a day through a
+local Windows task against the same Azure database
+(`scripts/run_local_hybrid.py`). The task starts exactly the image the Azure
+worker currently uses: it looks it up through the local `az` sign-in, signs in
+to the registry and fetches it with `docker pull`. If Docker does not answer,
+the script starts Docker Desktop and stops it again after the run; if it was
+running already, it stays on. The app role's database URL is in
+`.env.postgres-azure`. `user_settings.local.yaml` and `profile.local.yaml` are
+passed to the container as `JOBFINDER_USER_SETTINGS` and `JOBFINDER_PROFILE`;
+with the model address from `.env.docker-local` the agent then writes the fact
+sheets of the new jobs. A native Windows connection at times returned outdated
+reads from Azure; the container avoids that, the cause is still unexplained.
 
-Die Ausgabe jedes Laufs landet in `data/logs/hybrid-<Zeitpunkt>.log` (14 Tage
-aufbewahrt, ohne die geheimen Startparameter). Scheitert ein Schritt, etwa weil
-Docker nicht startet oder die `az`-Anmeldung abgelaufen ist, meldet das Skript
-Grund und Logdatei in Discord (`DISCORD_WEBHOOK_URL` als Benutzervariable).
+The output of every run goes to `data/logs/hybrid-<time>.log` (kept for 14
+days, without the secret start parameters). If a step fails, for example
+because Docker does not start or the `az` sign-in has expired, the script
+reports the reason and the log file to Discord (`DISCORD_WEBHOOK_URL` as a user
+variable).
 
-Im Container gibt es weder Managed Identity noch `az`-Anmeldung. Dafür gibt es
-einen eigenen Service Principal mit genau zwei Rollen: `Storage Blob Data
-Contributor` nur auf dem Container `application-documents`
-(`infrastructure/storage.tf`) und `Cognitive Services OpenAI User` für den
-Agenten (`infrastructure/openai.tf`). Einmalig einrichten:
+The container has neither a managed identity nor an `az` sign-in. Instead there
+is a separate service principal with exactly two roles: `Storage Blob Data
+Contributor` only on the container `application-documents`
+(`infrastructure/storage.tf`) and `Cognitive Services OpenAI User` for the agent
+(`infrastructure/openai.tf`). Set it up once:
 
 ```powershell
 az ad app create --display-name "jobfinder-local-docker"
-az ad sp create --id <appId aus dem vorigen Befehl>
+az ad sp create --id <appId from the previous command>
 az ad app credential reset --id <appId> --display-name "local-docker-worker" --years 2
 ```
 
-Das Geheimnis gilt zwei Jahre und wird mit dem letzten Befehl erneuert. Die
-Werte kommen in `.env.docker-local` (von Git ausgeschlossen):
+The secret is valid for two years and is renewed with the last command. The
+values go into `.env.docker-local` (excluded from Git):
 
 ```text
 AZURE_CLIENT_ID=<appId>
 AZURE_TENANT_ID=<tenant>
 AZURE_CLIENT_SECRET=<password>
-JOBFINDER_REVIEW_HOST=<Hostname der Review-App, für Direktlinks in Discord>
-JOBFINDER_OPENAI_ENDPOINT=<Adresse des Azure-OpenAI-Kontos, für den Agenten>
+JOBFINDER_REVIEW_HOST=<hostname of the review app, for direct links in Discord>
+JOBFINDER_OPENAI_ENDPOINT=<address of the Azure OpenAI account, for the agent>
 ```
 
-Danach die Objekt-ID des Service Principals (`az ad sp show --id <appId> --query id`)
-als `local_docker_sp_object_id` in `infrastructure/variables.tf` eintragen und
-die Rollenzuweisungen anwenden.
+Then enter the service principal's object ID
+(`az ad sp show --id <appId> --query id`) as `local_docker_sp_object_id` in
+`infrastructure/variables.tf` and apply the role assignments.
 
-## Logs und Traces
+## Logs and traces
 
-Jeder Lauf schreibt JSON-Zeilen mit derselben `run_id` (`job_finder/console.py`);
-im Log-Analytics-Workspace stehen sie in `ContainerAppConsoleLogs_CL`, Spalte
-`Log_s`. Der Agent ergänzt je Stelle eine Zeile `agent_job`: Stellen-ID,
-Ergebnis (`fertig`, `abgebrochen`, `gestoppt`), Abbruchgrund als festes Wort
-(etwa `job_cost`, `incomplete`, `rejected`), Versuch und ob ein weiterer folgt,
-Fazit-Stufe, Modell- und
-Werkzeugaufrufe, Websuchen, Tokens, Kosten und Sekunden. Teuerste Stellen und
-Abbruchgründe der letzten sieben Tage:
+Every run writes JSON lines with the same `run_id` (`job_finder/console.py`);
+in the Log Analytics workspace they are in `ContainerAppConsoleLogs_CL`, column
+`Log_s`. The agent adds one `agent_job` line per job: job ID, outcome
+(`fertig` done, `abgebrochen` aborted, `gestoppt` stopped), the abort reason as
+a fixed word (such as `job_cost`, `incomplete`, `rejected`), the attempt and
+whether another follows, the verdict level, model and tool calls, web searches,
+tokens, cost and seconds. The most expensive jobs and abort reasons of the last
+seven days:
 
 ```kusto
 ContainerAppConsoleLogs_CL
 | where TimeGenerated > ago(7d) and Log_s startswith "{"
 | extend e = parse_json(Log_s)
 | where e.event == "agent_job"
-| summarize Stellen = count(), Kosten = sum(todouble(e.cost_eur)), Websuchen = sum(toint(e.web_searches))
-    by Ergebnis = tostring(e.outcome), Grund = tostring(e.reason), Fazit = tostring(e.verdict)
-| order by Kosten desc
+| summarize Jobs = count(), Cost = sum(todouble(e.cost_eur)), WebSearches = sum(toint(e.web_searches))
+    by Outcome = tostring(e.outcome), Reason = tostring(e.reason), Verdict = tostring(e.verdict)
+| order by Cost desc
 ```
 
-Dieselben Zahlen gehen als Traces nach Application Insights
-(`appi-jobfinder`, `job_finder/telemetry.py`): ein Baum aus `agent_run`, je
-Stelle `agent_job` und darunter `model_call` und `tool_call` mit Dauer. Die
-Attribute der Modellaufrufe folgen den OpenTelemetry-Namen für generative KI
-(`gen_ai.usage.input_tokens` usw.). Im Portal zeigt „Transaktionssuche“ den Baum
-eines Laufs; im Workspace liegen die Spans in `AppDependencies`:
+The same figures go to Application Insights as traces (`appi-jobfinder`,
+`job_finder/telemetry.py`): a tree of `agent_run`, one `agent_job` per job and
+below it `model_call` and `tool_call` with their duration. The attributes of
+the model calls follow the OpenTelemetry names for generative AI
+(`gen_ai.usage.input_tokens` and so on). In the portal, „Transaction search"
+shows a run's tree; in the workspace the spans are in `AppDependencies`:
 
 ```kusto
 AppDependencies
 | where TimeGenerated > ago(7d) and Name == "model_call"
-| summarize Aufrufe = count(), Median_ms = percentile(DurationMs, 50), P95_ms = percentile(DurationMs, 95),
-    Ausgabe = sum(toint(Properties["gen_ai.usage.output_tokens"])) by bin(TimeGenerated, 1d)
+| summarize Calls = count(), Median_ms = percentile(DurationMs, 50), P95_ms = percentile(DurationMs, 95),
+    Output = sum(toint(Properties["gen_ai.usage.output_tokens"])) by bin(TimeGenerated, 1d)
 ```
 
-Was erfasst wird, legt `span()` in `job_finder/telemetry.py` fest: nur Zahlen,
-Wahrheitswerte und kurze feste Wörter; bei einem Fehler nur der Typname der
-Ausnahme. Profil, Prompt, Anzeigentext, Notizen, Titel, Firma und Antworten des
-Modells fehlen; ein Test in `tests/test_agent_runner.py` prüft das. Application
-Insights nimmt nur Daten mit Entra-ID-Anmeldung an (die Managed Identitys von
-Worker und Review), bewahrt sie 30 Tage auf und nimmt höchstens 0,1 GB am Tag an. Ohne
-`APPLICATIONINSIGHTS_CONNECTION_STRING`, also lokal, in Tests und Evals, sendet
-nichts.
+`span()` in `job_finder/telemetry.py` decides what is recorded: only numbers,
+booleans and short fixed words; on an error only the exception's type name.
+Profile, prompt, listing text, notes, title, company and the model's answers are
+left out; a test in `tests/test_agent_runner.py` checks that. Application
+Insights accepts data only with Entra ID sign-in (the managed identities of
+worker and review), keeps it for 30 days and takes at most 0.1 GB a day.
+Without `APPLICATIONINSIGHTS_CONNECTION_STRING`, so locally, in tests and evals,
+nothing is sent.
 
-Die Review schickt je API-Anfrage einen Span `review_request` mit Route, Status,
-Dauer und `jobfinder.first_request` (erste Anfrage nach dem Start, also
-Kaltstart). Darunter hängen die Schritte `db_connect` (Verbindung samt
-Entra-Token), `read_recommendations`, `read_memory`, `build_cards`,
-`read_fact_sheets` und `read_document`, mit Zeilen- und Kartenzahl, aber ohne
-IDs oder Inhalte. Wo die Ladezeit der Stellenliste bleibt:
+The review sends one span `review_request` per API request with route, status,
+duration and `jobfinder.first_request` (the first request after the start, so a
+cold start). Below it hang the steps `db_connect` (connection including the
+Entra token), `read_recommendations`, `read_memory`, `build_cards`,
+`read_fact_sheets` and `read_document`, with row and card counts but without IDs
+or contents. Where the job list's loading time goes:
 
 ```kusto
 AppDependencies
 | where TimeGenerated > ago(7d) and Name in ("review_request", "db_connect", "read_recommendations",
     "read_memory", "build_cards", "read_fact_sheets", "read_document")
-| summarize Anzahl = count(), Median_ms = percentile(DurationMs, 50), P95_ms = percentile(DurationMs, 95)
-    by Name, Route = tostring(Properties["jobfinder.route"]), Kaltstart = tostring(Properties["jobfinder.first_request"])
+| summarize Count = count(), Median_ms = percentile(DurationMs, 50), P95_ms = percentile(DurationMs, 95)
+    by Name, Route = tostring(Properties["jobfinder.route"]), ColdStart = tostring(Properties["jobfinder.first_request"])
 | order by Median_ms desc
 ```
 
-Jeder Finder-Lauf trägt sich außerdem in die Tabelle `runs` ein (Revision `0006_runs`):
-beim Start mit Quellen und Ort (`cloud` aus dem Worker-Job, `hybrid` aus dem lokalen
-Hybrid-Lauf, sonst `local`, gesetzt über `JOBFINDER_RUNNER`), am Ende mit Ergebnis
-(`finished` oder `failed`) und den Kennzahlen. So erscheinen auch die Hybrid-Läufe, die
-keine Logs nach Azure senden. Die Startseite der Review zeigt den letzten Lauf je Ort
-(`/api/runs`).
+Every finder run also records itself in the table `runs` (revision
+`0006_runs`): at the start with its sources and where it runs (`cloud` from the
+worker job, `hybrid` from the local hybrid run, otherwise `local`, set through
+`JOBFINDER_RUNNER`), at the end with its outcome (`finished` or `failed`) and
+the key figures. So the hybrid runs, which send no logs to Azure, show up as
+well. The review's landing page shows the latest run per place (`/api/runs`).
 
-Am Ende jedes Laufs, nach dem Agenten, steht eine Zeile `run_summary`: Dauer,
-Stellen, neue Stellen gesamt und je Quelle (`new_by_source`), neue Review-Karten,
-teilweise oder ganz gescheiterte Quellen, gesendete und fehlgeschlagene
-Discord-Nachrichten sowie der Rückstand danach: offene Discord-Aufträge, Alter des
-ältesten in Stunden, abgebrochene Steckbriefe und solche, die noch einmal
-versucht werden. Mit Application Insights ist der ganze Lauf außerdem ein Trace
-`finder_run` mit den Phasen (`collect_sources` mit je einem Schritt `source`,
-`prefilter`, `enrich_details`, `evaluate`, `availability_checks`, `publish`,
-`notifications`) und darunter `agent_run`.
+At the end of every run, after the agent, comes a `run_summary` line: duration,
+jobs, new jobs in total and per source (`new_by_source`), new review cards,
+partly or completely failed sources, sent and failed Discord messages, and the
+backlog afterwards: open Discord jobs, the age of the oldest in hours, aborted
+fact sheets and those that will be tried again. With Application Insights the
+whole run is also a trace `finder_run` with the phases (`collect_sources` with
+one `source` step each, `prefilter`, `enrich_details`, `evaluate`,
+`availability_checks`, `publish`, `notifications`) and `agent_run` below.
 
-Die Arbeitsmappe „Job Finder – Betrieb“ (Azure-Portal, Application Insights
-`appi-jobfinder` oder Log Analytics, „Arbeitsmappen“; Terraform:
-`infrastructure/workbooks/operations.json`) zeigt auf einer Seite die Laufdauer,
-diese Kennzahlen, Status und Treffer je Quelle, neue Stellen je Quelle,
-Agentenkosten je Tag und die Ladezeiten der Review samt Schritten, für einen
-wählbaren Zeitraum. Arbeitsmappen kosten nichts; sie lesen nur die vorhandenen
-Logs.
+The workbook „Job Finder – Betrieb" (Azure portal, Application Insights
+`appi-jobfinder` or Log Analytics, „Workbooks"; Terraform:
+`infrastructure/workbooks/operations.json`) shows on one page the run duration,
+these key figures, status and hits per source, new jobs per source, the agent's
+cost per day and the review's loading times with their steps, for a selectable
+period. Workbooks cost nothing; they only read the existing logs.
 
-## Kosten
+## Costs
 
-Listenpreise in Frankreich Mitte, ohne Steuern, laut Azure Retail Prices API am
-30.09.2026:
+List prices in France Central, without taxes, according to the Azure Retail
+Prices API on 30.09.2026:
 
-| Posten | Art | Etwa pro Monat |
+| Item | Kind | About per month |
 | --- | --- | --- |
-| PostgreSQL Flexible Server B1ms mit 32 GiB | fix | 15,55 € (11,90 € Rechenleistung, 3,65 € Speicher) |
-| Container Registry Basic | fix | 4,35 € |
-| Container Apps (Finder-Job, Review) | nach Nutzung | blieb bisher im kostenlosen Monatskontingent |
-| Log Analytics, Application Insights, Blob Storage, Metrik-Alarme | nach Nutzung | Cent-Beträge |
-| Sprachmodell und Websuche des Agenten | nach Nutzung | wenige Cent je Steckbrief, höchstens 1 € am Tag und 20 € im Monat (Standardgrenzen) |
+| PostgreSQL flexible server B1ms with 32 GiB | fixed | 15.55 € (11.90 € compute, 3.65 € storage) |
+| Container Registry Basic | fixed | 4.35 € |
+| Container Apps (finder job, review) | by use | so far within the free monthly grant |
+| Log Analytics, Application Insights, Blob Storage, metric alerts | by use | cents |
+| The agent's language model and web search | by use | a few cents per fact sheet, at most 1 € a day and 20 € a month (default limits) |
 
-Der Server läuft derzeit über ein kostenloses Kontingent der Subscription;
-danach kommen die 15,55 € hinzu. Das Monatsbudget von 25 € in
-`infrastructure/monitoring.tf` deckt Registry und die Grenze des Agenten und
-muss dann auf gut 40 € steigen, sonst meldet es jeden Monat eine
-Überschreitung. Ein Budget warnt nur, es stoppt nichts; die harten Grenzen
-setzt der Kostenwächter des Agenten.
+The server currently runs on a free grant of the subscription; after that the
+15.55 € are added. The monthly budget of 25 € in `infrastructure/monitoring.tf`
+covers the registry and the agent's limit and then has to rise to a good 40 €,
+otherwise it reports an overrun every month. A budget only warns, it stops
+nothing; the hard limits are set by the agent's cost guard.
 
-## Zugriffswege
+## Access paths
 
-Die Container-Apps-Umgebung läuft im Consumption-Profil ohne VNet-Integration:
-Worker und Review haben keine feste ausgehende IP, und alle Dienste sind über
-ihren öffentlichen Endpunkt erreichbar. Der Schutz liegt deshalb bei
-Anmeldung, RBAC und TLS, nicht an der Netzwerkgrenze.
+The Container Apps environment runs in the Consumption profile without VNet
+integration: worker and review have no fixed outbound IP, and all services are
+reachable through their public endpoint. The protection therefore lies in
+sign-in, RBAC and TLS, not at the network boundary.
 
-| Ressource | Eigentlicher Zugriffsschutz |
+| Resource | Actual access protection |
 | --- | --- |
-| Review-Container-App | Easy Auth (Entra ID), nur das eigene Konto; öffentlich erst nach der Anmeldekonfiguration, jeder Deploy prüft den Zugriff ohne Login (`review.tf`) |
-| PostgreSQL | TLS mit `sslmode=verify-full`, eingeschränkte DB-Rollen und deren Passwort oder nach gesonderter Entra-Abnahme Token; Firewall: Azure-Dienste (`0.0.0.0`, jede Subscription) und `local-review` |
-| Blob Storage | RBAC, Kontoschlüssel abgeschaltet; Schreibrechte nur auf `application-documents` |
-| Key Vault | RBAC: in `split` hat jede Laufzeit nur `Key Vault Secrets User` auf ihren benötigten Secrets; `Secrets Officer` nur für das eigene Konto |
-| Azure OpenAI | RBAC ohne API-Schlüssel: Worker, Hybrid-Lauf und das eigene Konto mit `Cognitive Services OpenAI User` |
+| Review container app | Easy Auth (Entra ID), only the own account; public only after the sign-in configuration, every deploy checks access without sign-in (`review.tf`) |
+| PostgreSQL | TLS with `sslmode=verify-full`, restricted database roles with their password or, after the separate Entra acceptance, a token; firewall: Azure services (`0.0.0.0`, any subscription) and `local-review` |
+| Blob Storage | RBAC, account keys switched off; write access only to `application-documents` |
+| Key Vault | RBAC: in `split` each runtime has only `Key Vault Secrets User` on the secrets it needs; `Secrets Officer` only for the own account |
+| Azure OpenAI | RBAC without API keys: worker, hybrid run and the own account with `Cognitive Services OpenAI User` |
 | Container Registry | RBAC, `admin_enabled = false` |
-| Worker (Container Apps Job) | kein Ingress, nur ausgehend |
+| Worker (Container Apps job) | no ingress, outbound only |
 
-GitHub Actions melden sich per OIDC ohne gespeichertes Azure-Geheimnis an, mit
-drei getrennten Identitäten (`infrastructure/cicd.tf`): Apply mit
-`Contributor` und `Role Based Access Control Administrator` auf `rg-jobfinder`
-plus Schreibzugriff auf den `tfstate`-Container, Build nur mit `AcrPush` und
-`Reader` auf der Registry, Plan für Pull Requests nur lesend.
+GitHub Actions sign in through OIDC without a stored Azure secret, with three
+separate identities (`infrastructure/cicd.tf`): apply with `Contributor` and
+`Role Based Access Control Administrator` on `rg-jobfinder` plus write access to
+the `tfstate` container, build only with `AcrPush` and `Reader` on the registry,
+and plan for pull requests read-only.
 
-**Warum kein VNet und keine Private Endpoints:** Technisch ginge es, denn die
-Workload-Profile-Umgebung unterstützt VNet-Integration auch im
-Consumption-Profil. Der Netzwerktyp lässt sich aber nur beim Anlegen einer
-Umgebung festlegen, der Umstieg wäre also ein Umzug in eine neue Umgebung. Ein
-Private Endpoint (etwa 6,30 € im Monat) ließe die Container dann privat auf die
-Datenbank zugreifen, und die Regel für alle Azure-Dienste könnte entfallen; der
-Zugriff vom eigenen Rechner bliebe über `local-review` möglich. Ein vollständig
-privater Server schlösse dagegen Hybrid-Lauf und Admin-Zugriff ohne VPN aus. Ein
-NAT Gateway (etwa 31 € im Monat samt öffentlicher IP) wäre nur für eine feste
-ausgehende Adresse nötig, etwa um die Firewall auf die Container zu begrenzen.
-Für einen Nutzer ohne Daten Dritter und ohne Compliance-Vorgabe tragen TLS, RBAC
-und das Passwort der App-Rolle die Absicherung. Kämen mehrere Nutzer oder
-Bewerberdaten Dritter hinzu, wäre das der erste Punkt, der sich ändern sollte.
+**Why no VNet and no private endpoints:** Technically it would work, since the
+workload profiles environment supports VNet integration in the Consumption
+profile too. But the network type can only be set when an environment is
+created, so the switch would mean moving to a new environment. A private
+endpoint (about 6.30 € a month) would then let the containers reach the database
+privately, and the rule for all Azure services could go; access from the own
+computer would remain possible through `local-review`. A completely private
+server, on the other hand, would shut out the hybrid run and admin access
+without a VPN. A NAT gateway (about 31 € a month including the public IP) would
+only be needed for a fixed outbound address, for example to limit the firewall
+to the containers. For a single user without third-party data and without
+compliance requirements, TLS, RBAC and the app role's password carry the
+protection. If more users or third-party applicant data were added, this would
+be the first thing to change.

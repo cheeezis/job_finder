@@ -1,148 +1,152 @@
-# Datenbankanmeldung mit Microsoft Entra (F10)
+# Database sign-in with Microsoft Entra (F10)
 
-## Nutzen und aktueller Umfang
+## Benefit and current scope
 
-**Stand 06.10.2026: aktiv.** Worker, Review und Hybridlauf melden sich mit Entra-Tokens an.
-Vor der Umschaltung bestanden alle drei Identitäten in Azure die Proben aus Etappe 3
-(Token-Anmeldung, Rechte-Matrix, verbotene DDL, zurückgerollter Schreibzugriff, neue
-Verbindung mit neuem Token). Die bisherigen DB-Secrets bleiben als Rückweg im Key Vault.
+**Status 06.10.2026: active.** Worker, review and hybrid run sign in with Entra
+tokens. Before the switch, all three identities passed the stage 3 checks in
+Azure (token sign-in, rights matrix, forbidden DDL, rolled-back write access, a
+new connection with a new token). The earlier database secrets stay in Key
+Vault as the way back.
 
-Worker und Review verwenden nach F09 eigene Datenbankrollen mit festgelegten
-Rechten. F10 ergänzt die Anmeldung über ihre bereits vorhandenen Azure-Identitäten:
-Ein zeitlich begrenztes Entra-Token ersetzt beim Verbindungsaufbau das gespeicherte
-DB-Passwort. Die Rechte auf Tabellen und Datensätze ändern sich dadurch nicht.
-Für den Hybridlauf kann dessen vorhandener Service Principal ein DB-Token beziehen;
-sein Azure-Client-Secret bleibt dabei zunächst erforderlich.
+Since F09, worker and review use database roles of their own with defined
+rights. F10 adds sign-in through their existing Azure identities: a short-lived
+Entra token replaces the stored database password when the connection is
+opened. The rights on tables and rows do not change. For the hybrid run, its
+existing service principal can obtain a database token; its Azure client secret
+is still needed for now.
 
-Die Implementierung umfasst Token-Anmeldung, einen separaten Einrichtungshelfer,
-Terraform-Phasen und eine gesonderte Hybrid-Umschaltung. Standard bleibt die
-bisherige Passwortanmeldung. Ein Merge allein aktiviert keine Entra-Anmeldung:
-Servervorbereitung und Laufzeitumschaltung müssen ausdrücklich freigegeben werden.
+The implementation covers token sign-in, a separate setup helper, Terraform
+phases and a separate hybrid switch. Password sign-in stays the default. A merge
+alone activates no Entra sign-in: server preparation and the runtime switch
+have to be approved explicitly.
 
-## Verbindungskonfiguration
+## Connection configuration
 
-`JOBFINDER_DATABASE_AUTH` bestimmt ausschließlich die Laufzeitanmeldung:
+`JOBFINDER_DATABASE_AUTH` decides only the runtime sign-in:
 
-| Wert | Anmeldung | Identität |
+| Value | Sign-in | Identity |
 | --- | --- | --- |
-| `password` (Standard) | bisheriger DSN | bestehende lokale oder Azure-DB-Rolle |
-| `managed_identity` | PostgreSQL-Token | explizite `JOBFINDER_MANAGED_IDENTITY_CLIENT_ID` |
-| `service_principal` | PostgreSQL-Token | explizite `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` |
+| `password` (default) | earlier DSN | existing local or Azure database role |
+| `managed_identity` | PostgreSQL token | explicit `JOBFINDER_MANAGED_IDENTITY_CLIENT_ID` |
+| `service_principal` | PostgreSQL token | explicit `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` |
 
-Für Entra muss `JOBFINDER_DATABASE_URL` einen DSN ohne Passwort, mit explizitem
-Host, Datenbank, Rolle und `sslmode=verify-full` enthalten. Das konfigurierte
-CA-Bundle bleibt erhalten. Beispiel mit erfundenen Angaben:
+For Entra, `JOBFINDER_DATABASE_URL` must contain a DSN without a password, with
+explicit host, database, role and `sslmode=verify-full`. The configured CA
+bundle is kept. An example with made-up details:
 
 ```text
 JOBFINDER_DATABASE_AUTH=managed_identity
-JOBFINDER_MANAGED_IDENTITY_CLIENT_ID=<Client-ID der eigenen Laufzeitidentität>
+JOBFINDER_MANAGED_IDENTITY_CLIENT_ID=<client ID of the own runtime identity>
 JOBFINDER_DATABASE_URL=postgresql://jobfinder_worker_entra@example.postgres.database.azure.com:5432/jobfinder?sslmode=verify-full&sslrootcert=/etc/ssl/certs/ca-certificates.crt
 ```
 
-Das Token wird nur im Speicher als Treiber-Passwort übergeben. Kein Token in
-DSN, Runtime-Datei, Terraform-State, Kommandozeile oder Log hinterlegen. Für jede
-neue Verbindung wird `get_token` aufgerufen; das Azure-SDK verwaltet gültige Tokens
-und deren Erneuerung. Bestehende/nestende Transaktionen und Sitzungssperren behalten
-ihre Verbindung. Es gibt derzeit keinen Verbindungspool; ein späterer Pool muss
-denselben Token-Aufruf beim Erzeugen neuer Verbindungen verwenden.
+The token is passed only in memory as the driver password. Never put a token in
+a DSN, runtime file, Terraform state, command line or log. `get_token` is called
+for every new connection; the Azure SDK manages valid tokens and their renewal.
+Existing or nested transactions and session locks keep their connection. There
+is no connection pool at present; a later pool has to use the same token call
+when it creates new connections.
 
-Die Credential-Auswahl verwendet ausdrücklich ManagedIdentityCredential oder
-ClientSecretCredential, ohne Ausweichen auf die Azure-CLI-Anmeldung des Entwicklers.
-Fehlende Identität, unbekannter Modus, Passwort-DSN, fehlende TLS-Prüfung oder
-Tokenfehler führen zum Abbruch. Keine Passwort-Ausweichanmeldung und keine
-Wiederholung möglicherweise bereits ausgeführter Schreibtransaktionen.
-Entra-Treiber-/Tokenfehler werden ohne sensible Ausnahmeinhalte weitergegeben.
+The credential choice uses ManagedIdentityCredential or ClientSecretCredential
+explicitly, without falling back to the developer's Azure CLI sign-in. A
+missing identity, an unknown mode, a password DSN, missing TLS verification or a
+token error abort. There is no fallback to a password sign-in and no retry of
+write transactions that may already have run. Entra driver and token errors are
+passed on without sensitive exception contents.
 
-Administrative Wartung bleibt getrennt: `transaction(admin=True)` und Alembic
-nutzen ausschließlich `JOBFINDER_ADMIN_DATABASE_URL`. Ein Laufzeitmodus macht
-die Anwendung nicht zum Entra-Administrator. Lokale Compose-Tests verwenden
-weiterhin Testpasswörter.
+Administrative maintenance stays separate: `transaction(admin=True)` and Alembic
+use only `JOBFINDER_ADMIN_DATABASE_URL`. A runtime mode does not make the
+application an Entra administrator. Local Compose tests still use test
+passwords.
 
-## Terraform-Phasen
+## Terraform phases
 
-| `database_auth_phase` | Server und Administrator | Laufzeiten |
+| `database_auth_phase` | Server and administrator | Runtimes |
 | --- | --- | --- |
-| `password` (Standard) | bestehende Konfiguration | bisherige getrennte Passwortrollen und Vault-Verweise |
-| `prepare` | Entra zusätzlich aktiv; eigener persönlicher Entra-Admin | unverändert, einschließlich DB-Secret-Zugriff |
-| `entra` | Entra und administrativer Passwortzugang bleiben verfügbar | eigene passwortfreie DSNs, explizite MI; nur Worker-/Review-DB-Secret-Verweise und zugehörige Vault-Rollen entfallen |
+| `password` (default) | existing configuration | earlier separate password roles and vault references |
+| `prepare` | Entra active in addition; own personal Entra admin | unchanged, including database secret access |
+| `entra` | Entra and administrative password access stay available | own password-free DSNs, explicit managed identity; only the worker and review database secret references and their vault roles go away |
 
-`prepare` und `entra` verlangen `runtime_identity_phase=split` sowie
-`runtime_access_verified=true`. `postgres_entra_admin_name` muss den Anmeldenamen
-des durch `owner_object_id` bestimmten persönlichen Entra-Administrators enthalten.
-Eine Worker-/Review-MI oder der Hybrid-Service-Principal darf nicht Administrator sein.
-PostgreSQL begrenzt Rollennamen auf 63 Zeichen, und Azure speichert den Administratornamen
-entsprechend gekürzt (etwa bei langen Gastkonten mit `#EXT#`). Deshalb den auf 63 Zeichen
-gekürzten Namen eintragen; die Anmeldung mit dem vollen Namen funktioniert trotzdem.
-`entra` verlangt zusätzlich `database_entra_verified=true` nach der tatsächlichen
-Azure-Abnahme. Die GitHub-Pipeline übergibt entsprechend `DATABASE_AUTH_PHASE`
-(Standard `password`) und `DATABASE_ENTRA_VERIFIED` (Standard `false`) als
-Repository-Variablen sowie `POSTGRES_ENTRA_ADMIN_NAME` als Repository-Secret: Der
-Anmeldename kann eine E-Mail-Adresse enthalten, und Variablen stehen ungeschwärzt in
-den öffentlichen Workflow-Logs. Lokale Terraform-Werte und GitHub-Werte müssen vor
-einem Apply zusammenpassen. Das Image mit Token-Unterstützung zuerst deployen.
+`prepare` and `entra` require `runtime_identity_phase=split` and
+`runtime_access_verified=true`. `postgres_entra_admin_name` must contain the
+sign-in name of the personal Entra administrator determined by
+`owner_object_id`. A worker or review managed identity or the hybrid service
+principal must not be administrator. PostgreSQL limits role names to 63
+characters, and Azure stores the administrator name shortened accordingly (for
+example for long guest accounts with `#EXT#`). Therefore enter the name
+shortened to 63 characters; signing in with the full name still works. `entra`
+additionally requires `database_entra_verified=true` after the actual Azure
+acceptance. The GitHub pipeline accordingly passes `DATABASE_AUTH_PHASE`
+(default `password`) and `DATABASE_ENTRA_VERIFIED` (default `false`) as
+repository variables and `POSTGRES_ENTRA_ADMIN_NAME` as a repository secret:
+the sign-in name can contain an email address, and variables appear unmasked in
+the public workflow logs. Local Terraform values and GitHub values must match
+before an apply. Deploy the image with token support first.
 
-Entra-Aktivierung startet den PostgreSQL-Server neu. Ein passendes Betriebsfenster
-ist vor dem ersten `prepare`-Apply erforderlich. Server, Datenbank und Administrator
-bleiben durch `prevent_destroy` geschützt. Rückkehr nach einer Aktivierung immer
-zu `prepare`, nicht zu `password`: damit wird Entra weder abgebaut noch der Admin
-gelöscht. Server-Passwortauth bleibt in allen Phasen an.
+Activating Entra restarts the PostgreSQL server. A suitable maintenance window
+is needed before the first `prepare` apply. Server, database and administrator
+stay protected by `prevent_destroy`. After an activation, always return to
+`prepare`, not to `password`: that neither removes Entra nor deletes the admin.
+Server password authentication stays on in all phases.
 
-Die Outputs `entra_principals` und `entra_database_urls` enthalten die geplanten
-Object-IDs beziehungsweise passwortfreie DSNs, keine Tokens oder Passwörter.
-Sie werden im getrennten F09-Modus auch vor `prepare` bereitgestellt; ihre Existenz
-bestätigt keine eingerichteten SQL-Principals oder Azure-Anmeldung.
+The outputs `entra_principals` and `entra_database_urls` contain the planned
+object IDs and password-free DSNs, no tokens or passwords. In the separate F09
+mode they are provided even before `prepare`; their existence does not confirm
+set-up SQL principals or an Azure sign-in.
 
-## Entra-Principals einrichten
+## Setting up Entra principals
 
-`scripts/create_entra_roles.py` verwendet zwei getrennte administrative Zugänge
-zum selben Server:
+`scripts/create_entra_roles.py` uses two separate administrative logins to the
+same server:
 
-- `JOBFINDER_ENTRA_ADMIN_DATABASE_URL` aus `.env.entra-azure` oder der Umgebung:
-  passwortfreier DSN des persönlichen Entra-Admins zur Datenbank `postgres`, mit
-  `verify-full` und passendem lokalem CA-Bundle. Nur dieser Wartungshelfer bezieht
-  das Token aus einer expliziten `AzureCliCredential` im vorgegebenen Tenant.
-- `JOBFINDER_ADMIN_DATABASE_URL` aus `.env.postgres-azure` oder der Umgebung:
-  bestehender Passwort-Admin zur Anwendungsdatenbank. Er ordnet die von ihm
-  verwalteten F09-Zugriffsgruppen zu. So muss der Entra-Admin weder diese Gruppen
-  übernehmen noch zusätzliche Admin-Rechte auf sie erhalten.
+- `JOBFINDER_ENTRA_ADMIN_DATABASE_URL` from `.env.entra-azure` or the
+  environment: a password-free DSN of the personal Entra admin to the database
+  `postgres`, with `verify-full` and a matching local CA bundle. Only this
+  maintenance helper obtains the token from an explicit `AzureCliCredential` in
+  the given tenant.
+- `JOBFINDER_ADMIN_DATABASE_URL` from `.env.postgres-azure` or the environment:
+  the existing password admin to the application database. It assigns the F09
+  access groups it manages. So the Entra admin neither has to take over these
+  groups nor gets additional admin rights on them.
 
-Die lokal ignorierten Dateien bleiben getrennt von der aktiven Runtime-Datei.
-Token, Passwort oder DSN nie als Kommandozeilenargument übergeben. Nach dem
-freigegebenen `prepare`-Apply den nicht geheimen Principal-Output exportieren:
+The locally ignored files stay separate from the active runtime file. Never pass
+a token, password or DSN as a command-line argument. After the approved
+`prepare` apply, export the non-secret principal output:
 
 ```powershell
 terraform -chdir=infrastructure output -json entra_principals > tmp/entra-principals.json
 uv run python scripts/create_entra_roles.py --principals-file tmp/entra-principals.json
-# Erst nach Prüfung und gesonderter Produktionsfreigabe:
+# Only after the check and a separate production approval:
 uv run python scripts/create_entra_roles.py --principals-file tmp/entra-principals.json --apply
 ```
 
-Standard ist eine technisch schreibgeschützte Prüfung. `--apply` legt nur die
-drei neuen Nicht-Admin-Logins `jobfinder_worker_entra`, `jobfinder_review_entra`,
-`jobfinder_hybrid_entra` über `pgaadauth_create_principal_with_oid` an und ordnet sie
-den bestehenden F09-NOLOGIN-Gruppen zu. Die Zuordnung verwendet die Object-IDs der
-MIs und des Hybrid-Service-Principals; Client-IDs oder Anzeigenamen sind hierfür
-ungeeignet. Der Helfer liest Tenant, Object-ID, Principal-Typ und Admin-Markierung
-zurück und prüft die Rollenattribute, Mitgliedschaften, vollständige effektive
-Tabellenrechte und die bestehende Review-Datensatz-Policy. Bestehende Passwortrollen,
-Passwörter, Tabellenrechte, Schema und aktive Konfiguration werden nicht verändert.
+The default is a technically read-only check. `--apply` creates only the three
+new non-admin logins `jobfinder_worker_entra`, `jobfinder_review_entra` and
+`jobfinder_hybrid_entra` through `pgaadauth_create_principal_with_oid` and
+assigns them to the existing F09 NOLOGIN groups. The assignment uses the object
+IDs of the managed identities and the hybrid service principal; client IDs or
+display names are unsuitable for this. The helper reads back tenant, object ID,
+principal type and admin flag and checks the role attributes, memberships,
+complete effective table rights and the existing review row policy. Existing
+password roles, passwords, table rights, schema and active configuration are not
+changed.
 
-Fehlende F09-Grenzen, PUBLIC-Tabellenrechte, fremde Mitgliedschaften, eine bereits
-anderweitig gebundene Object-ID oder eine gleichnamige Rolle ohne richtige
-Entra-Zuordnung führen zum Abbruch. Der Helfer repariert solche Zustände nicht
-automatisch und setzt keinen Abnahmemarker.
+Missing F09 boundaries, PUBLIC table rights, foreign memberships, an object ID
+already bound elsewhere or a role of the same name without the right Entra
+assignment abort. The helper does not repair such states automatically and sets
+no acceptance marker.
 
-Die Identitäten werden in `postgres`, die Mitgliedschaften in der Anwendungsdatenbank
-eingerichtet. Diese zwei Transaktionen können nicht gemeinsam atomar committen.
-Scheitert die zweite Phase, können neue Logins ohne Zugriffsgruppen verbleiben;
-die aktiven Zugänge bleiben erhalten. Erneutes Prüfen und Ausführen setzt sicher
-fort, ohne Passwörter zu rotieren. Vor der Umschaltung alle effektiven Rechte mit
-den tatsächlichen Token-Verbindungen separat abnehmen.
+The identities are set up in `postgres`, the memberships in the application
+database. These two transactions cannot commit atomically together. If the
+second phase fails, new logins without access groups can remain; the active
+logins are kept. Checking and running again continues safely without rotating
+passwords. Before the switch, accept all effective rights separately with the
+actual token connections.
 
-## Hybrid separat umschalten
+## Switching the hybrid run separately
 
-Der Runner liest zusätzliche Marker aus der vorhandenen, ignorierten
-`.env.runtime-azure`. Zum Vorbereiten ergänzen, die bisherigen Werte behalten:
+The runner reads additional markers from the existing, ignored
+`.env.runtime-azure`. To prepare, add them and keep the earlier values:
 
 ```text
 JOBFINDER_HYBRID_DATABASE_AUTH=password
@@ -150,51 +154,53 @@ JOBFINDER_HYBRID_ENTRA_VERIFIED=0
 JOBFINDER_HYBRID_ENTRA_DATABASE_URL=postgresql://jobfinder_hybrid_entra@example.postgres.database.azure.com:5432/jobfinder?sslmode=verify-full&sslrootcert=/etc/ssl/certs/ca-certificates.crt
 ```
 
-Erst nach Azure-Abnahme `JOBFINDER_HYBRID_ENTRA_VERIFIED=1` und
-`JOBFINDER_HYBRID_DATABASE_AUTH=entra` setzen. Der Runner verlangt zusätzlich den
-bestehenden geprüften F09-Modus (`JOBFINDER_RUNTIME_ACCESS=split`,
-`JOBFINDER_RUNTIME_CREDENTIALS_READY=1`). Er prüft Rolle, Host, Port und Datenbank
-gegen den bisherigen Hybridzugang, verweigert statische Passwörter und verlangt
-`verify-full`. Im Container verwendet er das Linux-CA-Bundle und übergibt
-`JOBFINDER_DATABASE_AUTH=service_principal`. Die vorhandenen expliziten SP-Angaben
-aus `.env.docker-local` bleiben erforderlich; sein Client-Secret entfällt durch
-diese DB-Umstellung nicht. Rückkehr: nur `JOBFINDER_HYBRID_DATABASE_AUTH=password`
-setzen. Fehlender Marker entspricht ebenfalls dem bisherigen Passwortmodus.
+Set `JOBFINDER_HYBRID_ENTRA_VERIFIED=1` and
+`JOBFINDER_HYBRID_DATABASE_AUTH=entra` only after the Azure acceptance. The
+runner also requires the existing, checked F09 mode
+(`JOBFINDER_RUNTIME_ACCESS=split`, `JOBFINDER_RUNTIME_CREDENTIALS_READY=1`). It
+checks role, host, port and database against the earlier hybrid login, refuses
+static passwords and requires `verify-full`. In the container it uses the Linux
+CA bundle and passes `JOBFINDER_DATABASE_AUTH=service_principal`. The existing
+explicit service principal details from `.env.docker-local` stay required; this
+database switch does not remove its client secret. Way back: set only
+`JOBFINDER_HYBRID_DATABASE_AUTH=password`. A missing marker also means the
+earlier password mode.
 
-## Cloud-Abnahme und Aktivierung
+## Cloud acceptance and activation
 
-1. Nach vollständiger F09-Betriebsabnahme Backup/Rückkehrweg prüfen, den konkreten
-   `prepare`-Plan auf Änderungen und Ressourcenersetzungen prüfen und das
-   Neustartfenster freigeben. Erst danach Server und eigenen Entra-Admin vorbereiten.
-2. Principal-Output und Einrichtungszugänge prüfen; Rollen mit dem Helfer nach
-   gesonderter Freigabe anlegen. Alte Zugänge zunächst aktiv halten.
-3. Mit den tatsächlichen eigenen Identitäten von Worker, Review und Hybrid
-   Image-Pull, Token-Anmeldung und neue Verbindung nach Tokenablauf abnehmen.
-   Rechte inklusive negativer Schreib-/DDL-/Datensatzprüfungen bestätigen.
-   Für Proben keine komplette Finder-Ausführung, Evals, Modellgeneration oder
-   Discord-Sends starten; Schreiben in einer abschließend zurückgerollten
-   Transaktion prüfen. Administrativen Passwort-Notzugang separat bestätigen.
-4. Erst dann `database_entra_verified=true`, den konkreten `entra`-Plan und die
-   Hybrid-Umschaltung freigeben. Persönlichen Review-Zugriff samt Dokumenten sowie
-   die folgenden regulären Cloud-/Hybrid-Läufe abnehmen. Alte DB-Secrets und Rollen
-   als Rückkehrweg erhalten; ihre Löschung erst später gesondert entscheiden.
+1. After the complete F09 operational acceptance, check backup and the way back,
+   check the concrete `prepare` plan for changes and resource replacements and
+   approve the restart window. Only then prepare the server and the own Entra
+   admin.
+2. Check the principal output and the setup logins; create the roles with the
+   helper after a separate approval. Keep the old logins active for now.
+3. With the actual own identities of worker, review and hybrid run, accept image
+   pull, token sign-in and a new connection after the token expired. Confirm the
+   rights including negative write, DDL and row checks. For the checks, start no
+   complete finder run, evals, model generation or Discord sends; check writing
+   in a transaction rolled back at the end. Confirm the administrative password
+   emergency access separately.
+4. Only then approve `database_entra_verified=true`, the concrete `entra` plan
+   and the hybrid switch. Accept personal review access including documents and
+   the following regular cloud and hybrid runs. Keep the old database secrets
+   and roles as the way back; decide on deleting them separately later.
 
-Eine spätere Abschaltung der serverweiten Passwortauthentifizierung betrifft
-auch den administrativen Notzugang und benötigt eine eigene Entscheidung.
-Entra verändert die vorhandene Netzwerk-Firewall nicht.
+Switching off server-wide password authentication later also affects the
+administrative emergency access and needs a decision of its own. Entra does not
+change the existing network firewall.
 
-## Lokale Prüfungen und ihre Grenze
+## Local checks and their limit
 
-Die Auth-Tests simulieren Credential-Auswahl, Tokenwechsel und Fehlerfälle ohne
-Azure-Anmeldung. Die Entra-Rechtetests simulieren nur die Azure-spezifische
-Principal-API; echte lokale PostgreSQL-Rollen prüfen F09-Gruppen, Review-RLS,
-Tabellen-/DDL-Grenzen, Wiederholung und Fehler zwischen den Einrichtungsphasen.
-Hybridtests verwenden erfundene Konfiguration und ersetzen Docker/CLI/Benachrichtigungen.
-Terraform-Tests simulieren alle Provider und prüfen Standard, Vorbereitung,
-Aktivierung und fehlende Freigaben. Diese Prüfungen ersetzen keine Azure-Abnahme.
+The auth tests simulate credential choice, token change and error cases without
+an Azure sign-in. The Entra rights tests simulate only the Azure-specific
+principal API; real local PostgreSQL roles check F09 groups, review RLS, table
+and DDL boundaries, repetition and errors between the setup phases. Hybrid tests
+use made-up configuration and replace Docker, CLI and notifications. Terraform
+tests simulate all providers and check default, preparation, activation and
+missing approvals. These checks do not replace an Azure acceptance.
 
-## Quellen
+## Sources
 
-- [Microsoft: Anmeldung mit Managed Identity](https://learn.microsoft.com/en-us/azure/postgresql/security/security-connect-with-managed-identity)
-- [Microsoft: Entra-Principals verwalten](https://learn.microsoft.com/en-us/azure/postgresql/security/security-manage-entra-users)
-- [Microsoft: Authentifizierungsmodi, Neustart und Tokenlebensdauer](https://learn.microsoft.com/en-us/azure/postgresql/security/security-entra-concepts)
+- [Microsoft: sign-in with a managed identity](https://learn.microsoft.com/en-us/azure/postgresql/security/security-connect-with-managed-identity)
+- [Microsoft: managing Entra principals](https://learn.microsoft.com/en-us/azure/postgresql/security/security-manage-entra-users)
+- [Microsoft: authentication modes, restart and token lifetime](https://learn.microsoft.com/en-us/azure/postgresql/security/security-entra-concepts)

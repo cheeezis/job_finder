@@ -45,7 +45,7 @@ serves a job search in Germany. This page is the English overview.
   version-pinned application documents. A drill in Azure restored an older state
   into separate resources and had a signed-in review with document download
   working after about 22 minutes, against a 60-minute target
-  ([details](docs/backup-recovery.md#ergebnis-der-azure-probe)).
+  ([details](docs/backup-recovery.md#result-of-the-azure-drill)).
 - **Observable agent:** every job leaves a JSON log line and an OpenTelemetry
   trace in Application Insights (run → job → model and tool calls) with ids,
   tokens, cost and the verdict, but never profile, prompt or ad text; a test
@@ -211,14 +211,21 @@ sheets the agent wrote for them, then opens the review at
 model. Each run empties the demo database first, and the script refuses any
 database server that is not local.
 
-## Documentation (German)
+## Documentation
 
-- [Bedienung](docs/bedienung.md): features, sources, review workflow, rules and
-  the agent's settings
-- [Betrieb](docs/operations.md): database, backups, Azure, the local job and
+- [Usage](docs/usage.md): features, sources, review workflow, rules and the
+  agent's settings
+- [Operations](docs/operations.md): database, backups, Azure, the local job and
   access paths
-- [Entwicklung](docs/development.md): structure, data flow of a run, adding a
+- [Development](docs/development.md): structure, data flow of a run, adding a
   source and code style
+- [Backup and restore](docs/backup-recovery.md),
+  [runtime access](docs/runtime-access.md) and
+  [database sign-in with Entra](docs/database-auth.md): the details behind
+  operations
+
+The review interface, the agent's rules and the Discord messages are German, as
+the finder serves a job search in Germany.
 
 ## License
 

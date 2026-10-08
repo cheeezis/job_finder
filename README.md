@@ -6,8 +6,8 @@ the same job, filters out clear misfits with transparent rules and lets an LLM
 agent write a short fact sheet for the promising ones, within a hard cost limit.
 A small web app supports the review and tracks applications.
 
-The user interface and the detailed documentation are in German, because the tool
-serves a job search in Germany. This page is the English overview.
+The user interface is in German, because the tool serves a job search in Germany;
+the documentation is in English.
 
 ## Highlights
 
@@ -223,9 +223,6 @@ database server that is not local.
   [runtime access](docs/runtime-access.md) and
   [database sign-in with Entra](docs/database-auth.md): the details behind
   operations
-
-The review interface, the agent's rules and the Discord messages are German, as
-the finder serves a job search in Germany.
 
 ## License
 

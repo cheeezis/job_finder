@@ -1,7 +1,8 @@
 # Developing the Job Finder
 
 This guide describes structure and development. Setup and use are in
-[Usage](usage.md), operation in [Operations](operations.md).
+[Usage](usage.md), operation in [Operations](operations.md), and the reasons
+behind the main design choices in the [architecture decisions](adr/README.md).
 
 ## Environment and checks
 

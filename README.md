@@ -219,6 +219,8 @@ database server that is not local.
   access paths
 - [Development](docs/development.md): structure, data flow of a run, adding a
   source and code style
+- [Architecture decisions](docs/adr/README.md): why the project is built the
+  way it is, with the alternatives that were considered
 - [Backup and restore](docs/backup-recovery.md),
   [runtime access](docs/runtime-access.md) and
   [database sign-in with Entra](docs/database-auth.md): the details behind

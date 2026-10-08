@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from job_finder.http import HttpStatusError
+from job_finder.models import JobSource
 from job_finder.sources import arbeitnow
 from job_finder.sources.common import collecting_diagnostics, load_detail_cache, save_detail_cache
 
@@ -165,6 +166,32 @@ class ArbeitnowTests(unittest.TestCase):
         self.assertEqual(count, 1)
         self.assertEqual(job.sources[0].application_url, "https://company.test/jobs/one")
         self.assertIn("Python APIs", job.description_clean)
+
+    def test_enriched_card_of_several_portals_is_cached_as_arbeitnow_listing_only(self):
+        url = "https://www.arbeitnow.com/jobs/example/shared"
+        own = arbeitnow.job_from_record(api_record("shared", "Find Jobs in Germany on Arbeitnow"))
+        # After deduplication the card also carries StepStone's listing and place.
+        card = arbeitnow.job_from_record(api_record("shared", "Find Jobs in Germany on Arbeitnow"))
+        card.locations = ["Fulda", "Berlin"]
+        card.sources.append(JobSource(source="stepstone", url="https://www.stepstone.de/job/1"))
+        html = '<meta property="og:description" content="' + ("Python APIs " * 30) + '">'
+
+        with tempfile.TemporaryDirectory() as directory:
+            cache_path = Path(directory) / "arbeitnow.json"
+            save_detail_cache(cache_path, {url: own})
+            with patch.object(
+                arbeitnow, "fetch_text_with_final_url", return_value=("https://company.test/jobs/shared", html)
+            ):
+                arbeitnow.enrich_candidate_jobs([card], {card.id}, cache_path=cache_path)
+            # A rate-limited run returns the cache as Arbeitnow's jobs.
+            with patch.object(arbeitnow, "collect_records", side_effect=HttpStatusError(429, arbeitnow.API_URL)):
+                fallback = arbeitnow.fetch_jobs(cache_path=cache_path)
+
+        self.assertEqual([source.source for source in card.sources], ["arbeitnow", "stepstone"])
+        self.assertEqual([source.source for source in fallback[0].sources], ["arbeitnow"])
+        self.assertEqual(fallback[0].sources[0].application_url, "https://company.test/jobs/shared")
+        self.assertEqual(fallback[0].locations, ["Fulda"])
+        self.assertIn("Python APIs", fallback[0].description_clean)
 
     def test_external_description_prefers_structured_job_posting(self):
         structured_description = "Structured Python job " * 30

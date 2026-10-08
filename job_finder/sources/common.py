@@ -9,6 +9,7 @@ from datetime import UTC, date, datetime, timedelta
 from urllib.parse import parse_qsl, urlencode, urlsplit
 
 from job_finder.console import print_progress, progress_checkpoint
+from job_finder.matching.deduplication import unique_sources
 from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource
 from job_finder.persistence.storage import read_versioned, write_versioned
@@ -377,7 +378,8 @@ def enrich_cached_candidates(jobs, candidate_ids, cache_path, source_name, label
             detailed.last_seen_at = job.last_seen_at
             detailed.workflow_status = job.workflow_status
             detailed.is_new = job.is_new
-            jobs[index] = detailed
+            jobs[index] = with_other_listings(detailed, job, source_name)
+            # The cache keeps the source's own detail, never the listings of other portals.
             cache[url] = detailed
             enriched += 1
             unsaved += 1
@@ -392,6 +394,24 @@ def enrich_cached_candidates(jobs, candidate_ids, cache_path, source_name, label
         record_candidate_failure(errors)
         print(f"WARNUNG {label}: {errors} Kandidat(en) nicht erreichbar")
     return enriched
+
+
+def with_other_listings(detailed, card, source_name):
+    """Return the detail as the run's card, keeping what other portals added to it.
+
+    Deduplication may have merged listings of several portals into one card; a
+    detail page knows only its own. The card keeps its ID, the other portals'
+    listings and their places.
+    """
+    others = [source for source in card.sources if source.source != source_name]
+    if not others:
+        return detailed
+    return replace(
+        detailed,
+        id=card.id,
+        locations=list(dict.fromkeys(detailed.locations + card.locations)),
+        sources=unique_sources(detailed.sources + others),
+    )
 
 
 def with_current_summary(cached_job, summary, **details):

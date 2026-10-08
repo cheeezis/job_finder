@@ -8,15 +8,17 @@ import threading
 import time
 import unittest
 from contextlib import nullcontext, redirect_stderr, redirect_stdout
+from copy import deepcopy
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import run_finder
 from job_finder.models import Job, JobSource
-from job_finder.sources import startup_jobs
+from job_finder.sources import remotely, startup_jobs
 from job_finder.sources.common import record_candidate_failure, record_partial_failure, record_total_segments
 from job_finder.sources.registry import SOURCE_LABELS
+from job_finder.workflow.memory import INACTIVE_AFTER_MISSED_RUNS, load_memory
 from run_finder import (
     SOURCES,
     IncompleteSourceSnapshotError,
@@ -128,6 +130,56 @@ class RunFinderTests(unittest.TestCase):
         self.assertTrue(result["is_new"])
         self.assertTrue(result["first_seen_at"])
         self.assertGreater(result["match_percent"], 0)
+
+    def test_closed_linkedin_listing_does_not_count_a_card_other_portals_list_as_missed(self):
+        card = make_job("stepstone:1")
+        card.remote_percentage = 100
+        card.sources.append(
+            JobSource(
+                source="remotely",
+                url="https://www.remotely.de/job/1",
+                application_url="https://de.linkedin.com/jobs/view/junior-at-example-1",
+            )
+        )
+        reports = [
+            {"name": "stepstone", "status": "success", "jobs": 1},
+            {"name": "remotely", "status": "success", "jobs": 1},
+        ]
+
+        with tempfile.TemporaryDirectory() as directory:
+            memory_file = Path(directory) / "state.sqlite3"
+
+            def check(jobs, candidate_ids):
+                return remotely.enrich_candidate_jobs(
+                    jobs,
+                    candidate_ids,
+                    status_cache_path=Path(directory) / "linkedin.json",
+                    fetcher=lambda url, headers=None: (url, "No longer accepting applications"),
+                    sleeper=lambda _seconds: None,
+                )
+
+            source = SimpleNamespace(SOURCE_NAME="remotely", enrich_candidate_jobs=check)
+            with (
+                patch("run_finder.JOBS_FILE", Path(directory) / "jobs.json"),
+                patch("run_finder.MEMORY_FILE", memory_file),
+                patch("run_finder.create_backup"),
+                patch("run_finder.SOURCES", [source]),
+                patch("run_finder.write_recommendations") as recommendations,
+                patch(
+                    "run_finder.deliver_notifications",
+                    return_value={"ready": 0, "sent": 0, "failed": 0, "configuration_error": None},
+                ),
+                redirect_stdout(io.StringIO()),
+            ):
+                for _run in range(INACTIVE_AFTER_MISSED_RUNS):
+                    with patch("run_finder.collect_jobs", return_value=([deepcopy(card)], reports)):
+                        run_pipeline()
+            entry = load_memory(memory_file)["stepstone:1"]
+
+        published = recommendations.call_args.args[0]["included"][0]
+        self.assertEqual([source["source"] for source in published["sources"]], ["stepstone"])
+        self.assertTrue(entry["active"])
+        self.assertEqual(entry["missed_runs"], 0)
 
     def test_listings_of_one_job_reach_the_review_as_one_card(self):
         fulda = make_job("arbeitnow:1")

@@ -181,9 +181,12 @@ try {
 }
 ```
 
-Ändert sich die eigene öffentliche IP, `postgres_client_ipv4` anpassen und neu
-planen und anwenden; die Firewallregel `local-review` lässt genau diese Adresse
-zu, auch für den Hybrid-Lauf. Lesender Zugriffstest mit Zertifikatsprüfung, der
+Die Firewallregel `local-review` lässt genau eine Adresse zu, auch für den
+Hybrid-Lauf. Weil die Heim-IP oft wechselt, setzt `scripts/run_local_hybrid.py`
+die Regel vor jedem Lauf über die angemeldete `az`-Sitzung auf die aktuelle
+öffentliche IP (ermittelt über `api.ipify.org`). Vor einer lokalen Review gegen
+Azure genügt `uv run python scripts/run_local_hybrid.py --allow-ip`. Terraform
+legt die Regel mit `postgres_client_ipv4` an und ignoriert danach ihre Adresse. Lesender Zugriffstest mit Zertifikatsprüfung, der
 nichts verändert:
 
 ```powershell

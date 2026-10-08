@@ -44,12 +44,18 @@ resource "azurerm_postgresql_flexible_server" "jobfinder" {
 }
 
 # Öffentlicher Endpunkt bedeutet nicht Zugriff von überall: Diese Regel erlaubt
-# nur die einzelne angegebene IP. Bei einem IP-Wechsel muss sie aktualisiert werden.
+# nur eine einzelne IP. Die Heim-IP wechselt oft; scripts/run_local_hybrid.py
+# setzt die Regel vor jedem Lauf (oder mit --allow-ip) auf die aktuelle Adresse.
+# Terraform legt die Regel an und lässt die Adresse danach dem Skript.
 resource "azurerm_postgresql_flexible_server_firewall_rule" "local_review" {
   name             = "local-review"
   server_id        = azurerm_postgresql_flexible_server.jobfinder.id
   start_ip_address = var.postgres_client_ipv4
   end_ip_address   = var.postgres_client_ipv4
+
+  lifecycle {
+    ignore_changes = [start_ip_address, end_ip_address]
+  }
 }
 
 # Der Worker läuft als Container Apps Job ohne feste ausgehende IP. Privater

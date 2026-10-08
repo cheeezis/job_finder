@@ -1,6 +1,6 @@
 # 0003: Move from JSON documents to tables in stages
 
-- Status: accepted, in progress
+- Status: accepted, stage 4 done
 - Date: 2026-10-07, recorded 2026-10-08
 
 ## Context and problem
@@ -49,16 +49,21 @@ data and run separately before the matching release (see
 
 ## Consequences
 
-- Until stage 4, every write updates JSON and tables together; `listing_drift`
-  in every run summary and `job_finder.db listings-drift` show deviations, and
-  `--repair` derives the tables again.
+- Until stage 4, every write updated JSON and tables together; `listing_drift`
+  in every run summary showed deviations and stayed 0 in production before the
+  contract migration (`0007`) ran.
 - An older image keeps working during the expand stages, because it still finds
   the JSON fields.
 - Stage 2 was skipped after measuring: the review list loads in about 0.6 s
   once the app runs, and the agent deliberately uses the same list as the
   review, because only the review maps listings to the user's decisions.
-- Stage 4 is a contract migration: after it, an image from before stage 1 is no
-  longer a way back, so it needs a backup and a deliberate release.
+- Stage 4 is a contract migration: an image from before it no longer finds its
+  fields. Its downgrade writes them back from the tables, so the way back is
+  `job_finder.db downgrade 0006_runs`, then the image rollback. A parity run on a
+  copy of the production data showed the same memory, review lists and
+  applications before, after and after the downgrade.
+- The dataset renames that were planned for stage 3 stay open; they need a new
+  row security rule and bring little.
 
 ## Revisit when
 

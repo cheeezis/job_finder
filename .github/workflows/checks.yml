@@ -383,8 +383,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [docker-build-push, release-plan]
     environment: production
-    # Never two deploys at once; a newly arriving one displaces one still
-    # waiting for approval.
+    # Never two deploys at once; a newer one waits behind one that waits for
+    # approval, so cancel the older run when only the newer should go out.
     concurrency:
       group: production-deploy
       cancel-in-progress: false

@@ -243,15 +243,22 @@ before the merge of the matching release.
 listings: position, URL, source) and `job_links` (linked jobs) and the columns
 `first_seen_at`, `last_seen_at` and `locations` on `job_state`, takes over the
 values from `job_state.extra` and gives the tables the same rights as
-`job_state`. Until their removal in a later stage the JSON fields stay the
-source: every save derives tables and columns from them again, so an older image
-keeps running unchanged. Deviations, for example after a rollback, are reported
-by `listing_drift` in the `run_summary` line; check and repair:
+`job_state`; until stage 4 the JSON fields stayed the source and every save
+derived the tables from them.
+`0007_job_state_contract` (F17, stage 4) makes the tables and columns the store:
+it derives them one last time, removes the fields `source_urls`,
+`source_names`, `linked_job_ids`, `first_seen_at`, `last_seen_at` and
+`locations` from `job_state.extra` and drops the two GIN indexes of `0004`.
+This is the first migration an older image cannot run on. Its way back is a
+downgrade, which writes the fields back from the tables and restores the
+indexes; only then may the previous image be rolled back:
 
 ```powershell
-.\.venv\Scripts\python.exe -m job_finder.db listings-drift
-.\.venv\Scripts\python.exe -m job_finder.db listings-drift --repair
+.\.venv\Scripts\python.exe -m job_finder.db downgrade 0006_runs
 ```
+
+Run it like `migrate` below, with the Azure connection details set for the
+call. Revisions before `0007` refuse a downgrade.
 
 Migrations run separately from the deploy on purpose (see
 [Deploy and rollback](#deploy-and-rollback)).

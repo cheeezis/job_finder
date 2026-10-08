@@ -109,8 +109,10 @@ manual approval in the environment `production` applies to exactly this plan:
 the apply loads it, checks its checksum and applies it; if the state has changed
 since, Terraform aborts. Afterwards it rolls out the image by digest to worker
 and review, checks the sign-in protection and waits until the new review
-revision runs healthily. A newer deploy cancels an older one still waiting, and
-after the approval it rolls out only if its commit is still the current `main`.
+revision runs healthily. Deploys run one at a time: a newer deploy waits behind
+one that waits for approval, so cancel the older run when only the newer should
+go out. After the approval a deploy rolls out only if its commit is still the
+current `main`.
 Terraform does not manage the image version; a local `terraform apply` therefore
 never resets the app. [Operations](operations.md#deploy-and-rollback) describes
 the way back.

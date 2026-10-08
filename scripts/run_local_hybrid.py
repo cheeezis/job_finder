@@ -13,12 +13,18 @@ optional model access. Like the cloud worker, it skips document backups and
 needs no Blob data access after F09's split. Document maintenance uses the
 owner's separately authenticated session.
 
+The home connection's public IP changes often. Before each run the script
+points the database firewall rule local-review at the current address (via the
+host's az session); `--allow-ip` does only that, e.g. before a local review.
+
 A Windows task starts this unattended, where a failure would leave no
 trace, so the script starts Docker Desktop when its engine does not
 answer (and stops it afterwards), keeps each run's output in data/logs
 for two weeks and reports every failure to Discord.
 """
 
+import argparse
+import ipaddress
 import os
 import re
 import shutil
@@ -34,6 +40,7 @@ from psycopg.conninfo import conninfo_to_dict, make_conninfo
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_DIR))
 
+from job_finder.http import fetch_text  # noqa: E402
 from job_finder.persistence.database_auth import entra_parameters  # noqa: E402
 from job_finder.persistence.entra_permissions import ENTRA_ROLES  # noqa: E402
 from job_finder.workflow.notifications import DiscordWebhookClient, NotificationError  # noqa: E402
@@ -44,6 +51,9 @@ WORKER_JOB = "jobfinder-worker"
 STORAGE_ACCOUNT = "stjobfindere64bfdce"
 STORAGE_CONTAINER = "application-documents"
 LOCAL_ONLY_SOURCES = "stepstone,remotely"
+FIREWALL_RULE = "local-review"
+# Answers with nothing but the caller's public IPv4 address.
+PUBLIC_IP_URL = "https://api.ipify.org"
 LOG_DIR = PROJECT_DIR / "data" / "logs"
 LOG_DAYS = 14
 DOCKER_START_SECONDS = 300
@@ -196,6 +206,48 @@ def deployed_image(log):
     )
 
 
+def public_ipv4():
+    """Return this machine's public IPv4 address as the internet sees it."""
+    try:
+        address = ipaddress.IPv4Address(fetch_text(PUBLIC_IP_URL, timeout=10).strip())
+    except (OSError, ValueError) as error:
+        raise RunFailed("öffentliche IP nicht ermittelbar") from error
+    if not address.is_global:
+        raise RunFailed("öffentliche IP nicht ermittelbar")
+    return str(address)
+
+
+def database_server():
+    """Return the Azure PostgreSQL server's name from the database host in .env.postgres-azure."""
+    url = read_dotenv(PROJECT_DIR / ".env.postgres-azure")["JOBFINDER_DATABASE_URL"]
+    return conninfo_to_dict(url)["host"].split(".", 1)[0]
+
+
+def allow_current_ip(log):
+    """Point the firewall rule local-review at the current public IP; return whether it changed."""
+    address = public_ipv4()
+    rule = ("postgres", "flexible-server", "firewall-rule")
+    target = ("--resource-group", RESOURCE_GROUP, "--server-name", database_server(), "--name", FIREWALL_RULE)
+    current = az(*rule, "show", *target, "--query", "startIpAddress", "--output", "tsv", log=log)
+    if current == address:
+        log.line("Firewall: die aktuelle IP ist bereits freigegeben.")
+        return False
+    az(
+        *rule,
+        "update",
+        *target,
+        "--start-ip-address",
+        address,
+        "--end-ip-address",
+        address,
+        "--output",
+        "none",
+        log=log,
+    )
+    log.line(f"Firewall: Regel {FIREWALL_RULE} auf die aktuelle IP gesetzt.")
+    return True
+
+
 def docker_answers():
     """Return whether the Docker engine answers."""
     try:
@@ -288,11 +340,27 @@ def report_failure(reason, log):
         log.line(f"Discord-Meldung fehlgeschlagen: {error}")
 
 
-def main():
-    """Run the containerized finder with only StepStone and Remotely; report any failure."""
+def main(argv=None):
+    """Run the containerized finder with only StepStone and Remotely; report any failure.
+
+    With --allow-ip it only points the firewall rule at the current IP.
+    """
+    parser = argparse.ArgumentParser(description="Lokaler Hybrid-Lauf (StepStone/Remotely)")
+    parser.add_argument("--allow-ip", action="store_true", help="nur die Firewall-Regel auf die aktuelle IP setzen")
+    if parser.parse_args(argv).allow_ip:
+        log = HybridLog()
+        try:
+            allow_current_ip(log)
+        except RunFailed as failure:
+            log.line(f"Fehlgeschlagen: {failure}")
+            raise SystemExit(1) from failure
+        finally:
+            log.close()
+        return
     log = HybridLog()
     started_docker = False
     try:
+        allow_current_ip(log)
         started_docker = start_docker(log)
         image = deployed_image(log)
         log.line(f"Image des Azure-Workers: {image}")

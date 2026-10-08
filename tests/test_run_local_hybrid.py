@@ -45,6 +45,7 @@ class LocalHybridRunTests(unittest.TestCase):
         defaults = {
             "start_docker": MagicMock(return_value=False),
             "stop_docker": MagicMock(),
+            "allow_current_ip": MagicMock(return_value=False),
             "deployed_image": MagicMock(return_value="acr.test/jobfinder:sha-1"),
             "pull": MagicMock(),
             "container_environment": MagicMock(
@@ -57,7 +58,7 @@ class LocalHybridRunTests(unittest.TestCase):
             patch.object(self.script.subprocess, "Popen", return_value=process) as popen,
             redirect_stdout(io.StringIO()),
         ):
-            self.script.main()
+            self.script.main([])
         return popen
 
     def log_text(self):
@@ -82,6 +83,54 @@ class LocalHybridRunTests(unittest.TestCase):
         ):
             self.assertTrue(self.script.start_docker(log))
         self.assertEqual(run.call_args.args[0][:3], ["docker", "desktop", "start"])
+
+    def firewall(self, current, public="9.9.9.9"):
+        """Run allow_current_ip against a rule that holds current; return the az calls."""
+        log = self.script.HybridLog()
+        self.addCleanup(log.close)
+        az = MagicMock(side_effect=lambda *args, log: current if "show" in args else "")
+        with (
+            patch.object(self.script, "fetch_text", return_value=f"{public}\n"),
+            patch.object(self.script, "database_server", return_value="psql-test"),
+            patch.object(self.script, "az", az),
+            redirect_stdout(io.StringIO()),
+        ):
+            changed = self.script.allow_current_ip(log)
+        return changed, [call.args for call in az.call_args_list]
+
+    def test_the_firewall_rule_follows_a_new_public_ip(self):
+        changed, calls = self.firewall(current="198.51.100.1")
+
+        self.assertTrue(changed)
+        show, update = calls
+        self.assertIn("show", show)
+        self.assertIn("update", update)
+        for flag, value in (
+            ("--server-name", "psql-test"),
+            ("--name", "local-review"),
+            ("--start-ip-address", "9.9.9.9"),
+            ("--end-ip-address", "9.9.9.9"),
+        ):
+            self.assertEqual(update[update.index(flag) + 1], value)
+
+    def test_an_unchanged_ip_leaves_the_rule_alone(self):
+        changed, calls = self.firewall(current="9.9.9.9")
+
+        self.assertFalse(changed)
+        self.assertEqual(len(calls), 1)
+
+    def test_an_unusable_ip_answer_stops_before_any_change(self):
+        for answer in ("<html>", "10.0.0.5"):
+            with self.subTest(answer), self.assertRaisesRegex(self.script.RunFailed, "öffentliche IP"):
+                self.firewall(current="198.51.100.1", public=answer)
+
+    def test_allow_ip_only_updates_the_rule(self):
+        allow, start = MagicMock(return_value=True), MagicMock()
+        with patch.multiple(self.script, allow_current_ip=allow, start_docker=start), redirect_stdout(io.StringIO()):
+            self.script.main(["--allow-ip"])
+
+        allow.assert_called_once()
+        start.assert_not_called()
 
     def test_a_successful_run_is_logged_without_the_secrets_it_passes_on(self):
         popen = self.run_main()

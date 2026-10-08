@@ -383,3 +383,7 @@ button.danger:hover { background: var(--danger); color: white; }
 .recent-runs ul { display: grid; gap: 6px; margin: 8px 0 0; padding: 0; list-style: none; }
 .recent-runs li { color: var(--muted); font-size: .9rem; }
 .recent-runs strong { color: var(--ink); font-weight: 600; }
+
+.application-links ul { margin: 6px 0 10px; padding-left: 18px; }
+.application-links li { margin: 3px 0; overflow-wrap: anywhere; }
+.application-links .link-group { margin: 10px 0 0; color: var(--muted); font-size: .85rem; }

@@ -227,7 +227,7 @@ class ReviewBrowserTests(unittest.TestCase):
         before = self.page.request.get("/api/applications").json()
         target = before["applications"][0]
         self.page.goto("/review")
-        title = self.current_title()
+        self.current_title()  # waits until the first card is shown
         self.page.fill("#review-note", "Notiz zur zusätzlichen Anzeige")
         self.page.click("#link-application")
         expect(self.page.locator("#link-application-dialog")).to_be_visible()
@@ -242,8 +242,8 @@ class ReviewBrowserTests(unittest.TestCase):
         linked = next(application for application in after["applications"] if application["id"] == target["id"])
         self.assertEqual(linked["documents"], target["documents"])
         self.assertEqual(linked["workflow_history"], target["workflow_history"])
-        self.assertEqual(linked["linked_listings"][0]["title"], title)
-        self.assertEqual(linked["linked_listings"][0]["review_note"], "Notiz zur zusätzlichen Anzeige")
+        # The linked listing's links join the application's links section.
+        self.assertGreater(len(linked["source_links"]), len(target["source_links"]))
 
 
 if __name__ == "__main__":

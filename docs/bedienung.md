@@ -138,8 +138,8 @@ Geänderte Bewertungsregeln wirken ab dem nächsten Finder-Lauf.
   gespeicherten Bewerbung, wähle „Bestehender Bewerbung zuordnen“ und die
   passende Bewerbung. Das funktioniert auch bei abweichenden Firmennamen,
   etwa bei Vermittlern. Die Bewerbung behält ihren Arbeitgeber, Verlauf,
-  Gehalt und ihre Unterlagen; die zusätzliche Anzeige und ihre Sichtungsnotiz
-  erscheinen dort unter „Zugeordnete Anzeigen“.
+  Gehalt und ihre Unterlagen; die Links der zusätzlichen Anzeige erscheinen
+  dort unter „Links“.
 - **Notiz:** „Meine Notiz“ hält den Grund einer Entscheidung fest (bis 2.000
   Zeichen) und wird beim Verlassen der Karte gespeichert. Der Agent liest bei
   ähnlichen Stellen die ersten 300 Zeichen mit.
@@ -155,8 +155,11 @@ Geänderte Bewertungsregeln wirken ab dem nächsten Finder-Lauf.
   nächste Termin ganz oben. Danach folgen vergangene Gespräche, das jüngste
   zuerst. Die übrigen offenen Bewerbungen stehen darunter, weiterhin nach
   Bewerbungsdatum mit der neuesten zuerst.
-- **Links:** Die Karte zeigt alle Anzeigen, die die Review derselben Stelle
-  zuordnet, auch von anderen Portalen.
+- **Links:** „Links“ auf der Karte listet alle Anzeigen, die der Finder zur
+  Stelle gefunden hat, auch von anderen Portalen, und die Seiten, die der Agent
+  für den Steckbrief geöffnet hat (etwa Firmenseite oder Bewerberportal).
+- **Firma und Titel:** Fehlt die Firma oder stimmt der Titel nicht, lassen sich
+  beide auf der Karte korrigieren; spätere Läufe überschreiben sie nicht mehr.
 - **Keine Rückmeldung:** Kommt 14 Tage nach Bewerbung, Rückmeldung oder letztem
   Gesprächstermin nichts Neues, zeigt die Übersicht „Keine Rückmeldung“; ein
   späteres Ereignis öffnet die Bewerbung wieder. Der Status lässt sich auch

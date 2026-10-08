@@ -294,9 +294,30 @@ test("a failed association leaves the selection and dialog available for retry",
   assert.equal(view.context.window.location.href, undefined);
 });
 
+test("application cards gather the finder's listings and the agent's pages in one links section", async () => {
+  const application = {id: "application:1", title: "Engineer", company: "Employer", active: true, workflow_status: "applied",
+    workflow_history: [], source_links: [{source: "original", url: "https://employer.example/job"}],
+    agent_sources: ["https://employer.example/about", "javascript:alert(1)"]};
+  const view = page("applications", {}, async path => ({ok: true, json: async () => path === "/api/sources"
+    ? {labels: {}}
+    : {applications: [application], completed_applications: [], statistics: {total: 1},
+      application_statuses: ["applied"], workflow_statuses: ["applied"]}}));
+  await new Promise(setImmediate);
+  const card = view.elements.get("applications").children[0];
+  const links = card.children.find(child => child.className === "application-links");
+  const [summary, ...rest] = links.children;
+  assert.equal(summary.textContent, "Links (2)");
+  const groups = rest.filter(child => child.className === "link-group").map(child => child.textContent);
+  assert.deepEqual(groups, ["Vom Finder gefunden", "Vom Agenten genutzt"]);
+  const anchors = rest.filter(child => child.tagName === "ul").flatMap(list => list.children.map(item => item.children[0]));
+  assert.deepEqual(anchors.map(link => [link.textContent, link.href]),
+    [["Originalanzeige", "https://employer.example/job"], ["employer.example", "https://employer.example/about"]]);
+  assert.ok(anchors.every(link => link.rel === "noopener noreferrer"));
+});
+
 test("a direct application link opens the completed archive and locates the selected card", async () => {
   const application = {id: "application:1", title: "Engineer", company: "Employer", workflow_status: "rejected", workflow_history: [],
-    linked_listings: [{title: "Recruiter ad", company: "Recruiter", review_note: "Saved source note"}]};
+    source_links: [{source: "listing", url: "https://example.test/job"}], agent_sources: []};
   const view = page("applications", {}, async () => ({ok: true, json: async () => ({applications: [],
     completed_applications: [application], statistics: {total: 1}, application_statuses: ["applied"], workflow_statuses: ["rejected"]})}));
   view.context.window.location.search = "?job=application%3A1";

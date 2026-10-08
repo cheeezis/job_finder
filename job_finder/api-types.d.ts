@@ -4,6 +4,26 @@
  */
 
 export interface paths {
+    "/api/application-details": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Application Details
+         * @description Correct the title and company of an application.
+         */
+        post: operations["application_details_api_application_details_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/application-document": {
         parameters: {
             query?: never;
@@ -319,6 +339,11 @@ export interface components {
         Application: {
             /** Active */
             active: boolean;
+            /**
+             * Agent Sources
+             * @default []
+             */
+            agent_sources: string[];
             /** Applied On */
             applied_on?: string | null;
             /** Automatic No Response */
@@ -347,8 +372,6 @@ export interface components {
             last_event_on?: string | null;
             /** Last Interview At */
             last_interview_at?: string | null;
-            /** Linked Listings */
-            linked_listings: components["schemas"]["LinkedListing"][];
             /** Next Interview At */
             next_interview_at?: string | null;
             /** Response On */
@@ -367,6 +390,15 @@ export interface components {
             workflow_history: components["schemas"]["HistoryEvent-Output"][];
             /** Workflow Status */
             workflow_status: string;
+        };
+        /** ApplicationDetails */
+        ApplicationDetails: {
+            /** Company */
+            company?: unknown;
+            /** Job Id */
+            job_id: string;
+            /** Title */
+            title?: unknown;
         };
         /** ApplicationListing */
         ApplicationListing: {
@@ -544,15 +576,6 @@ export interface components {
         JobRequest: {
             /** Job Id */
             job_id: string;
-        };
-        /** LinkedListing */
-        LinkedListing: {
-            /** Company */
-            company: string;
-            /** Review Note */
-            review_note: string;
-            /** Title */
-            title: string;
         };
         /** ManualImport */
         ManualImport: {
@@ -774,6 +797,39 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    application_details_api_application_details_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplicationDetails"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     application_document_api_application_document_get: {
         parameters: {
             query?: never;

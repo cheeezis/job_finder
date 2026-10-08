@@ -3,9 +3,12 @@
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+from psycopg import errors
+
 from job_finder.models import APPLICATION_STATUSES, OPEN_APPLICATION_STATUSES, WorkflowStatus
 from job_finder.paths import MEMORY_FILE, RECOMMENDATIONS_JSON
 from job_finder.persistence.application_documents import public_documents
+from job_finder.persistence.fact_sheets import fact_sheets
 from job_finder.persistence.storage import read_object
 from job_finder.telemetry import annotate, step
 from job_finder.workflow.memory import (
@@ -93,10 +96,11 @@ def load_application_overview(memory_path=MEMORY_FILE, as_of=None, recommendatio
         annotate(current, **{"jobfinder.rows": len(memory)})
     reference_date = as_of or date.today()
     links = review_links(memory, recommendations)
+    application_ids = [job_id for job_id, entry in memory.items() if is_application(entry)]
+    sources = agent_sources(application_ids)
     all_applications = [
-        application_row(job_id, entry, reference_date, links.get(job_id, ()))
-        for job_id, entry in memory.items()
-        if is_application(entry)
+        application_row(job_id, memory[job_id], reference_date, links.get(job_id, ()), sources.get(job_id, ()))
+        for job_id in application_ids
     ]
     all_applications.sort(key=lambda item: item["applied_on"] or item["last_event_on"] or "", reverse=True)
     applications = [item for item in all_applications if item["workflow_status"] in OPEN_APPLICATION_STATUSES]
@@ -191,8 +195,25 @@ def review_links(memory, recommendations):
     return links
 
 
-def application_row(job_id, entry, as_of=None, listing_links=()):
-    """Build one compact row with its complete manual timeline and every known listing link."""
+def agent_sources(job_ids):
+    """Return the pages the agent used for each job's fact sheet, in its order."""
+    try:
+        sheets = fact_sheets(job_ids)
+    except errors.UndefinedTable:
+        # Without the agent's tables (before `job_finder.db init`) there are no sheets.
+        return {}
+    return {
+        job_id: list(dict.fromkeys(url for url in (entry["fact_sheet"] or {}).get("quellen") or [] if url))
+        for job_id, entry in sheets.items()
+    }
+
+
+def application_row(job_id, entry, as_of=None, listing_links=(), agent_links=()):
+    """Build one compact row with its complete manual timeline and every known link.
+
+    source_links are the listings the finder found; agent_sources the further
+    pages the agent used for the fact sheet.
+    """
     history = valid_history(entry.get("workflow_history", []))
     applied_on = first_event_date(history, {WorkflowStatus.APPLIED.value})
     response_on = first_event_date(history, RESPONSE_STATUSES, not_before=applied_on)
@@ -237,14 +258,7 @@ def application_row(job_id, entry, as_of=None, listing_links=()):
         ),
         "workflow_history": history,
         "documents": public_documents(entry),
-        "linked_listings": [
-            {
-                "title": linked.get("title", ""),
-                "company": linked.get("company", ""),
-                "review_note": linked.get("review_note", ""),
-            }
-            for linked in (entry.get("linked_review_entries") or {}).values()
-        ],
+        "agent_sources": [url for url in agent_links if url not in known],
         "automatic_no_response": (
             current_status == WorkflowStatus.NO_RESPONSE.value and WorkflowStatus.NO_RESPONSE.value not in statuses
         ),

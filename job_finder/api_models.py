@@ -95,12 +95,6 @@ class Document(BaseModel):
     name: str | None = None
 
 
-class LinkedListing(BaseModel):
-    title: str
-    company: str
-    review_note: str
-
-
 class Application(BaseModel):
     """One application with its timeline, documents and derived figures."""
 
@@ -121,7 +115,7 @@ class Application(BaseModel):
     last_event_on: str | None = None
     workflow_history: list[HistoryEvent]
     documents: list[Document]
-    linked_listings: list[LinkedListing]
+    agent_sources: list[str] = []
     automatic_no_response: bool
     has_response: bool
     has_interview: bool

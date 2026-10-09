@@ -65,6 +65,14 @@ class AgentSettingsTests(unittest.TestCase):
                 self.assertIn(f"agent.{name}", settings.reason)
                 self.assertEqual(settings.limits, AgentLimits(**DEFAULT_LIMITS))
 
+    def test_amounts_that_are_no_number_switch_the_agent_off(self):
+        for value in (float("nan"), float("inf"), float("-inf")):
+            with self.subTest(value=value):
+                settings = agent_settings({"agent": {"enabled": True, "daily_max_cost_eur": value}})
+
+                self.assertFalse(settings.enabled)
+                self.assertIn("agent.daily_max_cost_eur muss ein Eurobetrag sein", settings.reason)
+
     def test_unknown_keys_and_inconsistent_limits_switch_the_agent_off(self):
         cases = (
             ({"enabled": True, "daily_max_cost": 1}, "agent.daily_max_cost"),

@@ -106,7 +106,7 @@ def single_call_variant(case, job, dataset, guard, model, settings):
         reasoning={"effort": settings.reasoning_effort},
         max_output_tokens=MAX_OUTPUT_TOKENS,
     )
-    answer = invoke(bound, [HumanMessage(job_prompt(job, dataset["today"], 0))])
+    answer = invoke(bound, [HumanMessage(job_prompt(job, dataset["today"], 0))], guard)
     try:
         guard.after_model_call(usage_of(answer, model.billed_searches))
         if answer.response_metadata.get("status") != "completed":

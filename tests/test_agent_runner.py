@@ -8,6 +8,7 @@ from datetime import date
 from unittest.mock import ANY, patch
 
 import httpx2
+from langgraph.errors import GraphRecursionError
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
@@ -279,6 +280,49 @@ class AgentRunnerTests(unittest.TestCase):
         with patch.object(runner.time, "sleep"), self.assertRaisesRegex(AgentStopped, "gedrosselt"):
             self.run_job(model)
         self.saved.assert_not_called()
+
+    def test_the_sdk_repeats_no_request_on_its_own(self):
+        model = runner.agent_model("https://example.test/openai/v1/", "test")
+
+        self.assertEqual(model.chat.max_retries, 0)
+
+    def test_a_lost_answer_is_booked_at_the_job_maximum_before_the_run_stops(self):
+        model = FakeModel(api_error("connection"))
+
+        with self.assertRaisesRegex(AgentStopped, "Modell nicht erreichbar"):
+            self.run_job(model)
+
+        self.assertEqual(len(model.requests), 1)
+        self.booked.assert_called_once()
+        self.assertEqual(self.booked.call_args.args[3], SETTINGS.limits.job_max_cost_eur)
+
+    def test_a_refused_request_books_nothing(self):
+        model = FakeModel(httpx2.Response(401, json={"error": {"message": "keine Berechtigung"}}))
+
+        with self.assertRaisesRegex(AgentStopped, "Modell nicht erreichbar"):
+            self.run_job(model)
+
+        self.booked.assert_not_called()
+
+    def test_no_throttle_wait_beyond_the_run_time(self):
+        model = FakeModel(api_error("rate_limit", retry_after="30"))
+        guard = CostGuard(SETTINGS, runner.MODEL, deadline=100, clock=lambda: 80)
+
+        with patch.object(runner.time, "sleep") as sleep, self.assertRaisesRegex(AgentStopped, "Zeitbudget"):
+            runner.write_fact_sheet(JOB, "version: 5\n", guard, model.model, SETTINGS, date(2026, 9, 25))
+
+        sleep.assert_not_called()
+
+    def test_a_job_whose_graph_goes_round_endlessly_ends_alone_for_good(self):
+        def going_round(job, _profile, guard, *_args):
+            guard.start_job(job["id"])
+            raise GraphRecursionError("zu viele Schritte")
+
+        with patch.object(runner, "draft_fact_sheet", side_effect=going_round):
+            outcome, _guard = self.run_job(FakeModel())
+
+        self.assertEqual(outcome, "abgebrochen")
+        self.assertFalse(self.aborted.call_args.kwargs["retryable"])
 
     def test_an_unreachable_model_stops_the_run_and_still_forgets_the_answers(self):
         model = FakeModel(reply("resp_1", decisions_call()), api_error("connection"))

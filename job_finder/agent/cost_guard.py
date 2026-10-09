@@ -2,8 +2,8 @@
 
 Two kinds of stops: JobLimitReached ends only the current job, the agent
 continues with the next one. AgentStopped ends the agent for this run: it is
-off, the model has no price, the ledger cannot be read or written, or the
-daily or monthly money is used up. Every doubt counts as a stop.
+off, the model has no price, the ledger cannot be read or written, the daily
+or monthly money or the run's time is used up. Every doubt counts as a stop.
 
 Paid web searches have their own budget per job. It does not stop the job:
 once it is used up, the agent keeps working without the search tool. One
@@ -11,6 +11,7 @@ model response can send several searches, so the searches of that last
 response may exceed the budget; the money limits still apply.
 """
 
+import time
 from decimal import Decimal
 
 from job_finder.agent.pricing import PRICES, Usage, call_cost
@@ -46,12 +47,15 @@ class SharedLedger:
 
 
 class CostGuard:
-    def __init__(self, settings, model, ledger=None):
+    def __init__(self, settings, model, ledger=None, *, deadline=None, clock=time.monotonic):
         self.settings = settings
         self.limits = settings.limits
         self.model = model
         # The evals bring their own ledger, so their runs stay out of the shared one.
         self.ledger = ledger or SharedLedger()
+        # The run's end on clock's scale; None means no time limit (the evals).
+        self.deadline = deadline
+        self.clock = clock
         self.job_id = None
 
     def start_job(self, job_id):
@@ -84,6 +88,8 @@ class CostGuard:
         if self.job_id is None:
             raise RuntimeError("start_job muss vor dem ersten Modellaufruf laufen")
         self.check_run()
+        if self.seconds_left() == 0:
+            raise AgentStopped("Zeitbudget des Laufs erreicht")
         if self.model_calls >= self.limits.job_max_model_calls:
             raise JobLimitReached(
                 f"Stelle abgebrochen: {self.limits.job_max_model_calls} Modellaufrufe erreicht", "model_calls"
@@ -107,6 +113,16 @@ class CostGuard:
                 "usage_missing",
             ) from error
         self.book(usage, cost)
+
+    def seconds_left(self):
+        """Seconds until the run's deadline, never negative; None without a deadline."""
+        if self.deadline is None:
+            return None
+        return max(0, self.deadline - self.clock())
+
+    def book_lost_answer(self):
+        """Book the job maximum for a call whose answer was lost: the model may have billed it."""
+        self.book(Usage(0, 0, 0), self.limits.job_max_cost_eur)
 
     def book(self, usage, cost):
         try:

@@ -148,8 +148,11 @@ class AgentPhaseTests(unittest.TestCase):
 
 
 class RunAgentTests(unittest.TestCase):
-    def run_agent(self, outcomes, clock=None):
-        waiting = [{"id": f"memory:{number}", "recommendation_id": f"job:{number}"} for number in range(1, 5)]
+    def run_agent(self, outcomes, clock=None, rerun=False):
+        waiting = [
+            {"id": f"memory:{number}", "recommendation_id": f"job:{number}", "fact_sheet_rerun": rerun}
+            for number in range(1, 5)
+        ]
         ads = {f"job:{number}": {"id": f"job:{number}"} for number in (1, 3, 4)}
         self.write = Mock(side_effect=outcomes)
         with patch.multiple(
@@ -178,6 +181,12 @@ class RunAgentTests(unittest.TestCase):
         self.assertEqual((stats["fertig"], stats["offen"]), (1, 2))
         self.assertEqual(stats["stopp"], "Tagesgrenze erreicht")
 
+    def test_a_rerun_request_of_a_job_merged_meanwhile_does_not_stop_the_run(self):
+        with patch.object(run, "clear_rerun_request", side_effect=KeyError("memory:1")):
+            stats = self.run_agent(["fertig", "fertig", "fertig"], rerun=True)
+
+        self.assertEqual((stats["fertig"], stats["stopp"]), (3, ""))
+
     def test_the_time_budget_ends_the_run_between_jobs(self):
         ticks = iter([0, 10, run.RUN_SECONDS + 1])
 
@@ -185,6 +194,15 @@ class RunAgentTests(unittest.TestCase):
 
         self.assertEqual((stats["fertig"], stats["offen"]), (1, 2))
         self.assertEqual(stats["stopp"], "Zeitbudget des Laufs erreicht")
+
+
+class DefaultFilterTests(unittest.TestCase):
+    def test_a_job_added_by_hand_passes_the_reviews_default_filters(self):
+        foreign = {"international": True, "location_precheck": "Junior-Hybrid: weit entfernt"}
+        manual = {**foreign, "source_links": [{"source": "manual", "url": "https://example.test/1"}]}
+
+        self.assertFalse(run.shown_by_default(foreign))
+        self.assertTrue(run.shown_by_default(manual))
 
 
 class AgentSelectionTests(unittest.TestCase):

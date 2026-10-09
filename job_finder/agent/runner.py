@@ -9,6 +9,7 @@ from typing import Annotated, TypedDict
 import openai
 from langchain_core.messages import HumanMessage, ToolMessage
 from langchain_openai import ChatOpenAI
+from langgraph.errors import GraphRecursionError
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 
@@ -59,8 +60,12 @@ class AgentModel:
     billed_searches: dict = field(default_factory=dict)
 
 
-def agent_model(base_url, api_key, *, max_retries=2, transport=None):
-    """Chat model for the Azure OpenAI v1 endpoint; api_key may be a token provider."""
+def agent_model(base_url, api_key, *, max_retries=0, transport=None):
+    """Chat model for the Azure OpenAI v1 endpoint; api_key may be a token provider.
+
+    The SDK retries nothing by default: a request it repeats unseen could be
+    billed without the cost guard counting it. invoke() owns the retries.
+    """
     billed = {}
 
     def remember_billing(response):
@@ -124,6 +129,11 @@ def draft_and_store(job, profile_text, guard, model, settings, today, attempt=1,
     stamp = {"attempt": attempt, "versions": versions}
     try:
         sheet, _dropped = draft_fact_sheet(job, profile_text, guard, model, settings, today)
+    except GraphRecursionError:
+        # The graph kept going round for this job; another attempt would only cost again.
+        note = "Stelle abgebrochen: zu viele Schritte"
+        save_aborted(job["id"], MODEL, note, guard.job_cost, retryable=False, **stamp)
+        return {"outcome": "abgebrochen", "reason": "loop", "attempt": attempt, "retryable": False}
     except (JobLimitReached, ValueError) as error:
         reason = error.reason if isinstance(error, JobLimitReached) else "unusable"
         note = str(error) if isinstance(error, JobLimitReached) else f"Steckbrief unbrauchbar: {error}"
@@ -232,11 +242,16 @@ def ask_model(model, rules, messages, guard, settings):
         max_output_tokens=MAX_OUTPUT_TOKENS,
         **options,
     )
-    return invoke(bound, messages)
+    return invoke(bound, messages, guard)
 
 
-def invoke(bound, messages):
-    """Call the bound model; wait out throttling, turn API errors into the guard's stops."""
+def invoke(bound, messages, guard):
+    """Call the bound model; wait out throttling, turn API errors into the guard's stops.
+
+    A throttled request is refused before it runs and costs nothing. A lost
+    connection, a timeout or a server error leaves open whether the model
+    worked and billed, so the guard books the job maximum before the run stops.
+    """
     throttled = None
     for attempt in range(RATE_LIMIT_RETRIES + 1):
         try:
@@ -244,10 +259,17 @@ def invoke(bound, messages):
         except openai.RateLimitError as error:
             throttled = error
             if attempt < RATE_LIMIT_RETRIES:
-                time.sleep(retry_after(error))
+                wait = retry_after(error)
+                left = guard.seconds_left()
+                if left is not None and wait >= left:
+                    raise AgentStopped("Zeitbudget des Laufs erreicht") from error
+                time.sleep(wait)
         except openai.BadRequestError as error:
             reason = error.code or error.status_code
             raise JobLimitReached(f"Stelle abgebrochen: Anfrage abgelehnt ({reason})", "rejected") from error
+        except (openai.APIConnectionError, openai.InternalServerError) as error:
+            guard.book_lost_answer()
+            raise AgentStopped(f"Modell nicht erreichbar ({type(error).__name__})") from error
         except openai.APIError as error:
             raise AgentStopped(f"Modell nicht erreichbar ({type(error).__name__})") from error
     raise AgentStopped("Modell gedrosselt, auch nach Wartezeit") from throttled

@@ -86,6 +86,8 @@ def parse_limit(name, value):
         if isinstance(value, bool) or not isinstance(value, int | float):
             raise ValueError(f"agent.{name} muss ein Eurobetrag sein")
         value = Decimal(str(value))
+        if not value.is_finite():
+            raise ValueError(f"agent.{name} muss ein Eurobetrag sein")
     elif isinstance(value, bool) or not isinstance(value, int):
         raise ValueError(f"agent.{name} muss eine Ganzzahl sein")
     may_be_zero = name in MAY_BE_ZERO

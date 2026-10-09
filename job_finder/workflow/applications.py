@@ -27,6 +27,10 @@ RESPONSE_STATUSES = {
     WorkflowStatus.OFFER.value,
 }
 NO_RESPONSE_AFTER_DAYS = 14
+# The availability check sets an offline shortlisted job to ignored with this
+# reason and marks it; "ignored" plus the marker means archived.
+UNAVAILABLE_REASON = "listing_unavailable"
+ARCHIVE_MARKER = "availability_checked_at"
 
 
 def record_status_change(entry, workflow_status, occurred_on=None, scheduled_for=None):
@@ -177,10 +181,17 @@ def editable_history_event(entry, event_index, previous_status, previous_occurre
 
 
 def synchronize_current_status(entry):
-    """Use the chronologically latest valid event as current status."""
+    """Use the chronologically latest valid event as current status.
+
+    The availability check's archive marker belongs to its own ignored event.
+    Once another event is current, the user decided, and the marker goes: the
+    job is then neither archived nor hidden from the agent's past decisions.
+    """
     history = valid_history(entry.get("workflow_history", []))
     status = history[-1]["status"] if history else WorkflowStatus.NEW.value
     entry["workflow_status"] = status
+    if not history or history[-1].get("reason") != UNAVAILABLE_REASON:
+        entry.pop(ARCHIVE_MARKER, None)
     return status
 
 
@@ -317,8 +328,8 @@ def normalized_history_event(event, event_index=None):
         normalized = history_event(event.get("status"), event.get("occurred_on"), event.get("scheduled_for"))
     except (TypeError, ValueError):
         return None
-    if event.get("reason") == "listing_unavailable":
-        normalized["reason"] = "listing_unavailable"
+    if event.get("reason") == UNAVAILABLE_REASON:
+        normalized["reason"] = UNAVAILABLE_REASON
     if event_index is not None:
         normalized["event_index"] = event_index
     return normalized

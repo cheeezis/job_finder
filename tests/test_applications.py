@@ -6,9 +6,24 @@ import unittest
 from datetime import date, timedelta
 from pathlib import Path
 
-from job_finder.workflow.applications import load_application_overview
+from job_finder.models import WorkflowStatus
+from job_finder.persistence.database import memory_scope
+from job_finder.persistence.decisions import decided_jobs
+from job_finder.workflow.applications import (
+    ARCHIVE_MARKER,
+    UNAVAILABLE_REASON,
+    delete_history_event,
+    load_application_overview,
+    record_status_change,
+)
 from job_finder.workflow.memory import load_memory, save_memory
-from job_finder.workflow.review_actions import delete_workflow_history, update_workflow_history, update_workflow_status
+from job_finder.workflow.review_actions import (
+    delete_workflow_history,
+    update_review_decision,
+    update_workflow_history,
+    update_workflow_status,
+)
+from job_finder.workflow.review_data import is_archived
 
 
 class ApplicationTrackingTests(unittest.TestCase):
@@ -664,3 +679,69 @@ class ApplicationTrackingTests(unittest.TestCase):
         self.assertEqual(result["workflow_status"], "interview")
         self.assertEqual(application["applied_on"], "2026-08-02")
         self.assertEqual(application["days_to_response"], 2)
+
+
+def shortlisted():
+    """A job the user found interesting on 1 October."""
+    return {
+        "workflow_status": "interesting",
+        "workflow_history": [{"status": "interesting", "occurred_on": "2026-10-01"}],
+    }
+
+
+def closed_by_availability_check(entry, occurred_on):
+    """Set a shortlisted job to ignored as the availability check does."""
+    record_status_change(entry, WorkflowStatus.IGNORED, occurred_on)
+    entry["workflow_history"][-1]["reason"] = UNAVAILABLE_REASON
+    entry[ARCHIVE_MARKER] = f"{occurred_on}T08:00:00"
+
+
+class ArchiveMarkerTests(unittest.TestCase):
+    def test_a_later_manual_decision_ends_the_archive_marker(self):
+        entry = shortlisted()
+        closed_by_availability_check(entry, "2026-10-02")
+        self.assertTrue(is_archived(entry))
+
+        record_status_change(entry, WorkflowStatus.INTERESTING, "2026-10-03")
+        self.assertNotIn(ARCHIVE_MARKER, entry)
+        record_status_change(entry, WorkflowStatus.IGNORED, "2026-10-04")
+
+        self.assertEqual(entry["workflow_status"], "ignored")
+        self.assertFalse(is_archived(entry))
+
+    def test_removing_the_automatic_ignore_ends_its_marker(self):
+        entry = shortlisted()
+        closed_by_availability_check(entry, "2026-10-02")
+
+        delete_history_event(entry, 1, "ignored", "2026-10-02")
+
+        self.assertEqual(entry["workflow_status"], "interesting")
+        self.assertNotIn(ARCHIVE_MARKER, entry)
+
+    def test_an_older_manual_event_leaves_the_automatic_ignore_current(self):
+        entry = shortlisted()
+        closed_by_availability_check(entry, "2026-10-02")
+
+        record_status_change(entry, WorkflowStatus.WAITING, "2026-09-30")
+
+        self.assertEqual(entry["workflow_status"], "ignored")
+        self.assertTrue(is_archived(entry))
+
+
+class ArchiveMarkerStorageTests(unittest.TestCase):
+    def test_a_declined_job_after_an_automatic_ignore_reaches_the_agent_and_not_the_archive(self):
+        # Automatic ignore, then the user: interesting, then not interesting (the review's three steps).
+        with tempfile.TemporaryDirectory() as directory:
+            memory_path = Path(directory) / "state.sqlite3"
+            entry = {"title": "Junior Developer", "company": "Example GmbH", **shortlisted()}
+            closed_by_availability_check(entry, "2026-10-02")
+            save_memory({"job:1": entry}, memory_path)
+
+            update_review_decision("job:1", "interesting", memory_path)
+            update_review_decision("job:1", "ignored", memory_path)
+
+            stored = load_memory(memory_path)["job:1"]
+            decided = [row[0] for row in decided_jobs(memory_scope(memory_path))]
+
+        self.assertFalse(is_archived(stored))
+        self.assertEqual(decided, ["job:1"])

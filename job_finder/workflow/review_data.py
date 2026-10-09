@@ -12,7 +12,7 @@ from job_finder.persistence.database import snapshot
 from job_finder.persistence.fact_sheets import fact_sheets
 from job_finder.persistence.storage import dataset_name, read_object
 from job_finder.telemetry import annotate, step
-from job_finder.workflow.applications import OPEN_APPLICATION_STATUSES, application_row, is_application
+from job_finder.workflow.applications import ARCHIVE_MARKER, OPEN_APPLICATION_STATUSES, application_row, is_application
 from job_finder.workflow.memory import (
     clear_studysmarter_board_companies,
     job_urls,
@@ -33,8 +33,11 @@ PERSISTED_REVIEW_STATUSES = {
 
 
 def is_archived(entry):
-    """Tell whether a listing went offline and was ignored for it; such cards grow daily."""
-    return entry.get("workflow_status") == "ignored" and bool(entry.get("availability_checked_at"))
+    """Tell whether a listing went offline and was ignored for it; such cards grow daily.
+
+    Like the SQL filters (postgres_store, decisions), the marker counts by its presence.
+    """
+    return entry.get("workflow_status") == "ignored" and ARCHIVE_MARKER in entry
 
 
 def load_review_jobs(recommendations_path=RECOMMENDATIONS_JSON, memory_path=MEMORY_FILE, *, archived=False):
@@ -187,7 +190,7 @@ def attach_fact_sheets(jobs):
 def remembered_review_job(job_id, entry):
     """Keep a manual shortlist entry until the user changes its status."""
     source_links = memory_source_links(entry)
-    if entry.get("availability_checked_at") and entry.get("workflow_status") == "ignored":
+    if is_archived(entry):
         availability_warning = "Anzeige nicht mehr verfügbar; automatisch auf Nicht interessant gesetzt."
     elif entry.get("active", True):
         availability_warning = "Im aktuellen Lauf nicht gefunden; Verfügbarkeit bitte über die Anzeige prüfen."

@@ -81,6 +81,62 @@ def ensure_partial_failure():
     diagnostics.failed_segments = max(1, diagnostics.failed_segments)
 
 
+# A malformed API record fails its conversion with one of these; a bug in the
+# adapter fails every record, and then the source fails as before.
+RECORD_ERRORS = (ValueError, TypeError, AttributeError, KeyError)
+
+
+def convert_records(records, convert, label):
+    """Convert API records one by one; a malformed record is skipped instead of failing the source.
+
+    convert returns a Job, or None for a record the source leaves out. Skipped
+    records make the result partial, so no job of the source counts as missed.
+    If no record converts, the first error propagates and the source fails.
+    """
+    jobs, errors = [], []
+    for record in records:
+        try:
+            job = convert(record)
+        except RECORD_ERRORS as error:
+            errors.append(error)
+            continue
+        if job is not None:
+            jobs.append(job)
+    if errors:
+        if not jobs:
+            raise errors[0]
+        ensure_partial_failure()
+        print(
+            f"WARNUNG {label}: {len(errors)} fehlerhafte(r) Datensatz/Datensätze übersprungen ({type(errors[0]).__name__})"
+        )
+    return jobs
+
+
+def collect_segments(segments, collect, label):
+    """Run collect(segment) for every search or page; a failed one makes the result partial.
+
+    collect gathers into the caller's own state, so what came before a failure
+    stays. A network or response error counts as failed; after HTTP 403 or 429
+    the remaining segments are not requested and count as failed too. If every
+    segment fails, the last error propagates and the source fails as before.
+    """
+    record_total_segments(len(segments))
+    failed, last_error = 0, None
+    for position, segment in enumerate(segments):
+        try:
+            collect(segment)
+        except (OSError, ValueError) as error:
+            failed, last_error = failed + 1, error
+            if getattr(error, "code", None) in {403, 429}:
+                failed += len(segments) - position - 1
+                break
+    if failed == len(segments) and last_error is not None:
+        raise last_error
+    if failed:
+        record_partial_failure(failed)
+        print(f"WARNUNG {label}: {failed} von {len(segments)} Abrufen fehlgeschlagen ({type(last_error).__name__})")
+
+
 def record_candidate_failure(count=1):
     """Record prefiltered candidates whose details could not be loaded.
 

@@ -19,6 +19,8 @@ from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource
 from job_finder.paths import cache_file
 from job_finder.sources.common import (
+    collect_segments,
+    ensure_partial_failure,
     fetch_cached_details,
     normalize_employment_type,
     parse_published_date,
@@ -32,6 +34,8 @@ SOURCE_NAME = "arbeitsagentur"
 SEARCH_BASE_URL = "https://www.arbeitsagentur.de/jobsuche/suche"
 DETAIL_BASE_URL = "https://www.arbeitsagentur.de/jobsuche/jobdetail"
 CACHE_FILE = cache_file("arbeitsagentur")
+# A guard against a result count that never ends, far above a normal search.
+MAX_SEARCH_PAGES = 40
 
 
 def fetch_jobs(cache_path=CACHE_FILE, now=None):
@@ -40,7 +44,10 @@ def fetch_jobs(cache_path=CACHE_FILE, now=None):
 
 
 def collect_links():
-    """Collect unique detail URLs from all configured Arbeitsagentur searches."""
+    """Collect unique detail URLs from all configured Arbeitsagentur searches.
+
+    Each search is one segment: a failed search leaves the results of the others.
+    """
     links = {}
     searches = [(term, local_search_location(), local_search_radius_km()) for term in search_terms()]
     searches.extend(
@@ -49,11 +56,14 @@ def collect_links():
         for term in commuter_search_terms()
     )
 
-    for term, location, radius in searches:
+    def collect(search_segment):
+        term, location, radius = search_segment
         for result in search(term, location=location, radius=radius):
             reference = result.get("referenznummer")
             if reference and "/" not in reference:
                 links[f"{DETAIL_BASE_URL}/{reference}"] = None
+
+    collect_segments(searches, collect, "Arbeitsagentur")
     return list(links)
 
 
@@ -75,6 +85,11 @@ def search(term, location=None, radius=None):
 
         total = int(search_result.get("maxErgebnisse", 0) or 0)
         if not new_results or len(results) >= total:
+            return results
+        if page >= MAX_SEARCH_PAGES:
+            # The search is cut short, so it does not prove that a missing job is gone.
+            ensure_partial_failure()
+            print(f"WARNUNG Arbeitsagentur: Suche nach {MAX_SEARCH_PAGES} Seiten abgebrochen")
             return results
 
         page += 1

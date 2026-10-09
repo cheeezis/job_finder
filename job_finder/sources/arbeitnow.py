@@ -11,6 +11,7 @@ from job_finder.models import Job, JobSource, WorkMode
 from job_finder.paths import cache_file
 from job_finder.sources.common import (
     canonical_detail_url,
+    convert_records,
     detail_is_fresh,
     load_detail_cache,
     normalize_employment_type,
@@ -67,13 +68,15 @@ def fetch_jobs(cache_path=CACHE_FILE):
         return jobs
 
     current_cache = {}
-    for record in records:
+
+    def convert(record):
         job = job_from_record(record)
         cache_key = canonical_detail_url(job.primary_url)
-        previous = cache.get(cache_key)
-        reuse_cached_enrichment(job, previous)
+        reuse_cached_enrichment(job, cache.get(cache_key))
         current_cache[cache_key] = job
-        jobs.append(job)
+        return job
+
+    jobs = convert_records(records, convert, "Arbeitnow")
 
     if jobs:
         save_detail_cache(cache_path, current_cache)

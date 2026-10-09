@@ -5,7 +5,7 @@ from copy import deepcopy
 from job_finder.paths import MEMORY_FILE
 from job_finder.persistence.database import lock, transaction
 from job_finder.workflow.applications import is_application
-from job_finder.workflow.memory import edit_memory, unique_values
+from job_finder.workflow.memory import add_listings, edit_memory, unique_values
 
 
 def link_listing_to_application(job_id, application_id, memory_path=MEMORY_FILE):
@@ -32,8 +32,8 @@ def link_listing_to_application(job_id, application_id, memory_path=MEMORY_FILE)
                 raise ValueError("Zwei bestehende Bewerbungen können hier nicht zusammengeführt werden")
             target.setdefault("linked_review_entries", {})[job_id] = deepcopy(source)
             target["linked_job_ids"] = unique_values(target.get("linked_job_ids", []), [job_id])
-            for field in ("source_urls", "source_names", "locations"):
-                target[field] = unique_values(target.get(field, []), source.get(field, []))
+            add_listings(target, source.get("source_urls", []), source.get("source_names", []))
+            target["locations"] = unique_values(target.get("locations", []), source.get("locations", []))
             target["active"] = bool(target.get("active", True) or source.get("active", True))
             del memory[job_id]
     return {"job_id": application_id}

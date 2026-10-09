@@ -148,8 +148,7 @@ def update_memory(jobs, memory, successful_sources=None, run_sources=None, *, al
             entry["company"] = job.company or entry.get("company") or ""
             job.company = entry["company"]
             entry["locations"] = unique_values(entry.get("locations") or [], job.locations)
-            entry["source_urls"] = unique_values(entry.get("source_urls", []), [source.url for source in job.sources])
-            entry["source_names"] = unique_values(entry.get("source_names", []), job.source_names)
+            add_listings(entry, *listings_of(job))
             entry["missed_runs"] = 0
             entry["active"] = True
             if remote_job(job):
@@ -169,11 +168,12 @@ def update_memory(jobs, memory, successful_sources=None, run_sources=None, *, al
             "first_seen_at": now.isoformat(),
             "last_seen_at": now.isoformat(),
             "workflow_status": WorkflowStatus.NEW.value,
-            "source_urls": [source.url for source in job.sources],
-            "source_names": job.source_names,
+            "source_urls": [],
+            "source_names": [],
             "missed_runs": 0,
             "active": True,
         }
+        add_listings(memory[job.id], *listings_of(job))
         if job.published_at is not None:
             memory[job.id]["published_at"] = job.published_at.isoformat()
         if remote_job(job):
@@ -250,8 +250,7 @@ def resolve_memory_id(job, memory, memory_index=None, *, aliases=None):
             continue
         if candidate_id in by_title and not may_share_decision(candidate, canonical):
             continue
-        for field in ("source_urls", "source_names"):
-            canonical[field] = unique_values(canonical.get(field, []), candidate.get(field, []))
+        add_listings(canonical, candidate.get("source_urls", []), candidate.get("source_names", []))
         canonical["locations"] = unique_values(canonical.get("locations") or [], candidate.get("locations") or [])
         if candidate.get("fully_remote"):
             canonical["fully_remote"] = True
@@ -428,6 +427,32 @@ def has_application_state(entry):
         isinstance(event, dict) and event.get("status") in APPLICATION_STATUSES
         for event in (history if isinstance(history, list) else [])
     )
+
+
+def add_listings(entry, urls, names):
+    """Add listings to an entry, keeping each URL with its source's name.
+
+    source_urls and source_names pair up by position, as job_listings stores
+    them. A URL the entry already lists keeps its pair. Entries whose lists
+    differ in length come from earlier runs, which merged both lists
+    separately; their pairs are unknown, so they keep growing that way.
+    """
+    known_urls = entry.get("source_urls") or []
+    known_names = entry.get("source_names") or []
+    if len(known_urls) != len(known_names) or len(urls) != len(names):
+        entry["source_urls"] = unique_values(known_urls, urls)
+        entry["source_names"] = unique_values(known_names, names)
+        return
+    pairs = dict(zip(known_urls, known_names, strict=True))
+    for url, name in zip(urls, names, strict=True):
+        if url:
+            pairs.setdefault(url, name)
+    entry["source_urls"], entry["source_names"] = list(pairs), list(pairs.values())
+
+
+def listings_of(job):
+    """Return a job's listing URLs and their source names as two paired lists."""
+    return [source.url for source in job.sources], [source.source for source in job.sources]
 
 
 def unique_values(*groups):

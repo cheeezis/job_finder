@@ -13,7 +13,7 @@ from job_finder.models import WorkflowStatus
 from job_finder.sources.arbeitnow import application_page_is_missing
 from job_finder.sources.manual import VisibleJobParser, validate_public_url
 from job_finder.structured_data import extract_json_ld_job_posting
-from job_finder.workflow.applications import record_status_change
+from job_finder.workflow.applications import ARCHIVE_MARKER, UNAVAILABLE_REASON, record_status_change
 from job_finder.workflow.memory import edit_memory, has_application_state, load_memory, sources_succeeded, update_memory
 
 CLOSED_MESSAGE = re.compile(
@@ -302,8 +302,8 @@ def apply_closed_listing_checks(prepared, memory, *, unchanged_ids=None):
         if not all(recent_check(check, prepared.now) and check.get("closed") is True for check in updated.values()):
             continue
         record_status_change(entry, WorkflowStatus.IGNORED)
-        entry["workflow_history"][-1]["reason"] = "listing_unavailable"
-        entry["availability_checked_at"] = prepared.now.isoformat()
+        entry["workflow_history"][-1]["reason"] = UNAVAILABLE_REASON
+        entry[ARCHIVE_MARKER] = prepared.now.isoformat()
         entry["active"] = False
         ignored.add(job_id)
     return ignored

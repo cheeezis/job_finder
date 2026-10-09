@@ -10,7 +10,14 @@ from pathlib import Path
 
 from job_finder.models import Job, JobSource, WorkflowStatus
 from job_finder.persistence.database import transaction
-from job_finder.workflow.memory import edit_memory, load_memory, save_memory, update_memory
+from job_finder.workflow.memory import (
+    add_listings,
+    edit_memory,
+    load_memory,
+    memory_source_links,
+    save_memory,
+    update_memory,
+)
 
 
 def make_job():
@@ -689,6 +696,42 @@ class MemoryTests(unittest.TestCase):
         self.assertEqual(stuttgart.id, "arbeitnow:1")
         self.assertEqual(stuttgart.workflow_status, WorkflowStatus.NEW)
         self.assertIn("stepstone:1", memory)
+
+    def test_every_listing_url_keeps_the_name_of_its_portal(self):
+        job = listing("stepstone:1", "Berlin")
+        job.sources += [
+            JobSource(source="stepstone", url="https://stepstone.test/second"),
+            JobSource(source="arbeitnow", url="https://arbeitnow.test/1"),
+        ]
+        memory = {}
+        update_memory([job], memory)
+        later = listing("stepstone:1", "Berlin")
+        later.sources = [
+            JobSource(source="arbeitnow", url="https://arbeitnow.test/1"),
+            JobSource(source="get_in_it", url="https://get-in-it.test/1"),
+        ]
+        update_memory([later], memory)
+
+        self.assertEqual(
+            memory_source_links(memory["stepstone:1"]),
+            [
+                {"source": "stepstone", "url": "https://stepstone.test/stepstone:1"},
+                {"source": "stepstone", "url": "https://stepstone.test/second"},
+                {"source": "arbeitnow", "url": "https://arbeitnow.test/1"},
+                {"source": "get_in_it", "url": "https://get-in-it.test/1"},
+            ],
+        )
+
+    def test_merged_entries_keep_their_pairs_and_unknown_old_pairs_are_not_guessed(self):
+        canonical = {"source_urls": ["https://a.test/1"], "source_names": ["stepstone"]}
+        add_listings(canonical, ["https://b.test/1", "https://a.test/1"], ["arbeitnow", "stepstone"])
+        self.assertEqual(canonical["source_names"], ["stepstone", "arbeitnow"])
+
+        # Before pairs were kept, two StepStone URLs left a single name.
+        old = {"source_urls": ["https://a.test/1", "https://a.test/2"], "source_names": ["stepstone"]}
+        add_listings(old, ["https://b.test/1"], ["arbeitnow"])
+        self.assertEqual(old["source_urls"], ["https://a.test/1", "https://a.test/2", "https://b.test/1"])
+        self.assertEqual(old["source_names"], ["stepstone", "arbeitnow"])
 
     def test_each_run_counts_a_job_of_both_runs_as_missed_by_its_own_sources(self):
         # One job with listings from the Azure run (Arbeitnow) and the local run (Remotely).

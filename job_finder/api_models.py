@@ -110,8 +110,10 @@ class Application(BaseModel):
     applied_on: str | None = None
     response_on: str | None = None
     days_to_response: int | None = None
-    next_interview_at: str | None = None
-    last_interview_at: str | None = None
+    next_appointment_at: str | None = None
+    next_appointment_status: str | None = None
+    last_appointment_at: str | None = None
+    last_appointment_status: str | None = None
     last_event_on: str | None = None
     workflow_history: list[HistoryEvent]
     documents: list[Document]
@@ -119,6 +121,7 @@ class Application(BaseModel):
     automatic_no_response: bool
     has_response: bool
     has_interview: bool
+    has_trial_day: bool
     has_rejection: bool
     has_no_response: bool
     has_offer: bool
@@ -131,6 +134,7 @@ class ApplicationStatistics(BaseModel):
     completed: int
     responses: int
     interviews: int
+    trial_days: int
     rejections: int
     no_responses: int
     offers: int

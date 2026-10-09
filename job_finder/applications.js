@@ -1,6 +1,10 @@
 // @ts-check
   const statusLabels = {...JobFinder.statusLabels, interview: "Gespräch", offer: "Zusage"};
   const terminalStatuses = new Set(["rejected", "no_response", "offer", "withdrawn"]);
+  // Statuses whose event may carry an appointment (models.APPOINTMENT_STATUSES).
+  const appointmentStatuses = new Set(["interview", "trial_day"]);
+  const appointmentNames = {interview: ["Nächstes Gespräch", "Letztes Gespräch"],
+    trial_day: ["Nächste Hospitation/Probearbeiten", "Letzte Hospitation/Probearbeiten"]};
   /** @type {HTMLElement | null} */
   let focusedApplicationCard = null;
 
@@ -42,13 +46,32 @@
     parent.append(container);
   }
 
-  function renderStats(stats) {
-    const definitions = [
+  // How far the applications got: each stage counts the applications that reached it.
+  function renderFunnel(stats) {
+    const stages = [
       ["total", "Bewerbungen"],
-      ["open", "Offen"],
-      ["completed", "Abgeschlossen"],
       ["responses", "Antworten"],
       ["interviews", "Gespräche"],
+      ["trial_days", "Hospitation/Probearbeiten"],
+      ["offers", "Zusagen"]
+    ];
+    const funnel = element("funnel");
+    funnel.replaceChildren();
+    stages.forEach(([key, label]) => {
+      const stage = make("li", null, "funnel-stage");
+      const bar = make("span", null, "funnel-bar");
+      const share = stats.total ? stats[key] / stats.total : 0;
+      bar.style.setProperty("--share", String(share));
+      stage.append(make("span", String(stats[key]), "funnel-value"), make("span", label, "funnel-label"), bar);
+      funnel.append(stage);
+    });
+  }
+
+  function renderStats(stats) {
+    renderFunnel(stats);
+    const definitions = [
+      ["open", "Offen"],
+      ["completed", "Abgeschlossen"],
       ["rejections", "Absagen"],
       ["no_responses", "Ohne Rückmeldung"],
       ["withdrawals", "Selbst abgesagt"],
@@ -133,18 +156,18 @@
   }
 
   function appointmentField(select, initialValue = "") {
-    const label = make("label", "Gesprächstermin");
+    const label = make("label", "Termin");
     const input = document.createElement("input");
     input.type = "datetime-local";
     input.value = initialValue || "";
     label.append(input);
-    const updateVisibility = () => { label.hidden = select.value !== "interview"; };
+    const updateVisibility = () => { label.hidden = !appointmentStatuses.has(select.value); };
     select.addEventListener("change", updateVisibility);
     updateVisibility();
     return {label, input};
   }
 
-  // Status, date and interview appointment shared by the new-event and edit forms.
+  // Status, date and appointment shared by the new-event and edit forms.
   function eventFields(title, statuses, event = {}) {
     const statusLabel = make("label", title);
     const select = statusSelect(statuses, event.status);
@@ -155,7 +178,7 @@
     date.value = event.occurred_on || "";
     dateLabel.append(date);
     const appointment = appointmentField(select, event.scheduled_for);
-    const scheduledFor = () => select.value === "interview" ? appointment.input.value || null : null;
+    const scheduledFor = () => appointmentStatuses.has(select.value) ? appointment.input.value || null : null;
     return {select, date, scheduledFor, labels: [statusLabel, dateLabel, appointment.label]};
   }
 
@@ -228,12 +251,13 @@
     return item;
   }
 
-  // Cancelling an interview ends the application on the user's side, dated today.
+  // Cancelling an appointment ends the application on the user's side, dated today.
   function withdrawButton(application) {
-    const button = make("button", "Gespräch absagen", "withdraw");
+    const name = application.workflow_status === "trial_day" ? "Hospitation/Probearbeiten" : "Gespräch";
+    const button = make("button", `${name} absagen`, "withdraw");
     button.type = "button";
     button.addEventListener("click", async () => {
-      if (!window.confirm("Gespräch absagen und die Bewerbung als selbst abgesagt abschließen?")) return;
+      if (!window.confirm(`${name} absagen und die Bewerbung als selbst abgesagt abschließen?`)) return;
       await saveChange([button], "/api/status",
         {job_id: application.id, workflow_status: "withdrawn", occurred_on: localIsoDate(), scheduled_for: null},
         "Absage konnte nicht gespeichert werden");
@@ -351,10 +375,15 @@
       meta.append(make("span", `Beworben: ${formatDate(application.applied_on)}`));
       if (application.response_on) meta.append(make("span", `Erste Antwort: ${formatDate(application.response_on)}`));
       if (application.days_to_response != null) meta.append(make("span", `${application.days_to_response} Tag(e) bis zur Antwort`));
-      if (application.next_interview_at) meta.append(make("span", `Nächstes Gespräch: ${formatDateTime(application.next_interview_at)}`, "appointment"));
-      else if (application.last_interview_at) meta.append(make("span", `Letztes Gespräch: ${formatDateTime(application.last_interview_at)}`, "appointment"));
+      if (application.next_appointment_at) {
+        const [name] = appointmentNames[application.next_appointment_status || "interview"];
+        meta.append(make("span", `${name}: ${formatDateTime(application.next_appointment_at)}`, "appointment"));
+      } else if (application.last_appointment_at) {
+        const [, name] = appointmentNames[application.last_appointment_status || "interview"];
+        meta.append(make("span", `${name}: ${formatDateTime(application.last_appointment_at)}`, "appointment"));
+      }
       card.append(meta);
-      if (application.workflow_status === "interview") card.append(withdrawButton(application));
+      if (appointmentStatuses.has(application.workflow_status)) card.append(withdrawButton(application));
       if (application.review_note) card.append(make("p", application.review_note, "note"));
       const links = linksSection(application);
       if (links) card.append(links);

@@ -17,6 +17,7 @@ DECISION_LABELS = {
     "applied": "Beworben",
     "response": "Antwort erhalten",
     "interview": "Interview",
+    "trial_day": "Hospitation/Probearbeiten",
     "rejected": "Absage",
     "no_response": "Keine Rückmeldung",
     "offer": "Angebot",

@@ -18,6 +18,8 @@ class WorkflowStatus(str, Enum):
     APPLIED = "applied"
     RESPONSE = "response"
     INTERVIEW = "interview"
+    # Hospitation or trial work at the company, with an appointment like an interview.
+    TRIAL_DAY = "trial_day"
     REJECTED = "rejected"
     NO_RESPONSE = "no_response"
     OFFER = "offer"
@@ -29,6 +31,7 @@ APPLICATION_STATUSES = (
     WorkflowStatus.APPLIED.value,
     WorkflowStatus.RESPONSE.value,
     WorkflowStatus.INTERVIEW.value,
+    WorkflowStatus.TRIAL_DAY.value,
     WorkflowStatus.REJECTED.value,
     WorkflowStatus.NO_RESPONSE.value,
     WorkflowStatus.OFFER.value,
@@ -39,7 +42,10 @@ OPEN_APPLICATION_STATUSES = {
     WorkflowStatus.APPLIED.value,
     WorkflowStatus.RESPONSE.value,
     WorkflowStatus.INTERVIEW.value,
+    WorkflowStatus.TRIAL_DAY.value,
 }
+# Statuses whose event may carry an appointment (date and time).
+APPOINTMENT_STATUSES = {WorkflowStatus.INTERVIEW.value, WorkflowStatus.TRIAL_DAY.value}
 COMPLETED_APPLICATION_STATUSES = set(APPLICATION_STATUSES) - OPEN_APPLICATION_STATUSES
 
 

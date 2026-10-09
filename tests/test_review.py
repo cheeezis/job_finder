@@ -724,7 +724,7 @@ class ReviewTests(unittest.TestCase):
                 with self.subTest(route=route), urlopen(base_url + route) as response:
                     page = response.read().decode("utf-8")
                     self.assertIn(marker, page)
-                    self.assertIn('href="/app.css?v=9"', page)
+                    self.assertIn('href="/app.css?v=10"', page)
                     self.assertIn('src="/app.js"', page)
                     self.assertNotIn("<style", page)
                     self.assertNotIn("style=", page)
@@ -1131,7 +1131,7 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(overview["completed_applications"][0]["applied_on"], event_on)
         self.assertEqual(edit_result["workflow_status"], "response")
         self.assertEqual(delete_result["workflow_status"], "applied")
-        self.assertEqual(interview_overview["applications"][0]["next_interview_at"], "2099-08-25T10:30")
+        self.assertEqual(interview_overview["applications"][0]["next_appointment_at"], "2099-08-25T10:30")
         self.assertEqual(final_overview["statistics"]["open"], 1)
 
     def test_cross_origin_and_non_json_mutations_are_rejected(self):

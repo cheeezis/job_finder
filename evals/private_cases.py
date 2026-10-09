@@ -39,6 +39,7 @@ TOWARDS = {
     "applied",
     "response",
     "interview",
+    "trial_day",
     "rejected",
     "no_response",
     "offer",

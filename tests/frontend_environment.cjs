@@ -7,6 +7,7 @@ function node(tagName) {
   return {
     tagName, children: [], value: "", textContent: "", checked: false, hidden: false,
     files: [], listeners: {},
+    style: {setProperty(name, value) { this[name] = value; }},
     get options() { return this.children; },
     append(...children) {
       this.children.push(...children);

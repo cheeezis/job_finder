@@ -152,6 +152,11 @@ flowchart LR
     applied --> interview[interview<br/>Gespräch]
     response --> interview
     interview --> offer([offer<br/>Zusage])
+    response --> trial[trial day<br/>Hospitation/Probearbeiten]
+    interview --> trial
+    trial --> offer
+    trial --> rejected
+    trial --> withdrawn
     applied --> rejected([rejected<br/>Absage])
     response --> rejected
     interview --> rejected
@@ -179,12 +184,17 @@ flowchart LR
   with all places and links, across boards and runs; one decision applies to
   all. A job already decided takes over a new listing only without a new place
   or when both are fully remote.
-- **Interviews:** The card highlights the next interview; once it is over, it
-  shows "Letztes Gespräch" (last interview) until a new event is entered.
-  "Gespräch absagen" (cancel interview) ends the application as withdrawn; that
-  counts neither as a rejection nor as no response.
-- **Order of applications:** Upcoming interviews come first, the next date at
-  the top. Past interviews follow, the most recent first. The other open
+- **Interviews and trial days:** "Gespräch" (interview) and
+  "Hospitation/Probearbeiten" (trial day) take an appointment with date and
+  time. The card highlights the next one; once it is over, it shows the last one
+  until a new event is entered. "… absagen" (cancel) ends the application as
+  withdrawn; that counts neither as a rejection nor as no response. A trial day
+  keeps the application open but does not count as the company's response.
+- **Funnel:** Above the figures, the applications page shows how far the
+  applications got: applications, responses, interviews, trial days and offers,
+  each with its share of all applications.
+- **Order of applications:** Upcoming appointments come first, the next date at
+  the top. Past appointments follow, the most recent first. The other open
   applications come below, still by application date with the newest first.
 - **Links:** "Links" on the card lists every listing the finder found for the
   job, also on other boards, and the pages the agent opened for the fact sheet
@@ -192,7 +202,7 @@ flowchart LR
 - **Company and title:** If the company is missing or the title is wrong, both
   can be corrected on the card; later runs no longer overwrite them.
 - **No response:** If nothing new happens 14 days after the application, a
-  response or the last interview, the overview shows "Keine Rückmeldung" (no
+  response or the last appointment, the overview shows "Keine Rückmeldung" (no
   response); a later event reopens the application. The status can also be
   entered by hand. The response rate counts only completed applications.
 

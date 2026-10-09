@@ -364,16 +364,22 @@ export interface components {
             has_rejection: boolean;
             /** Has Response */
             has_response: boolean;
+            /** Has Trial Day */
+            has_trial_day: boolean;
             /** Has Withdrawal */
             has_withdrawal: boolean;
             /** Id */
             id: string;
+            /** Last Appointment At */
+            last_appointment_at?: string | null;
+            /** Last Appointment Status */
+            last_appointment_status?: string | null;
             /** Last Event On */
             last_event_on?: string | null;
-            /** Last Interview At */
-            last_interview_at?: string | null;
-            /** Next Interview At */
-            next_interview_at?: string | null;
+            /** Next Appointment At */
+            next_appointment_at?: string | null;
+            /** Next Appointment Status */
+            next_appointment_status?: string | null;
             /** Response On */
             response_on?: string | null;
             /** Review Note */
@@ -443,6 +449,8 @@ export interface components {
             responses: number;
             /** Total */
             total: number;
+            /** Trial Days */
+            trial_days: number;
             /** Withdrawals */
             withdrawals: number;
         };

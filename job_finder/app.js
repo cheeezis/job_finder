@@ -6,7 +6,8 @@ const JobFinder = (() => {
   const statusLabels = {
     new: "Neu", review: "Prüfen", interesting: "Interessant", inquiry: "Rückfrage offen",
     waiting: "Warteliste", ignored: "Nicht interessant", applied: "Beworben", response: "Antwort erhalten",
-    interview: "Interview", rejected: "Absage", no_response: "Keine Rückmeldung",
+    interview: "Interview", trial_day: "Hospitation/Probearbeiten", rejected: "Absage",
+    no_response: "Keine Rückmeldung",
     offer: "Angebot", withdrawn: "Selbst abgesagt", closed: "Abgeschlossen"
   };
   // Source names come from the server's registry; loadSourceLabels fills them once per page.

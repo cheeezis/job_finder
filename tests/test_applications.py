@@ -12,6 +12,8 @@ from job_finder.persistence.decisions import decided_jobs
 from job_finder.workflow.applications import (
     ARCHIVE_MARKER,
     UNAVAILABLE_REASON,
+    application_row,
+    application_statistics,
     delete_history_event,
     load_application_overview,
     record_status_change,
@@ -100,7 +102,7 @@ class ApplicationTrackingTests(unittest.TestCase):
             load_memory(self.memory_path)["job:1"]["workflow_history"][-1],
             {"status": "interview", "occurred_on": "2026-08-17", "scheduled_for": "2099-08-21T14:30"},
         )
-        self.assertEqual(overview["applications"][0]["next_interview_at"], "2099-08-21T14:30")
+        self.assertEqual(overview["applications"][0]["next_appointment_at"], "2099-08-21T14:30")
 
     def test_interview_appointment_can_be_edited_and_snapshot_is_checked(self):
         jobs = {
@@ -149,7 +151,7 @@ class ApplicationTrackingTests(unittest.TestCase):
         }
         self.save_jobs(jobs)
 
-        with self.assertRaisesRegex(ValueError, "nur beim Status Gespräch"):
+        with self.assertRaisesRegex(ValueError, "nur bei Gespräch oder Hospitation/Probearbeiten"):
             update_workflow_status(
                 "job:1",
                 "response",
@@ -254,6 +256,7 @@ class ApplicationTrackingTests(unittest.TestCase):
                 "completed": 2,
                 "responses": 2,
                 "interviews": 1,
+                "trial_days": 0,
                 "rejections": 1,
                 "no_responses": 0,
                 "offers": 1,
@@ -458,9 +461,9 @@ class ApplicationTrackingTests(unittest.TestCase):
         self.save_job({"workflow_status": "response", "workflow_history": history})
         answered = load_application_overview(self.memory_path, as_of=date(2026, 8, 10))["applications"][0]
 
-        self.assertEqual((past["next_interview_at"], past["last_interview_at"]), (None, "2026-08-07T10:00"))
-        self.assertEqual((upcoming["next_interview_at"], upcoming["last_interview_at"]), ("2099-08-07T10:00", None))
-        self.assertIsNone(answered["last_interview_at"])
+        self.assertEqual((past["next_appointment_at"], past["last_appointment_at"]), (None, "2026-08-07T10:00"))
+        self.assertEqual((upcoming["next_appointment_at"], upcoming["last_appointment_at"]), ("2099-08-07T10:00", None))
+        self.assertIsNone(answered["last_appointment_at"])
 
     def test_the_card_shows_every_listing_the_review_joins_to_it(self):
         self.save_job(
@@ -679,6 +682,27 @@ class ApplicationTrackingTests(unittest.TestCase):
         self.assertEqual(result["workflow_status"], "interview")
         self.assertEqual(application["applied_on"], "2026-08-02")
         self.assertEqual(application["days_to_response"], 2)
+
+
+class TrialDayTests(unittest.TestCase):
+    def test_a_trial_day_keeps_its_appointment_and_the_application_open_without_counting_as_a_response(self):
+        entry = {"workflow_status": "applied", "workflow_history": [{"status": "applied", "occurred_on": "2026-10-01"}]}
+        record_status_change(entry, WorkflowStatus.TRIAL_DAY, "2026-10-05", "2099-10-14T09:00")
+
+        row = application_row("job:1", entry, date(2026, 10, 6))
+        statistics = application_statistics([row])
+
+        self.assertEqual(row["workflow_status"], "trial_day")
+        self.assertEqual(
+            (row["next_appointment_at"], row["next_appointment_status"]), ("2099-10-14T09:00", "trial_day")
+        )
+        self.assertFalse(row["has_response"])
+        self.assertEqual((statistics["open"], statistics["trial_days"], statistics["interviews"]), (1, 1, 0))
+
+    def test_only_interviews_and_trial_days_take_an_appointment(self):
+        entry = {"workflow_status": "applied"}
+        with self.assertRaisesRegex(ValueError, "Hospitation/Probearbeiten"):
+            record_status_change(entry, WorkflowStatus.RESPONSE, "2026-10-05", "2099-10-14T09:00")
 
 
 def shortlisted():

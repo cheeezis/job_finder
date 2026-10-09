@@ -5,7 +5,7 @@ from pathlib import Path
 
 from psycopg import errors
 
-from job_finder.models import APPLICATION_STATUSES, OPEN_APPLICATION_STATUSES, WorkflowStatus
+from job_finder.models import APPLICATION_STATUSES, APPOINTMENT_STATUSES, OPEN_APPLICATION_STATUSES, WorkflowStatus
 from job_finder.paths import MEMORY_FILE, RECOMMENDATIONS_JSON
 from job_finder.persistence.application_documents import public_documents
 from job_finder.persistence.fact_sheets import fact_sheets
@@ -108,10 +108,10 @@ def load_application_overview(memory_path=MEMORY_FILE, as_of=None, recommendatio
     ]
     all_applications.sort(key=lambda item: item["applied_on"] or item["last_event_on"] or "", reverse=True)
     applications = [item for item in all_applications if item["workflow_status"] in OPEN_APPLICATION_STATUSES]
-    # Stable sorts prioritize upcoming interviews, then recent past interviews,
+    # Stable sorts prioritize upcoming appointments, then recent past ones,
     # preserving application-date order for other applications and tied appointments.
-    applications.sort(key=lambda item: item["last_interview_at"] or "", reverse=True)
-    applications.sort(key=lambda item: (item["next_interview_at"] is None, item["next_interview_at"] or ""))
+    applications.sort(key=lambda item: item["last_appointment_at"] or "", reverse=True)
+    applications.sort(key=lambda item: (item["next_appointment_at"] is None, item["next_appointment_at"] or ""))
     completed_applications = [
         item for item in all_applications if item["workflow_status"] not in OPEN_APPLICATION_STATUSES
     ]
@@ -260,10 +260,10 @@ def application_row(job_id, entry, as_of=None, listing_links=(), agent_links=())
         "applied_on": applied_on,
         "response_on": response_on,
         "days_to_response": days_to_response,
-        "next_interview_at": (
-            first_upcoming_interview(history) if current_status in OPEN_APPLICATION_STATUSES else None
+        **appointment_fields(
+            "next", next_appointment(history) if current_status in OPEN_APPLICATION_STATUSES else None
         ),
-        "last_interview_at": last_past_interview(history),
+        **appointment_fields("last", last_past_appointment(history)),
         "last_event_on": max(
             (event["occurred_on"] for event in history if event["occurred_on"] is not None), default=None
         ),
@@ -275,6 +275,7 @@ def application_row(job_id, entry, as_of=None, listing_links=(), agent_links=())
         ),
         "has_response": bool(statuses & RESPONSE_STATUSES),
         "has_interview": WorkflowStatus.INTERVIEW.value in statuses,
+        "has_trial_day": WorkflowStatus.TRIAL_DAY.value in statuses,
         "has_rejection": WorkflowStatus.REJECTED.value in statuses,
         "has_no_response": (
             current_status == WorkflowStatus.NO_RESPONSE.value
@@ -289,12 +290,12 @@ def waiting_since(current_status, history, statuses, applied_on):
     """Return the date since which an open application waits for news, or None.
 
     After applying without any answer the application date counts. After a
-    response or an interview the latest event or interview appointment
+    response, an interview or a trial day the latest event or appointment
     counts, so a future appointment keeps the application open.
     """
     if current_status == WorkflowStatus.APPLIED.value:
         return None if statuses & RESPONSE_STATUSES else applied_on
-    if current_status not in (WorkflowStatus.RESPONSE.value, WorkflowStatus.INTERVIEW.value):
+    if current_status not in (WorkflowStatus.RESPONSE.value, *APPOINTMENT_STATUSES):
         return None
     dates = [event["occurred_on"] for event in history if event["occurred_on"] is not None]
     dates += [event["scheduled_for"][:10] for event in history if "scheduled_for" in event]
@@ -353,38 +354,46 @@ def validated_optional_date(value):
 
 
 def validated_scheduled_for(status, value):
-    """Return one optional local interview timestamp at minute precision."""
+    """Return one optional local appointment timestamp at minute precision."""
     if value is None or value == "":
         return None
-    if status != WorkflowStatus.INTERVIEW.value:
-        raise ValueError("Ein Gesprächstermin ist nur beim Status Gespräch möglich")
+    if status not in APPOINTMENT_STATUSES:
+        raise ValueError("Ein Termin ist nur bei Gespräch oder Hospitation/Probearbeiten möglich")
     if not isinstance(value, str):
-        raise ValueError("Gesprächstermin muss als Datum und Uhrzeit angegeben werden")
+        raise ValueError("Termin muss als Datum und Uhrzeit angegeben werden")
     try:
         appointment = datetime.strptime(value, "%Y-%m-%dT%H:%M")
     except ValueError as error:
-        raise ValueError("Ungültiger Gesprächstermin; erwartet wird YYYY-MM-DDTHH:MM") from error
+        raise ValueError("Ungültiger Termin; erwartet wird YYYY-MM-DDTHH:MM") from error
     return appointment.strftime("%Y-%m-%dT%H:%M")
 
 
-def first_upcoming_interview(history):
-    """Return the next scheduled interview from a normalized history."""
+def next_appointment(history):
+    """Return the next scheduled appointment event from a normalized history, or None."""
     current = datetime.now().strftime("%Y-%m-%dT%H:%M")
-    appointments = [
-        event["scheduled_for"]
+    upcoming = [
+        event
         for event in history
-        if event["status"] == WorkflowStatus.INTERVIEW.value and event.get("scheduled_for", "") >= current
+        if event["status"] in APPOINTMENT_STATUSES and event.get("scheduled_for", "") >= current
     ]
-    return min(appointments, default=None)
+    return min(upcoming, key=lambda event: event["scheduled_for"], default=None)
 
 
-def last_past_interview(history):
-    """Return the appointment of the latest event while it is a past interview."""
+def last_past_appointment(history):
+    """Return the latest event while it is a past appointment, or None."""
     latest = history[-1] if history else {}
     appointment = latest.get("scheduled_for")
-    if latest.get("status") != WorkflowStatus.INTERVIEW.value or not appointment:
+    if latest.get("status") not in APPOINTMENT_STATUSES or not appointment:
         return None
-    return appointment if appointment < datetime.now().strftime("%Y-%m-%dT%H:%M") else None
+    return latest if appointment < datetime.now().strftime("%Y-%m-%dT%H:%M") else None
+
+
+def appointment_fields(prefix, event):
+    """Return the appointment time and status of an event under the given prefix (next or last)."""
+    return {
+        f"{prefix}_appointment_at": event["scheduled_for"] if event else None,
+        f"{prefix}_appointment_status": event["status"] if event else None,
+    }
 
 
 def first_event_date(history, statuses, not_before=None):
@@ -413,6 +422,7 @@ def application_statistics(applications):
         "completed": total - open_count,
         "responses": responses,
         "interviews": sum(item["has_interview"] for item in applications),
+        "trial_days": sum(item["has_trial_day"] for item in applications),
         "rejections": sum(item["has_rejection"] for item in applications),
         "no_responses": sum(item["has_no_response"] for item in applications),
         "offers": sum(item["has_offer"] for item in applications),

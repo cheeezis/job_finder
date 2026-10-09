@@ -294,17 +294,35 @@ dialog::backdrop { background: rgba(25, 24, 23, .58); }
 .applications-page main { width: min(1160px, calc(100% - 48px)); }
 /* Every tile draws its right and bottom line one pixel past its cell; at the
    outer edge that pixel is cut off, so any number of tiles fits the grid. */
-.stats {
+/* Funnel: one stage per step an application can reach; the bar shows its share of all. */
+.funnel {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
+  margin: 24px 0 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--ink);
+  border-bottom: 0;
+  background: var(--panel);
+}
+.funnel-stage { position: relative; display: grid; align-content: start; gap: 2px; padding: 14px 14px 18px; }
+.funnel-stage + .funnel-stage::before { content: "›"; position: absolute; top: 12px; left: -6px; color: var(--line-strong); font-size: 1.4rem; }
+.funnel-value { color: var(--ink); font-family: Georgia, "Times New Roman", serif; font-size: 2rem; font-weight: 500; }
+.funnel-label { color: var(--muted); font-size: .72rem; line-height: 1.25; }
+.funnel-bar { height: 6px; margin-top: 8px; background: var(--paper-deep); }
+.funnel-bar::after { content: ""; display: block; width: calc(var(--share, 0) * 100%); height: 100%; background: var(--accent); }
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
   gap: 0;
-  margin: 24px 0 34px;
+  margin: 0 0 34px;
   overflow: hidden;
   border: 1px solid var(--ink);
   background: rgba(255, 253, 248, .55);
 }
 
-.stat { min-height: 94px; margin: 0 -1px -1px 0; padding: 14px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.stat { display: grid; align-content: start; gap: 2px; min-height: 94px; margin: 0 -1px -1px 0; padding: 14px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .stat-value { color: var(--ink); font-family: Georgia, "Times New Roman", serif; font-size: 2rem; font-weight: 500; }
 .stat-label { color: var(--muted); font-size: .72rem; line-height: 1.25; }
 .section-header { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin: 28px 0 14px; padding-bottom: 10px; border-bottom: 2px solid var(--ink); }
@@ -358,6 +376,12 @@ button.danger:hover { background: var(--danger); color: white; }
   .choice + .choice { border-left: 0; border-top: 1px solid var(--ink); }
   .filters { grid-template-columns: 1fr; }
   .stats { grid-template-columns: repeat(2, 1fr); }
+  .funnel { grid-template-columns: 1fr; }
+  .funnel-stage + .funnel-stage::before { content: none; }
+  .funnel-stage { grid-template-columns: auto 1fr; align-items: baseline; column-gap: 10px; padding: 10px 14px; }
+  .funnel-stage + .funnel-stage { border-top: 1px solid var(--line); }
+  .funnel-value { font-size: 1.5rem; }
+  .funnel-bar { grid-column: 1 / -1; margin-top: 4px; }
   .application-header { display: block; }
   .nav-link { display: inline-block; margin-top: 12px; }
   .section-header { align-items: start; flex-direction: column; }

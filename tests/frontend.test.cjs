@@ -433,6 +433,43 @@ test("only interview cards offer cancelling, which records a self-cancelled stat
   assert.equal(payload.scheduled_for, null);
 });
 
+test("trial days have an appointment, a card line and their own cancel button", async () => {
+  const posts = [];
+  const view = applicationsPage(posts);
+  await new Promise(setImmediate);
+  const form = view.context.eventForm("job:1");
+  const [statusLabel, , appointmentLabel] = form.children;
+  const [select] = statusLabel.children;
+  select.value = "trial_day";
+  await select.emit("change");
+  assert.equal(appointmentLabel.hidden, false);
+
+  const trial = {id: "job:trial", title: "T", company: "C", active: true, workflow_status: "trial_day",
+    workflow_history: [], next_appointment_at: "2099-10-14T09:00", next_appointment_status: "trial_day"};
+  view.context.renderApplications([trial], "applications");
+  const card = view.elements.get("applications").children[0];
+  const meta = card.children.find(child => child.className === "meta");
+  assert.ok(meta.children.some(item => item.textContent.startsWith("Nächste Hospitation/Probearbeiten: ")));
+  const cancel = card.children.find(child => child.className === "withdraw");
+  assert.equal(cancel.textContent, "Hospitation/Probearbeiten absagen");
+  await cancel.emit("click");
+  assert.equal(plain(posts)[0][1].workflow_status, "withdrawn");
+});
+
+test("the funnel shows how far the applications got, each against all applications", async () => {
+  const view = page("applications", {}, async path => ({ok: true, json: async () => path === "/api/sources"
+    ? {labels: {}}
+    : {applications: [], completed_applications: [], application_statuses: [], workflow_statuses: [],
+      statistics: {total: 20, responses: 8, interviews: 4, trial_days: 2, offers: 1, open: 5, completed: 15}}}));
+  await new Promise(setImmediate);
+  const stages = view.elements.get("funnel").children;
+  assert.deepEqual(stages.map(stage => [stage.children[0].textContent, stage.children[1].textContent]),
+    [["20", "Bewerbungen"], ["8", "Antworten"], ["4", "Gespräche"], ["2", "Hospitation/Probearbeiten"], ["1", "Zusagen"]]);
+  assert.deepEqual(stages.map(stage => stage.children[2].style["--share"]), ["1", "0.4", "0.2", "0.1", "0.05"]);
+  const labels = view.elements.get("stats").children.map(tile => tile.children[1].textContent);
+  assert.ok(!labels.includes("Gespräche") && labels.includes("Offen"));
+});
+
 test("appointments are offered and sent only for interviews", async () => {
   const posts = [];
   const view = applicationsPage(posts);

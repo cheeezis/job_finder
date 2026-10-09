@@ -7,6 +7,7 @@ run. It only starts when the switch is on, a model endpoint is configured
 
 import os
 import time
+from contextlib import suppress
 from datetime import date
 
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
@@ -97,8 +98,9 @@ def run_agent(settings, profile_text, client, clock=time.monotonic, today=None, 
     With the run's basis (run_basis), every new sheet is stamped with it and
     older sheets are marked where it has changed since.
     """
-    guard = CostGuard(settings, MODEL)
     started = clock()
+    # The guard checks the time before every model call, not only between jobs.
+    guard = CostGuard(settings, MODEL, deadline=started + RUN_SECONDS, clock=clock)
     stats = {"fertig": 0, "abgebrochen": 0, "offen": 0, "veraltet": 0, "stopp": ""}
     with span("agent_run", **{"jobfinder.run_id": run_id}) as current:
         jobs, sheets = load_review_jobs(), fact_sheets()
@@ -131,7 +133,9 @@ def run_agent(settings, profile_text, client, clock=time.monotonic, today=None, 
                 break
             stats[outcome] += 1
             if job.get("fact_sheet_rerun"):
-                clear_rerun_request(job["id"])
+                # A job merged into another one meanwhile took its request along.
+                with suppress(KeyError):
+                    clear_rerun_request(job["id"])
         stats["heute_eur"], stats["monat_eur"] = spent_today_and_this_month()
         annotate(
             current,
@@ -201,7 +205,12 @@ def clear_rerun_request(job_id):
 
 
 def shown_by_default(job):
-    """Apply the review's default filters (review.js): no international or junior-hybrid jobs."""
+    """Apply the review's default filters (review.js): no international or junior-hybrid jobs.
+
+    As in the review, a job the user added by hand passes both filters.
+    """
+    if any(link.get("source") == "manual" for link in job.get("source_links") or []):
+        return True
     junior_hybrid = str(job.get("location_precheck") or "").startswith("Junior-Hybrid")
     return not job.get("international") and not junior_hybrid
 

@@ -35,8 +35,13 @@ Option 3, in layers that do not depend on each other:
 ## Consequences
 
 - The worst case of a bug is bounded by the daily limit plus at most one call.
-- Every call writes to the ledger first, so costs are known per job and per day
-  and show up in the logs and the operations workbook.
+- Every answered call is booked in the ledger right away, so costs are known per
+  job and per day and show up in the logs and the operations workbook. The SDK
+  repeats no request on its own; a call whose answer is lost (timeout, lost
+  connection, server error) is booked at the job maximum before the run stops,
+  as it may have been billed.
+- The run's time budget is checked before every model call and before waiting
+  out a throttle, not only between jobs.
 - A reached limit stops the agent for the run; the remaining jobs wait for the
   next run, and Discord reports it.
 - Prices are maintained in the code (`pricing.py`); a model change needs a price

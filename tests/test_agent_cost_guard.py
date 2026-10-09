@@ -39,6 +39,18 @@ class CostGuardTests(unittest.TestCase):
         self.spent = self.enterContext(patch.object(cost_guard, "spent_today_and_this_month", return_value=(0, 0)))
         self.record = self.enterContext(patch.object(cost_guard, "record_model_call"))
 
+    def test_no_model_call_after_the_run_deadline(self):
+        now = [0]
+        guard = CostGuard(ENABLED, "gpt-5-mini", deadline=60, clock=lambda: now[0])
+        guard.start_job("job:1")
+        guard.before_model_call()
+        self.assertEqual(guard.seconds_left(), 60)
+
+        now[0] = 60
+        with self.assertRaisesRegex(AgentStopped, "Zeitbudget"):
+            guard.before_model_call()
+        self.assertIsNone(CostGuard(ENABLED, "gpt-5-mini").seconds_left())
+
     def test_no_call_without_switch_price_or_readable_ledger(self):
         for guard, message in (
             (CostGuard(agent_settings({}), "gpt-5-mini"), "Agent aus: Abschnitt agent fehlt"),

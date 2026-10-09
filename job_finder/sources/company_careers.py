@@ -6,8 +6,18 @@ from urllib.parse import urljoin, urlsplit
 
 from job_finder.http import fetch_text
 from job_finder.paths import cache_file
-from job_finder.sources.common import canonical_detail_url, fetch_cached_details, job_from_schema_posting, source_job_id
+from job_finder.sources.common import (
+    canonical_detail_url,
+    collect_segments,
+    ensure_partial_failure,
+    fetch_cached_details,
+    job_from_schema_posting,
+    source_job_id,
+)
 from job_finder.structured_data import extract_json_ld_job_posting
+
+# The career pages advertise their own page count; this bounds the requests if it is wrong.
+MAX_LIST_PAGES = 20
 
 
 class CareerPage:
@@ -43,12 +53,26 @@ class PaginatedCareerPage(CareerPage):
         """Collect unique detail links across all advertised pages."""
         first_html = fetch_text(self.list_url)
         page_pattern = re.escape(urlsplit(self.list_url).path) + r"page/(\d+)/"
-        last_page = max((int(value) for value in re.findall(page_pattern, first_html)), default=1)
-        links = dict.fromkeys(extract_links(first_html, self.list_url, self.link_pattern))
-        for page in range(2, last_page + 1):
-            html = fetch_text(f"{self.list_url}page/{page}/")
+        last_page = bounded_last_page(
+            max((int(value) for value in re.findall(page_pattern, first_html)), default=1), self.SOURCE_NAME
+        )
+        links = {}
+
+        def collect(page):
+            html = first_html if page == 1 else fetch_text(f"{self.list_url}page/{page}/")
             links.update(dict.fromkeys(extract_links(html, self.list_url, self.link_pattern)))
+
+        collect_segments(list(range(1, last_page + 1)), collect, self.SOURCE_NAME)
         return list(links)
+
+
+def bounded_last_page(last_page, label):
+    """Return the advertised last page, at most MAX_LIST_PAGES; a cut makes the result partial."""
+    if last_page <= MAX_LIST_PAGES:
+        return last_page
+    ensure_partial_failure()
+    print(f"WARNUNG {label}: {last_page} Seiten angegeben, nur {MAX_LIST_PAGES} abgerufen")
+    return MAX_LIST_PAGES
 
 
 def fetch_company_jobs(source_name, company, links, cache_path, now=None, parser=None):

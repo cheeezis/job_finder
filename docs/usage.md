@@ -55,8 +55,11 @@ stays with the user.
 
 Startup Jobs runs only with `STARTUP_JOBS_API_KEY`. When a source returns only
 partial results, for example because of rate limits, the run reports it in the
-console, the log and Discord. When more than half of the sources are unusable,
-it stops and leaves the previous state unchanged.
+console, the log and Discord. A malformed record or a failed search or page
+costs only itself: the source keeps the rest and counts as partial. After HTTP
+403 or 429 it requests nothing more in that run. Career pages are read up to 20
+pages and an Arbeitsagentur search up to 40. When more than half of the sources
+are unusable, the run stops and leaves the previous state unchanged.
 
 ### Fair fetching
 

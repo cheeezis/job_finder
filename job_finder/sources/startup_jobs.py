@@ -6,6 +6,8 @@ from urllib.parse import urlencode
 from job_finder.http import fetch_json
 from job_finder.models import Job, JobSource, WorkMode
 from job_finder.sources.common import (
+    collect_segments,
+    convert_records,
     normalize_employment_type,
     numeric_salary,
     parse_published_date,
@@ -40,14 +42,18 @@ def fetch_jobs(api_key=None):
     if not key:
         raise ValueError(f"{API_KEY_ENV} fehlt")
     headers = {"Accept": "application/json", "Authorization": f"Bearer {key}"}
-    return [job_from_record(record) for record in collect_records(headers) if available_from_germany(record)]
+
+    def convert(record):
+        return job_from_record(record) if available_from_germany(record) else None
+
+    return convert_records(collect_records(headers), convert, "Startup Jobs")
 
 
 def collect_records(headers, scopes=SEARCH_SCOPES):
-    """Fetch bounded cursor pages and merge overlaps between both scopes."""
+    """Fetch bounded cursor pages and merge overlaps between both scopes; each scope is one segment."""
     records = {}
 
-    for scope in scopes:
+    def collect(scope):
         cursor = None
         for _page in range(MAX_PAGES_PER_SCOPE):
             payload = fetch_json(build_search_url(scope, cursor), headers=headers)
@@ -60,6 +66,7 @@ def collect_records(headers, scopes=SEARCH_SCOPES):
             if not payload.get("has_more") or cursor is None:
                 break
 
+    collect_segments(list(scopes), collect, "Startup Jobs")
     return list(records.values())
 
 

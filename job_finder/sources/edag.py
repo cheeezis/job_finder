@@ -7,8 +7,8 @@ from job_finder.http import fetch_text
 from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource
 from job_finder.paths import cache_file
-from job_finder.sources.common import normalize_employment_type, source_job_id, utc_now
-from job_finder.sources.company_careers import extract_links, fetch_company_jobs, identifier_from_url
+from job_finder.sources.common import collect_segments, normalize_employment_type, source_job_id, utc_now
+from job_finder.sources.company_careers import bounded_last_page, extract_links, fetch_company_jobs, identifier_from_url
 from job_finder.text import compact_text, html_to_text, normalize_text
 
 SOURCE_NAME = "edag"
@@ -29,12 +29,14 @@ def collect_links():
     """Collect unique local job links across EDAG's advertised result pages."""
     first_html = fetch_text(LIST_URL)
     pages = [int(value) for value in re.findall(r"currentPage(?:%5D|\])=(\d+)", first_html)]
-    last_page = max(pages, default=1)
+    last_page = bounded_last_page(max(pages, default=1), "EDAG")
     links = {}
 
-    for page in range(1, last_page + 1):
+    def collect(page):
         html = first_html if page == 1 else fetch_text(f"{LIST_URL}?tx_successfactors_view%5BcurrentPage%5D={page}")
         links.update(dict.fromkeys(extract_local_links(html)))
+
+    collect_segments(list(range(1, last_page + 1)), collect, "EDAG")
     return list(links)
 
 

@@ -7,6 +7,8 @@ from urllib.parse import urlencode
 from job_finder.http import fetch_json
 from job_finder.models import Job, JobSource, WorkMode
 from job_finder.sources.common import (
+    collect_segments,
+    convert_records,
     integer,
     normalize_employment_type,
     numeric_salary,
@@ -38,19 +40,23 @@ REQUEST_PAUSE_SECONDS = 0.25
 
 def fetch_jobs():
     """Return current entry-level remote jobs available from Germany."""
-    return [job_from_record(record) for record in collect_records()]
+    return convert_records(collect_records(), job_from_record, "Himalayas")
 
 
 def collect_records(search_terms=SEARCH_TERMS):
-    """Fetch bounded filtered searches and remove cross-query duplicates."""
-    records = {}
-    first_request = True
+    """Fetch bounded filtered searches and remove cross-query duplicates.
 
-    for search_term in search_terms:
+    Each search term is one segment: a failed search leaves the others and
+    the pages it already returned.
+    """
+    records = {}
+    requests = []
+
+    def collect(search_term):
         for page in range(1, MAX_PAGES_PER_SEARCH + 1):
-            if not first_request:
+            if requests:
                 time.sleep(REQUEST_PAUSE_SECONDS)
-            first_request = False
+            requests.append(page)
             payload = fetch_json(build_search_url(search_term, page))
             page_records = payload.get("jobs") or []
             for record in page_records:
@@ -61,6 +67,7 @@ def collect_records(search_terms=SEARCH_TERMS):
             if page_is_complete(payload, page_records):
                 break
 
+    collect_segments(list(search_terms), collect, "Himalayas")
     return list(records.values())
 
 

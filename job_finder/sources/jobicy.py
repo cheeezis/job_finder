@@ -6,6 +6,8 @@ from urllib.parse import urlencode
 from job_finder.http import fetch_json
 from job_finder.models import Job, JobSource, WorkMode
 from job_finder.sources.common import (
+    collect_segments,
+    convert_records,
     normalize_employment_type,
     numeric_salary,
     parse_published_date,
@@ -31,24 +33,29 @@ REQUEST_PAUSE_SECONDS = 0.25
 
 def fetch_jobs():
     """Return recent Germany-focused and international remote IT jobs."""
-    return [
-        job_from_record(record) for record in collect_records() if remote_region_allows_germany(record.get("jobGeo"))
-    ]
+
+    def convert(record):
+        return job_from_record(record) if remote_region_allows_germany(record.get("jobGeo")) else None
+
+    return convert_records(collect_records(), convert, "Jobicy")
 
 
 def collect_records(scopes=SEARCH_SCOPES):
-    """Fetch a bounded set of official feeds and remove their overlaps."""
+    """Fetch a bounded set of official feeds and remove their overlaps; each feed is one segment."""
     records = {}
+    requests = []
 
-    for index, scope in enumerate(scopes):
-        if index:
+    def collect(scope):
+        if requests:
             time.sleep(REQUEST_PAUSE_SECONDS)
+        requests.append(scope)
         payload = fetch_json(build_search_url(scope))
         for record in payload.get("jobs") or []:
             identifier = record_identifier(record)
             if identifier:
                 records.setdefault(identifier, record)
 
+    collect_segments(list(scopes), collect, "Jobicy")
     return list(records.values())
 
 

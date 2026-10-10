@@ -14,6 +14,7 @@ from job_finder.sources.common import (
     numeric_salary,
     parse_published_date,
     source_job_id,
+    unique_records,
     utc_now,
 )
 from job_finder.text import html_to_text
@@ -49,7 +50,7 @@ def collect_records(search_terms=SEARCH_TERMS):
     Each search term is one segment: a failed search leaves the others and
     the pages it already returned.
     """
-    records = {}
+    records = []
     requests = []
 
     def collect(search_term):
@@ -59,16 +60,13 @@ def collect_records(search_terms=SEARCH_TERMS):
             requests.append(page)
             payload = fetch_json(build_search_url(search_term, page))
             page_records = payload.get("jobs") or []
-            for record in page_records:
-                identifier = record_identifier(record)
-                if identifier:
-                    records.setdefault(identifier, record)
+            records.extend(page_records)
 
             if page_is_complete(payload, page_records):
                 break
 
-    collect_segments(list(search_terms), collect, "Himalayas")
-    return list(records.values())
+    collect_segments(list(search_terms), collect, "Himalayas", has_results=lambda: bool(records))
+    return unique_records(records, record_identifier)
 
 
 def build_search_url(search_term, page=1):

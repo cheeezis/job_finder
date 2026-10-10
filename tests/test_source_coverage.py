@@ -28,6 +28,56 @@ def run(function, *args, **kwargs):
 
 
 class RecordIsolationTests(unittest.TestCase):
+    def test_api_collection_preserves_valid_records_among_malformed_records(self):
+        cases = [
+            (himalayas, {"jobs": [himalayas_record("one"), "not a record", {}]}, {}),
+            (
+                jobicy,
+                {
+                    "jobs": [
+                        {"id": 1, "url": "https://example.test/one", "jobTitle": "Junior", "companyName": "Example"},
+                        None,
+                        {},
+                    ]
+                },
+                {},
+            ),
+            (
+                startup_jobs,
+                {
+                    "data": [
+                        {"id": 1, "url": "https://example.test/one", "title": "Junior", "company": {"name": "Example"}},
+                        False,
+                        {},
+                    ]
+                },
+                {"api_key": "test-only"},
+            ),
+        ]
+        for source, payload, kwargs in cases:
+            with (
+                self.subTest(source=source.SOURCE_NAME),
+                patch.object(source, "fetch_json", return_value=payload),
+                patch("time.sleep"),
+            ):
+                jobs, diagnostics = run(source.fetch_jobs, **kwargs)
+                self.assertEqual(len(jobs), 1)
+                self.assertGreaterEqual(diagnostics.failed_segments, 1)
+
+    def test_api_collection_without_valid_records_still_fails(self):
+        for source, field, kwargs in [
+            (himalayas, "jobs", {}),
+            (jobicy, "jobs", {}),
+            (startup_jobs, "data", {"api_key": "test-only"}),
+        ]:
+            with (
+                self.subTest(source=source.SOURCE_NAME),
+                patch.object(source, "fetch_json", return_value={field: [{}]}),
+                patch("time.sleep"),
+                self.assertRaises(ValueError),
+            ):
+                run(source.fetch_jobs, **kwargs)
+
     def test_a_malformed_record_is_skipped_and_makes_the_source_partial(self):
         records = [himalayas_record("one"), himalayas_record("broken", companyName=""), "not a record"]
 
@@ -54,6 +104,56 @@ class RecordIsolationTests(unittest.TestCase):
 
 
 class SegmentTests(unittest.TestCase):
+    def test_every_scope_failing_later_preserves_earlier_valid_pages(self):
+        cases = [
+            (
+                himalayas,
+                {"jobs": [himalayas_record("one")], "offset": 0, "limit": 1, "totalCount": 2},
+                {},
+                len(himalayas.SEARCH_TERMS),
+            ),
+            (
+                startup_jobs,
+                {
+                    "data": [
+                        {"id": 1, "url": "https://example.test/one", "title": "Junior", "company": {"name": "Example"}}
+                    ],
+                    "has_more": True,
+                    "next_cursor": "next",
+                },
+                {"api_key": "test-only"},
+                len(startup_jobs.SEARCH_SCOPES),
+            ),
+        ]
+        for source, first_page, kwargs, scope_count in cases:
+            pages = [
+                value for _scope in range(scope_count) for value in (first_page, HttpStatusError(500, source.API_URL))
+            ]
+            with (
+                self.subTest(source=source.SOURCE_NAME),
+                patch.object(source, "fetch_json", side_effect=pages),
+                patch("time.sleep"),
+            ):
+                jobs, diagnostics = run(source.fetch_jobs, **kwargs)
+                self.assertEqual(len(jobs), 1)
+                self.assertEqual((diagnostics.failed_segments, diagnostics.total_segments), (scope_count, scope_count))
+
+    def test_a_later_page_block_preserves_results_and_stops_remaining_scopes(self):
+        first_page = {"jobs": [himalayas_record("one")], "offset": 0, "limit": 1, "totalCount": 2}
+        with (
+            patch.object(
+                himalayas, "fetch_json", side_effect=[first_page, HttpStatusError(429, himalayas.API_URL)]
+            ) as fetch,
+            patch("time.sleep"),
+        ):
+            jobs, diagnostics = run(himalayas.fetch_jobs)
+        self.assertEqual(len(jobs), 1)
+        self.assertEqual(fetch.call_count, 2)
+        self.assertEqual(
+            (diagnostics.failed_segments, diagnostics.total_segments),
+            (len(himalayas.SEARCH_TERMS), len(himalayas.SEARCH_TERMS)),
+        )
+
     def test_a_failed_search_keeps_the_results_of_the_others(self):
         pages = [
             {"offset": 0, "limit": 1, "totalCount": 1, "jobs": [{"guid": "one"}]},

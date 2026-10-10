@@ -13,6 +13,7 @@ from job_finder.sources.common import (
     parse_published_date,
     remote_region_allows_germany,
     source_job_id,
+    unique_records,
     utc_now,
 )
 from job_finder.text import html_to_text
@@ -42,7 +43,7 @@ def fetch_jobs():
 
 def collect_records(scopes=SEARCH_SCOPES):
     """Fetch a bounded set of official feeds and remove their overlaps; each feed is one segment."""
-    records = {}
+    records = []
     requests = []
 
     def collect(scope):
@@ -50,13 +51,10 @@ def collect_records(scopes=SEARCH_SCOPES):
             time.sleep(REQUEST_PAUSE_SECONDS)
         requests.append(scope)
         payload = fetch_json(build_search_url(scope))
-        for record in payload.get("jobs") or []:
-            identifier = record_identifier(record)
-            if identifier:
-                records.setdefault(identifier, record)
+        records.extend(payload.get("jobs") or [])
 
     collect_segments(list(scopes), collect, "Jobicy")
-    return list(records.values())
+    return unique_records(records, record_identifier)
 
 
 def build_search_url(scope):

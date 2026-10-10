@@ -11,6 +11,7 @@ from job_finder.models import Job, JobSource, WorkMode
 from job_finder.paths import cache_file
 from job_finder.sources.common import (
     canonical_detail_url,
+    detail_is_fresh,
     enrich_cached_candidates,
     integer,
     load_detail_cache,
@@ -45,18 +46,19 @@ REMOTE_MODES = {"completely": (WorkMode.REMOTE, 100), "partly": (WorkMode.HYBRID
 
 def fetch_jobs(cache_path=CACHE_FILE, now=None):
     """Return cached details or lightweight records for the first prefilter."""
-    return jobs_from_records(collect_records(), cache_path)
+    return jobs_from_records(collect_records(), cache_path, now=now)
 
 
-def jobs_from_records(records, cache_path):
-    """Combine current search summaries with cached details by canonical URL."""
+def jobs_from_records(records, cache_path, now=None):
+    """Combine current search summaries with fresh cached details by canonical URL."""
     cache = load_detail_cache(cache_path)
     jobs = []
     for record in records:
         url = detail_url(record.get("link", ""))
         if url:
             summary = summary_job_from_record(record)
-            jobs.append(with_current_summary(cache[url], summary) if url in cache else summary)
+            cached = cache.get(url)
+            jobs.append(with_current_summary(cached, summary) if detail_is_fresh(cached, now) else summary)
     return jobs
 
 

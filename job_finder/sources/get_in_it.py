@@ -117,9 +117,21 @@ def api_names(items):
 
 def enrich_candidate_jobs(jobs, candidate_ids, cache_path=CACHE_FILE, now=None):
     """Fetch details only for prefiltered candidates without a fresh cache."""
-    return enrich_cached_candidates(
+    enriched = enrich_cached_candidates(
         jobs, candidate_ids, cache_path, SOURCE_NAME, "get-in-IT", lambda job, url: fetch_job(url), now=now
     )
+    for job in jobs:
+        # Summaries have no detail-fetch timestamp. Their home-office flag
+        # admits candidates to the prefilter, but proves no remote percentage.
+        if (
+            job.primary_source
+            and job.primary_source.source == SOURCE_NAME
+            and job.fetched_at is None
+            and job.work_mode is WorkMode.REMOTE
+        ):
+            job.work_mode = WorkMode.UNKNOWN
+            job.remote_percentage = None
+    return enriched
 
 
 def build_api_searches():

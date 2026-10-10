@@ -3,7 +3,7 @@
 import tempfile
 import unittest
 from copy import deepcopy
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -54,6 +54,37 @@ class StudySmarterTests(unittest.TestCase):
             },
         )
         self.assertTrue(all(search.get("is_remote_position") == "completely" for search in searches[1:]))
+
+    def test_detail_freshness_is_applied_before_candidate_selection(self):
+        now = datetime(2026, 8, 27, 12, tzinfo=UTC)
+        record = {
+            "id": 12345678,
+            "link": self.JOB_URL,
+            "title": "Junior Python Developer",
+            "company_name": "Example GmbH",
+            "locations": ["Fulda"],
+        }
+        for age, fresh in [
+            (timedelta(days=7, seconds=-1), True),
+            (timedelta(days=7), False),
+            (timedelta(days=8), False),
+            (None, False),
+        ]:
+            with self.subTest(age=age), tempfile.TemporaryDirectory() as directory:
+                cached = studysmarter.enrich_summary_job(studysmarter.summary_job_from_record(record), self.JOB_HTML)
+                cached.fetched_at = now - age if age is not None else None
+                cached.description_clean = "Python. Mindestens 12 Jahre Berufserfahrung erforderlich."
+                cache_path = Path(directory) / "studysmarter.json"
+                save_detail_cache(cache_path, {self.JOB_URL: cached})
+                with (
+                    patch.object(studysmarter, "collect_records", return_value=[record]),
+                    patch.object(studysmarter, "fetch_text", return_value=self.JOB_HTML) as fetch,
+                ):
+                    jobs = studysmarter.fetch_jobs(cache_path, now=now)
+                    self.assertEqual(jobs[0].description_clean == cached.description_clean, fresh)
+                    enriched = studysmarter.enrich_candidate_jobs(jobs, {jobs[0].id}, cache_path, now=now)
+                self.assertEqual(enriched, 0 if fresh else 1)
+                self.assertEqual(fetch.call_count, 0 if fresh else 1)
 
     def test_current_search_metadata_replaces_stale_cached_prefilter_fields(self):
         record = {
@@ -158,7 +189,7 @@ class StudySmarterTests(unittest.TestCase):
                 cache_path = Path(directory) / "studysmarter.json"
                 save_detail_cache(cache_path, {self.JOB_URL: cached})
                 with patch.object(studysmarter, "fetch_text") as fetch:
-                    jobs = studysmarter.jobs_from_records([record], cache_path)
+                    jobs = studysmarter.jobs_from_records([record], cache_path, now=datetime(2026, 8, 27, tzinfo=UTC))
                     enriched = studysmarter.enrich_candidate_jobs(
                         jobs, {jobs[0].id}, cache_path, now=datetime(2026, 8, 27, tzinfo=UTC)
                     )

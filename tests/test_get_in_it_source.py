@@ -6,9 +6,10 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
+from job_finder.matching.scoring import score_job
 from job_finder.models import Job, JobSource, WorkflowStatus, WorkMode
 from job_finder.sources import get_in_it
-from job_finder.sources.common import load_detail_cache, save_detail_cache
+from job_finder.sources.common import collecting_diagnostics, load_detail_cache, save_detail_cache
 
 API_RECORD = {
     "id": 311970,
@@ -22,6 +23,45 @@ API_RECORD = {
 
 
 class GetInItSourceTests(unittest.TestCase):
+    def test_home_office_hint_reaches_enrichment_but_failed_detail_becomes_unknown(self):
+        record = {
+            "id": 1,
+            "title": "Junior Python Developer",
+            "url": "/jobsuche/p1",
+            "homeOffice": True,
+            "locations": [{"name": "Hamburg"}],
+            "company": {"title": "Example GmbH"},
+        }
+        now = datetime(2026, 9, 8, 12, tzinfo=UTC)
+        with tempfile.TemporaryDirectory() as directory:
+            cache_path = Path(directory) / "get_in_it.json"
+            jobs = get_in_it.jobs_from_records([record], cache_path, now=now)
+            self.assertEqual(score_job(jobs[0])["filter_status"], "included")
+            with (
+                patch.object(get_in_it, "fetch_job", side_effect=TimeoutError("test timeout")) as fetch,
+                collecting_diagnostics() as diagnostics,
+            ):
+                enriched = get_in_it.enrich_candidate_jobs(jobs, {jobs[0].id}, cache_path, now=now)
+            self.assertEqual(enriched, 0)
+            self.assertIs(jobs[0].work_mode, WorkMode.UNKNOWN)
+            self.assertIsNone(jobs[0].remote_percentage)
+            self.assertEqual(diagnostics.failed_candidates, 1)
+            fetch.assert_called_once()
+
+    def test_successful_detail_preserves_confirmed_remote_percentage(self):
+        now = datetime(2026, 9, 8, 12, tzinfo=UTC)
+        detailed = self.detailed_job(now)
+        detailed.work_mode = WorkMode.REMOTE
+        detailed.remote_percentage = 100
+        with tempfile.TemporaryDirectory() as directory:
+            cache_path = Path(directory) / "get_in_it.json"
+            jobs = get_in_it.jobs_from_records([API_RECORD], cache_path, now=now)
+            with patch.object(get_in_it, "fetch_job", return_value=detailed):
+                enriched = get_in_it.enrich_candidate_jobs(jobs, {jobs[0].id}, cache_path, now=now)
+        self.assertEqual(enriched, 1)
+        self.assertIs(jobs[0].work_mode, WorkMode.REMOTE)
+        self.assertEqual(jobs[0].remote_percentage, 100)
+
     def detailed_job(self, fetched_at):
         return Job(
             id="get_in_it:311970",

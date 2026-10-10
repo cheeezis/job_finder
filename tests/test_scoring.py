@@ -359,6 +359,29 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(result["filter_status"], "excluded")
         self.assertIn("4 Jahre", result["reasons"][0])
 
+    def test_high_required_years_are_excluded(self):
+        for requirement, years in [
+            ("Mindestens 10 Jahre Berufserfahrung erforderlich.", 10),
+            ("Mindestens 11 Jahre Berufserfahrung erforderlich.", 11),
+            ("12 years of professional experience required.", 12),
+            ("30+ years of professional experience required.", 30),
+            ("11 bis 12 Jahre Berufserfahrung erforderlich.", 12),
+            ("Mehr als 10 Jahre Berufserfahrung erforderlich.", 11),
+        ]:
+            with self.subTest(requirement=requirement):
+                result = score_job(make_job(description=f"Python APIs. {requirement}"))
+                self.assertEqual(result["filter_status"], "excluded")
+                self.assertIn(f"{years} Jahre", result["reasons"][0])
+
+    def test_optional_high_years_and_company_age_do_not_exclude_a_junior(self):
+        for description in [
+            "Python APIs. 30 Jahre Berufserfahrung sind wuenschenswert.",
+            "Wir sind seit 30 Jahren am Markt. Du entwickelst Python APIs.",
+        ]:
+            with self.subTest(description=description):
+                result = score_job(make_job(title="Junior Python Developer", description=description))
+                self.assertEqual(result["filter_status"], "included")
+
     def test_three_required_years_remain_with_low_experience_score(self):
         result = score_job(
             make_job(title="Junior Python Developer", description="Python APIs. 3 Jahre Berufserfahrung erforderlich.")

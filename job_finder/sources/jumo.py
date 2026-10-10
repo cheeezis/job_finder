@@ -5,7 +5,7 @@ import re
 from html import unescape
 from urllib.parse import urlencode
 
-from job_finder.http import response_text, session
+from job_finder.http import session, session_text
 from job_finder.paths import cache_file
 from job_finder.sources.company_careers import fetch_company_jobs
 
@@ -63,5 +63,4 @@ def extract_job_ids(html):
 
 def _session_text(client, url, form=None):
     """GET, or POST form fields, through the JUMO session and return UTF-8 text."""
-    response = client.get(url) if form is None else client.post(url, data=form)
-    return response_text(response)
+    return session_text(client, url, form)

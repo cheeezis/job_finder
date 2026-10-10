@@ -1,12 +1,10 @@
 """User-supplied job links persisted as a small local source."""
 
-import ipaddress
 import re
-import socket
 from html.parser import HTMLParser
 from urllib.parse import urlsplit
 
-from job_finder.http import fetch_text_with_final_url
+from job_finder.http import fetch_text_with_final_url, validate_public_url
 from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource
 from job_finder.paths import MANUAL_CACHE_FILE
@@ -198,25 +196,6 @@ def first_labeled_value(lines, labels):
             if re.match(rf"^{re.escape(label)}\s*:\s*(.+)$", normalized):
                 return line[line.find(":") + 1 :].strip()
     return ""
-
-
-def validate_public_url(value):
-    """Accept HTTP(S) URLs only when every resolved address is public."""
-    text = str(value or "").strip()
-    parts = urlsplit(text)
-    if parts.scheme not in {"http", "https"} or not parts.hostname:
-        raise ValueError("Bitte eine vollständige http(s)-URL eingeben")
-    hostname = parts.hostname.casefold()
-    if hostname == "localhost" or hostname.endswith(".local"):
-        raise ValueError("Lokale Adressen können nicht importiert werden")
-    try:
-        addresses = {item[4][0] for item in socket.getaddrinfo(hostname, parts.port)}
-    except socket.gaierror as error:
-        raise ValueError("Adresse der Stellenanzeige konnte nicht aufgelöst werden") from error
-    if not addresses or any(not ipaddress.ip_address(item).is_global for item in addresses):
-        raise ValueError("Private Netzwerkadressen können nicht importiert werden")
-    # Preserve functional query parameters; canonicalization is only a cache concern.
-    return parts._replace(fragment="").geturl()
 
 
 class VisibleJobParser(HTMLParser):

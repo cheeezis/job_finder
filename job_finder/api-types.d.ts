@@ -33,7 +33,7 @@ export interface paths {
         };
         /**
          * Application Document
-         * @description Return one document of a job's application as a download; 404 for anything else.
+         * @description Download a referenced document; distinguish absence, unsafe access and integrity failures.
          */
         get: operations["application_document_api_application_document_get"];
         put?: never;

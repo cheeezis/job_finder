@@ -91,20 +91,35 @@ def description_is_missing(description):
 
 
 def extract_required_years(text):
-    """Return the highest explicit experience requirement up to ten years."""
+    """Return the highest positive explicit experience requirement."""
     years = []
-    for match in required_matches(text, YEAR_RANGE_PATTERNS):
+    for match in required_year_matches(text, YEAR_RANGE_PATTERNS):
         lower, upper = match.groups()[-2:]
         years.extend([int(lower), int(upper)])
-    for match in required_matches(text, SINGLE_YEAR_PATTERNS):
+    for match in required_year_matches(text, SINGLE_YEAR_PATTERNS):
         qualifier, value = match.groups()[-2:]
         year = int(value)
         if qualifier and qualifier.strip() in MORE_THAN_QUALIFIERS:
             year += 1
         years.append(year)
-    years.extend(int(match.group(1)) for match in required_matches(text, [PLUS_YEARS_PATTERN]))
-    plausible = [year for year in years if 0 < year <= 10]
+    years.extend(int(match.group(1)) for match in required_year_matches(text, [PLUS_YEARS_PATTERN]))
+    plausible = [year for year in years if year > 0]
     return max(plausible, default=0)
+
+
+def required_year_matches(text, patterns):
+    """Keep numeric requirements apart from explicit descriptions of the employer's team."""
+    for match in required_matches(text, patterns):
+        start, end = match_context(text, match, context_size=80)
+        clause = text[start:end]
+        employer_subject = re.search(
+            r"\b(?:unser(?:e[smnr]?)?|our)\s+(?:team|unternehmen|firma|company)\s+"
+            r"(?:umfasst|hat|haben|bringt|bringen|has|have|includes)\b",
+            clause,
+        )
+        if employer_subject and not contains_any(clause, APPLICANT_SUBJECT_PHRASES):
+            continue
+        yield match
 
 
 def experience_is_optional(text):

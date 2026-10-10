@@ -65,6 +65,8 @@ def main():
                     "job_state",
                     "workflow_history",
                     "application_documents",
+                    "job_listings",
+                    "job_links",
                     "jobs",
                     "recommendations",
                     "notifications",
@@ -72,6 +74,7 @@ def main():
                     "source_cache",
                     "agent_usage",
                     "agent_fact_sheets",
+                    "runs",
                 )
             }
     print(json.dumps(result, indent=2, ensure_ascii=False))

@@ -625,6 +625,7 @@ class RunTracingTests(unittest.TestCase):
             patch.object(run_finder, "worker_lock", return_value=nullcontext()),
             patch.object(run_finder, "RunLog", return_value=run_log),
             patch.object(run_finder, "run_pipeline", side_effect=RuntimeError("kaputt")),
+            patch.object(run_finder, "reconcile_runs") as reconciled,
             patch.object(run_finder, "start_run") as started,
             patch.object(run_finder, "finish_run") as finished,
             self.assertRaises(RuntimeError),
@@ -632,5 +633,48 @@ class RunTracingTests(unittest.TestCase):
             run_finder.main()
 
         tracing.shutdown.assert_called_once_with()
+        reconciled.assert_called_once_with()
         self.assertEqual(started.call_args.args[0], "run-1")
         finished.assert_called_once_with("run-1", "failed")
+
+    def test_reconciliation_holds_the_lock_and_precedes_starting_a_run(self):
+        lock = Mock()
+        lock.__enter__ = Mock()
+        lock.__exit__ = Mock(return_value=False)
+        calls = Mock()
+        calls.attach_mock(lock.__enter__, "acquired")
+        run_log = Mock(run_id="synthetic-run")
+        run_log.__enter__ = Mock(return_value=run_log)
+        run_log.__exit__ = Mock(return_value=False)
+        with (
+            patch.object(run_finder, "parse_args", return_value=SimpleNamespace(exclude_sources="", only_sources=None)),
+            patch.object(run_finder, "start_tracing", return_value=None),
+            patch.object(run_finder, "worker_lock", return_value=lock),
+            patch.object(run_finder, "RunLog", return_value=run_log),
+            patch.object(run_finder, "run_pipeline") as pipeline,
+            patch.object(run_finder, "reconcile_runs") as reconciled,
+            patch.object(run_finder, "start_run") as started,
+        ):
+            calls.attach_mock(reconciled, "reconciled")
+            calls.attach_mock(started, "started")
+            calls.attach_mock(pipeline, "pipeline")
+            run_finder.main()
+        self.assertEqual([call[0] for call in calls.mock_calls], ["acquired", "reconciled", "started", "pipeline"])
+
+    def test_busy_worker_lock_stops_before_reconciliation_or_pipeline_work(self):
+        lock = Mock()
+        lock.__enter__ = Mock(side_effect=RuntimeError("already running"))
+        lock.__exit__ = Mock()
+        with (
+            patch.object(run_finder, "parse_args", return_value=SimpleNamespace(exclude_sources="", only_sources=None)),
+            patch.object(run_finder, "start_tracing", return_value=None),
+            patch.object(run_finder, "worker_lock", return_value=lock),
+            patch.object(run_finder, "reconcile_runs") as reconciled,
+            patch.object(run_finder, "start_run") as started,
+            patch.object(run_finder, "run_pipeline") as pipeline,
+            self.assertRaises(RuntimeError),
+        ):
+            run_finder.main()
+        reconciled.assert_not_called()
+        started.assert_not_called()
+        pipeline.assert_not_called()

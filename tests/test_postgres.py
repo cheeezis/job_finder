@@ -42,7 +42,7 @@ class PostgresTests(unittest.TestCase):
     def clear_database(self):
         with transaction() as connection:
             self.assertTrue(connection.info.dbname.endswith("_test"))
-            connection.execute("TRUNCATE job_state,datasets,agent_usage,agent_fact_sheets CASCADE")
+            connection.execute("TRUNCATE job_state,datasets,agent_usage,agent_fact_sheets,runs CASCADE")
 
     def test_default_manual_import_writes_source_state_and_review_to_the_database(self):
         page = """<meta property="og:site_name" content="Example GmbH">
@@ -92,6 +92,8 @@ class PostgresTests(unittest.TestCase):
                 "job_state",
                 "workflow_history",
                 "application_documents",
+                "job_listings",
+                "job_links",
                 "jobs",
                 "recommendations",
                 "notifications",
@@ -99,6 +101,7 @@ class PostgresTests(unittest.TestCase):
                 "source_cache",
                 "agent_usage",
                 "agent_fact_sheets",
+                "runs",
             ],
         )
         self.assertTrue(all(isinstance(count, int) for count in counts.values()))

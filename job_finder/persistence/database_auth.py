@@ -8,6 +8,8 @@ from azure.core.credentials import TokenCredential
 from azure.identity import ClientSecretCredential, ManagedIdentityCredential
 from psycopg.conninfo import conninfo_to_dict
 
+from job_finder.errors import DatabaseUnavailableError
+
 POSTGRES_SCOPE = "https://ossrdbms-aad.database.windows.net/.default"
 
 
@@ -37,10 +39,13 @@ def entra_parameters(url: str):
 
 
 def connect_runtime(url: str, *, autocommit: bool = False) -> psycopg.Connection:
-    """Keep password mode unchanged; Entra never falls back to a developer or password login."""
+    """Connect with explicit authentication; redact outages without changing identities or retrying."""
     mode = os.environ.get("JOBFINDER_DATABASE_AUTH", "password")
     if mode == "password":
-        return psycopg.connect(url, autocommit=autocommit, connect_timeout=10)
+        try:
+            return psycopg.connect(url, autocommit=autocommit, connect_timeout=10)
+        except psycopg.OperationalError:
+            raise DatabaseUnavailableError("Datenbankverbindung konnte nicht hergestellt werden.") from None
     if mode not in {"managed_identity", "service_principal"}:
         raise RuntimeError("Unbekannte JOBFINDER_DATABASE_AUTH; keine Datenbankanmeldung.")
     parameters = entra_parameters(url)
@@ -59,11 +64,11 @@ def connect_runtime(url: str, *, autocommit: bool = False) -> psycopg.Connection
             raise RuntimeError("Empty token")
     except Exception:
         # Identity errors can contain tenant details or HTTP response bodies.
-        raise RuntimeError("Entra-Token für die Datenbank konnte nicht bezogen werden.") from None
+        raise DatabaseUnavailableError("Entra-Token für die Datenbank konnte nicht bezogen werden.") from None
     try:
         return psycopg.connect(**{**parameters, "password": token, "connect_timeout": 10}, autocommit=autocommit)
-    except psycopg.Error:
+    except psycopg.OperationalError:
         # Connection diagnostics can echo a DSN or token. Do not retry writes or change identities.
-        raise RuntimeError(
+        raise DatabaseUnavailableError(
             "Entra-Datenbankverbindung fehlgeschlagen; Identität, Rolle, TLS und Erreichbarkeit prüfen."
         ) from None

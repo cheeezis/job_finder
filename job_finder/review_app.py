@@ -15,13 +15,20 @@ from pathlib import Path
 from typing import Annotated, Any
 from urllib.parse import quote
 
-import psycopg
 from fastapi import FastAPI, Form, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
+from opentelemetry.trace import Status, StatusCode
 from pydantic import BaseModel
 
 from job_finder.api_models import ApplicationsResponse, RecommendationsResponse, RunsResponse, SourcesResponse
+from job_finder.errors import (
+    DatabaseUnavailableError,
+    DocumentAccessError,
+    ManualImportError,
+    NotFoundError,
+    UserInputError,
+)
 from job_finder.matching.config import route_origin as configured_route_origin
 from job_finder.models import WorkflowStatus
 from job_finder.paths import APPLICATION_DOCUMENTS_DIR, JOBS_FILE, MANUAL_CACHE_FILE, MEMORY_FILE, RECOMMENDATIONS_JSON
@@ -182,7 +189,15 @@ def create_app(paths=ReviewPaths(), *, deployed_host="", manual_importer=import_
                 },
             ) as current:
                 served["any"] = True
-                response = await call_next(request)
+                try:
+                    response = await call_next(request)
+                except Exception as exc:
+                    # Internal diagnostics may contain credentials or document contents.
+                    current.set_status(Status(StatusCode.ERROR, type(exc).__name__))
+                    response = error(500, "Interner Fehler; bitte später erneut versuchen.")
+                else:
+                    if response.status_code >= 500:
+                        current.set_status(Status(StatusCode.ERROR, f"HTTP {response.status_code}"))
                 route = request.scope.get("route")
                 annotate(
                     current,
@@ -202,15 +217,23 @@ def create_app(paths=ReviewPaths(), *, deployed_host="", manual_importer=import_
     async def invalid_payload(_request, exc: RequestValidationError):
         return error(400, validation_message(exc.errors()))
 
-    @app.exception_handler(psycopg.Error)
+    @app.exception_handler(DatabaseUnavailableError)
     async def database_failed(request: Request, _exc):
         if request.method == "GET":
             return error(503, "Datenbank vorübergehend nicht erreichbar.")
         return error(503, "Datenbankänderung fehlgeschlagen; bitte erneut versuchen.")
 
-    for kind in (TypeError, ValueError, KeyError, OSError, RuntimeError):
-        # The domain functions explain a refused change in their message.
-        app.add_exception_handler(kind, lambda _request, exc: error(400, str(exc)))
+    @app.exception_handler(UserInputError)
+    async def invalid_input(_request, exc: UserInputError):
+        return error(400, str(exc))
+
+    @app.exception_handler(NotFoundError)
+    async def not_found(_request, _exc):
+        return error(404, "Nicht gefunden")
+
+    @app.exception_handler(ManualImportError)
+    async def import_failed(_request, _exc):
+        return error(502, "Stellenanzeige konnte nicht geladen werden; bitte später erneut versuchen.")
 
     for path, (name, content_type) in STATIC_FILES.items():
         app.add_api_route(path, page(PACKAGE / name, content_type), methods=["GET"], include_in_schema=False)
@@ -243,7 +266,7 @@ def create_app(paths=ReviewPaths(), *, deployed_host="", manual_importer=import_
 
     @app.get("/api/application-document")
     def application_document(request: Request):
-        """Return one document of a job's application as a download; 404 for anything else."""
+        """Download a referenced document; distinguish absence, unsafe access and integrity failures."""
         try:
             job_id = single_query_value(request, "job_id")
             document_id = single_query_value(request, "document_id")
@@ -251,7 +274,7 @@ def create_app(paths=ReviewPaths(), *, deployed_host="", manual_importer=import_
                 metadata = find_document(load_job(job_id, paths.memory), document_id)
             with step("read_document"):
                 content = read_document(job_id, metadata, paths.documents)
-        except (KeyError, ValueError, OSError):
+        except (UserInputError, DocumentAccessError, FileNotFoundError):
             return error(404, "Nicht gefunden")
         return Response(
             content,
@@ -418,7 +441,7 @@ def uploaded_document(kind, file):
     """Read one uploaded file, at most one byte beyond the limit, as the documents check expects it."""
     content = file.file.read(MAX_DOCUMENT_BYTES + 1)
     if len(content) > MAX_DOCUMENT_BYTES:
-        raise ValueError("Eine Datei darf höchstens 15 MB groß sein")
+        raise UserInputError("Eine Datei darf höchstens 15 MB groß sein")
     return {"kind": kind, "name": file.filename, "content": content}
 
 
@@ -426,7 +449,7 @@ def single_query_value(request, name):
     """Require exactly one non-empty query parameter."""
     values = request.query_params.getlist(name)
     if len(values) != 1 or not values[0]:
-        raise ValueError(f"Fehlender Parameter: {name}")
+        raise UserInputError(f"Fehlender Parameter: {name}")
     return values[0]
 
 

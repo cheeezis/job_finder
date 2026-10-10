@@ -5,6 +5,7 @@ from pathlib import Path
 
 from psycopg import errors
 
+from job_finder.errors import UserInputError
 from job_finder.models import APPLICATION_STATUSES, APPOINTMENT_STATUSES, OPEN_APPLICATION_STATUSES, WorkflowStatus
 from job_finder.paths import MEMORY_FILE, RECOMMENDATIONS_JSON
 from job_finder.persistence.application_documents import public_documents
@@ -33,9 +34,17 @@ UNAVAILABLE_REASON = "listing_unavailable"
 ARCHIVE_MARKER = "availability_checked_at"
 
 
+def validated_workflow_status(value):
+    """Validate a user-supplied status without echoing the input."""
+    try:
+        return WorkflowStatus(value)
+    except ValueError:
+        raise UserInputError("Ungültiger Workflow-Status") from None
+
+
 def record_status_change(entry, workflow_status, occurred_on=None, scheduled_for=None):
     """Set the current status and append one dated manual transition."""
-    status = WorkflowStatus(workflow_status).value
+    status = validated_workflow_status(workflow_status).value
     explicit_event = occurred_on is not None or scheduled_for is not None
     event = history_event(status, validated_date(occurred_on), scheduled_for)
     previous_status = entry.get("workflow_status", WorkflowStatus.NEW.value)
@@ -76,11 +85,11 @@ def validated_date(value):
     if value is None:
         return date.today().isoformat()
     if not isinstance(value, str):
-        raise ValueError("Datum muss als YYYY-MM-DD angegeben werden")
+        raise UserInputError("Datum muss als YYYY-MM-DD angegeben werden")
     try:
         return date.fromisoformat(value).isoformat()
     except ValueError as error:
-        raise ValueError("Ungueltiges Datum; erwartet wird YYYY-MM-DD") from error
+        raise UserInputError("Ungueltiges Datum; erwartet wird YYYY-MM-DD") from error
 
 
 def load_application_overview(memory_path=MEMORY_FILE, as_of=None, recommendations_path=RECOMMENDATIONS_JSON):
@@ -140,7 +149,7 @@ def update_history_event(
     )
     updated_event = history_event(workflow_status, occurred_on, scheduled_for)
     if updated_event in map(normalized_history_event, history[:index] + history[index + 1 :]):
-        raise ValueError("Dieses Verlaufsereignis existiert bereits")
+        raise UserInputError("Dieses Verlaufsereignis existiert bereits")
     history[index] = updated_event
     current_status = synchronize_current_status(entry)
     return {
@@ -164,19 +173,19 @@ def delete_history_event(entry, event_index, previous_status, previous_occurred_
 def editable_history_event(entry, event_index, previous_status, previous_occurred_on, previous_scheduled_for=None):
     """Return a mutable history and one validated raw event index."""
     if isinstance(event_index, bool) or not isinstance(event_index, int):
-        raise ValueError("Verlaufsindex muss eine Zahl sein")
+        raise UserInputError("Verlaufsindex muss eine Zahl sein")
     history = entry.get("workflow_history")
     if not isinstance(history, list):
-        raise ValueError("Für diese Bewerbung ist kein Verlauf gespeichert")
+        raise UserInputError("Für diese Bewerbung ist kein Verlauf gespeichert")
     if event_index < 0 or event_index >= len(history):
-        raise ValueError("Verlaufsereignis wurde nicht gefunden")
+        raise UserInputError("Verlaufsereignis wurde nicht gefunden")
     current_event = normalized_history_event(history[event_index])
     if current_event is None:
-        raise ValueError("Verlaufsereignis ist ungültig")
+        raise UserInputError("Verlaufsereignis ist ungültig")
     expected_event = history_event(previous_status, previous_occurred_on, previous_scheduled_for)
     current_event.pop("reason", None)
     if current_event != expected_event:
-        raise ValueError("Verlauf wurde zwischenzeitlich geändert; Seite neu laden")
+        raise UserInputError("Verlauf wurde zwischenzeitlich geändert; Seite neu laden")
     return history, event_index
 
 
@@ -338,7 +347,7 @@ def normalized_history_event(event, event_index=None):
 
 def history_event(workflow_status, occurred_on, scheduled_for=None):
     """Build one validated event while preserving an unknown event date."""
-    status = WorkflowStatus(workflow_status).value
+    status = validated_workflow_status(workflow_status).value
     event = {"status": status, "occurred_on": validated_optional_date(occurred_on)}
     appointment = validated_scheduled_for(status, scheduled_for)
     if appointment is not None:
@@ -358,13 +367,13 @@ def validated_scheduled_for(status, value):
     if value is None or value == "":
         return None
     if status not in APPOINTMENT_STATUSES:
-        raise ValueError("Ein Termin ist nur bei Gespräch oder Hospitation/Probearbeiten möglich")
+        raise UserInputError("Ein Termin ist nur bei Gespräch oder Hospitation/Probearbeiten möglich")
     if not isinstance(value, str):
-        raise ValueError("Termin muss als Datum und Uhrzeit angegeben werden")
+        raise UserInputError("Termin muss als Datum und Uhrzeit angegeben werden")
     try:
         appointment = datetime.strptime(value, "%Y-%m-%dT%H:%M")
     except ValueError as error:
-        raise ValueError("Ungültiger Termin; erwartet wird YYYY-MM-DDTHH:MM") from error
+        raise UserInputError("Ungültiger Termin; erwartet wird YYYY-MM-DDTHH:MM") from error
     return appointment.strftime("%Y-%m-%dT%H:%M")
 
 

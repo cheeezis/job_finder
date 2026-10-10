@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from copy import deepcopy
 from datetime import UTC, date, datetime
 
+from job_finder.errors import NotFoundError
 from job_finder.matching.deduplication import (
     BOARD_NAMES,
     companies_match,
@@ -37,7 +38,7 @@ def load_job(job_id, path=MEMORY_FILE):
     with snapshot() as connection:
         memory = read_memory(connection, memory_scope(path), job_id)
     if job_id not in memory:
-        raise KeyError(f"Unbekannte Job-ID: {job_id}")
+        raise NotFoundError(f"Unbekannte Job-ID: {job_id}")
     return memory[job_id]
 
 
@@ -95,7 +96,7 @@ def edit_job(job_id, path=MEMORY_FILE):
         lock(connection, "memory:" + scope, shared=True)
         memory = read_memory(connection, scope, job_id, for_update=True)
         if job_id not in memory:
-            raise KeyError(f"Unbekannte Job-ID: {job_id}")
+            raise NotFoundError(f"Unbekannte Job-ID: {job_id}")
         original = deepcopy(memory)
         yield memory[job_id]
         write_memory(connection, scope, original, memory)

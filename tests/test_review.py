@@ -875,7 +875,7 @@ class ReviewTests(unittest.TestCase):
         with self.server_context(application_documents_dir=documents_directory) as base_url:
             with self.assertRaises(HTTPError) as caught:
                 urlopen(f"{base_url}/api/application-document?{query}")
-            self.assertEqual(caught.exception.code, 404)
+            self.assertEqual(caught.exception.code, 500)
             caught.exception.close()
 
     def test_a_document_is_served_only_for_its_own_job(self):
@@ -1026,7 +1026,7 @@ class ReviewTests(unittest.TestCase):
         # Asking twice keeps the first request; the decision itself stays untouched.
         self.assertEqual(load_memory(self.memory_path)["job:1"][RERUN_FIELD], requested_at)
         self.assertEqual(load_memory(self.memory_path)["job:1"]["workflow_status"], "interesting")
-        self.assertEqual(unknown.exception.code, 400)
+        self.assertEqual(unknown.exception.code, 404)
 
     def test_api_requests_leave_timings_but_no_ids_or_text(self):
         spans = span_recorder()

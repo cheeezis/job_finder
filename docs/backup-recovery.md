@@ -74,6 +74,22 @@ same key are possible. Different referenced contents at the same key explicitly
 abort the backup, because ZIP v1 maps one content per key. Regular new uploads
 avoid this collision through their own folder group.
 
+ZIP v1 enthält zusätzlich `runs.json` mit der Laufhistorie und ihrer
+Manifest-Prüfsumme. Alte ZIP-v1-Archive ohne diesen Eintrag bleiben lesbar und
+stellen keine Läufe wieder her. Importierte `running`-Einträge werden als
+`failed` gespeichert: Ein archivierter Lauf ist kein aktiver Worker. Seine
+unbekannte Endzeit bleibt `NULL`; abgeschlossene Läufe und Kennzahlen bleiben
+unverändert. Die Prüfung der importierten Zeilen erfolgt vor dieser Umstellung.
+
+Das Restore-Ziel muss auch hinsichtlich `runs` leer sein. Geprüft werden die
+Datenwurzeln `job_state`, `datasets`, `agent_usage`, `agent_fact_sheets` und
+`runs`; ihre abhängigen Tabellen sind durch Foreign Keys abgedeckt.
+`schema_version`, `alembic_version` und das historische `migration_runs` sind
+Verwaltungsmarker und werden nicht als Anwendungsdaten importiert. Unbekannte
+Manifest-Einträge werden abgewiesen; bei einem Restore-Fehler werden die
+DB-Transaktion und die von diesem Restore neu geschriebenen Dokumente
+zurückgenommen.
+
 After lost upload responses, an unreferenced file version can remain although
 the database transaction was rolled back. Such an upload must not overwrite
 older referenced documents. A later cleanup needs the proof of references and

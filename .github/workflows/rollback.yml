@@ -11,6 +11,14 @@ on:
       image:
         description: "Image with digest, e.g. acrjobfinder.azurecr.io/jobfinder@sha256:…"
         required: true
+      allow_precontract:
+        description: "Bewusst ein Image vor Contract 0007 zulassen (separaten DB-Rückweg vorher prüfen)"
+        type: boolean
+        default: false
+      rollback_reason:
+        description: "Begründung für eine Freigabe vor Contract 0007"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -37,11 +45,21 @@ jobs:
             exit 1
           fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
       - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Check image provenance and contract boundary
+        env:
+          ALLOW_PRECONTRACT: ${{ inputs.allow_precontract }}
+          ROLLBACK_REASON: ${{ inputs.rollback_reason }}
+        run: |
+          set -euo pipefail
+          az acr repository show --name acrjobfinder --image "jobfinder@${IMAGE##*@}" --query tags --output tsv \
+            | python3 .github/scripts/check_rollback_commit.py
       - name: Roll back the image
         run: |
           az extension add --name containerapp --upgrade --only-show-errors

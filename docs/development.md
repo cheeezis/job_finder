@@ -117,6 +117,20 @@ Terraform does not manage the image version; a local `terraform apply` therefore
 never resets the app. [Operations](operations.md#deploy-and-rollback) describes
 the way back.
 
+Für jeden PR, einschließlich Forks und Dependabot, führt
+`infrastructure-checks` zusätzlich `terraform init -backend=false`,
+`terraform validate` und `terraform test` mit Mock Providern aus. Dieser Job
+hat weder Azure-Login noch OIDC-Schreibrecht oder Zugriff auf Repo-Secrets.
+Die beiden Azure-Plan-Jobs prüfen zuvor die vier expliziten Repo-Variablen
+`RUNTIME_IDENTITY_PHASE`, `RUNTIME_ACCESS_VERIFIED`, `DATABASE_AUTH_PHASE` und
+`DATABASE_ENTRA_VERIFIED`: fehlende, ungültige oder widersprüchliche Phasen
+brechen vor dem Login ab. Für den initialen Bootstrap müssen `legacy`,
+`false`, `password`, `false` ausdrücklich gesetzt werden; spätere Phasen folgen
+den Abnahmen in [runtime-access.md](runtime-access.md) und
+[database-auth.md](database-auth.md). Es gibt keine stillen CI-Defaults.
+Die bestehenden Image-Probestarts prüfen außerdem `TZ=Europe/Berlin` und die
+UTC-Abweichung im Januar und Juli.
+
 New general changes start on a current `main`, for example on `docs/...`,
 `fix/...` or `feat/...`. Commit content changes and large purely mechanical
 changes separately. The [PR template](../.github/PULL_REQUEST_TEMPLATE.md)
@@ -539,6 +553,23 @@ They deliver listings and their origin; filtering and saving stay in the shared
 modules.
 
 ## State changes and configuration
+
+### Checkliste für neue Tabellen
+
+- Neue Alembic-Revision mit `upgrade` und überprüftem `downgrade`; bestehende
+  Revisions-Snapshots bleiben unverändert. Bei einem Contract muss zusätzlich
+  die Commit-Grenze in `.github/scripts/check_rollback_commit.py` geprüft und
+  vor einem produktiven Einsatz mit dem Owner abgestimmt werden.
+- Runtime Grants, RLS und unzulässige direkte sowie indirekte Schreibzugriffe
+  in den lokalen Rechtetests berücksichtigen; `job-finder-db check` um die
+  neue Anwendungstabelle ergänzen.
+- Backup-/Restore-Abdeckung festlegen: entweder unter einer vorhandenen
+  Datenwurzel mit Foreign Key oder als eigener Eintrag mit Prüfsumme und
+  Leerzielprüfung. Roundtrip, alte Archive und Abbruch ohne verbleibende
+  DB-/Dokumentänderungen über `scripts/test_postgres.py` prüfen. Der Vertrag
+  steht in [backup-recovery.md](backup-recovery.md).
+
+### Bestehende Zustandswege
 
 `paths.py` defines all paths relative to the project. There is no general
 `DATA_DIR` environment switch; only the document folder can be moved through

@@ -34,8 +34,13 @@ Option 3:
 - Database migrations run separately and before the release that needs them,
   with an explicit approval. They only add tables and columns, so the previous
   image keeps working; cleanup migrations come later, deliberately.
-- Three identities with separate rights: plan (read), build (push images) and
-  apply.
+- Drei Identitäten: Der PR-Plan nutzt die Read-only-Plan-Identität, der Build
+  darf Images pushen. Der Release-Plan auf `main` nutzt bewusst die
+  Apply-Identität im Environment `production-plan`: Sein Refresh benötigt
+  unter anderem `listSecrets`. Dieses Environment ist auf `main` beschränkt;
+  die manuelle Freigabe erfolgt anschließend für den gespeicherten Plan in
+  `production`. Der Owner akzeptiert diese Aufteilung; eine vierte Identität
+  wird nicht eingeführt.
 
 ## Consequences
 
@@ -45,6 +50,11 @@ Option 3:
   waiting deploys, of which only the latest one is rolled out.
 - Contract migrations (see [0003](0003-data-model-transition.md)) remove the way
   back to older images and need a backup and their own plan.
+- Seit Contract 0007 prüft `Rollback` den zum Image-Digest gehörenden
+  `sha-<12>`-Commit gegen `c55e17787bbe6e95cc6666771f9f890f3c4c4cf6`.
+  Unbekannte oder mehrdeutige Herkunft bricht ab. Ein bekanntes älteres Image
+  benötigt eine ausdrückliche Ausnahme mit Begründung und einen separat
+  geprüften DB-Rückweg. Diese Prüfung liest die Datenbank nicht.
 
 ## Revisit when
 

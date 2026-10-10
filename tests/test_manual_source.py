@@ -211,9 +211,7 @@ class ManualSourceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             cache_path = Path(directory) / "manual.json"
             with (
-                patch(
-                    "socket.getaddrinfo", return_value=[(None, None, None, None, ("93.184.216.34", 443))]
-                ),
+                patch("socket.getaddrinfo", return_value=[(None, None, None, None, ("93.184.216.34", 443))]),
                 patch.object(
                     manual, "fetch_text_with_final_url", return_value=("https://example.com/jobs/python", html)
                 ) as fetch,

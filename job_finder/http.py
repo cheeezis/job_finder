@@ -156,9 +156,12 @@ def _fetch_once(url, headers, timeout, url_validator, max_bytes, *, http_client=
     http_client = http_client if http_client is not None else client()
     try:
         for _redirect in range(MAX_REDIRECTS + 1):
-            with host_slot(url), http_client.stream(
-                method, url, headers=request_headers, timeout=timeout, data=data, follow_redirects=False
-            ) as response:
+            with (
+                host_slot(url),
+                http_client.stream(
+                    method, url, headers=request_headers, timeout=timeout, data=data, follow_redirects=False
+                ) as response,
+            ):
                 if response.is_redirect:
                     target = url_validator(urljoin(str(response.url), response.headers["Location"]))
                     request_headers = _redirect_headers(request_headers, url, target, response.request.headers)

@@ -36,7 +36,9 @@ class RedirectCredentialsTests(unittest.TestCase):
             return httpx.Response(200, text="ok")
 
         with transport(respond):
-            self.assertEqual(http.fetch_text("https://source.example/start", headers={"Authorization": "test-only"}), "ok")
+            self.assertEqual(
+                http.fetch_text("https://source.example/start", headers={"Authorization": "test-only"}), "ok"
+            )
         self.assertEqual(requests[1].headers["authorization"], "test-only")
 
     def test_origin_change_strips_all_sensitive_headers_and_does_not_restore_them(self):
@@ -58,7 +60,12 @@ class RedirectCredentialsTests(unittest.TestCase):
             with self.subTest(destination=destination), transport(respond):
                 http.fetch_text(
                     start,
-                    headers={"aUtHoRiZaTiOn": "test-only", "PROXY-AUTHORIZATION": "test-only", "cookie": "test=only", "Accept": "text/html"},
+                    headers={
+                        "aUtHoRiZaTiOn": "test-only",
+                        "PROXY-AUTHORIZATION": "test-only",
+                        "cookie": "test=only",
+                        "Accept": "text/html",
+                    },
                 )
             for request in requests[1:]:
                 self.assertFalse({"authorization", "proxy-authorization", "cookie"}.intersection(request.headers))
@@ -81,7 +88,11 @@ class RedirectCredentialsTests(unittest.TestCase):
 
         def respond(request):
             requests.append(request)
-            return httpx.Response(302, headers={"Location": "http://source.example/final"}) if len(requests) == 1 else httpx.Response(200, text="ok")
+            return (
+                httpx.Response(302, headers={"Location": "http://source.example/final"})
+                if len(requests) == 1
+                else httpx.Response(200, text="ok")
+            )
 
         with transport(respond):
             self.assertEqual(http.fetch_text("https://source.example/start"), "ok")
@@ -97,19 +108,32 @@ class RedirectCredentialsTests(unittest.TestCase):
             return httpx.Response(503 if len(requests) == 2 else 200, text="ok")
 
         with transport(respond):
-            self.assertEqual(http.fetch_text("https://source.example/start", headers={"Authorization": "test-only"}), "ok")
-        self.assertEqual([request.headers.get("authorization") for request in requests], ["test-only", None, "test-only", None])
+            self.assertEqual(
+                http.fetch_text("https://source.example/start", headers={"Authorization": "test-only"}), "ok"
+            )
+        self.assertEqual(
+            [request.headers.get("authorization") for request in requests], ["test-only", None, "test-only", None]
+        )
 
 
 class PublicTargetTests(unittest.TestCase):
     def test_default_policy_rejects_private_start_and_redirect_targets(self):
-        for target in ("http://127.0.0.1/private", "http://[::1]/private", "http://localhost/private", "http://169.254.169.254/private"):
+        for target in (
+            "http://127.0.0.1/private",
+            "http://[::1]/private",
+            "http://localhost/private",
+            "http://169.254.169.254/private",
+        ):
             for redirect in (False, True):
                 requests = []
 
                 def respond(request):
                     requests.append(request)
-                    return httpx.Response(302, headers={"Location": target}) if len(requests) == 1 else httpx.Response(200, text="private")
+                    return (
+                        httpx.Response(302, headers={"Location": target})
+                        if len(requests) == 1
+                        else httpx.Response(200, text="private")
+                    )
 
                 with self.subTest(target=target, redirect=redirect), transport(respond), self.assertRaises(ValueError):
                     http.fetch_text_with_final_url("https://source.example/apply" if redirect else target)
@@ -126,13 +150,25 @@ class PublicTargetTests(unittest.TestCase):
         client.assert_not_called()
 
     def test_invalid_scheme_userinfo_and_ports_are_rejected(self):
-        for url in ("file:///private", "https://user:pass@source.example/job", "https://source.example:8080/job", "https://source.example:bad/job"):
-            with self.subTest(url=url), patch("socket.getaddrinfo", return_value=PUBLIC_ADDRESS), self.assertRaises(ValueError):
+        for url in (
+            "file:///private",
+            "https://user:pass@source.example/job",
+            "https://source.example:8080/job",
+            "https://source.example:bad/job",
+        ):
+            with (
+                self.subTest(url=url),
+                patch("socket.getaddrinfo", return_value=PUBLIC_ADDRESS),
+                self.assertRaises(ValueError),
+            ):
                 manual.validate_public_url(url)
 
     def test_public_query_is_preserved_and_fragment_removed(self):
         with patch("socket.getaddrinfo", return_value=PUBLIC_ADDRESS):
-            self.assertEqual(manual.validate_public_url("https://source.example/job?id=one#details"), "https://source.example/job?id=one")
+            self.assertEqual(
+                manual.validate_public_url("https://source.example/job?id=one#details"),
+                "https://source.example/job?id=one",
+            )
 
 
 class SessionTests(unittest.TestCase):
@@ -173,12 +209,16 @@ class SessionTests(unittest.TestCase):
         def respond(request):
             requests.append(request)
             if request.method == "GET":
-                return httpx.Response(200, headers={"Set-Cookie": "session=test-only; Path=/"}, text='<input name="_csrf" value="test-only">')
+                return httpx.Response(
+                    200,
+                    headers={"Set-Cookie": "session=test-only; Path=/"},
+                    text='<input name="_csrf" value="test-only">',
+                )
             self.assertIn("session=test-only", request.headers["cookie"])
             self.assertIn(b"_csrf=test-only", request.content)
             if b"hasNextJobOffers" in request.content:
                 return httpx.Response(200, text="false")
-            return httpx.Response(200, text='jobOfferId=abc123')
+            return httpx.Response(200, text="jobOfferId=abc123")
 
         with transport(respond) as client, patch.object(jumo, "session", return_value=nullcontext(client)):
             links = jumo.collect_links()
@@ -196,7 +236,11 @@ class SessionTests(unittest.TestCase):
                     responses.append(response)
                     return response
 
-                with self.subTest(form=form, headers=headers), transport(respond) as client, self.assertRaisesRegex(ValueError, "Größenlimit"):
+                with (
+                    self.subTest(form=form, headers=headers),
+                    transport(respond) as client,
+                    self.assertRaisesRegex(ValueError, "Größenlimit"),
+                ):
                     http.session_text(client, "https://source.example/search", form, max_bytes=10)
                 self.assertTrue(responses[0].is_closed)
 
@@ -230,7 +274,11 @@ class SessionTests(unittest.TestCase):
                 requests.append(request)
                 return httpx.Response(status, headers={"Retry-After": "1"})
 
-            with self.subTest(status=status), transport(respond) as client, self.assertRaises(http.HttpStatusError) as caught:
+            with (
+                self.subTest(status=status),
+                transport(respond) as client,
+                self.assertRaises(http.HttpStatusError) as caught,
+            ):
                 http.session_text(client, "https://source.example/search", {"page": "next"})
             self.assertEqual(caught.exception.code, status)
             self.assertEqual(len(requests), 1)
@@ -251,7 +299,11 @@ class SessionTests(unittest.TestCase):
 
         def respond(request):
             requests.append(request)
-            return httpx.Response(303, headers={"Location": "/done"}) if len(requests) == 1 else httpx.Response(200, text="ok")
+            return (
+                httpx.Response(303, headers={"Location": "/done"})
+                if len(requests) == 1
+                else httpx.Response(200, text="ok")
+            )
 
         with transport(respond) as client:
             self.assertEqual(http.session_text(client, "https://source.example/search", {"page": "next"}), "ok")

@@ -139,8 +139,41 @@ class LocalHybridRunTests(unittest.TestCase):
         self.assertIn("[1/4] Quellen", text)
         self.assertIn("Lokaler Lauf beendet.", text)
         self.assertNotIn("s3cret", text)
-        self.assertIn("s3cret", " ".join(popen.call_args.args[0]))
+        self.assertNotIn("s3cret", " ".join(popen.call_args.args[0]))
+        self.assertEqual(
+            popen.call_args.kwargs["env"]["JOBFINDER_DATABASE_URL"], "postgresql://app:s3cret@db.test/jobfinder"
+        )
+        self.assertIn("JOBFINDER_DATABASE_URL", popen.call_args.args[0])
         self.assertEqual(self.sent, [])
+
+    def test_dotenv_quotes_comments_empty_values_and_literals(self):
+        path = self.logs / "synthetic-settings.txt"
+        path.write_text(
+            "# comment\nPLAIN=hello\nQUOTED='value # literal'\nCOMMENT=value # ignored\n"
+            "EMPTY=\nBARE\nWINDOWS=C:\\synthetic\\ca.pem\n"
+            "EXPRESSION=$(private-command)\nREFERENCE=${PLAIN}\n",
+            encoding="utf-8",
+        )
+        values = self.script.read_dotenv(path)
+        self.assertEqual(
+            values,
+            {
+                "PLAIN": "hello",
+                "QUOTED": "value # literal",
+                "COMMENT": "value",
+                "EMPTY": "",
+                "WINDOWS": "C:\\synthetic\\ca.pem",
+                "EXPRESSION": "$(private-command)",
+                "REFERENCE": "${PLAIN}",
+            },
+        )
+
+    def test_docker_inherits_only_cli_environment_and_explicit_container_values(self):
+        with patch.dict(os.environ, {"UNRELATED_PRIVATE_TOKEN": "private", "DOCKER_CONTEXT": "synthetic"}):
+            popen = self.run_main()
+        child = popen.call_args.kwargs["env"]
+        self.assertEqual(child["DOCKER_CONTEXT"], "synthetic")
+        self.assertNotIn("UNRELATED_PRIVATE_TOKEN", child)
 
     def test_a_failed_step_reaches_discord_and_the_log_and_docker_stops_again(self):
         failure = self.script.RunFailed("az containerapp job fehlgeschlagen, az-Anmeldung prüfen")

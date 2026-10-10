@@ -149,11 +149,20 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     timeout-minutes: 10
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: infrastructure
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "1.16.2"
+      - run: terraform fmt -check
+      - run: terraform init -backend=false -input=false
+      - run: terraform validate
+      - run: terraform test -no-color
       - uses: terraform-linters/setup-tflint@6ffdbaa3be476b3431f7275c26966ef32ff60337 # v6.3.2
         with:
           tflint_version: v0.64.0
@@ -190,8 +199,15 @@ jobs:
     defaults:
       run:
         working-directory: infrastructure
+    env:
+      TF_VAR_runtime_identity_phase: ${{ vars.RUNTIME_IDENTITY_PHASE }}
+      TF_VAR_runtime_access_verified: ${{ vars.RUNTIME_ACCESS_VERIFIED }}
+      TF_VAR_database_auth_phase: ${{ vars.DATABASE_AUTH_PHASE }}
+      TF_VAR_database_entra_verified: ${{ vars.DATABASE_ENTRA_VERIFIED }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check release phases before sign-in
+        run: python3 ../.github/scripts/check_release_config.py
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
           terraform_version: "1.16.2"
@@ -205,11 +221,7 @@ jobs:
           client-id: ${{ vars.AZURE_CLIENT_ID_PLAN }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-      - run: terraform fmt -check
       - run: terraform init -input=false
-      - run: terraform validate
-      # Only simulated providers; independent of Azure state and real secrets.
-      - run: terraform test -no-color
       - run: terraform plan -input=false -lock=false -refresh=false
         env:
           TF_VAR_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
@@ -217,10 +229,6 @@ jobs:
           TF_VAR_postgres_client_ipv4: ${{ secrets.POSTGRES_CLIENT_IPV4 }}
           TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
           TF_VAR_review_fqdn: ${{ secrets.REVIEW_FQDN }}
-          TF_VAR_runtime_identity_phase: ${{ vars.RUNTIME_IDENTITY_PHASE || 'legacy' }}
-          TF_VAR_runtime_access_verified: ${{ vars.RUNTIME_ACCESS_VERIFIED || 'false' }}
-          TF_VAR_database_auth_phase: ${{ vars.DATABASE_AUTH_PHASE || 'password' }}
-          TF_VAR_database_entra_verified: ${{ vars.DATABASE_ENTRA_VERIFIED || 'false' }}
           # A secret, not a variable: the sign-in name can contain an email address, and
           # variables appear unmasked in the public logs.
           TF_VAR_postgres_entra_admin_name: ${{ secrets.POSTGRES_ENTRA_ADMIN_NAME }}
@@ -236,9 +244,17 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: docker build -t jobfinder:check .
       - name: Trial start as a restricted user
-        run: >-
-          docker run --rm --entrypoint sh jobfinder:check -c
-          'test "$(id -u)" != 0 && touch data/probe && python -c "import run_finder, job_finder.review"'
+        run: |
+          docker run --rm -i --entrypoint sh jobfinder:check -c \
+            'test "$(id -u)" != 0 && touch data/probe && python -' <<'PY'
+          import os
+          import time
+          from datetime import UTC, datetime
+          import run_finder, job_finder.review
+          assert os.environ["TZ"] == "Europe/Berlin"
+          for month, hour in ((1, 1), (7, 2)):
+              assert time.localtime(datetime(2026, month, 15, tzinfo=UTC).timestamp()).tm_hour == hour
+          PY
       - name: Report vulnerabilities (high and critical)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -282,9 +298,17 @@ jobs:
       - run: az acr login --name acrjobfinder
       - run: docker build -t acrjobfinder.azurecr.io/jobfinder:${{ steps.tag.outputs.tag }} .
       - name: Trial start as a restricted user
-        run: >-
-          docker run --rm --entrypoint sh acrjobfinder.azurecr.io/jobfinder:${{ steps.tag.outputs.tag }} -c
-          'test "$(id -u)" != 0 && touch data/probe && python -c "import run_finder, job_finder.review"'
+        run: |
+          docker run --rm -i --entrypoint sh acrjobfinder.azurecr.io/jobfinder:${{ steps.tag.outputs.tag }} -c \
+            'test "$(id -u)" != 0 && touch data/probe && python -' <<'PY'
+          import os
+          import time
+          from datetime import UTC, datetime
+          import run_finder, job_finder.review
+          assert os.environ["TZ"] == "Europe/Berlin"
+          for month, hour in ((1, 1), (7, 2)):
+              assert time.localtime(datetime(2026, month, 15, tzinfo=UTC).timestamp()).tm_hour == hour
+          PY
       - name: Fail on fixable critical vulnerabilities
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -328,8 +352,14 @@ jobs:
         working-directory: infrastructure
     env:
       PLAN_BLOB: release-plans/${{ github.sha }}.tfplan
+      TF_VAR_runtime_identity_phase: ${{ vars.RUNTIME_IDENTITY_PHASE }}
+      TF_VAR_runtime_access_verified: ${{ vars.RUNTIME_ACCESS_VERIFIED }}
+      TF_VAR_database_auth_phase: ${{ vars.DATABASE_AUTH_PHASE }}
+      TF_VAR_database_entra_verified: ${{ vars.DATABASE_ENTRA_VERIFIED }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check release phases before sign-in
+        run: python3 ../.github/scripts/check_release_config.py
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
           terraform_version: "1.16.2"
@@ -346,10 +376,6 @@ jobs:
           TF_VAR_postgres_client_ipv4: ${{ secrets.POSTGRES_CLIENT_IPV4 }}
           TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
           TF_VAR_review_fqdn: ${{ secrets.REVIEW_FQDN }}
-          TF_VAR_runtime_identity_phase: ${{ vars.RUNTIME_IDENTITY_PHASE || 'legacy' }}
-          TF_VAR_runtime_access_verified: ${{ vars.RUNTIME_ACCESS_VERIFIED || 'false' }}
-          TF_VAR_database_auth_phase: ${{ vars.DATABASE_AUTH_PHASE || 'password' }}
-          TF_VAR_database_entra_verified: ${{ vars.DATABASE_ENTRA_VERIFIED || 'false' }}
           # A secret, not a variable: the sign-in name can contain an email address, and
           # variables appear unmasked in the public logs.
           TF_VAR_postgres_entra_admin_name: ${{ secrets.POSTGRES_ENTRA_ADMIN_NAME }}

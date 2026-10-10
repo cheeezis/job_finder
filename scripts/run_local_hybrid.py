@@ -35,6 +35,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import psycopg
+from dotenv import dotenv_values
 from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
 from job_finder.http import fetch_text
@@ -92,19 +93,16 @@ def remove_old_logs(directory, now):
 
 
 def read_dotenv(path):
-    """Read simple KEY=VALUE lines, ignoring comments and blanks."""
-    values = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        values[key] = value
-    return values
+    """Read dotenv quoting and comments without interpolation or shell expansion."""
+    return {
+        key: value
+        for key, value in dotenv_values(path, interpolate=False, encoding="utf-8").items()
+        if value is not None
+    }
 
 
 def container_environment():
-    """Build the -e KEY=VALUE pairs the container needs, none of it inherited."""
+    """Build the explicit values passed to the container, none of them inherited."""
     postgres = read_dotenv(PROJECT_DIR / ".env.postgres-azure")
     runtime_file = PROJECT_DIR / ".env.runtime-azure"
     runtime = {}
@@ -301,10 +299,33 @@ def pull(image, log):
 
 def run_container(image, log):
     """Run the finder in the container with its output in the log; return its exit code."""
-    env_args = []
-    for key, value in container_environment().items():
-        env_args += ["-e", f"{key}={value}"]
-    # This command line carries secrets; only the container's output is logged.
+    values = container_environment()
+    # Keep only the host settings Docker needs. Secret values travel in the
+    # child environment; Docker's -e KEY passes only the named values onward.
+    cli_keys = {
+        "PATH",
+        "SystemRoot",
+        "SYSTEMROOT",
+        "WINDIR",
+        "COMSPEC",
+        "PATHEXT",
+        "USERPROFILE",
+        "APPDATA",
+        "LOCALAPPDATA",
+        "TEMP",
+        "TMP",
+        "HOME",
+        "DOCKER_HOST",
+        "DOCKER_CONTEXT",
+        "DOCKER_CONFIG",
+        "DOCKER_TLS_VERIFY",
+        "DOCKER_CERT_PATH",
+        "XDG_RUNTIME_DIR",
+        "SSH_AUTH_SOCK",
+    }
+    child_environment = {key: value for key, value in os.environ.items() if key in cli_keys}
+    child_environment.update(values)
+    env_args = [argument for key in values for argument in ("-e", key)]
     command = [
         "docker",
         "run",
@@ -318,7 +339,13 @@ def run_container(image, log):
         LOCAL_ONLY_SOURCES,
     ]
     with subprocess.Popen(
-        command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace"
+        command,
+        env=child_environment,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
     ) as process:
         for line in process.stdout:
             log.line(line.rstrip("\n"))

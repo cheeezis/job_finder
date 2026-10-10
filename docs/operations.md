@@ -352,6 +352,21 @@ the image noted under "Way back" (`…/jobfinder@sha256:…`). It also runs only
 after approval in `production`, resets only the image of worker and review and
 runs the same checks. Terraform and database stay unchanged.
 
+Vor dem Image-Update liest der Workflow ausschließlich die Tags des
+angegebenen Digests und prüft den eindeutigen CI-Commit `sha-<12>` mit der
+vollständigen Git-Historie. Dieser muss Contract 0007
+(`c55e17787bbe6e95cc6666771f9f890f3c4c4cf6`) enthalten. Fehlende, unbekannte
+oder mehrdeutige Commit-Zuordnungen brechen immer ab. Für ein bekanntes Image
+vor dieser Grenze sind `allow_precontract=true` und `rollback_reason`
+erforderlich. Zuerst den separaten Schema-Downgrade-/Restore-Rückweg prüfen
+und ausdrücklich freigeben; der Workflow führt keinen DB-Downgrade aus.
+Die Commit-Prüfung ersetzt diese Prüfung des Zielschemas nicht. Die
+Begründung wird nicht in die Workflow-Ausgabe geschrieben.
+
+Rückweg für eine Änderung an diesen Workflow-Prüfungen: den betreffenden
+Commit per Revert-PR zurücknehmen. Für Laufzeitcode bleibt das zuvor notierte
+Image der Rückweg, sofern es die oben genannte Contract-Grenze erfüllt.
+
 That works only as long as the schema fits the old image. Migrations are
 therefore additive (new tables and columns, nothing removed) and run before the
 deploy, separately, as described above under Azure; cleanup migrations follow
@@ -373,6 +388,14 @@ passed to the container as `JOBFINDER_USER_SETTINGS` and `JOBFINDER_PROFILE`;
 with the model address from `.env.docker-local` the agent then writes the fact
 sheets of the new jobs. A native Windows connection at times returned outdated
 reads from Azure; the container avoids that, the cause is still unexplained.
+
+Der Docker-Prozess erhält Containerwerte über eine explizite Child-Environment;
+in der Kommandozeile steht nur `-e KEY`, kein Secretwert oder Profilinhalt.
+Die übrigen geerbten Variablen sind auf den Docker-CLI-Kontext begrenzt.
+Lokale dotenv-Dateien werden mit `python-dotenv` gelesen: Quotes und Kommentare
+werden berücksichtigt, `${...}` wird nicht interpoliert. Der Docker-Daemon
+und sein `docker inspect` haben weiterhin Zugriff auf die Container-Environment;
+der vertrauenswürdige lokale Host bleibt Teil dieser Betriebsgrenze.
 
 The output of every run goes to `data/logs/hybrid-<time>.log` (kept for 14
 days, without the secret start parameters). If a step fails, for example
@@ -473,6 +496,14 @@ worker job, `hybrid` from the local hybrid run, otherwise `local`, set through
 `JOBFINDER_RUNNER`), at the end with its outcome (`finished` or `failed`) and
 the key figures. So the hybrid runs, which send no logs to Azure, show up as
 well. The review's landing page shows the latest run per place (`/api/runs`).
+
+Nach Erwerb des exklusiven Worker-Locks markiert der nächste Finder-Start alle
+verwaisten `running`-Einträge als `failed`, bevor er den eigenen Lauf anlegt.
+`finished_at` ist dabei der Zeitpunkt der Erkennung, nicht die unbekannte
+Abbruchzeit. Ein parallel aktiver Worker hält den Lock und wird nicht verändert.
+Diese Korrektur benötigt weder eine neue Statusart noch eine Migration. Ein
+Image-Rollback nimmt den Code zurück; bereits auf `failed` gesetzte Einträge
+bleiben abgeschlossene Historie.
 
 At the end of every run, after the agent, comes a `run_summary` line: duration,
 jobs, new jobs in total and per source (`new_by_source`), new review cards,

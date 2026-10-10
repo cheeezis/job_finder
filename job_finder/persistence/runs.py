@@ -17,6 +17,12 @@ def runner(environ=os.environ):
     return value if value in RUNNERS else "local"
 
 
+def reconcile_runs():
+    """Mark abandoned runs failed; call only while holding the exclusive worker lock."""
+    with transaction() as connection:
+        connection.execute("UPDATE runs SET outcome='failed', finished_at=now() WHERE outcome='running'")
+
+
 def start_run(run_id, sources, environ=os.environ):
     """Record that a run began, with the sources it searches."""
     with transaction() as connection:

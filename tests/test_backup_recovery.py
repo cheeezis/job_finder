@@ -12,11 +12,13 @@ from pathlib import Path
 from unittest.mock import patch
 
 from document_store_helpers import FakeVersionedContainer
+from psycopg import errors
 
 from job_finder.persistence import document_store
 from job_finder.persistence.application_documents import read_document, resolve_document_key, store_documents
 from job_finder.persistence.database import transaction
 from job_finder.persistence.postgres_backup import create_postgres_backup, restore_backup
+from job_finder.persistence.runs import finish_run, start_run
 from job_finder.workflow.memory import load_memory, save_memory
 
 
@@ -56,7 +58,7 @@ class BackupRecoveryTests(unittest.TestCase):
     def clear_database(self):
         with transaction() as connection:
             self.assertTrue(connection.info.dbname.endswith("_test"))
-            connection.execute("TRUNCATE job_state,datasets,agent_usage,agent_fact_sheets CASCADE")
+            connection.execute("TRUNCATE job_state,datasets,agent_usage,agent_fact_sheets,runs CASCADE")
 
     def backup(self):
         documents = store_documents(
@@ -215,3 +217,95 @@ class BackupRecoveryTests(unittest.TestCase):
         self.assertEqual(load_memory(), {})
         self.assertEqual(len(concurrent), 1)
         self.assertEqual(concurrent[0].read_bytes(), b"concurrent writer's content")
+
+    def test_backup_includes_run_history_and_restore_keeps_it_historical(self):
+        with transaction() as connection:
+            connection.execute("TRUNCATE runs")
+        start_run("synthetic-finished", ["manual"], {"JOBFINDER_RUNNER": "cloud"})
+        finish_run("synthetic-finished", "finished", jobs_total=3, jobs_new=2)
+        start_run("synthetic-crashed", ["manual"], {"JOBFINDER_RUNNER": "hybrid"})
+        with transaction() as connection:
+            expected = connection.execute("SELECT run_id,started_at,jobs_new FROM runs ORDER BY run_id").fetchall()
+        archive = self.backup()
+        with transaction() as connection:
+            connection.execute("TRUNCATE runs")
+        with zipfile.ZipFile(archive) as saved:
+            self.assertIn("runs.json", json.loads(saved.read("manifest.json"))["hashes"])
+        restore_backup(archive, self.root / "restored")
+        with transaction() as connection:
+            self.assertEqual(
+                connection.execute("SELECT run_id,started_at,jobs_new FROM runs ORDER BY run_id").fetchall(), expected
+            )
+            self.assertEqual(
+                connection.execute(
+                    "SELECT outcome,finished_at IS NOT NULL FROM runs WHERE run_id='synthetic-crashed'"
+                ).fetchone(),
+                ("failed", False),
+            )
+
+    def test_existing_run_history_refuses_restore_into_an_otherwise_empty_database(self):
+        archive = self.backup()
+        start_run("synthetic-existing", [], {})
+        with self.assertRaisesRegex(ValueError, "leere Datenbank"):
+            restore_backup(archive, self.root / "restored")
+        self.assertEqual(load_memory(), {})
+
+    def rewrite_member(self, archive, name, content, *, update_hash=True):
+        target = self.root / "changed-member.zip"
+        with zipfile.ZipFile(archive) as source:
+            contents = {member: source.read(member) for member in source.namelist()}
+        manifest = json.loads(contents["manifest.json"])
+        if content is None:
+            contents.pop(name)
+            del manifest["hashes"][name]
+        else:
+            contents[name] = content
+            if update_hash:
+                manifest["hashes"][name] = hashlib.sha256(content).hexdigest()
+        contents["manifest.json"] = json.dumps(manifest).encode()
+        with zipfile.ZipFile(target, "w") as result:
+            for member, value in contents.items():
+                result.writestr(member, value)
+        return target
+
+    def test_old_zip_v1_without_runs_restores_with_empty_run_history(self):
+        archive = self.rewrite_member(self.backup(), "runs.json", None)
+        self.assertTrue(restore_backup(archive, self.root / "restored")["verified"])
+        self.assertIn("synthetic:recovery", load_memory())
+        with transaction() as connection:
+            self.assertEqual(connection.execute("SELECT count(*) FROM runs").fetchone(), (0,))
+
+    def test_changed_run_history_is_rejected_before_database_or_file_writes(self):
+        archive = self.rewrite_member(self.backup(), "runs.json", b"[{}]", update_hash=False)
+        target = self.root / "restored"
+        with self.assertRaisesRegex(ValueError, "Prüfsumme"):
+            restore_backup(archive, target)
+        self.assertEqual(load_memory(), {})
+        self.assertFalse(target.exists())
+
+    def test_unknown_table_payload_is_rejected_before_database_or_file_writes(self):
+        archive = self.rewrite_member(self.backup(), "agent/unknown_table.json", b"[]")
+        target = self.root / "restored"
+        with self.assertRaisesRegex(ValueError, "Unbekannter Inhalt"):
+            restore_backup(archive, target)
+        self.assertEqual(load_memory(), {})
+        self.assertFalse(target.exists())
+
+    def test_invalid_run_payload_rolls_back_database_and_restored_documents(self):
+        invalid = [
+            {
+                "run_id": "synthetic-invalid",
+                "runner": "invalid",
+                "sources": [],
+                "outcome": "failed",
+                "started_at": "2026-01-01T00:00:00Z",
+            }
+        ]
+        archive = self.rewrite_member(self.backup(), "runs.json", json.dumps(invalid).encode())
+        target = self.root / "restored"
+        with self.assertRaises(errors.CheckViolation):
+            restore_backup(archive, target)
+        self.assertEqual(load_memory(), {})
+        self.assertTrue(document_store.is_empty(target))
+        with transaction() as connection:
+            self.assertEqual(connection.execute("SELECT count(*) FROM runs").fetchone(), (0,))

@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
-from urllib.parse import quote
+from urllib.parse import quote, urlencode, urlunsplit
 from uuid import uuid4
 
 import psycopg
@@ -31,6 +31,44 @@ def load_runtime_script():
         script = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(script)
     return script
+
+
+def provisioning_uri(info):
+    """Keep optional libpq credentials and TLS options in the provisioner's URI input."""
+    login = quote(info["user"], safe="")
+    if "password" in info:
+        login += ":" + quote(info["password"], safe="")
+    host = info["host"]
+    if ":" in host and not host.startswith("["):
+        host = f"[{host}]"
+    port = ":" + info["port"] if "port" in info else ""
+    options = {key: value for key, value in info.items() if key not in {"user", "password", "host", "port", "dbname"}}
+    return urlunsplit(
+        ("postgresql", f"{login}@{host}{port}", "/" + quote(info["dbname"], safe=""), urlencode(options), "")
+    )
+
+
+class ProvisioningUriTests(unittest.TestCase):
+    def test_optional_password_and_tls_options_survive_conversion_and_role_replacement(self):
+        script = load_runtime_script()
+        for password in (None, "", "synthetic@password:with/slash"):
+            for host in ("127.0.0.1", "::1"):
+                with self.subTest(password=password, host=host):
+                    info = {
+                        "user": "synthetic_admin",
+                        "host": host,
+                        "port": "5432",
+                        "dbname": "synthetic_test",
+                        "sslmode": "verify-full",
+                        "sslrootcert": "C:/synthetic/ca.pem",
+                    }
+                    if password is not None:
+                        info["password"] = password
+                    uri = provisioning_uri(info)
+                    # libpq normalizes an empty URI password to an omitted password.
+                    self.assertEqual(conninfo_to_dict(uri), {key: value for key, value in info.items() if value != ""})
+                    runtime = conninfo_to_dict(script.runtime_url(uri, "synthetic_runtime", "new@test"))
+                    self.assertEqual(runtime, {**info, "user": "synthetic_runtime", "password": "new@test"})
 
 
 class RuntimePermissionsTests(unittest.TestCase):
@@ -306,10 +344,7 @@ class RuntimePermissionsTests(unittest.TestCase):
         script = load_runtime_script()
         roles = {key: f"f09_new_{key}_{uuid4().hex}" for key in self.roles}
         info = conninfo_to_dict(self.admin_url)
-        admin_url = (
-            f"postgresql://{quote(info['user'], safe='')}:{quote(info['password'], safe='')}@"
-            f"{info['host']}:{info.get('port', '5432')}/{info['dbname']}"
-        )
+        admin_url = provisioning_uri(info)
         target = {
             "connect_kwargs": info,
             "database": self.database,

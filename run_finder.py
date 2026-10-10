@@ -19,7 +19,7 @@ from job_finder.operations import RunLog, create_backup, timed_step
 from job_finder.paths import JOBS_FILE, MEMORY_FILE
 from job_finder.persistence.database import lock, transaction, worker_lock
 from job_finder.persistence.health import backlog
-from job_finder.persistence.runs import finish_run, start_run
+from job_finder.persistence.runs import finish_run, reconcile_runs, start_run
 from job_finder.persistence.storage import publish_results
 from job_finder.sources import (
     arbeitnow,
@@ -181,6 +181,7 @@ def main():
     try:
         with worker_lock(), RunLog() as run_log, span("finder_run", **{"jobfinder.run_id": run_log.run_id}):
             selected = [source.SOURCE_NAME for source in SOURCES if source.SOURCE_NAME not in excluded]
+            record_run(reconcile_runs)
             record_run(start_run, run_log.run_id, selected)
             try:
                 run_pipeline(exclude_sources=excluded, run_id=run_log.run_id)

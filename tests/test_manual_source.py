@@ -211,9 +211,7 @@ class ManualSourceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             cache_path = Path(directory) / "manual.json"
             with (
-                patch.object(
-                    manual.socket, "getaddrinfo", return_value=[(None, None, None, None, ("93.184.216.34", 443))]
-                ),
+                patch("socket.getaddrinfo", return_value=[(None, None, None, None, ("93.184.216.34", 443))]),
                 patch.object(
                     manual, "fetch_text_with_final_url", return_value=("https://example.com/jobs/python", html)
                 ) as fetch,
@@ -269,7 +267,7 @@ class ManualSourceTests(unittest.TestCase):
 
     def test_hostname_resolving_to_private_network_is_rejected(self):
         with (
-            patch.object(manual.socket, "getaddrinfo", return_value=[(None, None, None, None, ("192.168.1.10", 443))]),
+            patch("socket.getaddrinfo", return_value=[(None, None, None, None, ("192.168.1.10", 443))]),
             self.assertRaisesRegex(ValueError, "Private Netzwerk"),
         ):
             manual.validate_public_url("https://public-name.example/job")

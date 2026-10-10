@@ -59,7 +59,9 @@ def local_server(routes):
     server = QuietServer(("127.0.0.1", 0), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
-        yield f"http://127.0.0.1:{server.server_port}", requests
+        # These fixtures intentionally serve loopback, outside the production public-URL policy.
+        with patch("job_finder.http.validate_public_url", side_effect=lambda url: url):
+            yield f"http://127.0.0.1:{server.server_port}", requests
     finally:
         server.shutdown()
         server.server_close()

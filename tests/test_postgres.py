@@ -51,7 +51,7 @@ class PostgresTests(unittest.TestCase):
             die Wartung unserer Anwendungen im agilen Produktteam. Erste Kenntnisse in
             Python und Datenbanken sind willkommen.</p></main>"""
         with (
-            patch.object(manual.socket, "getaddrinfo", return_value=[(None, None, None, None, ("93.184.216.34", 443))]),
+            patch("socket.getaddrinfo", return_value=[(None, None, None, None, ("93.184.216.34", 443))]),
             patch.object(manual, "fetch_text_with_final_url", return_value=("https://example.com/jobs/python", page)),
         ):
             result = import_manual_url("https://example.com/jobs/python")

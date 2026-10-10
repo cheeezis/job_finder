@@ -29,15 +29,13 @@ def import_manual_url(
     transaction. Return job_id, title, company, match_percent and
     prefilter_warning, which explains why a submission the filter
     rejects stays reviewable. Invalid URLs or unrecognized pages raise
-    ValueError; network, filesystem and database failures propagate to
-    the caller.
+    UserInputError; remote download failures raise ManualImportError.
+    Filesystem, database and internal failures retain their own types.
     """
     # Download before taking a database lock. Persist the manual source and
     # both review datasets in the same transaction as the remembered job.
     if dataset_name(cache_path):
-        requested_url = manual.validate_public_url(url)
-        final_url, html = manual.fetch_text_with_final_url(requested_url, url_validator=manual.validate_public_url)
-        imported = manual.job_from_page(final_url, html)
+        _, _, imported = manual.fetch_listing(url)
     else:
         imported = manual.add_url(url, cache_path=cache_path)
     with transaction() if dataset_name(jobs_path) else nullcontext() as connection:

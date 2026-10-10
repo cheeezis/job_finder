@@ -16,6 +16,8 @@ from urllib.parse import urljoin, urlsplit
 
 import httpx
 
+from job_finder.errors import UserInputError
+
 DEFAULT_HEADERS = {"User-Agent": "job-finder/0.1"}
 MAX_RESPONSE_BYTES = 20 * 1024 * 1024
 MAX_REDIRECTS = 10
@@ -29,6 +31,10 @@ _client_lock = threading.Lock()
 # One lock per host: parallel sources never send two requests to the same host at once.
 _host_locks = {}
 _host_locks_lock = threading.Lock()
+
+
+class HttpResponseError(ValueError):
+    """A remote response exceeded the accepted size."""
 
 
 class HttpStatusError(OSError):
@@ -83,27 +89,31 @@ def validate_public_url(value):
     This does not pin DNS or claim to prevent DNS rebinding.
     """
     text = str(value or "").strip()
-    parts = urlsplit(text)
-    if parts.scheme not in {"http", "https"} or not parts.hostname:
-        raise ValueError("Bitte eine vollständige http(s)-URL eingeben")
+    try:
+        parts = urlsplit(text)
+        hostname, port = parts.hostname, parts.port
+    except ValueError:
+        raise UserInputError("Bitte eine vollständige http(s)-URL eingeben") from None
+    if parts.scheme not in {"http", "https"} or not hostname:
+        raise UserInputError("Bitte eine vollständige http(s)-URL eingeben")
     if parts.username is not None or parts.password is not None:
-        raise ValueError("Zugangsdaten in der URL sind nicht erlaubt")
-    if parts.port not in {None, 80, 443}:
-        raise ValueError("Nur HTTP(S)-Standardports sind erlaubt")
-    hostname = parts.hostname.casefold()
+        raise UserInputError("Zugangsdaten in der URL sind nicht erlaubt")
+    if port not in {None, 80, 443}:
+        raise UserInputError("Nur HTTP(S)-Standardports sind erlaubt")
+    hostname = hostname.casefold()
     if hostname == "localhost" or hostname.endswith(".local"):
-        raise ValueError("Lokale Adressen können nicht importiert werden")
+        raise UserInputError("Lokale Adressen können nicht importiert werden")
     try:
         address = ipaddress.ip_address(hostname)
     except ValueError:
         try:
-            addresses = {item[4][0] for item in socket.getaddrinfo(hostname, parts.port)}
+            addresses = {item[4][0] for item in socket.getaddrinfo(hostname, port)}
         except socket.gaierror as error:
-            raise ValueError("Adresse der Stellenanzeige konnte nicht aufgelöst werden") from error
+            raise UserInputError("Adresse der Stellenanzeige konnte nicht aufgelöst werden") from error
     else:
         addresses = {str(address)}
     if not addresses or any(not ipaddress.ip_address(item).is_global for item in addresses):
-        raise ValueError("Private Netzwerkadressen können nicht importiert werden")
+        raise UserInputError("Private Netzwerkadressen können nicht importiert werden")
     return parts._replace(fragment="").geturl()
 
 
@@ -206,10 +216,10 @@ def _read_bounded(response, max_bytes):
     """Read one response with a hard limit to protect local memory."""
     content_length = response.headers.get("Content-Length")
     if content_length and int(content_length) > max_bytes:
-        raise ValueError("HTTP-Antwort überschreitet das Größenlimit")
+        raise HttpResponseError("HTTP-Antwort überschreitet das Größenlimit")
     content = bytearray()
     for chunk in response.iter_bytes():
         content.extend(chunk)
         if len(content) > max_bytes:
-            raise ValueError("HTTP-Antwort überschreitet das Größenlimit")
+            raise HttpResponseError("HTTP-Antwort überschreitet das Größenlimit")
     return bytes(content)

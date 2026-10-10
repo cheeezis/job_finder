@@ -7,6 +7,7 @@ import re
 import uuid
 from pathlib import Path
 
+from job_finder.errors import DocumentAccessError, DocumentIntegrityError, NotFoundError, UserInputError
 from job_finder.paths import APPLICATION_DOCUMENTS_DIR
 from job_finder.persistence import document_store
 
@@ -55,20 +56,20 @@ def prepare_documents(documents):
     if documents is None:
         return []
     if not isinstance(documents, list):
-        raise ValueError("Bewerbungsunterlagen müssen eine Liste sein")
+        raise UserInputError("Bewerbungsunterlagen müssen eine Liste sein")
 
     prepared = []
     kinds = set()
     for document in documents:
         if not isinstance(document, dict):
-            raise ValueError("Ungültige Bewerbungsunterlage")
+            raise UserInputError("Ungültige Bewerbungsunterlage")
         kind = str(document.get("kind") or "")
         if kind not in ALLOWED_KINDS or kind in kinds:
-            raise ValueError("Anschreiben und Lebenslauf dürfen je einmal vorkommen")
+            raise UserInputError("Anschreiben und Lebenslauf dürfen je einmal vorkommen")
         kinds.add(kind)
         name = safe_original_name(document.get("name"))
         if Path(name).suffix.casefold() not in ALLOWED_EXTENSIONS:
-            raise ValueError("Erlaubt sind PDF-, DOC-, DOCX- und ODT-Dateien")
+            raise UserInputError("Erlaubt sind PDF-, DOC-, DOCX- und ODT-Dateien")
         raw = document.get("content")
         content = checked_content(raw) if isinstance(raw, bytes) else decode_content(raw)
         metadata = {"id": uuid.uuid4().hex, "kind": kind, "name": name, "stored_name": name}
@@ -76,7 +77,7 @@ def prepare_documents(documents):
 
     stored_names = [metadata["stored_name"].casefold() for metadata, _ in prepared]
     if len(stored_names) != len(set(stored_names)):
-        raise ValueError("Bewerbungsunterlagen müssen unterschiedliche Namen haben")
+        raise UserInputError("Bewerbungsunterlagen müssen unterschiedliche Namen haben")
 
     return prepared
 
@@ -94,14 +95,17 @@ def resolve_document_key(job_id, metadata):
 
 def read_document(job_id, metadata, root=APPLICATION_DOCUMENTS_DIR):
     """Read the referenced version and check its contents; legacy metadata remains readable."""
-    key = resolve_document_key(job_id, metadata)
+    try:
+        key = resolve_document_key(job_id, metadata)
+    except ValueError:
+        raise DocumentAccessError("Ungültiger Dokumentpfad") from None
     version = metadata.get("blob_version_id")
     if version is not None and (not isinstance(version, str) or not version):
-        raise ValueError("Ungültige Dokumentversion")
+        raise DocumentAccessError("Ungültige Dokumentversion")
     content = document_store.read(key, root, version_id=version)
     expected = metadata.get("sha256")
     if expected is not None and expected != hashlib.sha256(content).hexdigest():
-        raise ValueError("Dokument-Prüfsumme stimmt nicht überein")
+        raise DocumentIntegrityError("Dokument-Prüfsumme stimmt nicht überein")
     return content
 
 
@@ -138,7 +142,7 @@ def find_document(entry, document_id):
     for document in entry.get("application_documents", []):
         if isinstance(document, dict) and document.get("id") == document_id:
             return document
-    raise KeyError("Bewerbungsunterlage wurde nicht gefunden")
+    raise NotFoundError("Bewerbungsunterlage wurde nicht gefunden")
 
 
 def remove_documents(job_id, documents, root=APPLICATION_DOCUMENTS_DIR):
@@ -196,25 +200,25 @@ def safe_original_name(value):
     name = Path(str(value or "").replace("\\", "/")).name.strip()
     name = safe_windows_name(name)
     if not name or len(name) > 240:
-        raise ValueError("Ungültiger Dateiname")
+        raise UserInputError("Ungültiger Dateiname")
     return name
 
 
 def decode_content(value):
     """Decode a bounded base64 document payload."""
     if not isinstance(value, str) or not value:
-        raise ValueError("Dateiinhalt fehlt")
+        raise UserInputError("Dateiinhalt fehlt")
     try:
         content = base64.b64decode(value, validate=True)
     except (binascii.Error, ValueError) as error:
-        raise ValueError("Dateiinhalt ist ungültig") from error
+        raise UserInputError("Dateiinhalt ist ungültig") from error
     return checked_content(content)
 
 
 def checked_content(content):
     """Refuse an empty or oversized document."""
     if not content:
-        raise ValueError("Die Datei ist leer")
+        raise UserInputError("Die Datei ist leer")
     if len(content) > MAX_DOCUMENT_BYTES:
-        raise ValueError("Eine Datei darf höchstens 15 MB groß sein")
+        raise UserInputError("Eine Datei darf höchstens 15 MB groß sein")
     return content

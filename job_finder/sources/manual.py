@@ -4,7 +4,8 @@ import re
 from html.parser import HTMLParser
 from urllib.parse import urlsplit
 
-from job_finder.http import fetch_text_with_final_url, validate_public_url
+from job_finder.errors import ManualImportError, UserInputError
+from job_finder.http import HttpResponseError, HttpStatusError, fetch_text_with_final_url, validate_public_url
 from job_finder.matching.remote import classify_remote, detect_remote
 from job_finder.models import Job, JobSource
 from job_finder.paths import MANUAL_CACHE_FILE
@@ -56,13 +57,21 @@ _VOID_TAGS = {
 }
 
 
+def fetch_listing(url):
+    """Download one public listing; classify only expected remote failures."""
+    requested_url = validate_public_url(url)
+    try:
+        final_url, html = fetch_text_with_final_url(requested_url, url_validator=validate_public_url)
+    except (HttpStatusError, HttpResponseError, TimeoutError, ConnectionError):
+        raise ManualImportError("Stellenanzeige konnte nicht geladen werden.") from None
+    return requested_url, final_url, job_from_page(final_url, html)
+
+
 def add_url(url, cache_path=MANUAL_CACHE_FILE):
     """Fetch and persist one explicitly supplied public job URL."""
-    requested_url = validate_public_url(url)
-    final_url, html = fetch_text_with_final_url(requested_url, url_validator=validate_public_url)
+    requested_url, final_url, job = fetch_listing(url)
     cache = load_detail_cache(cache_path)
     cache_key = canonical_detail_url(final_url)
-    job = job_from_page(final_url, html)
     cache.pop(canonical_detail_url(requested_url), None)
     cache[cache_key] = job
     save_detail_cache(cache_path, cache)
@@ -154,7 +163,7 @@ def job_from_visible_page(url, html):
             or not headings.intersection(_TASK_HEADINGS)
             or not headings.intersection(_PROFILE_HEADINGS)
         ):
-            raise ValueError("Kein Hauptinhalt für die Stellenanzeige gefunden")
+            raise UserInputError("Kein Hauptinhalt für die Stellenanzeige gefunden")
     title = parser.title or parser.metadata.get("og:title", "")
     company = parser.metadata.get("og:site_name", "") or urlsplit(url).hostname
     description_html = parser.main_fragment(html)
@@ -164,7 +173,7 @@ def job_from_visible_page(url, html):
     employment = first_labeled_value(parser.lines, {"beschaeftigungsart", "anstellungsart", "employment type"})
 
     if not title or not company or len(description) < 200:
-        raise ValueError("Auf der Seite wurde keine vollständige Stellenanzeige erkannt")
+        raise UserInputError("Auf der Seite wurde keine vollständige Stellenanzeige erkannt")
 
     remote = detect_remote(title, " ".join(locations), description)
     work_mode, remote_percentage = classify_remote(remote)
@@ -220,7 +229,7 @@ class VisibleJobParser(HTMLParser):
     def main_fragment(self, html):
         """Extract the captured container from the HTML already fed to this parser."""
         if self.fragment_start is None or self.fragment_end is None:
-            raise ValueError("Kein Hauptinhalt für die Stellenanzeige gefunden")
+            raise UserInputError("Kein Hauptinhalt für die Stellenanzeige gefunden")
         offsets = [0]
         for line in html.splitlines(keepends=True):
             offsets.append(offsets[-1] + len(line))

@@ -303,6 +303,28 @@ For an update, change the version and both `sha384` checksums in `docs.html`
 together with the version in `SWAGGER` (`review_app.py`); a test checks that
 every external file has a checksum and is in the policy.
 
+#### Fehlervertrag
+
+Alle Fehlerantworten der Review-API verwenden `{"error": "…"}` und die
+Security Headers. Nur explizite Fehler an der jeweiligen Grenze bestimmen
+den Status; Basistypen wie `ValueError`, `KeyError` oder `psycopg.Error`
+werden nicht pauschal als Benutzer- oder Verbindungsfehler behandelt.
+
+| Status | Bedeutung |
+| --- | --- |
+| 400 | Ungültige Payload oder bekannte Eingabevalidierung (`UserInputError`); deutsche Validierungsmeldung |
+| 404 | Unbekannte Job-/Dokument-ID, fehlende Datei oder Blob-Version; auch verweigerter Dokumentzugriff über unsichere Metadaten |
+| 502 | Erwarteter HTTP-/Transportfehler oder Größenlimit beim Download einer manuell importierten Anzeige (`ManualImportError`) |
+| 503 | Fehlgeschlagene Laufzeitanmeldung oder Datenbankverbindung (`DatabaseUnavailableError`); kein Retry von Änderungen und kein Wechsel der Identität |
+| 500 | Interner Fehler, SQL-Fehler nach dem Verbindungsaufbau, Storageausfall oder verletzte Dokument-Prüfsumme (`DocumentIntegrityError`) |
+
+Bei 500 bleiben Response und Telemetrie frei von Exception-Text, DSN,
+Tokens, Dokumentnamen und Bytes. Der Request-Span enthält Route und Status;
+bei unerwarteten Fehlern nur den Exception-Typ als Fehlerbeschreibung.
+Rollback: über den Workflow `Rollback` das vorherige Image aus „Way back“
+wiederherstellen (siehe [Operations](operations.md#deploy-and-rollback)).
+Diese Änderung benötigt keine Datenbankmigration.
+
 ### Manual import
 
 `manual_import.import_manual_url` processes exactly the submitted URL and keeps

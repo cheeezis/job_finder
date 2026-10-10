@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 
+from job_finder.errors import UserInputError
 from job_finder.models import WorkflowStatus
 from job_finder.paths import APPLICATION_DOCUMENTS_DIR, MEMORY_FILE
 from job_finder.persistence.application_documents import prepare_documents, remove_documents, write_documents
@@ -11,6 +12,7 @@ from job_finder.workflow.applications import (
     record_status_change,
     synchronize_current_status,
     update_history_event,
+    validated_workflow_status,
 )
 from job_finder.workflow.memory import DETAILS_EDITED, edit_job, load_job
 
@@ -19,21 +21,21 @@ MAX_REVIEW_NOTE_CHARS = 2000
 
 def update_workflow_status(job_id, workflow_status, memory_path=MEMORY_FILE, occurred_on=None, scheduled_for=None):
     """Validate and persist one manual workflow decision."""
-    status = WorkflowStatus(workflow_status)
+    status = validated_workflow_status(workflow_status)
     with edit_job(job_id, memory_path) as entry:
         return record_status_change(entry, status, occurred_on, scheduled_for)
 
 
 def update_review_decision(job_id, workflow_status, memory_path=MEMORY_FILE):
     """Persist a review decision without changing an existing application."""
-    status = WorkflowStatus(workflow_status)
+    status = validated_workflow_status(workflow_status)
     if status not in {
         WorkflowStatus.INTERESTING,
         WorkflowStatus.INQUIRY,
         WorkflowStatus.WAITING,
         WorkflowStatus.IGNORED,
     }:
-        raise ValueError("Ungueltiger Review-Status")
+        raise UserInputError("Ungueltiger Review-Status")
     with edit_job(job_id, memory_path) as entry:
         if is_application(entry):
             return status_result(entry.get("workflow_status", WorkflowStatus.APPLIED.value), True)
@@ -54,10 +56,10 @@ def request_fact_sheet_rerun(job_id, memory_path=MEMORY_FILE):
 def update_review_note(job_id, review_note, memory_path=MEMORY_FILE):
     """Store the user's own note on a job without touching its decision; empty removes it."""
     if not isinstance(review_note, str):
-        raise ValueError("Notiz muss Text sein")
+        raise UserInputError("Notiz muss Text sein")
     note = review_note.strip()
     if len(note) > MAX_REVIEW_NOTE_CHARS:
-        raise ValueError(f"Notiz darf höchstens {MAX_REVIEW_NOTE_CHARS} Zeichen lang sein")
+        raise UserInputError(f"Notiz darf höchstens {MAX_REVIEW_NOTE_CHARS} Zeichen lang sein")
     with edit_job(job_id, memory_path) as entry:
         if note:
             entry["review_note"] = note
@@ -70,17 +72,17 @@ def undo_ignored_decision(job_id, expected_status, memory_path=MEMORY_FILE):
     """Remove the latest ignored transition and restore its prior status."""
     with edit_job(job_id, memory_path) as entry:
         if is_application(entry):
-            raise ValueError("Bewerbungsstatus kann hier nicht rückgängig gemacht werden")
-        if entry.get("workflow_status") != WorkflowStatus(expected_status).value:
-            raise ValueError("Die Stelle wurde zwischenzeitlich geändert")
+            raise UserInputError("Bewerbungsstatus kann hier nicht rückgängig gemacht werden")
+        if entry.get("workflow_status") != validated_workflow_status(expected_status).value:
+            raise UserInputError("Die Stelle wurde zwischenzeitlich geändert")
         if expected_status != WorkflowStatus.IGNORED.value:
-            raise ValueError("Nur die letzte Nicht-interessant-Entscheidung ist rückgängig")
+            raise UserInputError("Nur die letzte Nicht-interessant-Entscheidung ist rückgängig")
         history = entry.get("workflow_history")
         if not isinstance(history, list) or not history:
-            raise ValueError("Keine Entscheidung zum Rückgängigmachen gefunden")
+            raise UserInputError("Keine Entscheidung zum Rückgängigmachen gefunden")
         last_event = history[-1]
         if not isinstance(last_event, dict) or last_event.get("status") != expected_status:
-            raise ValueError("Die letzte Entscheidung hat sich zwischenzeitlich geändert")
+            raise UserInputError("Die letzte Entscheidung hat sich zwischenzeitlich geändert")
         history.pop()
         return status_result(synchronize_current_status(entry), False)
 
@@ -137,7 +139,7 @@ def status_result(workflow_status, application_tracked):
 def validated_salary_expectation_eur(value, period="year"):
     """Return one optional positive annual gross salary in whole euros."""
     if period not in {"year", "month"}:
-        raise ValueError("Gehaltszeitraum muss Jahr oder Monat sein")
+        raise UserInputError("Gehaltszeitraum muss Jahr oder Monat sein")
     if value is None or value == "":
         return None
     if isinstance(value, str) and value.strip().isdecimal():
@@ -145,11 +147,11 @@ def validated_salary_expectation_eur(value, period="year"):
     elif isinstance(value, int) and not isinstance(value, bool):
         salary = value
     else:
-        raise ValueError("Gehaltsvorstellung muss eine ganze Zahl sein")
+        raise UserInputError("Gehaltsvorstellung muss eine ganze Zahl sein")
     if period == "month":
         salary *= 12
     if salary <= 0 or salary > 10_000_000:
-        raise ValueError("Gehaltsvorstellung liegt außerhalb des gültigen Bereichs")
+        raise UserInputError("Gehaltsvorstellung liegt außerhalb des gültigen Bereichs")
     return salary
 
 
@@ -158,7 +160,7 @@ def update_application_salary(job_id, value, period="year", memory_path=MEMORY_F
     salary = validated_salary_expectation_eur(value, period)
     with edit_job(job_id, memory_path) as entry:
         if not is_application(entry):
-            raise ValueError("Für diese Stelle ist noch keine Bewerbung gespeichert")
+            raise UserInputError("Für diese Stelle ist noch keine Bewerbung gespeichert")
         if salary is None:
             entry.pop("salary_expectation_eur", None)
         else:
@@ -175,13 +177,13 @@ def update_application_details(job_id, title, company, memory_path=MEMORY_FILE):
     for field, value, label in (("title", title, "Titel"), ("company", company, "Firma")):
         text = " ".join(str(value or "").split())
         if not text:
-            raise ValueError(f"{label} darf nicht leer sein")
+            raise UserInputError(f"{label} darf nicht leer sein")
         if len(text) > MAX_DETAIL_LENGTH:
-            raise ValueError(f"{label} ist länger als {MAX_DETAIL_LENGTH} Zeichen")
+            raise UserInputError(f"{label} ist länger als {MAX_DETAIL_LENGTH} Zeichen")
         values[field] = text
     with edit_job(job_id, memory_path) as entry:
         if not is_application(entry):
-            raise ValueError("Für diese Stelle ist noch keine Bewerbung gespeichert")
+            raise UserInputError("Für diese Stelle ist noch keine Bewerbung gespeichert")
         entry.update(values)
         entry[DETAILS_EDITED] = True
     return values

@@ -10,6 +10,7 @@ import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
+from job_finder.errors import DocumentAccessError
 from job_finder.paths import APPLICATION_DOCUMENTS_DIR
 
 _container_client = None
@@ -54,7 +55,7 @@ def local_path(key, root=APPLICATION_DOCUMENTS_DIR):
     base = os.path.realpath(root)
     path = os.path.realpath(os.path.join(base, key))
     if not path.startswith(base + os.sep):
-        raise ValueError("Ungültiger Dokumentschlüssel")
+        raise DocumentAccessError("Ungültiger Dokumentschlüssel")
     return Path(path)
 
 

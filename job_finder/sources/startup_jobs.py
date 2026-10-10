@@ -13,6 +13,7 @@ from job_finder.sources.common import (
     parse_published_date,
     remote_region_allows_germany,
     source_job_id,
+    unique_records,
     utc_now,
 )
 from job_finder.text import html_to_text
@@ -51,23 +52,20 @@ def fetch_jobs(api_key=None):
 
 def collect_records(headers, scopes=SEARCH_SCOPES):
     """Fetch bounded cursor pages and merge overlaps between both scopes; each scope is one segment."""
-    records = {}
+    records = []
 
     def collect(scope):
         cursor = None
         for _page in range(MAX_PAGES_PER_SCOPE):
             payload = fetch_json(build_search_url(scope, cursor), headers=headers)
-            for record in payload.get("data") or []:
-                identifier = str(record.get("id") or record.get("url") or "").strip()
-                if identifier:
-                    records.setdefault(identifier, record)
+            records.extend(payload.get("data") or [])
 
             cursor = payload.get("next_cursor")
             if not payload.get("has_more") or cursor is None:
                 break
 
-    collect_segments(list(scopes), collect, "Startup Jobs")
-    return list(records.values())
+    collect_segments(list(scopes), collect, "Startup Jobs", has_results=lambda: bool(records))
+    return unique_records(records, lambda record: str(record.get("id") or record.get("url") or "").strip())
 
 
 def build_search_url(scope, cursor=None):

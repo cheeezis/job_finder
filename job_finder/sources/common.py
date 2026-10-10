@@ -112,13 +112,26 @@ def convert_records(records, convert, label):
     return jobs
 
 
-def collect_segments(segments, collect, label):
+def unique_records(records, identifier):
+    """Deduplicate API records, keeping malformed records for conversion and its failure policy."""
+    unique, malformed = {}, []
+    for record in records:
+        key = identifier(record) if isinstance(record, dict) else None
+        if key:
+            unique.setdefault(key, record)
+        else:
+            malformed.append(record)
+    return [*unique.values(), *malformed]
+
+
+def collect_segments(segments, collect, label, *, has_results=None):
     """Run collect(segment) for every search or page; a failed one makes the result partial.
 
     collect gathers into the caller's own state, so what came before a failure
     stays. A network or response error counts as failed; after HTTP 403 or 429
     the remaining segments are not requested and count as failed too. If every
-    segment fails, the last error propagates and the source fails as before.
+    segment fails, the last error propagates unless has_results confirms that
+    earlier pages already contributed records. Those records remain partial.
     """
     record_total_segments(len(segments))
     failed, last_error = 0, None
@@ -130,7 +143,7 @@ def collect_segments(segments, collect, label):
             if getattr(error, "code", None) in {403, 429}:
                 failed += len(segments) - position - 1
                 break
-    if failed == len(segments) and last_error is not None:
+    if failed == len(segments) and last_error is not None and not (has_results and has_results()):
         raise last_error
     if failed:
         record_partial_failure(failed)

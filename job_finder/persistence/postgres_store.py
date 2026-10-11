@@ -164,7 +164,7 @@ def write_memory(connection, scope, before, after):
     records = []
     children = {table: [] for table, _fields in CHILD_TABLES}
     for job_id, entry in changed.items():
-        core = deepcopy(entry)
+        core = dict(entry)
         for field, fields in CHILD_TABLES:
             values = core.get(field)
             if isinstance(values, list):

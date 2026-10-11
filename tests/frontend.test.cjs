@@ -102,7 +102,6 @@ test("review decisions update the backing jobs and preserve navigation", () => {
     view.context.applyFilters = reset => { assert.equal(reset, false); filterCalls += 1; };
     view.context.applyWorkflowResult(jobs[0], {workflow_status: "interesting", application_tracked: false});
     assert.equal(jobs[0].workflow_status, "interesting");
-    assert.equal(jobs[0].is_new, false);
     assert.equal(jobs[0].application_tracked, false);
     assert.equal(filterCalls, filtered ? 1 : 0);
     assert.equal(renders, filtered ? 0 : 1);
@@ -141,7 +140,6 @@ test("review decisions retain updates for cards sharing a persisted job ID", () 
   for (const job of jobs) {
     assert.equal(job.workflow_status, "applied");
     assert.equal(job.application_tracked, true);
-    assert.equal(job.is_new, false);
   }
 });
 

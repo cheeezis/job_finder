@@ -322,7 +322,6 @@
 
   function applyWorkflowResult(job, result) {
     job.workflow_status = result.workflow_status;
-    job.is_new = false;
     if (result.application_tracked != null) {
       job.application_tracked = result.application_tracked;
     }
@@ -331,7 +330,6 @@
     if (original) {
       original.workflow_status = result.workflow_status;
       original.application_tracked = job.application_tracked;
-      original.is_new = false;
     }
     if (element("status-filter").value && element("status-filter").value !== result.workflow_status) {
       applyFilters(false);

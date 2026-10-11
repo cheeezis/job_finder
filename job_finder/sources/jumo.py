@@ -32,20 +32,20 @@ def collect_links():
 
 def _collect_links(client):
     """Walk the result batches of one search session."""
-    page = _session_text(client, SEARCH_URL)
+    page = session_text(client, SEARCH_URL)
     csrf_match = re.search(r'name="_csrf"[^>]*value="([^"]+)"', page)
     if not csrf_match:
         raise ValueError("JUMO-CSRF-Kennung nicht gefunden")
     csrf = unescape(csrf_match.group(1))
 
-    _session_text(client, f"{LIST_URL}?search=true", {"j": "jobexchange", "_csrf": csrf})
+    session_text(client, f"{LIST_URL}?search=true", {"j": "jobexchange", "_csrf": csrf})
     identifiers = {}
 
     for _batch in range(MAX_RESULT_BATCHES):
-        html = _session_text(client, LIST_URL, {"showNextJobOffers": "true", "j": "jobexchange", "_csrf": csrf})
+        html = session_text(client, LIST_URL, {"showNextJobOffers": "true", "j": "jobexchange", "_csrf": csrf})
         identifiers.update(dict.fromkeys(extract_job_ids(html)))
 
-        has_next = _session_text(client, LIST_URL, {"hasNextJobOffers": "true", "_csrf": csrf})
+        has_next = session_text(client, LIST_URL, {"hasNextJobOffers": "true", "_csrf": csrf})
         if not json.loads(has_next.lower()):
             break
 
@@ -59,8 +59,3 @@ def _collect_links(client):
 def extract_job_ids(html):
     """Return unique hexadecimal offer IDs in their first-seen order."""
     return list(dict.fromkeys(re.findall(r"jobOfferId=([a-f0-9]+)", html, re.IGNORECASE)))
-
-
-def _session_text(client, url, form=None):
-    """GET, or POST form fields, through the JUMO session and return UTF-8 text."""
-    return session_text(client, url, form)

@@ -7,6 +7,8 @@ lists into rows, attach() turns the rows back into lists. The two lists of a
 listing share one row per position, so lists of different length survive.
 """
 
+from itertools import zip_longest
+
 LISTING_FIELDS = ("source_urls", "source_names")
 LINK_FIELD = "linked_job_ids"
 FIELDS = (*LISTING_FIELDS, LINK_FIELD)
@@ -17,7 +19,7 @@ def rows(scope, job_id, entry):
     urls, names = (_strings(entry.get(field)) for field in LISTING_FIELDS)
     listings = [
         (scope, job_id, position, url, name)
-        for position, (url, name) in enumerate(_zip_longest(urls, names))
+        for position, (url, name) in enumerate(zip_longest(urls, names))
         if url is not None or name is not None
     ]
     links = [
@@ -78,15 +80,6 @@ def attach(connection, memory, present, where, params):
 
 def _strings(values):
     return list(values) if isinstance(values, list) else []
-
-
-def _zip_longest(first, second):
-    length = max(len(first), len(second))
-    return [(_at(first, i), _at(second, i)) for i in range(length)]
-
-
-def _at(values, index):
-    return values[index] if index < len(values) else None
 
 
 def _put(values, position, value):

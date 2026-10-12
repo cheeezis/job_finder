@@ -133,7 +133,7 @@ def deliver_notifications(
             refreshed = [(key, current[key]) for key in remaining if key in current]
             if not refreshed:
                 break
-            chunk = notification_chunks(refreshed, review_host=review_host)[0]
+            chunk = next_notification_chunk(refreshed, review_host=review_host)
             attempted = {key for key, _job in chunk}
             remaining = [key for key in remaining if key not in attempted]
             timestamp = datetime.now(UTC).isoformat()
@@ -399,26 +399,19 @@ def pending_entry(job, timestamp):
     }
 
 
-def notification_chunks(candidates, *, review_host=None):
-    """Group jobs within Discord's embed count and character limits.
+def next_notification_chunk(candidates, *, review_host=None):
+    """Take the leading jobs that fit one message within Discord's embed count and character limits.
 
     Size each card exactly as it is sent, including the optional review link.
     """
-    chunks = []
-    current = []
-    current_characters = 0
+    chunk = []
+    characters = 0
     for candidate in candidates:
-        embed = discord_embed(candidate[1], review_host=review_host)
-        characters = embed_character_count(embed)
-        if current and (len(current) >= MAX_EMBEDS or current_characters + characters > MAX_EMBED_CHARACTERS):
-            chunks.append(current)
-            current = []
-            current_characters = 0
-        current.append(candidate)
-        current_characters += characters
-    if current:
-        chunks.append(current)
-    return chunks
+        characters += embed_character_count(discord_embed(candidate[1], review_host=review_host))
+        if chunk and (len(chunk) >= MAX_EMBEDS or characters > MAX_EMBED_CHARACTERS):
+            break
+        chunk.append(candidate)
+    return chunk
 
 
 def discord_payload(jobs, *, review_host=None):

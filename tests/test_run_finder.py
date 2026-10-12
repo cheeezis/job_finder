@@ -114,7 +114,7 @@ class RunFinderTests(unittest.TestCase):
                     "run_finder.collect_jobs",
                     return_value=([job], [{"name": "arbeitnow", "status": "success", "jobs": 1}]),
                 ),
-                patch("run_finder.write_recommendations") as recommendations,
+                patch("run_finder.build_recommendations", wraps=run_finder.build_recommendations) as recommendations,
                 patch(
                     "run_finder.deliver_notifications",
                     return_value={"ready": 0, "sent": 0, "failed": 0, "configuration_error": None},
@@ -164,7 +164,7 @@ class RunFinderTests(unittest.TestCase):
                 patch("run_finder.MEMORY_FILE", memory_file),
                 patch("run_finder.create_backup"),
                 patch("run_finder.SOURCES", [source]),
-                patch("run_finder.write_recommendations") as recommendations,
+                patch("run_finder.build_recommendations", wraps=run_finder.build_recommendations) as recommendations,
                 patch(
                     "run_finder.deliver_notifications",
                     return_value={"ready": 0, "sent": 0, "failed": 0, "configuration_error": None},
@@ -198,7 +198,7 @@ class RunFinderTests(unittest.TestCase):
                 patch("run_finder.create_backup"),
                 patch("run_finder.SOURCES", []),
                 patch("run_finder.collect_jobs", return_value=([fulda, berlin], reports)),
-                patch("run_finder.write_recommendations") as recommendations,
+                patch("run_finder.build_recommendations", wraps=run_finder.build_recommendations) as recommendations,
                 patch(
                     "run_finder.deliver_notifications",
                     return_value={"ready": 0, "sent": 0, "failed": 0, "configuration_error": None},
@@ -257,7 +257,7 @@ class RunFinderTests(unittest.TestCase):
             patch("run_finder.create_backup"),
             patch("run_finder.SOURCES", sources),
             patch("run_finder.collect_jobs", return_value=([job], [{"name": "kept", "status": "success", "jobs": 1}])),
-            patch("run_finder.write_recommendations"),
+            patch("run_finder.build_recommendations", wraps=run_finder.build_recommendations),
             patch(
                 "run_finder.deliver_notifications",
                 return_value={"ready": 0, "sent": 0, "failed": 0, "configuration_error": None},
@@ -312,7 +312,7 @@ class RunFinderTests(unittest.TestCase):
             patch("run_finder.collect_jobs", return_value=([make_job("working:1")], reports)),
             patch("run_finder.edit_memory") as edit_memory,
             patch("run_finder.publish_results") as write_jobs,
-            patch("run_finder.write_recommendations") as write_recommendations,
+            patch("run_finder.build_recommendations", wraps=run_finder.build_recommendations) as recommendation_builder,
             patch("run_finder.deliver_notifications") as notifications,
             self.assertRaises(IncompleteSourceSnapshotError),
         ):
@@ -320,7 +320,7 @@ class RunFinderTests(unittest.TestCase):
 
         edit_memory.assert_not_called()
         write_jobs.assert_not_called()
-        write_recommendations.assert_not_called()
+        recommendation_builder.assert_not_called()
         notifications.assert_not_called()
 
     def test_half_reachable_sources_are_still_usable(self):
@@ -601,7 +601,7 @@ class RunFinderTests(unittest.TestCase):
             patch("run_finder.SOURCES", [kept, excluded]),
             patch("run_finder.create_backup"),
             patch("run_finder.collect_jobs", side_effect=fake_collect_jobs),
-            patch("run_finder.write_recommendations"),
+            patch("run_finder.build_recommendations", wraps=run_finder.build_recommendations),
             patch(
                 "run_finder.deliver_notifications",
                 return_value={"ready": 0, "sent": 0, "failed": 0, "configuration_error": None},

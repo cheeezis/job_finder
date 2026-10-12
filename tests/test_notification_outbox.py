@@ -16,7 +16,7 @@ from job_finder.paths import JOBS_FILE, RECOMMENDATIONS_JSON
 from job_finder.persistence.database import database_url, in_transaction, transaction
 from job_finder.persistence.postgres_backup import create_postgres_backup, restore_backup
 from job_finder.persistence.postgres_store import write_dataset
-from job_finder.persistence.storage import read_json
+from job_finder.persistence.storage import read_json, write_json_atomic
 from job_finder.workflow.memory import load_memory, save_memory
 from job_finder.workflow.notifications import (
     NotificationError,
@@ -25,7 +25,6 @@ from job_finder.workflow.notifications import (
     queue_notifications,
     save_notification_state,
 )
-from job_finder.workflow.reporting import write_recommendations
 from run_finder import run_pipeline
 from tests.test_notifications import FakeClient, make_job
 from tests.test_run_finder import make_job as collected_job
@@ -78,18 +77,20 @@ class NotificationOutboxTests(unittest.TestCase):
         job = collected_job("test:1")
         job.remote_percentage = 100
         for target, original in (
-            ("write_recommendations", write_recommendations),
-            ("queue_notifications", queue_notifications),
+            ("job_finder.persistence.storage.write_json_atomic", write_json_atomic),
+            ("run_finder.queue_notifications", queue_notifications),
         ):
             with self.subTest(stage=target):
 
                 def fail_after_write(*args, **kwargs):
-                    original(*args, **kwargs)
-                    raise RuntimeError("injected before commit")
+                    result = original(*args, **kwargs)
+                    if target == "run_finder.queue_notifications" or args[0] == RECOMMENDATIONS_JSON:
+                        raise RuntimeError("injected before commit")
+                    return result
 
                 with (
                     self.pipeline([job]),
-                    patch("run_finder." + target, side_effect=fail_after_write),
+                    patch(target, side_effect=fail_after_write),
                     patch("run_finder.deliver_notifications") as delivery,
                     self.assertRaisesRegex(RuntimeError, "before commit"),
                 ):
@@ -101,17 +102,21 @@ class NotificationOutboxTests(unittest.TestCase):
         job = collected_job("test:1")
         job.remote_percentage = 100
 
-        def inspect_before_commit(results):
+        def inspect_before_commit(results, **kwargs):
+            statistics = queue_notifications(results, **kwargs)
             self.assertTrue(in_transaction())
-            write_recommendations(results)
+            with transaction() as writer:
+                for table in ("job_state", "jobs", "recommendations", "notifications"):
+                    self.assertGreater(writer.execute(f"SELECT count(*) FROM {table}").fetchone()[0], 0)
             with psycopg.connect(database_url()) as reader:
                 for table in ("job_state", "jobs", "recommendations", "notifications"):
                     self.assertEqual(reader.execute(f"SELECT count(*) FROM {table}").fetchone()[0], 0)
+            return statistics
 
         client = FakeClient()
         with (
             self.pipeline([job]),
-            patch("run_finder.write_recommendations", side_effect=inspect_before_commit),
+            patch("run_finder.queue_notifications", side_effect=inspect_before_commit),
             patch("job_finder.workflow.notifications.DiscordWebhookClient", return_value=client),
         ):
             run_pipeline()

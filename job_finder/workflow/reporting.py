@@ -45,10 +45,14 @@ ROLE_LABELS = {
 }
 
 
+def build_recommendations(results):
+    """Build the review document for every job that passed the rule-based prefilter."""
+    return {"recommendations": [recommendation_for_job(job) for job in results["included"]]}
+
+
 def write_recommendations(results, json_path=RECOMMENDATIONS_JSON):
     """Write every job that passed the rule-based prefilter."""
-    recommendations = [recommendation_for_job(job) for job in results["included"]]
-    write_json_atomic(json_path, {"recommendations": recommendations})
+    write_json_atomic(json_path, build_recommendations(results))
 
 
 def recommendation_for_job(job):

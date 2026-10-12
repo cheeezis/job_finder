@@ -91,7 +91,15 @@ def _with_skipped_listings(current, previous, key, exclude_sources):
     return [*current, *kept]
 
 
-def publish_results(jobs, results, *, jobs_path, writer, exclude_sources=frozenset()):
+def publish_results(
+    jobs,
+    results,
+    *,
+    jobs_path,
+    recommendation_builder,
+    recommendations_path=RECOMMENDATIONS_JSON,
+    exclude_sources=frozenset(),
+):
     """Publish both result views, retaining manual imports and skipped sources' listings.
 
     exclude_sources names the sources this run did not collect completely:
@@ -107,12 +115,11 @@ def publish_results(jobs, results, *, jobs_path, writer, exclude_sources=frozens
         if managed:
             lock(connection, "finder-publication")
             values = _with_skipped_listings(values, read_json(jobs_path, []), "sources", exclude_sources)
-            previous = read_object(RECOMMENDATIONS_JSON, {}).get("recommendations", [])
+            previous = read_object(recommendations_path, {}).get("recommendations", [])
         write_json_atomic(jobs_path, values)
-        writer(results)
+        document = recommendation_builder(results)
         if managed:
-            updated = read_object(RECOMMENDATIONS_JSON, {"recommendations": []})
-            updated["recommendations"] = _with_skipped_listings(
-                updated["recommendations"], previous, "source_links", exclude_sources
+            document["recommendations"] = _with_skipped_listings(
+                document["recommendations"], previous, "source_links", exclude_sources
             )
-            write_json_atomic(RECOMMENDATIONS_JSON, updated)
+        write_json_atomic(recommendations_path, document)

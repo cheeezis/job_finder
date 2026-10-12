@@ -90,17 +90,6 @@ resource "azurerm_storage_container" "application_documents" {
   }
 }
 
-# Transitional right of the earlier shared identity. In split the review
-# takes over the document access. Both planned workers skip the ZIP backup
-# and therefore need no document bytes; metadata stays in PostgreSQL.
-resource "azurerm_role_assignment" "storage_blob_data_contributor" {
-  count                = local.runtime_split ? 0 : 1
-  scope                = azurerm_storage_container.application_documents.id
-  role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = azurerm_user_assigned_identity.jobfinder.principal_id
-  principal_type       = "ServicePrincipal"
-}
-
 # Provides only the tenant ID now (keyvault.tf, review.tf); object_id is
 # deliberately NOT read from here any more, see var.owner_object_id.
 data "azurerm_client_config" "current" {}
@@ -112,17 +101,4 @@ resource "azurerm_role_assignment" "storage_blob_data_contributor_dev" {
   scope                = azurerm_storage_account.jobfinder.id
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = var.owner_object_id
-}
-
-# Dedicated app registration for the local Docker-based hybrid worker run
-# (StepStone/Remotely), which has no Managed Identity and no interactive
-# az-CLI session available inside the container. Least privilege: only this
-# one role on the documents container - not the tfstate container in the same
-# account, since this principal's secret lives on a local disk.
-resource "azurerm_role_assignment" "storage_blob_data_contributor_local_docker" {
-  count                = local.runtime_split ? 0 : 1
-  scope                = azurerm_storage_container.application_documents.id
-  role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = var.local_docker_sp_object_id
-  principal_type       = "ServicePrincipal"
 }

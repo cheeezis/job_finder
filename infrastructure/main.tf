@@ -119,14 +119,6 @@ resource "azurerm_container_app_job" "finder" {
     key_vault_secret_id = "${azurerm_key_vault.jobfinder.vault_uri}secrets/StartupJobsApiKey"
     identity            = azurerm_user_assigned_identity.jobfinder.id
   }
-  dynamic "secret" {
-    for_each = local.database_entra_active ? [] : [1]
-    content {
-      name                = "jobfinder-database-url"
-      key_vault_secret_id = "${azurerm_key_vault.jobfinder.vault_uri}secrets/${local.worker_database_secret}"
-      identity            = azurerm_user_assigned_identity.jobfinder.id
-    }
-  }
   # Personal search settings (content of user_settings.local.yaml); they
   # belong neither in the public repo nor in the image.
   secret {
@@ -199,16 +191,12 @@ resource "azurerm_container_app_job" "finder" {
       }
 
       env {
-        name        = "JOBFINDER_DATABASE_URL"
-        secret_name = local.database_entra_active ? null : "jobfinder-database-url"
-        value       = local.database_entra_active ? local.entra_database_urls.worker : null
+        name  = "JOBFINDER_DATABASE_URL"
+        value = local.entra_database_urls.worker
       }
-      dynamic "env" {
-        for_each = local.database_entra_active ? [1] : []
-        content {
-          name  = "JOBFINDER_DATABASE_AUTH"
-          value = "managed_identity"
-        }
+      env {
+        name  = "JOBFINDER_DATABASE_AUTH"
+        value = "managed_identity"
       }
       env {
         name        = "JOBFINDER_USER_SETTINGS"
@@ -254,7 +242,6 @@ resource "azurerm_container_app_job" "finder" {
   # The reference to the identity alone does not ensure this order.
   depends_on = [
     azurerm_role_assignment.acr_pull,
-    azurerm_role_assignment.keyvault_secrets_user_worker,
     azurerm_role_assignment.keyvault_worker_secret,
   ]
 }

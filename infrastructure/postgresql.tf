@@ -20,15 +20,15 @@ resource "azurerm_postgresql_flexible_server" "jobfinder" {
   public_network_access_enabled = true
 
   # Only for setup/administration; runtimes use their own restricted
-  # roles. This administrative way back stays during Entra.
+  # roles. This administrative way back stays next to Entra.
   administrator_login               = "jobfinder_admin"
   administrator_password_wo         = var.postgres_admin_password
   administrator_password_wo_version = 1
 
   authentication {
     password_auth_enabled         = true
-    active_directory_auth_enabled = local.database_entra_prepared
-    tenant_id                     = local.database_entra_prepared ? data.azurerm_client_config.current.tenant_id : null
+    active_directory_auth_enabled = true
+    tenant_id                     = data.azurerm_client_config.current.tenant_id
   }
 
   # Azure picks the available zone at creation. Keep this choice instead

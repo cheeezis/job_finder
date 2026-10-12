@@ -157,12 +157,11 @@ resource "azurerm_role_assignment" "monitoring_publisher_worker" {
   principal_type       = "ServicePrincipal"
 }
 
-# The same for the review with its own identity (F09); until then it uses the worker's.
+# The same for the review with its own identity (F09).
 resource "azurerm_role_assignment" "monitoring_publisher_review" {
-  count                = local.runtime_prepared ? 1 : 0
   scope                = azurerm_application_insights.jobfinder.id
   role_definition_name = "Monitoring Metrics Publisher"
-  principal_id         = azurerm_user_assigned_identity.review[0].principal_id
+  principal_id         = azurerm_user_assigned_identity.review.principal_id
   principal_type       = "ServicePrincipal"
 }
 

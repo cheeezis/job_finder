@@ -95,8 +95,7 @@ def queue_notifications(results, *, state_path=NOTIFICATION_STATE_FILE, aliases=
     """Persist stable job-ID orders with all card data, without external requests."""
     with edit_notification_state(state_path) as state:
         _merge_notification_ids(state, aliases or {})
-        _candidates, stats = _update_queue(results, state, datetime.now(UTC).isoformat())
-    return stats
+        return _update_queue(results, state, datetime.now(UTC).isoformat())
 
 
 def deliver_notifications(
@@ -268,17 +267,14 @@ def _update_queue(results, state, timestamp):
         elif key in state["pending"]:
             state["pending"][key]["payload"] = notification_job(job)
 
-    candidates = [
-        (key, jobs_by_key[key]) for key in state["pending"] if key in jobs_by_key and is_notifiable(jobs_by_key[key])
-    ]
-    stats = notification_stats(
+    ready = sum(1 for key in state["pending"] if key in jobs_by_key and is_notifiable(jobs_by_key[key]))
+    return notification_stats(
         queued=queued,
-        ready=len(candidates),
+        ready=ready,
         current_new=current_new,
         eligible_new=eligible_new,
-        already_notified=max(eligible_new - len(candidates), 0),
+        already_notified=max(eligible_new - ready, 0),
     )
-    return candidates, stats
 
 
 def send_run_summary(summary, *, webhook_url):

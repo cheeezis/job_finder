@@ -58,3 +58,11 @@ openapi.json
 
 # Build metadata of the editable install (uv sync)
 *.egg-info/
+
+# Private local audit reports and their export archive
+/audit/
+/final-bloat-masterplan.zip
+
+# Local Claude launch configuration and permission settings
+/.claude/launch.json
+/.claude/settings.local.json

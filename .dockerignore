@@ -18,6 +18,11 @@ profile.yaml
 data/
 tmp/
 
+# Private audit artifacts and local editor configuration are not runtime inputs.
+audit/
+final-bloat-masterplan.zip
+.claude/
+
 # Terraform configuration and local state files do not belong in the image.
 infrastructure/
 

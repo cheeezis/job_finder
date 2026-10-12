@@ -275,19 +275,28 @@ def write_dataset(name, value):
             # Position is a regular column, not part of record attributes.
             upsert_records(connection, kind, ("dataset", "position"), ("job_id", *fields), rows)
         elif kind == "notifications":
-            connection.execute("DELETE FROM notifications WHERE dataset=%s", (name,))
-            rows = [
-                (name, key, state, *parts(item, NOTIFICATION_FIELDS))
-                for state in ("sent", "pending")
-                for key, item in value.get(state, {}).items()
-            ]
-            upsert_records(
-                connection,
-                "notifications",
-                ("dataset", "notification_key", "delivery_state"),
-                NOTIFICATION_FIELDS,
-                rows,
+            rows = []
+            for state in ("sent", "pending"):
+                entries = value.get(state, {})
+                connection.execute(
+                    "DELETE FROM notifications WHERE dataset=%s AND delivery_state=%s "
+                    "AND NOT(notification_key=ANY(%s::text[]))",
+                    (name, state, list(entries)),
+                )
+                rows.extend((name, key, state, *parts(item, NOTIFICATION_FIELDS)) for key, item in entries.items())
+            # Presence records membership; unpack() may reorder the keys.
+            statement = (
+                "INSERT INTO notifications(dataset,notification_key,delivery_state,job_id,sent_at,attempts,present,extra) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s) "
+                "ON CONFLICT(dataset,notification_key,delivery_state) DO UPDATE SET "
+                "(job_id,sent_at,attempts,present,extra)="
+                "(EXCLUDED.job_id,EXCLUDED.sent_at,EXCLUDED.attempts,EXCLUDED.present,EXCLUDED.extra) "
+                "WHERE (notifications.job_id,notifications.sent_at,notifications.attempts,notifications.extra) "
+                "IS DISTINCT FROM (EXCLUDED.job_id,EXCLUDED.sent_at,EXCLUDED.attempts,EXCLUDED.extra) "
+                "OR NOT(notifications.present @> EXCLUDED.present AND notifications.present <@ EXCLUDED.present)"
             )
+            with connection.cursor() as cursor:
+                cursor.executemany(statement, rows)
         elif kind in {"cache", "manual"}:
             table, key_column = CACHE_TABLES[kind]
             entries = enumerate(value[field]) if info["list"] else value[field].items()

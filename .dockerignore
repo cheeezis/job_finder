@@ -1,11 +1,21 @@
 # Local Python environment, bytecode and tool caches
 .venv/
-__pycache__/
-*.pyc
+**/__pycache__/
+**/*.pyc
 .ruff_cache/
+.pytest_cache/
+node_modules/
 
 # Git metadata is not needed to run in the container.
 .git/
+
+# Development directories are not Dockerfile COPY sources.
+.github/
+docs/
+evals/
+scripts/
+tests/
+typecheck/
 
 # Personal configuration is passed to the container at run time.
 .env

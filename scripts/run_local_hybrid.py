@@ -26,7 +26,6 @@ for two weeks and reports every failure to Discord.
 import argparse
 import ipaddress
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -103,41 +102,20 @@ def read_dotenv(path):
 
 def container_environment():
     """Build the explicit values passed to the container, none of them inherited."""
-    postgres = read_dotenv(PROJECT_DIR / ".env.postgres-azure")
-    runtime_file = PROJECT_DIR / ".env.runtime-azure"
-    runtime = {}
-    if runtime_file.exists():
-        runtime = read_dotenv(runtime_file)
-        if runtime.get("JOBFINDER_RUNTIME_ACCESS", "legacy") == "split":
-            if runtime.get("JOBFINDER_RUNTIME_CREDENTIALS_READY") != "1" or not runtime.get(
-                "JOBFINDER_HYBRID_DATABASE_URL"
-            ):
-                raise RunFailed("Getrennter Hybrid-Zugang ist noch nicht geprüft")
-            postgres["JOBFINDER_DATABASE_URL"] = runtime["JOBFINDER_HYBRID_DATABASE_URL"]
-    auth = runtime.get("JOBFINDER_HYBRID_DATABASE_AUTH", "password")
-    if auth not in {"password", "entra"}:
-        raise RunFailed("Unbekannte Hybrid-Datenbankanmeldung")
-    if auth == "entra":
-        if runtime.get("JOBFINDER_RUNTIME_ACCESS") != "split" or runtime.get("JOBFINDER_HYBRID_ENTRA_VERIFIED") != "1":
-            raise RunFailed("Entra-Hybridzugang ist noch nicht abgenommen")
-        try:
-            target = entra_parameters(runtime.get("JOBFINDER_HYBRID_ENTRA_DATABASE_URL", ""))
-            previous = conninfo_to_dict(postgres["JOBFINDER_DATABASE_URL"])
-        except (RuntimeError, psycopg.Error):
-            raise RunFailed("Ungültiger passwortfreier Entra-Hybridzugang") from None
-        if target["user"] != ENTRA_ROLES["hybrid"] or any(
-            target.get(key, default) != previous.get(key, default)
-            for key, default in (("host", ""), ("dbname", ""), ("port", "5432"))
-        ):
-            raise RunFailed("Entra-Hybridzugang gehört nicht zur vorbereiteten Datenbank und Rolle")
-        postgres["JOBFINDER_DATABASE_URL"] = runtime["JOBFINDER_HYBRID_ENTRA_DATABASE_URL"]
-    database_url = (
-        make_conninfo(**{**target, "sslrootcert": "/etc/ssl/certs/ca-certificates.crt"})
-        if auth == "entra"
-        else re.sub(
-            r"sslrootcert=[^&]+", "sslrootcert=/etc/ssl/certs/ca-certificates.crt", postgres["JOBFINDER_DATABASE_URL"]
-        )
-    )
+    # The container signs in to PostgreSQL as the hybrid Entra role with the service principal.
+    runtime = read_dotenv(PROJECT_DIR / ".env.runtime-azure")
+    try:
+        target = entra_parameters(runtime.get("JOBFINDER_HYBRID_ENTRA_DATABASE_URL", ""))
+        database = conninfo_to_dict(read_dotenv(PROJECT_DIR / ".env.postgres-azure")["JOBFINDER_DATABASE_URL"])
+    except (RuntimeError, psycopg.Error):
+        raise RunFailed("Ungültiger passwortfreier Entra-Hybridzugang") from None
+    # The firewall rule (server_name) and the container must reach the same database.
+    if target["user"] != ENTRA_ROLES["hybrid"] or any(
+        target.get(key, default) != database.get(key, default)
+        for key, default in (("host", ""), ("dbname", ""), ("port", "5432"))
+    ):
+        raise RunFailed("Entra-Hybridzugang gehört nicht zur Azure-Datenbank und Hybrid-Rolle")
+    database_url = make_conninfo(**{**target, "sslrootcert": "/etc/ssl/certs/ca-certificates.crt"})
     docker_local = read_dotenv(PROJECT_DIR / ".env.docker-local")
     values = {
         "JOBFINDER_DATABASE_URL": database_url,
@@ -151,9 +129,8 @@ def container_environment():
         "AZURE_CLIENT_ID": docker_local["AZURE_CLIENT_ID"],
         "AZURE_TENANT_ID": docker_local["AZURE_TENANT_ID"],
         "AZURE_CLIENT_SECRET": docker_local["AZURE_CLIENT_SECRET"],
+        "JOBFINDER_DATABASE_AUTH": "service_principal",
     }
-    if auth == "entra":
-        values["JOBFINDER_DATABASE_AUTH"] = "service_principal"
     # Optional: without the review host the Discord cards miss their direct link, without the
     # model endpoint the agent writes no fact sheets in this run.
     for key in ("JOBFINDER_REVIEW_HOST", "JOBFINDER_OPENAI_ENDPOINT"):

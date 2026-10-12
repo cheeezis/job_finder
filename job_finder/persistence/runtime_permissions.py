@@ -8,7 +8,6 @@ from job_finder.persistence.migrations.runtime_boundaries import REVIEW_GROUP, r
 from job_finder.persistence.schema_migrations import _sql_shape
 
 WORKER_GROUP = "jobfinder_worker_access"
-RUNTIME_ROLES = {"worker": "jobfinder_worker", "review": "jobfinder_review", "hybrid": "jobfinder_hybrid"}
 STATE_TABLES = ("job_state", "workflow_history", "application_documents", "job_listings", "job_links")
 REVIEW_WRITE_TABLES = (*STATE_TABLES, "datasets", "jobs", "recommendations", "manual_sources")
 REVIEW_READ_TABLES = ("agent_usage", "agent_fact_sheets", "runs")
@@ -45,17 +44,6 @@ def ensure_access_group(connection, role):
         )
 
 
-def ensure_login_role(connection, role, password):
-    """Create a runtime principal without rotating any existing password."""
-    exists = _validate_role(connection, role, login=True)
-    if not exists:
-        connection.execute(
-            sql.SQL(
-                "CREATE ROLE {} LOGIN INHERIT PASSWORD {} NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS"
-            ).format(sql.Identifier(role), sql.Literal(password))
-        )
-
-
 def _validate_role(connection, role, *, login):
     """Refuse existing roles with elevated attributes or object ownership."""
     row = connection.execute(
@@ -78,20 +66,18 @@ def _validate_role(connection, role, *, login):
 
 
 def apply_runtime_grants(
-    connection, database, admin_role, *, roles=None, worker_group=WORKER_GROUP, review_group=REVIEW_GROUP
+    connection, database, admin_role, *, roles, worker_group=WORKER_GROUP, review_group=REVIEW_GROUP
 ):
-    """Apply a closed table allowlist; new tables receive no implicit runtime grants."""
-    roles = roles or RUNTIME_ROLES
+    """Apply a closed table allowlist to the groups and their login roles; new tables stay private.
+
+    roles maps worker, review and hybrid to existing logins; an empty mapping sets up only the groups.
+    """
     require_dataset_boundary(connection, review_group)
     ensure_access_group(connection, worker_group)
     ensure_access_group(connection, review_group)
-    expected_groups = {
-        roles["worker"]: worker_group,
-        roles["hybrid"]: worker_group,
-        roles["review"]: review_group,
-        worker_group: None,
-        review_group: None,
-    }
+    expected_groups: dict[str, str | None] = {worker_group: None, review_group: None}
+    for component, role in roles.items():
+        expected_groups[role] = review_group if component == "review" else worker_group
     for role, allowed_group in expected_groups.items():
         memberships = list(
             connection.execute(
@@ -137,9 +123,8 @@ def apply_runtime_grants(
     verify_runtime_grants(connection, database, roles=roles)
 
 
-def verify_runtime_grants(connection, database, *, roles=None):
+def verify_runtime_grants(connection, database, *, roles):
     """Inspect effective rights, including inherited PUBLIC grants; never repair them implicitly."""
-    roles = roles or RUNTIME_ROLES
     tables = connection.execute(
         "SELECT c.relname,c.oid FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace "
         "WHERE n.nspname='public' AND c.relkind IN ('r','p','v','m','f')"

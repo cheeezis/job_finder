@@ -1,4 +1,4 @@
-"""Add Object-ID-bound Entra logins to the existing, verified F09 capability groups."""
+"""Set up the F09 capability groups and add Object-ID-bound Entra logins to them."""
 
 from uuid import UUID
 
@@ -6,9 +6,9 @@ from psycopg import sql
 
 from job_finder.persistence.runtime_permissions import (
     REVIEW_GROUP,
-    RUNTIME_ROLES,
     WORKER_GROUP,
     _validate_role,
+    apply_runtime_grants,
     require_dataset_boundary,
     verify_runtime_grants,
 )
@@ -83,16 +83,11 @@ def _memberships(connection, role):
     ).fetchall()
 
 
-def _require_existing_boundary(connection, database, legacy_roles, worker_group, review_group):
+def _require_existing_boundary(connection, worker_group, review_group):
     require_dataset_boundary(connection, review_group)
     for group in (worker_group, review_group):
         if not _validate_role(connection, group, login=False) or _memberships(connection, group):
-            raise RuntimeError("Bestehende Zugriffsgruppen fehlen oder haben zusätzliche Rechte.")
-    for component, role in legacy_roles.items():
-        group = review_group if component == "review" else worker_group
-        if _memberships(connection, role) != [(group, False, True, True)]:
-            raise RuntimeError("Bestehende Laufzeitrolle hat unerwartete Mitgliedschaften.")
-    verify_runtime_grants(connection, database, roles=legacy_roles)
+            raise RuntimeError("Zugriffsgruppen fehlen oder haben zusätzliche Rechte.")
     if connection.execute(
         "SELECT EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace "
         "CROSS JOIN LATERAL aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a "
@@ -109,26 +104,29 @@ def prepare(
     *,
     apply=False,
     roles=None,
-    legacy_roles=None,
     worker_group=WORKER_GROUP,
     review_group=REVIEW_GROUP,
 ):
-    """Inspect by default; provision identities in postgres and grant memberships in the app DB.
+    """Inspect by default; apply sets up the groups, Entra identities and their memberships.
 
+    The groups' table grants are applied in the app DB, the identities in postgres.
     The connections must be dedicated autocommit connections to the same server.
     Their two transactions cannot commit atomically across databases. If the grant
     phase fails, newly created logins remain without capability-group membership;
-    rerunning resumes safely. No runtime, password, schema or table grant is changed.
+    rerunning resumes safely. No runtime, password or schema is changed.
     """
     principals = validate_principals(principals)
     roles = roles or ENTRA_ROLES
-    legacy_roles = legacy_roles or RUNTIME_ROLES
     with app_connection.transaction():
         if apply:
             app_connection.execute("SELECT pg_advisory_xact_lock(hashtextextended('jobfinder-runtime-grants',0))")
+            admin_role = app_connection.execute("SELECT current_user").fetchone()[0]
+            apply_runtime_grants(
+                app_connection, database, admin_role, roles={}, worker_group=worker_group, review_group=review_group
+            )
         else:
             app_connection.execute("SET TRANSACTION READ ONLY")
-        _require_existing_boundary(app_connection, database, legacy_roles, worker_group, review_group)
+        _require_existing_boundary(app_connection, worker_group, review_group)
         # Same-server global roles, but pgaadauth must run in the postgres database.
         with identity_connection.transaction():
             if apply:
@@ -161,7 +159,6 @@ def prepare(
             granted[component] = memberships == [(group, False, True, True)]
             if granted[component]:
                 verify_runtime_grants(app_connection, database, roles={component: role})
-        verify_runtime_grants(app_connection, database, roles=legacy_roles)
     return {
         "mode": "prepared" if apply else "inspect",
         "roles_present": present,

@@ -1,13 +1,8 @@
-"""Exercise separate runtime principals in PostgreSQL, including indirect delete paths."""
+"""Exercise the runtime capability groups in PostgreSQL, including indirect delete paths."""
 
-import importlib.util
 import os
-import sys
-import tempfile
 import unittest
-from pathlib import Path
 from unittest.mock import patch
-from urllib.parse import quote, urlencode, urlunsplit
 from uuid import uuid4
 
 import psycopg
@@ -24,51 +19,11 @@ from job_finder.workflow.review_actions import start_application, update_review_
 from job_finder.workflow.review_data import attach_fact_sheets, load_review_jobs
 
 
-def load_runtime_script():
-    scripts = Path(__file__).resolve().parents[1] / "scripts"
-    with patch.object(sys, "path", [str(scripts), *sys.path]):
-        spec = importlib.util.spec_from_file_location("create_runtime_roles_test", scripts / "create_runtime_roles.py")
-        script = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(script)
-    return script
-
-
-def provisioning_uri(info):
-    """Keep optional libpq credentials and TLS options in the provisioner's URI input."""
-    login = quote(info["user"], safe="")
-    if "password" in info:
-        login += ":" + quote(info["password"], safe="")
-    host = info["host"]
-    if ":" in host and not host.startswith("["):
-        host = f"[{host}]"
-    port = ":" + info["port"] if "port" in info else ""
-    options = {key: value for key, value in info.items() if key not in {"user", "password", "host", "port", "dbname"}}
-    return urlunsplit(
-        ("postgresql", f"{login}@{host}{port}", "/" + quote(info["dbname"], safe=""), urlencode(options), "")
+def create_login(connection, role, password):
+    """Stand in for a runtime identity: Azure's Entra logins cannot exist in local PostgreSQL."""
+    connection.execute(
+        sql.SQL("CREATE ROLE {} LOGIN INHERIT PASSWORD {}").format(sql.Identifier(role), sql.Literal(password))
     )
-
-
-class ProvisioningUriTests(unittest.TestCase):
-    def test_optional_password_and_tls_options_survive_conversion_and_role_replacement(self):
-        script = load_runtime_script()
-        for password in (None, "", "synthetic@password:with/slash"):
-            for host in ("127.0.0.1", "::1"):
-                with self.subTest(password=password, host=host):
-                    info = {
-                        "user": "synthetic_admin",
-                        "host": host,
-                        "port": "5432",
-                        "dbname": "synthetic_test",
-                        "sslmode": "verify-full",
-                        "sslrootcert": "C:/synthetic/ca.pem",
-                    }
-                    if password is not None:
-                        info["password"] = password
-                    uri = provisioning_uri(info)
-                    # libpq normalizes an empty URI password to an omitted password.
-                    self.assertEqual(conninfo_to_dict(uri), {key: value for key, value in info.items() if value != ""})
-                    runtime = conninfo_to_dict(script.runtime_url(uri, "synthetic_runtime", "new@test"))
-                    self.assertEqual(runtime, {**info, "user": "synthetic_runtime", "password": "new@test"})
 
 
 class RuntimePermissionsTests(unittest.TestCase):
@@ -79,7 +34,7 @@ class RuntimePermissionsTests(unittest.TestCase):
         if os.environ.get("JOBFINDER_TEST_MODE") != "1" or not cls.database.endswith("_test"):
             raise RuntimeError("Rechtetests benötigen eine eigene _test-Datenbank.")
         suffix = uuid4().hex
-        cls.roles = {key: f"f09_{key}_{suffix}" for key in permissions.RUNTIME_ROLES}
+        cls.roles = {key: f"f09_{key}_{suffix}" for key in ("worker", "review", "hybrid")}
         cls.worker_group, cls.review_group = f"f09_worker_access_{suffix}", f"f09_review_access_{suffix}"
         cls.all_roles = (*cls.roles.values(), cls.worker_group, cls.review_group)
         cls.urls = {key: make_conninfo(cls.admin_url, user=role, password=suffix) for key, role in cls.roles.items()}
@@ -88,7 +43,7 @@ class RuntimePermissionsTests(unittest.TestCase):
             cls.admin_role = connection.execute("SELECT current_user").fetchone()[0]
             cls.set_policy(connection, cls.review_group)
             for role in cls.roles.values():
-                permissions.ensure_login_role(connection, role, suffix)
+                create_login(connection, role, suffix)
             cls.grant(connection)
 
     @classmethod
@@ -268,10 +223,8 @@ class RuntimePermissionsTests(unittest.TestCase):
         with self.assertRaises(errors.InsufficientPrivilege):
             self.execute_as("review", sql.SQL("SET ROLE {}").format(sql.Identifier(self.worker_group)))
 
-    def test_rerunning_grants_preserves_passwords_and_future_tables_stay_private(self):
+    def test_rerunning_grants_keeps_logins_and_future_tables_stay_private(self):
         with psycopg.connect(self.admin_url) as admin:
-            for role in self.roles.values():
-                permissions.ensure_login_role(admin, role, "this-must-not-replace-the-password")
             self.grant(admin)
             admin.execute("CREATE TABLE f09_future(id int)")
         try:
@@ -293,96 +246,6 @@ class RuntimePermissionsTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "Matrix"), admin.transaction():
                 self.grant(admin)
             admin.rollback()
-
-    def test_role_preparation_is_readonly_by_default_and_does_not_activate(self):
-        script = load_runtime_script()
-        target = {
-            "connect_kwargs": conninfo_to_dict(self.admin_url),
-            "database": self.database,
-            "admin_role": self.admin_role,
-            "admin_url": "postgresql://unused@unused.test/unused",
-        }
-        with (
-            tempfile.TemporaryDirectory() as directory,
-            patch.multiple(
-                script, RUNTIME_ROLES=self.roles, WORKER_GROUP=self.worker_group, REVIEW_GROUP=self.review_group
-            ),
-        ):
-            path = Path(directory) / ".env.runtime-local"
-            with patch.object(script, "write_credentials", side_effect=AssertionError("inspection wrote credentials")):
-                self.assertEqual(script.prepare(target, path)["mode"], "inspect")
-            self.assertFalse(path.exists())
-            with (
-                self.assertRaisesRegex(RuntimeError, "Passwort"),
-                patch.object(
-                    script, "write_credentials", side_effect=AssertionError("missing credentials wrote a file")
-                ),
-            ):
-                script.prepare(target, path, apply=True)
-            # Existing credentials are supplied internally and never printed.
-            target["admin_url"] = self.admin_url
-            script.write_credentials(path, {script.credential_key(key): url for key, url in self.urls.items()})
-            result = script.prepare(target, path, apply=True)
-            self.assertFalse(result["activated"])
-            values = script.dotenv_values(path)
-            self.assertEqual((values[script.READY], values[script.PHASE]), ("1", "legacy"))
-            script.prepare(target, path, apply=True)
-            values[script.PHASE] = "split"
-            script.write_credentials(path, values)
-            with self.assertRaisesRegex(RuntimeError, "Rückschaltung"):
-                script.prepare(target, path, apply=True)
-            sample = (
-                "postgresql://admin:old@db.example.test:5432/jobfinder?sslmode=verify-full&sslrootcert=C%3A%2Fca.pem"
-            )
-            converted = conninfo_to_dict(script.runtime_url(sample, "runtime", "test@password"))
-            self.assertEqual(
-                (converted["user"], converted["password"], converted["sslmode"], converted["sslrootcert"]),
-                ("runtime", "test@password", "verify-full", "C:/ca.pem"),
-            )
-
-    def test_provisioner_creates_new_credentials_and_refuses_file_failure_before_ddl(self):
-        script = load_runtime_script()
-        roles = {key: f"f09_new_{key}_{uuid4().hex}" for key in self.roles}
-        info = conninfo_to_dict(self.admin_url)
-        admin_url = provisioning_uri(info)
-        target = {
-            "connect_kwargs": info,
-            "database": self.database,
-            "admin_role": self.admin_role,
-            "admin_url": admin_url,
-        }
-        try:
-            with (
-                tempfile.TemporaryDirectory() as directory,
-                patch.multiple(
-                    script, RUNTIME_ROLES=roles, WORKER_GROUP=self.worker_group, REVIEW_GROUP=self.review_group
-                ),
-            ):
-                path = Path(directory) / ".env.runtime-local"
-                with (
-                    patch.object(script, "write_credentials", side_effect=OSError("read-only file")),
-                    self.assertRaises(OSError),
-                ):
-                    script.prepare(target, path, apply=True)
-                with psycopg.connect(self.admin_url) as admin:
-                    self.assertEqual(
-                        admin.execute(
-                            "SELECT count(*) FROM pg_roles WHERE rolname=ANY(%s)", (list(roles.values()),)
-                        ).fetchone()[0],
-                        0,
-                    )
-                script.prepare(target, path, apply=True)
-                values = script.dotenv_values(path)
-                self.assertEqual((values[script.READY], values[script.PHASE]), ("1", "legacy"))
-                original = path.read_text(encoding="utf-8")
-                script.prepare(target, path, apply=True)
-                self.assertEqual(path.read_text(encoding="utf-8"), original)
-        finally:
-            with psycopg.connect(self.admin_url) as admin:
-                for role in roles.values():
-                    if admin.execute("SELECT 1 FROM pg_roles WHERE rolname=%s", (role,)).fetchone():
-                        admin.execute(sql.SQL("DROP OWNED BY {}").format(sql.Identifier(role)))
-                        admin.execute(sql.SQL("DROP ROLE {}").format(sql.Identifier(role)))
 
     def test_existing_unsafe_roles_are_refused_without_repair(self):
         for statement in (

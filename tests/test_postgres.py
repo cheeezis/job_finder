@@ -17,14 +17,14 @@ from job_finder import db
 from job_finder.agent.pricing import Usage
 from job_finder.matching.user_settings import current_settings
 from job_finder.models import Job, JobSource
-from job_finder.paths import JOBS_FILE, RECOMMENDATIONS_JSON
+from job_finder.paths import JOBS_FILE
 from job_finder.persistence.agent_usage import record_model_call, spent_today_and_this_month
 from job_finder.persistence.application_documents import store_documents
 from job_finder.persistence.database import transaction
 from job_finder.persistence.fact_sheets import fact_sheets, save_fact_sheet
 from job_finder.persistence.postgres_backup import create_postgres_backup, restore_backup
 from job_finder.persistence.postgres_store import prune_cache, read_dataset, write_dataset
-from job_finder.persistence.storage import publish_results, write_json_atomic
+from job_finder.persistence.storage import publish_results
 from job_finder.sources import manual
 from job_finder.workflow.manual_import import import_manual_url
 from job_finder.workflow.memory import edit_job, edit_memory, load_memory, save_memory
@@ -260,17 +260,64 @@ class PostgresTests(unittest.TestCase):
         self.assertEqual(load_review_jobs()[0]["workflow_status"], "interesting")
         self.assertEqual(len(read_dataset("internal/jobs.json")), 1)
 
+    def test_publication_writes_only_the_final_recommendation_rows_and_header(self):
+        manual_job = {"id": "manual:retained", "sources": [{"source": "manual", "url": "https://example.test/manual"}]}
+        manual_card = {"id": "manual:retained", "source_links": manual_job["sources"], "optional": None}
+        write_dataset("internal/jobs.json", [manual_job])
+        write_dataset("output/recommendations.json", {"old_header": True, "recommendations": [manual_card]})
+        current = Job(
+            id="test:current",
+            title="Junior Developer",
+            company="Example GmbH",
+            locations=[],
+            sources=[JobSource(source="test", url="https://example.test/current")],
+            description_raw="",
+            description_clean="",
+        )
+        card = {"id": current.id, "source_links": current.to_dict()["sources"], "optional": None}
+        document = {"batch": None, "metadata": {"tags": ["current"]}, "recommendations": [card]}
+
+        with transaction() as connection:
+            statement = "SELECT n_tup_ins FROM pg_stat_xact_user_tables WHERE relname='recommendations'"
+            before = connection.execute(statement).fetchone()[0]
+            publish_results(
+                [current], {}, jobs_path=JOBS_FILE, recommendation_builder=lambda _results: deepcopy(document)
+            )
+            inserted = connection.execute(statement).fetchone()[0] - before
+        self.assertEqual(inserted, 2)
+        self.assertEqual(
+            read_dataset("output/recommendations.json"), {**document, "recommendations": [card, manual_card]}
+        )
+
+    def test_builder_failure_after_jobs_write_preserves_both_previous_views(self):
+        jobs = [{"id": "previous", "optional": None}]
+        document = {"batch": "previous", "recommendations": [{"id": "previous", "optional": None}]}
+        write_dataset("internal/jobs.json", jobs)
+        write_dataset("output/recommendations.json", document)
+        current = Job(
+            id="current",
+            title="New",
+            company="Example GmbH",
+            locations=[],
+            sources=[],
+            description_raw="",
+            description_clean="",
+        )
+
+        def fail(_results):
+            raise RuntimeError("builder failed between view writes")
+
+        with self.assertRaisesRegex(RuntimeError, "between view writes"):
+            publish_results([current], {}, jobs_path=JOBS_FILE, recommendation_builder=fail)
+        self.assertEqual(read_dataset("internal/jobs.json"), jobs)
+        self.assertEqual(read_dataset("output/recommendations.json"), document)
+
     def test_worker_publication_preserves_manual_import_not_in_snapshot(self):
         manual_job = {"id": "manual:1", "sources": [{"source": "manual", "url": "https://example.test/manual"}]}
         manual_result = {"id": "manual:1", "source_links": manual_job["sources"]}
         write_dataset("internal/jobs.json", [manual_job])
         write_dataset("output/recommendations.json", {"recommendations": [manual_result]})
-        publish_results(
-            [],
-            {},
-            jobs_path=JOBS_FILE,
-            writer=lambda _results: write_json_atomic(RECOMMENDATIONS_JSON, {"recommendations": []}),
-        )
+        publish_results([], {}, jobs_path=JOBS_FILE, recommendation_builder=lambda _results: {"recommendations": []})
         self.assertEqual(read_dataset("internal/jobs.json"), [manual_job])
         self.assertEqual(read_dataset("output/recommendations.json")["recommendations"], [manual_result])
 
@@ -289,7 +336,7 @@ class PostgresTests(unittest.TestCase):
             [],
             {},
             jobs_path=JOBS_FILE,
-            writer=lambda _results: write_json_atomic(RECOMMENDATIONS_JSON, {"recommendations": []}),
+            recommendation_builder=lambda _results: {"recommendations": []},
             exclude_sources={"arbeitsagentur"},
         )
         self.assertEqual(read_dataset("internal/jobs.json"), [skipped_job])
@@ -334,7 +381,7 @@ class PostgresTests(unittest.TestCase):
             [found_again],
             {},
             jobs_path=JOBS_FILE,
-            writer=lambda _results: write_json_atomic(RECOMMENDATIONS_JSON, {"recommendations": [card]}),
+            recommendation_builder=lambda _results: {"recommendations": [card]},
             exclude_sources={"stepstone", "remotely"},
         )
 

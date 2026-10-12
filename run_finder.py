@@ -49,7 +49,7 @@ from job_finder.workflow.availability import (
 from job_finder.workflow.main import build_score_results, combine_listings, evaluate_jobs, score_jobs
 from job_finder.workflow.memory import edit_memory, update_memory
 from job_finder.workflow.notifications import deliver_notifications, queue_notifications, send_run_summary
-from job_finder.workflow.reporting import is_visible_in_default_review, write_recommendations
+from job_finder.workflow.reporting import build_recommendations, is_visible_in_default_review
 
 SOURCES = [
     arbeitsagentur,
@@ -267,7 +267,7 @@ def run_pipeline(exclude_sources=frozenset(), run_id=None):
             jobs,
             results,
             jobs_path=JOBS_FILE,
-            writer=write_recommendations,
+            recommendation_builder=build_recommendations,
             exclude_sources=set(exclude_sources) | (run_sources - complete_sources),
         )
         notification_stats = queue_notifications(results, aliases=aliases)

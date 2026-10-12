@@ -95,7 +95,7 @@ def seed(demo, cases, today):
     from job_finder.workflow.applications import record_status_change
     from job_finder.workflow.main import build_score_results, combine_listings, evaluate_jobs
     from job_finder.workflow.memory import edit_memory, update_memory
-    from job_finder.workflow.reporting import write_recommendations
+    from job_finder.workflow.reporting import build_recommendations
 
     initialize()
     with transaction() as connection:
@@ -115,7 +115,9 @@ def seed(demo, cases, today):
                 record_status_change(memory[f"demo:{case_id}"], status, (today - timedelta(days=days_ago)).isoformat())
     evaluated = combine_listings(evaluated)
     results = build_score_results(evaluated)
-    publish_results([job for job, _result in evaluated], results, jobs_path=JOBS_FILE, writer=write_recommendations)
+    publish_results(
+        [job for job, _result in evaluated], results, jobs_path=JOBS_FILE, recommendation_builder=build_recommendations
+    )
     for case_id, sheet in demo["fact_sheets"].items():
         save_fact_sheet(f"demo:{case_id}", MODEL, sheet, Decimal("0.005"))
     return results

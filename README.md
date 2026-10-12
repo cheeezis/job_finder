@@ -226,10 +226,8 @@ database server that is not local.
   apply, secrets, database and GitHub settings for a rebuild
 - [Architecture decisions](docs/adr/README.md): why the project is built the
   way it is, with the alternatives that were considered
-- [Backup and restore](docs/backup-recovery.md),
-  [runtime access](docs/runtime-access.md) and
-  [database sign-in with Entra](docs/database-auth.md): the details behind
-  operations
+- [Backup and restore](docs/backup-recovery.md) and
+  [runtime access](docs/runtime-access.md): the details behind operations
 
 ## License
 

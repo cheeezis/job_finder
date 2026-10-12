@@ -71,12 +71,11 @@ suite and so in CI as well.
 `tests/test_runtime_permissions.py` checks F09 with unique local worker, review
 and hybrid roles and capability groups for each test. Besides allowed real
 review flows, it checks direct rights violations, indirect deletion through
-record cascades, `SET ROLE`, later tables and unchanged passwords. The tests
-remove their roles and restore the policy afterwards. The Terraform tests in
-`infrastructure/tests/runtime_access.tftest.hcl` check `legacy`, `prepare`, a
-refused `split` and an approved `split` with fully simulated providers
-(`terraform test`). They create no Azure resources. The later cloud acceptance
-that is still needed is described in [runtime-access.md](runtime-access.md).
+record cascades, `SET ROLE` and later tables. The tests remove their roles and
+restore the policy afterwards. The Terraform tests in
+`infrastructure/tests/runtime_access.tftest.hcl` check the separate identities,
+the token sign-in and the guards for the Entra administrator with fully
+simulated providers (`terraform test`). They create no Azure resources.
 
 The browser tests (`tests/test_review_browser.py`) click through the review in
 Chromium on freshly filled demo data: fact sheet, decision with note, waiting
@@ -121,13 +120,6 @@ Für jeden PR, einschließlich Forks und Dependabot, führt
 `infrastructure-checks` zusätzlich `terraform init -backend=false`,
 `terraform validate` und `terraform test` mit Mock Providern aus. Dieser Job
 hat weder Azure-Login noch OIDC-Schreibrecht oder Zugriff auf Repo-Secrets.
-Die beiden Azure-Plan-Jobs prüfen zuvor die vier expliziten Repo-Variablen
-`RUNTIME_IDENTITY_PHASE`, `RUNTIME_ACCESS_VERIFIED`, `DATABASE_AUTH_PHASE` und
-`DATABASE_ENTRA_VERIFIED`: fehlende, ungültige oder widersprüchliche Phasen
-brechen vor dem Login ab. Für den initialen Bootstrap müssen `legacy`,
-`false`, `password`, `false` ausdrücklich gesetzt werden; spätere Phasen folgen
-den Abnahmen in [runtime-access.md](runtime-access.md) und
-[database-auth.md](database-auth.md). Es gibt keine stillen CI-Defaults.
 Die bestehenden Image-Probestarts prüfen außerdem `TZ=Europe/Berlin` und die
 UTC-Abweichung im Januar und Juli.
 

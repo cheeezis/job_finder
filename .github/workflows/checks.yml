@@ -244,17 +244,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: docker build -t jobfinder:check .
       - name: Trial start as a restricted user
-        run: |
-          docker run --rm -i --entrypoint sh jobfinder:check -c \
-            'test "$(id -u)" != 0 && touch data/probe && python -' <<'PY'
-          import os
-          import time
-          from datetime import UTC, datetime
-          import run_finder, job_finder.review
-          assert os.environ["TZ"] == "Europe/Berlin"
-          for month, hour in ((1, 1), (7, 2)):
-              assert time.localtime(datetime(2026, month, 15, tzinfo=UTC).timestamp()).tm_hour == hour
-          PY
+        run: bash .github/scripts/check_container.sh jobfinder:check
       - name: Report vulnerabilities (high and critical)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -297,17 +287,7 @@ jobs:
       - run: az acr login --name acrjobfinder
       - run: docker build -t acrjobfinder.azurecr.io/jobfinder:${{ steps.tag.outputs.tag }} .
       - name: Trial start as a restricted user
-        run: |
-          docker run --rm -i --entrypoint sh acrjobfinder.azurecr.io/jobfinder:${{ steps.tag.outputs.tag }} -c \
-            'test "$(id -u)" != 0 && touch data/probe && python -' <<'PY'
-          import os
-          import time
-          from datetime import UTC, datetime
-          import run_finder, job_finder.review
-          assert os.environ["TZ"] == "Europe/Berlin"
-          for month, hour in ((1, 1), (7, 2)):
-              assert time.localtime(datetime(2026, month, 15, tzinfo=UTC).timestamp()).tm_hour == hour
-          PY
+        run: bash .github/scripts/check_container.sh "acrjobfinder.azurecr.io/jobfinder:${{ steps.tag.outputs.tag }}"
       - name: Fail on fixable critical vulnerabilities
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:

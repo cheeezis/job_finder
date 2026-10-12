@@ -68,9 +68,12 @@ def load_review_jobs(recommendations_path=RECOMMENDATIONS_JSON, memory_path=MEMO
     represented_memory_ids = set()
     for recommendation in recommendations:
         job = dict(recommendation)
-        job["international"] = bool(job.get("international")) or is_international_listing(job)
         candidates = find_memory_ids(job)
         represented_memory_ids.update(candidates)
+        # The archive shows none of the current cards, only keeps their jobs out.
+        if archived:
+            continue
+        job["international"] = bool(job.get("international")) or is_international_listing(job)
         memory_id = preferred_memory_id(candidates, memory, job["id"]) if candidates else job["id"]
         entry = memory.get(memory_id, {})
         if entry.get("linked_job_ids"):
@@ -95,8 +98,6 @@ def load_review_jobs(recommendations_path=RECOMMENDATIONS_JSON, memory_path=MEMO
             job["source_links"] = memory_source_links(entry)
         review_jobs.append(job)
 
-    if archived:
-        review_jobs = []
     for job_id, entry in memory.items():
         wanted = is_archived(entry) if archived else entry.get("workflow_status") in PERSISTED_REVIEW_STATUSES
         if wanted and job_id not in represented_memory_ids:

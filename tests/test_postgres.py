@@ -140,8 +140,9 @@ class PostgresTests(unittest.TestCase):
             "output/recommendations.json": {"recommendations": [dict(records[0], match_percent=82)]},
             "internal/notifications.json": {
                 "version": 3,
-                "sent": {"x": {"job_id": "x", "sent_at": "2026-09-18"}},
-                "pending": {"y": {"attempts": 2, "job": {"title": "pending"}}},
+                "unknown_header": [None, {"retain": True}],
+                "sent": {"x": {"job_id": "x", "sent_at": None, "event_key": "event:x"}, "empty": {}},
+                "pending": {"x": {"attempts": 2, "job": {"title": "legacy"}}, "y": {"attempts": None}},
             },
             "internal/test_cache.json": {"version": 1, "jobs": {"url": {"title": "cache"}}},
             "internal/feed_cache.json": {"version": 1, "jobs": [{"id": "feed"}]},
@@ -150,6 +151,69 @@ class PostgresTests(unittest.TestCase):
         for name, value in samples.items():
             write_dataset(name, value)
             self.assertEqual(read_dataset(name), value)
+
+    def test_notification_replacement_only_changes_affected_composite_keys(self):
+        name, other = "internal/notifications.json", "other/notifications.json"
+        document = {
+            "version": 3,
+            "sent": {
+                "same": {"job_id": "shared", "sent_at": None, "event_key": "event:shared"},
+                "null": {"job_id": None},
+                "keep": {},
+            },
+            "pending": {"same": {"attempts": 0, "extra": {"enabled": False}}, "old": {"job_id": "old"}},
+        }
+        write_dataset(name, document)
+        write_dataset(other, document)
+
+        with transaction() as connection:
+
+            def versions():
+                return {
+                    (row[0], row[1]): row[2]
+                    for row in connection.execute(
+                        "SELECT notification_key,delivery_state,ctid::text FROM notifications WHERE dataset=%s", (name,)
+                    )
+                }
+
+            original = versions()
+            document = read_dataset(name)
+            write_dataset(name, document)
+            self.assertEqual(versions(), original)
+            document["unknown_header"] = [None, {"retain": True}]
+            write_dataset(name, document)
+            self.assertEqual(versions(), original)
+            self.assertEqual(read_dataset(name), document)
+
+            document["pending"]["same"]["extra"]["enabled"] = 0
+            write_dataset(name, document)
+            self.assertIs(type(read_dataset(name)["pending"]["same"]["extra"]["enabled"]), int)
+            self.assertNotEqual(versions()["same", "pending"], original["same", "pending"])
+
+            document["sent"].pop("same")
+            document["sent"]["null"].pop("job_id")
+            document["pending"]["same"]["attempts"] = 1
+            document["pending"]["alias"] = document["pending"].pop("old")
+            write_dataset(name, document)
+            self.assertEqual(read_dataset(name), document)
+            self.assertEqual(
+                set(versions()), {("null", "sent"), ("keep", "sent"), ("same", "pending"), ("alias", "pending")}
+            )
+            self.assertEqual(versions()["keep", "sent"], original["keep", "sent"])
+            self.assertNotEqual(versions()["null", "sent"], original["null", "sent"])
+            self.assertEqual(read_dataset(other)["sent"]["same"]["job_id"], "shared")
+            self.assertEqual(set(read_dataset(other)["pending"]), {"same", "old"})
+
+            before_rollback = versions()
+            with self.assertRaisesRegex(RuntimeError, "abort"), transaction():
+                write_dataset(name, {"sent": {}, "pending": {}})
+                self.assertEqual(versions(), {})
+                raise RuntimeError("abort")
+            self.assertEqual(versions(), before_rollback)
+            self.assertEqual(read_dataset(name), document)
+            write_dataset(name, {"unknown_header": None})
+            self.assertEqual(read_dataset(name), {"unknown_header": None, "sent": {}, "pending": {}})
+            self.assertEqual(versions(), {})
 
     def test_related_writes_roll_back_together(self):
         with self.assertRaisesRegex(RuntimeError, "abort"), transaction():

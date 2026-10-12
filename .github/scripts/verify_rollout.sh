@@ -1,9 +1,25 @@
 #!/usr/bin/env bash
-# Checks after the rollout: worker and review point to the expected image, and
-# the newest review revision runs healthily. Otherwise the run ends with an error. A healthy
-# revision may already be asleep again (ScaledToZero); the review scales to zero.
+# Checks after the rollout: the review serves nothing without sign-in, worker and
+# review point to the expected image, and the newest review revision runs healthily.
+# Otherwise the run ends with an error. A healthy revision may already be asleep
+# again (ScaledToZero); the review scales to zero.
 set -euo pipefail
 image="$1"
+# Without sign-in a request must redirect to the sign-in (302) or be refused
+# (401). The app only starts with the first request, hence several attempts.
+for attempt in 1 2 3 4 5 6; do
+  status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 60 "https://$REVIEW_FQDN/api/recommendations" || true)
+  case "$status" in
+    302 | 401) echo "Without sign-in: HTTP $status"; break ;;
+    200) echo "::error::The review serves data without sign-in."; exit 1 ;;
+  esac
+  if [ "$attempt" = 6 ]; then
+    echo "::error::The review was not reachable after the rollout."
+    exit 1
+  fi
+  echo "Attempt $attempt: HTTP $status, next attempt in 20 seconds"
+  sleep 20
+done
 worker=$(az containerapp job show --name jobfinder-worker --resource-group rg-jobfinder \
   --query "properties.template.containers[0].image" -o tsv)
 if [ "$worker" != "$image" ]; then

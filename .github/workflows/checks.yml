@@ -456,26 +456,9 @@ jobs:
         run: |
           az containerapp job update --name jobfinder-worker --resource-group rg-jobfinder --image "$IMAGE" --output none
           az containerapp update --name jobfinder-review --resource-group rg-jobfinder --image "$IMAGE" --output none
-      # Without sign-in the review must serve nothing: a request must redirect
-      # to the sign-in (302) or be refused (401). The app only starts with
-      # the first request (scale to zero), hence several attempts.
-      - name: Check the review without sign-in
-        env:
-          REVIEW_FQDN: ${{ secrets.REVIEW_FQDN }}
-        run: |
-          for attempt in 1 2 3 4 5 6; do
-            status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 60 "https://$REVIEW_FQDN/api/recommendations" || true)
-            case "$status" in
-              302|401) echo "Without sign-in: HTTP $status"; exit 0 ;;
-              200) echo "::error::The review serves data without sign-in."; exit 1 ;;
-            esac
-            echo "Attempt $attempt: HTTP $status, next attempt in 20 seconds"
-            sleep 20
-          done
-          echo "::error::The review was not reachable after the deploy."
-          exit 1
-      - name: Check versions and health
+      - name: Check sign-in, versions and health
         working-directory: .
         env:
           IMAGE: ${{ needs.docker-build-push.outputs.image_ref }}
+          REVIEW_FQDN: ${{ secrets.REVIEW_FQDN }}
         run: bash .github/scripts/verify_rollout.sh "$IMAGE"

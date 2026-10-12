@@ -293,9 +293,13 @@ test("a failed association leaves the selection and dialog available for retry",
 });
 
 test("application cards gather the finder's listings and the agent's pages in one links section", async () => {
+  const unsafe = ["javascript:alert(1)", "data:text/html,test", "file:///test", "bad URL", "", null];
   const application = {id: "application:1", title: "Engineer", company: "Employer", active: true, workflow_status: "applied",
-    workflow_history: [], source_links: [{source: "original", url: "https://employer.example/job"}],
-    agent_sources: ["https://employer.example/about", "javascript:alert(1)"]};
+    workflow_history: [], source_links: [
+      {source: "original", url: " HTTPS://Employer.Example:443/a/../job "},
+      {source: "unknown", url: "HTTP://Finder.Example:80"},
+      ...unsafe.map(url => ({source: "original", url}))
+    ], agent_sources: [" https://Agent.Example:8443/about ", "HTTP://Agent.Example:80", ...unsafe]};
   const view = page("applications", {}, async path => ({ok: true, json: async () => path === "/api/sources"
     ? {labels: {}}
     : {applications: [application], completed_applications: [], statistics: {total: 1},
@@ -304,12 +308,14 @@ test("application cards gather the finder's listings and the agent's pages in on
   const card = view.elements.get("applications").children[0];
   const links = card.children.find(child => child.className === "application-links");
   const [summary, ...rest] = links.children;
-  assert.equal(summary.textContent, "Links (2)");
+  assert.equal(summary.textContent, "Links (4)");
   const groups = rest.filter(child => child.className === "link-group").map(child => child.textContent);
   assert.deepEqual(groups, ["Vom Finder gefunden", "Vom Agenten genutzt"]);
   const anchors = rest.filter(child => child.tagName === "ul").flatMap(list => list.children.map(item => item.children[0]));
   assert.deepEqual(anchors.map(link => [link.textContent, link.href]),
-    [["Originalanzeige", "https://employer.example/job"], ["employer.example", "https://employer.example/about"]]);
+    [["Originalanzeige", "https://employer.example/job"], ["Anzeige", "http://finder.example/"],
+      ["agent.example", "https://agent.example:8443/about"], ["agent.example", "http://agent.example/"]]);
+  assert.ok(anchors.every(link => link.target === "_blank"));
   assert.ok(anchors.every(link => link.rel === "noopener noreferrer"));
 });
 

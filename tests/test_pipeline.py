@@ -9,7 +9,7 @@ from job_finder.matching.user_settings import current_settings
 from job_finder.models import Job, JobSource, WorkMode
 from job_finder.workflow.main import combine_listings, load_jobs, score_jobs
 from job_finder.workflow.memory import update_memory
-from job_finder.workflow.reporting import write_recommendations
+from job_finder.workflow.reporting import build_recommendations
 
 
 class PipelineTests(unittest.TestCase):
@@ -33,8 +33,7 @@ class PipelineTests(unittest.TestCase):
 
             restored_jobs = load_jobs(jobs_path)
             results = score_jobs(restored_jobs)
-            write_recommendations(results, json_path=directory_path / "recommendations.json")
-            review = json.loads((directory_path / "recommendations.json").read_text(encoding="utf-8"))
+            review = build_recommendations(results)
 
         self.assertEqual(len(results["included"]), 1)
         self.assertEqual(review["recommendations"][0]["title"], "Junior Python Developer")

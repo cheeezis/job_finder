@@ -11,7 +11,7 @@ from unittest.mock import patch
 from job_finder.models import Job, JobSource
 from job_finder.paths import JOBS_FILE
 from job_finder.persistence import storage
-from job_finder.workflow.reporting import write_recommendations
+from job_finder.workflow.reporting import build_recommendations
 
 JOBS_DATASET = "internal/jobs.json"
 RECOMMENDATIONS_DATASET = "output/recommendations.json"
@@ -192,10 +192,7 @@ class PublicationTests(unittest.TestCase):
         second = {**job("second", "https://fresh.test/second").to_dict(), "match_percent": 0}
         results = {"included": [second, first], "excluded": [job("excluded", "https://fresh.test/excluded").to_dict()]}
         original = deepcopy(results)
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "recommendations.json"
-            write_recommendations(results, json_path=path)
-            document = json.loads(path.read_text(encoding="utf-8"))
+        document = build_recommendations(results)
 
         self.assertEqual(list(document), ["recommendations"])
         zero, nullable = document["recommendations"]

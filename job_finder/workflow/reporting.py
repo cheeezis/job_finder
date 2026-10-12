@@ -2,8 +2,6 @@
 
 import re
 
-from job_finder.paths import RECOMMENDATIONS_JSON
-from job_finder.persistence.storage import write_json_atomic
 from job_finder.text import text_is_mainly_english
 
 INTERNATIONAL_LOCATION_TERMS = {"anywhere", "emea", "eu", "europa", "europe", "global", "weltweit", "worldwide"}
@@ -48,11 +46,6 @@ ROLE_LABELS = {
 def build_recommendations(results):
     """Build the review document for every job that passed the rule-based prefilter."""
     return {"recommendations": [recommendation_for_job(job) for job in results["included"]]}
-
-
-def write_recommendations(results, json_path=RECOMMENDATIONS_JSON):
-    """Write every job that passed the rule-based prefilter."""
-    write_json_atomic(json_path, build_recommendations(results))
 
 
 def recommendation_for_job(job):

@@ -334,8 +334,11 @@
     const labels = {...JobFinder.sourceLabels, original: "Originalanzeige"};
     const groups = [
       ["Vom Finder gefunden", (application.source_links || []).map(link => [link.url, labels[link.source] || "Anzeige"])],
-      ["Vom Agenten genutzt", (application.agent_sources || []).map(url => [url, safeUrl(url) ? new URL(url).hostname : url])]
-    ].map(([title, links]) => [title, links.filter(([url]) => safeUrl(url))]);
+      ["Vom Agenten genutzt", (application.agent_sources || []).map(url => [url, null])]
+    ].map(([title, links]) => [title, links.flatMap(([value, text]) => {
+      const url = safeUrl(value);
+      return url ? [[url, text ?? new URL(url).hostname]] : [];
+    })]);
     const count = groups.reduce((total, [, links]) => total + links.length, 0);
     if (!count) return null;
     const details = make("details", null, "application-links");
@@ -345,7 +348,7 @@
       const list = make("ul");
       links.forEach(([url, text]) => {
         const item = make("li");
-        item.append(externalLink(safeUrl(url), text));
+        item.append(externalLink(url, text));
         list.append(item);
       });
       details.append(make("p", title, "link-group"), list);

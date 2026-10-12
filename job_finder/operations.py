@@ -152,20 +152,16 @@ def create_backup(backup_dir=BACKUP_DIR, keep=BACKUP_FILES_TO_KEEP):
 def timed_step(label, trace_name=None):
     """Log elapsed wall time even when a step fails or is interrupted; trace_name also times it in the run's trace."""
     with step(trace_name) if trace_name else nullcontext():
-        yield from _timed(label)
-
-
-def _timed(label):
-    started = time.monotonic()
-    writer = getattr(sys.stdout, "write_progress", None)
-    if writer is not None and getattr(sys.stdout, "isatty", lambda: False)():
-        writer(f"  {label} …")
-    else:
-        print(f"  {label}: gestartet", flush=True)
-    completed = False
-    try:
-        yield
-        completed = True
-    finally:
-        outcome = "fertig" if completed else "abgebrochen/fehlgeschlagen"
-        print(f"  {label}: {format_clock(time.monotonic() - started)} · {outcome}", flush=True)
+        started = time.monotonic()
+        writer = getattr(sys.stdout, "write_progress", None)
+        if writer is not None and getattr(sys.stdout, "isatty", lambda: False)():
+            writer(f"  {label} …")
+        else:
+            print(f"  {label}: gestartet", flush=True)
+        completed = False
+        try:
+            yield
+            completed = True
+        finally:
+            outcome = "fertig" if completed else "abgebrochen/fehlgeschlagen"
+            print(f"  {label}: {format_clock(time.monotonic() - started)} · {outcome}", flush=True)

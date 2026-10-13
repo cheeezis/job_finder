@@ -297,7 +297,10 @@
     const freshness = element("freshness");
     freshness.hidden = !job.cache_stale;
     freshness.textContent = job.cache_stale ? `Cache-Fallback · Stand: ${displayDate(job.fetched_at)}` : "";
-    setText("current-status", `Status: ${statusLabels[job.workflow_status] || job.workflow_status}`);
+    // The "Neu" badge already says it; other statuses get their own chip.
+    setText("current-status", job.workflow_status === "new"
+      ? ""
+      : `Status: ${statusLabels[job.workflow_status] || job.workflow_status}`);
     setText("role-group", job.current_snapshot_missing
       ? "aktuell nicht verfügbar"
       : job.role_label || "Allgemeine IT");

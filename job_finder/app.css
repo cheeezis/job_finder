@@ -232,6 +232,7 @@ label { display: grid; gap: 6px; color: var(--muted); font-size: .82rem; font-we
 .fact-sheet-lines .light-gruen { background: var(--positive-soft); }
 .fact-sheet-lines .light-gelb, .fact-sheet-lines .light-orange, .fact-sheet-lines .light-hinweis { background: var(--warning-soft); }
 .fact-sheet-lines .light-rot { background: var(--danger-soft); }
+.fact-sheet-lines .light-unbekannt { background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1.5px var(--line); }
 .fact-sheet-verdict { display: inline-block; padding: 6px 14px; border-radius: 999px; background: var(--paper); font-weight: 800; }
 .verdict-bewerben { background: var(--positive-soft); color: var(--positive); }
 .verdict-erst_klaeren { background: var(--warning-soft); color: var(--warning); }

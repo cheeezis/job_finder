@@ -341,6 +341,8 @@ test("complete review loading renders a card and applies a decision", async () =
   assert.equal(view.elements.get("title").textContent, "Developer");
   assert.equal(view.elements.get("role-badge").textContent, "Business Analyst (KI)");
   assert.equal(view.elements.get("card").hidden, false);
+  assert.equal(view.elements.get("current-status").textContent, "");
+  assert.equal(view.elements.get("greeting").textContent, "Eine neue Stelle wartet auf dich.");
   await view.elements.get("mark-interesting").emit("click");
   assert.equal(job.workflow_status, "interesting");
   assert.equal(view.elements.get("card").hidden, true);

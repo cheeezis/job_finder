@@ -341,6 +341,8 @@ test("complete review loading renders a card and applies a decision", async () =
   assert.equal(view.elements.get("title").textContent, "Developer");
   assert.equal(view.elements.get("role-badge").textContent, "Business Analyst (KI)");
   assert.equal(view.elements.get("card").hidden, false);
+  assert.equal(view.elements.get("current-status").textContent, "");
+  assert.equal(view.elements.get("greeting").textContent, "Eine neue Stelle wartet auf dich.");
   await view.elements.get("mark-interesting").emit("click");
   assert.equal(job.workflow_status, "interesting");
   assert.equal(view.elements.get("card").hidden, true);
@@ -532,6 +534,7 @@ test("the agent's fact sheet renders as plain text lines with lights and safe li
   const lines = view.elements.get("fact-sheet-lines").children.map(line => line.textContent);
   assert.equal(lines.length, 8);
   assert.equal(lines[0], "🟢 Status: offen und aktuell");
+  assert.equal(view.elements.get("fact-sheet-lines").children[0].className, "light-gruen");
   assert.equal(lines[3], "🔴 Lücken: Java fehlt");
   assert.equal(lines[7], "⚠️ Bewerbung: Portfolio verlangt");
   const verdict = view.elements.get("fact-sheet-verdict");

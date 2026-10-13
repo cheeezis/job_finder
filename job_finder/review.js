@@ -92,7 +92,7 @@
       ...(sheet.zusatz || []).map(line => [line.thema, line])
     ] : [];
     element("fact-sheet-lines").replaceChildren(...rows.filter(([, line]) => line).map(
-      ([label, line]) => make("li", `${factSheetLights[line.ampel] || "⚪"} ${label}: ${line.text}`)
+      ([label, line]) => make("li", `${factSheetLights[line.ampel] || "⚪"} ${label}: ${line.text}`, `light-${line.ampel}`)
     ));
     const verdict = element("fact-sheet-verdict");
     verdict.className = sheet ? `fact-sheet-verdict verdict-${sheet.fazit.stufe}` : "fact-sheet-verdict";
@@ -253,8 +253,15 @@
     });
   }
 
+  function greeting() {
+    const waiting = visibleJobs.filter(job => job.workflow_status === "new").length;
+    if (!waiting) return "Eine vorgefilterte Stelle nach der anderen – du entscheidest.";
+    return waiting === 1 ? "Eine neue Stelle wartet auf dich." : `${waiting} neue Stellen warten auf dich.`;
+  }
+
   function render() {
     element("undo-ignored").hidden = !undoDecision;
+    setText("greeting", greeting());
     const hasJobs = visibleJobs.length > 0;
     element("card").hidden = !hasJobs;
     element("navigation").hidden = !hasJobs;
@@ -290,7 +297,10 @@
     const freshness = element("freshness");
     freshness.hidden = !job.cache_stale;
     freshness.textContent = job.cache_stale ? `Cache-Fallback · Stand: ${displayDate(job.fetched_at)}` : "";
-    setText("current-status", `Status: ${statusLabels[job.workflow_status] || job.workflow_status}`);
+    // The "Neu" badge already says it; other statuses get their own chip.
+    setText("current-status", job.workflow_status === "new"
+      ? ""
+      : `Status: ${statusLabels[job.workflow_status] || job.workflow_status}`);
     setText("role-group", job.current_snapshot_missing
       ? "aktuell nicht verfügbar"
       : job.role_label || "Allgemeine IT");

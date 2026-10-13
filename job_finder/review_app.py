@@ -72,6 +72,7 @@ STATIC_FILES = {
     "/applications.js": ("applications.js", JAVASCRIPT),
     "/docs": ("docs.html", HTML),
     "/docs.js": ("docs.js", JAVASCRIPT),
+    "/nunito.woff2": ("nunito.woff2", "font/woff2"),
 }
 MAX_JSON_BYTES = 1024 * 1024
 # Two documents of at most 15 MB each plus the form fields.

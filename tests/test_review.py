@@ -724,7 +724,7 @@ class ReviewTests(unittest.TestCase):
                 with self.subTest(route=route), urlopen(base_url + route) as response:
                     page = response.read().decode("utf-8")
                     self.assertIn(marker, page)
-                    self.assertIn('href="/app.css?v=10"', page)
+                    self.assertIn('href="/app.css?v=11"', page)
                     self.assertIn('src="/app.js"', page)
                     self.assertNotIn("<style", page)
                     self.assertNotIn("style=", page)
@@ -746,6 +746,7 @@ class ReviewTests(unittest.TestCase):
                 ("/landing.js", "text/javascript", "landing.js"),
                 ("/review.js", "text/javascript", "review.js"),
                 ("/applications.js", "text/javascript", "applications.js"),
+                ("/nunito.woff2", "font/woff2", "nunito.woff2"),
             ]:
                 with self.subTest(route=route), urlopen(base_url + route) as response:
                     self.assertIn(content_type, response.headers["Content-Type"])

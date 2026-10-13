@@ -532,6 +532,7 @@ test("the agent's fact sheet renders as plain text lines with lights and safe li
   const lines = view.elements.get("fact-sheet-lines").children.map(line => line.textContent);
   assert.equal(lines.length, 8);
   assert.equal(lines[0], "🟢 Status: offen und aktuell");
+  assert.equal(view.elements.get("fact-sheet-lines").children[0].className, "light-gruen");
   assert.equal(lines[3], "🔴 Lücken: Java fehlt");
   assert.equal(lines[7], "⚠️ Bewerbung: Portfolio verlangt");
   const verdict = view.elements.get("fact-sheet-verdict");

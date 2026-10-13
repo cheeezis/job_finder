@@ -59,7 +59,7 @@ py-modules = ["run_finder"]
 include = ["job_finder*"]
 
 [tool.setuptools.package-data]
-job_finder = ["*.html", "*.css", "*.js"]
+job_finder = ["*.html", "*.css", "*.js", "*.woff2", "*.txt"]
 "job_finder.persistence.migrations" = ["script.py.mako"]
 
 [tool.pytest.ini_options]

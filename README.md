@@ -1,78 +1,59 @@
 # Job Finder
 
-A personal job-search assistant for entry-level IT roles in Germany. It collects
-listings from job boards, open feeds and company career pages, merges listings of
-the same job, filters out clear misfits with transparent rules and lets an LLM
-agent write a short fact sheet for the promising ones, within a hard cost limit.
-A small web app supports the review and tracks applications.
+A job-search assistant for entry-level IT roles in Germany that runs on Azure. It
+collects listings from job boards, feeds and career pages, merges duplicates,
+filters out clear misfits with transparent rules and lets an LLM agent write a
+short fact sheet for the promising ones, within a hard cost limit. A small web app
+supports the review and tracks applications.
 
-The user interface is in German, because the tool serves a job search in Germany;
-the documentation is in English.
+![The review: a job card with prefilter score, the agent's traffic-light fact sheet and the decision buttons](docs/images/review.png)
 
-## Highlights
+I built it for my own job search and use it daily; it is also my portfolio
+project for cloud and backend work. The interface is German, the documentation
+English. Everything in the screenshots comes from made-up
+[demo data](#demo-with-made-up-data).
 
-- **LLM agent with guardrails:** a LangGraph graph with a LangChain model on Azure
-  OpenAI (Responses API with web search) writes a structured fact sheet per job:
-  seven traffic-light lines, a verdict and a short reason. Its tools only read, job
-  ads and web pages count as material rather than instructions, and only links the
-  model actually saw survive as sources. One Pydantic model defines and checks the
-  sheet. Each sheet records the profile, rules, ad and model it was written on, so
-  the review flags outdated sheets; an incomplete answer gets one more try, and a
-  new sheet comes only when the user asks for it.
-- **Cost control in layers:** every model and tool call passes a cost guard backed
-  by a ledger in PostgreSQL, with limits per job, day and month that fail closed.
-  In Azure, a throttled model deployment, a token alert and a monthly budget add to
-  it. A fact sheet costs a few cents.
-- **Azure without account keys:** storage and the model accept only Entra ID,
-  secrets come from Key Vault through a managed identity, and the review app sits
-  behind Entra ID sign-in for one account. It becomes public only after its
-  sign-in is configured, and every deploy checks that it serves nothing without
-  sign-in.
-- **Infrastructure as code and gated delivery:** Terraform manages all resources.
-  GitHub Actions sign in to Azure with OIDC, using separate identities for plan,
-  build and apply. After a merge, CI plans against the live Azure state, and the
-  approved deploy applies exactly that saved plan. The image rolls out by digest,
-  and the deploy waits for a healthy revision. A one-click rollback workflow restores
-  the previous digest.
-- **Supply chain:** builds install the exact versions from `uv.lock`, actions are
-  pinned to commit SHAs, and the image runs as a non-root user without pip or uv.
-  CI scans the image and the Terraform code with Trivy; a new Terraform finding
-  fails the pull request, and the accepted ones are documented with a reason.
-  CodeQL analyses the code, and Dependabot proposes updates every week.
-- **Careful data handling:** PostgreSQL with advisory locks and consistent
-  snapshot reads; a source that fails never wipes the listings it found before.
-- **Rehearsed recovery:** 14 days of point-in-time restore for the database and
-  version-pinned application documents. A drill in Azure restored an older state
-  into separate resources and had a signed-in review with document download
-  working after about 22 minutes, against a 60-minute target
-  ([details](docs/backup-recovery.md#result-of-the-azure-drill)).
-- **Observable agent:** every job leaves a JSON log line and an OpenTelemetry
-  trace in Application Insights (run → job → model and tool calls) with ids,
-  tokens, cost and the verdict, but never profile, prompt or ad text; a test
-  checks that. Ingestion needs Entra ID, keeps 30 days and is capped per day.
-- **Tests:** 500+ Python tests that run in CI against a real PostgreSQL with a
-  coverage report, including boundary tests for the app role's database rights
-  and the worker lock; Playwright browser tests click through the review on the
-  demo data; Pyright checks the whole application package; frontend tests and
-  Ruff for lint and formatting.
-- **Measured quality:** an eval harness (`python -m evals`) runs the agent and a
-  one-call baseline on 24 synthetic job ads with known verdicts, including two
-  prompt-injection cases. Latest run, two passes: 44/48 correct verdicts for the
-  agent and 42/48 for the baseline, no invented money amounts, about half a cent
-  per fact sheet ([report](evals/results/2026-10-01-1451-synthetisch.md)). Two
-  cases fail in every pass and are kept as known weaknesses: a pre-sales role and
-  a foreign employer that only says "Germany (remote)". A second run against the
-  owner's own decisions stays local.
+## What it shows
+
+- **An LLM agent with guardrails.** A LangGraph agent on Azure OpenAI writes a
+  structured fact sheet per job: seven traffic-light lines, a verdict and sources.
+  Its tools only read, job ads count as material rather than instructions, and only
+  links the model actually saw survive.
+- **Cost limits that fail closed.** Every model and tool call passes a cost guard
+  backed by a ledger in PostgreSQL, with limits per job, day and month; Azure adds
+  a throttled deployment, a token alert and a budget. A fact sheet costs about half
+  a cent ([ADR 0002](docs/adr/0002-layered-cost-limits.md)).
+- **Azure without account keys or runtime passwords.** Storage and model accept
+  only Entra ID, and each runtime signs in to PostgreSQL with a token of its own
+  identity, with only the table rights and secrets it needs
+  ([runtime access](docs/runtime-access.md)). The review sits behind sign-in for one
+  account, and every deploy checks that it serves nothing without it.
+- **Infrastructure as code and gated delivery.** Terraform manages all resources.
+  GitHub Actions sign in with OIDC; CI plans against the live state, the approved
+  deploy applies exactly that plan, rolls the image out by digest and waits for a
+  healthy revision. Rollback is one workflow
+  ([ADR 0007](docs/adr/0007-deployment-responsibility.md)).
+- **Supply chain.** Locked dependencies, actions pinned to commit SHAs, a non-root
+  image without pip, Trivy for image and Terraform, CodeQL and Dependabot.
+- **Rehearsed recovery.** 14 days of point-in-time restore and versioned documents.
+  A drill restored an older state into separate resources in about 22 minutes,
+  against a 60-minute target ([details](docs/backup-recovery.md#result-of-the-azure-drill)).
+- **Observability.** Every job leaves a log line and an OpenTelemetry trace (run,
+  job, model and tool calls) with tokens, cost and verdict, but never profile,
+  prompt or ad text; a test checks that.
+- **Tests and evals.** 800+ Python tests against a real PostgreSQL, including the
+  database rights of each runtime role; Playwright clicks through the demo; Pyright,
+  frontend tests and Ruff. An eval harness runs the agent and a one-call baseline on
+  24 synthetic ads with known verdicts, two of them prompt injections: 44/48 correct
+  for the agent, 42/48 for the baseline
+  ([report](evals/results/2026-10-01-1451-synthetisch.md)).
 
 ## Screenshots
 
-The review app with the made-up [demo data](#demo-with-made-up-data); the
-interface is German.
-
-| Reviewing a job | Waiting list | Applications |
-| --- | --- | --- |
-| ![A job card with the prefilter score, the agent's fact sheet and the decision buttons](docs/images/review.png) | ![A second job at a company with an open application, on the waiting list](docs/images/waiting-list.png) | ![Open applications with key figures](docs/images/applications.png) |
-| Prefilter score, the agent's fact sheet with traffic lights, verdict and sources, and the decision. | A second job at a company with an open application: the card names it, and the job can wait. | Open and closed applications, their history and key figures. |
+| Waiting list | Applications |
+| --- | --- |
+| ![A second job at a company with an open application, on the waiting list](docs/images/waiting-list.png) | ![Open applications with funnel and key figures](docs/images/applications.png) |
+| A second job at a company with an open application: the card names it, and the job can wait. | The funnel from application to offer, key figures and each application's history. |
 
 ## Architecture
 

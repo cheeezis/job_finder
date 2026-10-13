@@ -136,19 +136,16 @@ class EntraPermissionsTests(unittest.TestCase):
         if os.environ.get("JOBFINDER_TEST_MODE") != "1" or not cls.database.endswith("_test"):
             raise RuntimeError("Entra-Rechtetests benötigen eine eigene _test-Datenbank.")
         suffix = uuid4().hex
-        cls.legacy = {key: f"f10_old_{key}_{suffix}" for key in entra.ENTRA_ROLES}
         cls.worker_group, cls.review_group = f"f10_worker_access_{suffix}", f"f10_review_access_{suffix}"
         cls.mapping_table = f"f10_mapping_{suffix}"
         cls.addClassCleanup(cls.cleanup_class)
         with psycopg.connect(cls.url) as connection:
             cls.set_policy(connection, cls.review_group)
-            for role in cls.legacy.values():
-                permissions.ensure_login_role(connection, role, "local-test-password")
             permissions.apply_runtime_grants(
                 connection,
                 cls.database,
                 connection.execute("SELECT current_user").fetchone()[0],
-                roles=cls.legacy,
+                roles={},
                 worker_group=cls.worker_group,
                 review_group=cls.review_group,
             )
@@ -170,7 +167,7 @@ class EntraPermissionsTests(unittest.TestCase):
         with psycopg.connect(cls.url) as connection:
             cls.set_policy(connection, permissions.REVIEW_GROUP)
             connection.execute(sql.SQL("DROP TABLE IF EXISTS {}").format(sql.Identifier(cls.mapping_table)))
-            for role in (*cls.legacy.values(), cls.worker_group, cls.review_group):
+            for role in (cls.worker_group, cls.review_group):
                 connection.execute(sql.SQL("DROP OWNED BY {}").format(sql.Identifier(role)))
                 connection.execute(sql.SQL("DROP ROLE {}").format(sql.Identifier(role)))
 
@@ -214,7 +211,6 @@ class EntraPermissionsTests(unittest.TestCase):
                 self.database,
                 apply=apply,
                 roles=self.roles,
-                legacy_roles=self.legacy,
                 worker_group=self.worker_group,
                 review_group=self.review_group,
             )
@@ -229,11 +225,6 @@ class EntraPermissionsTests(unittest.TestCase):
         self.assertEqual(result, self.prepare(apply=True))
         self.assertEqual(self.prepare()["grants_verified"], result["grants_verified"])
         with psycopg.connect(self.url) as connection:
-            permissions.verify_runtime_grants(connection, self.database, roles=self.legacy)
-            passwords = connection.execute(
-                "SELECT rolpassword FROM pg_authid WHERE rolname=ANY(%s)", (list(self.legacy.values()),)
-            ).fetchall()
-            self.assertTrue(all(row[0] for row in passwords))
             self.assertEqual(
                 connection.execute(
                     "SELECT rolpassword FROM pg_authid WHERE rolname=ANY(%s)", (list(self.roles.values()),)
@@ -310,7 +301,7 @@ class EntraPermissionsTests(unittest.TestCase):
             connection.execute(sql.SQL("DROP ROLE {}").format(sql.Identifier(self.roles["worker"])))
             connection.execute(
                 sql.SQL("INSERT INTO {} VALUES (%s,%s,%s,'service',0,0)").format(sql.Identifier(self.mapping_table)),
-                (self.legacy["worker"], self.principals["worker"], self.principals["tenant_id"]),
+                ("f10_other_alias", self.principals["worker"], self.principals["tenant_id"]),
             )
         with self.assertRaises(RuntimeError):
             self.prepare(apply=True)

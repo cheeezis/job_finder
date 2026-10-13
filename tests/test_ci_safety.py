@@ -1,15 +1,11 @@
 """Release prerequisites and rollback provenance, without cloud or registry access."""
 
 import importlib.util
-import io
 import os
 import subprocess
 import tempfile
 import unittest
-from contextlib import redirect_stdout
-from itertools import product
 from pathlib import Path
-from unittest.mock import patch
 
 import yaml
 
@@ -23,53 +19,7 @@ def load_script(name):
     return module
 
 
-phases = load_script("check_release_config")
 rollback = load_script("check_rollback_commit")
-
-
-class ReleaseConfigTests(unittest.TestCase):
-    def test_only_accepted_phase_combinations_pass(self):
-        runtime_pairs = {
-            ("legacy", "false"),
-            ("legacy", "true"),
-            ("prepare", "false"),
-            ("prepare", "true"),
-            ("split", "true"),
-        }
-        accepted = {
-            (runtime, verified, "password", entra) for runtime, verified in runtime_pairs for entra in ("false", "true")
-        }
-        accepted.update(
-            {
-                ("split", "true", "prepare", "false"),
-                ("split", "true", "prepare", "true"),
-                ("split", "true", "entra", "true"),
-            }
-        )
-        for values in product(
-            ("legacy", "prepare", "split"), ("false", "true"), ("password", "prepare", "entra"), ("false", "true")
-        ):
-            with self.subTest(values=values):
-                environ = dict(zip(phases.PHASE_VALUES, values))
-                if values in accepted:
-                    phases.validate(environ)
-                else:
-                    with self.assertRaises(ValueError):
-                        phases.validate(environ)
-
-    def test_missing_empty_or_malformed_variables_stop_without_echoing_values(self):
-        valid = dict(zip(phases.PHASE_VALUES, ("legacy", "false", "password", "false")))
-        for key in valid:
-            for invalid in (None, "", " true ", "TRUE", "synthetic-private-value"):
-                with self.subTest(key=key, invalid=invalid):
-                    environ = {**valid, key: invalid}
-                    if invalid is None:
-                        del environ[key]
-                    output = io.StringIO()
-                    with patch.object(phases.os, "environ", environ), redirect_stdout(output):
-                        self.assertEqual(phases.main(), 1)
-                    self.assertIn(key, output.getvalue())
-                    self.assertNotIn("synthetic-private-value", output.getvalue())
 
 
 class RollbackCommitTests(unittest.TestCase):
@@ -183,20 +133,6 @@ class WorkflowSafetyTests(unittest.TestCase):
         self.assertIn("terraform test -no-color", commands)
         for test in (ROOT / "infrastructure/tests").glob("*.tftest.hcl"):
             self.assertIn('mock_provider "azurerm"', test.read_text(encoding="utf-8"))
-
-    def test_both_plan_jobs_validate_explicit_phases_before_azure_login(self):
-        for name in ("terraform-plan", "release-plan"):
-            with self.subTest(job=name):
-                job = self.jobs[name]
-                for key in phases.PHASE_VALUES:
-                    self.assertIn(key, job["env"])
-                    self.assertNotIn("||", job["env"][key])
-                steps = job["steps"]
-                gate = next(i for i, step in enumerate(steps) if "check_release_config.py" in step.get("run", ""))
-                login = next(i for i, step in enumerate(steps) if step.get("uses", "").startswith("azure/login@"))
-                self.assertLess(gate, login)
-                for step in steps:
-                    self.assertFalse(set(step.get("env", {})) & phases.PHASE_VALUES.keys())
 
     def test_rollback_verifies_the_exact_digest_before_any_image_update(self):
         job = self.rollback["jobs"]["rollback"]

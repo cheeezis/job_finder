@@ -76,8 +76,6 @@ never end up in the state:
 | `DiscordWebhookUrl` | optional Discord webhook |
 | `StartupJobsApiKey` | optional key for Startup Jobs |
 | `ReviewAadClientSecret` | client secret of the review sign-in app |
-| `JobfinderDatabaseUrl` | the app role's database URL (shared `legacy` mode) |
-| `JobfinderWorkerDatabaseUrl`, `JobfinderReviewDatabaseUrl` | separate logins after [runtime access](runtime-access.md) |
 
 On Windows, set file contents with the UTF-8 call from [Usage](usage.md#setup).
 
@@ -103,17 +101,15 @@ terraform -chdir=infrastructure init -migrate-state
 
 ## 6. Database
 
-Run the migrations as admin and create the restricted runtime roles, as
-described in [Operations](operations.md#azure) and
-[runtime access](runtime-access.md):
+Run the migrations as admin, then set up the access groups and the three
+password-free runtime logins, as described in [Operations](operations.md#azure)
+and [runtime access](runtime-access.md#setting-up-groups-and-logins):
 
 ```powershell
 uv run python -m job_finder.db migrate
-uv run python scripts/create_runtime_roles.py --target azure
+terraform -chdir=infrastructure output -json entra_principals > tmp/entra-principals.json
+uv run python scripts/create_entra_roles.py --principals-file tmp/entra-principals.json --apply
 ```
-
-Optionally switch to Entra token sign-in later
-([database sign-in with Entra](database-auth.md)).
 
 ## 7. GitHub
 
@@ -121,9 +117,8 @@ Optionally switch to Entra token sign-in later
 | --- | --- | --- |
 | Variable | `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` | tenant and subscription |
 | Variable | `AZURE_CLIENT_ID`, `AZURE_CLIENT_ID_BUILD`, `AZURE_CLIENT_ID_PLAN` | client IDs of the three GitHub identities |
-| Variable | `RUNTIME_IDENTITY_PHASE`, `RUNTIME_ACCESS_VERIFIED`, `DATABASE_AUTH_PHASE`, `DATABASE_ENTRA_VERIFIED` | phases, see runtime access and Entra docs |
 | Secret | `POSTGRES_ADMIN_PASSWORD`, `POSTGRES_CLIENT_IPV4`, `ALERT_EMAIL`, `REVIEW_FQDN` | the same values as locally |
-| Secret | `POSTGRES_ENTRA_ADMIN_NAME` | only with Entra; a secret because it can contain an email address |
+| Secret | `POSTGRES_ENTRA_ADMIN_NAME` | sign-in name of the personal Entra database admin; a secret because it can contain an email address |
 
 Create the environments `production` (with required reviewers) and
 `production-plan` (limited to `main`, no reviewers).
@@ -134,5 +129,5 @@ Merge to `main` or start the workflow by hand: CI builds the image, plans, and
 after the approval in `production` applies the plan and rolls out the image by
 digest ([Deploy and rollback](operations.md#deploy-and-rollback)). Afterwards
 the deploy summary names the image as the way back. The local hybrid run needs
-`.env.postgres-azure` and `.env.docker-local` and a Windows task that runs
+`.env.postgres-azure`, `.env.runtime-azure` and `.env.docker-local` and a Windows task that runs
 `scripts/run_local_hybrid.py` daily ([Operations](operations.md#local-hybrid-run-stepstoneremotely)).

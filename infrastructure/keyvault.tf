@@ -25,15 +25,6 @@ resource "azurerm_key_vault" "jobfinder" {
   }
 }
 
-# The worker identity may read secret values, but not create/change/delete them.
-resource "azurerm_role_assignment" "keyvault_secrets_user_worker" {
-  count                = local.runtime_split ? 0 : 1
-  scope                = azurerm_key_vault.jobfinder.id
-  role_definition_name = "Key Vault Secrets User"
-  principal_id         = azurerm_user_assigned_identity.jobfinder.principal_id
-  principal_type       = "ServicePrincipal"
-}
-
 # Own access to enter/update secret values - only through the az CLI,
 # never through Terraform (otherwise the value ends up in the state).
 resource "azurerm_role_assignment" "keyvault_secrets_officer_dev" {

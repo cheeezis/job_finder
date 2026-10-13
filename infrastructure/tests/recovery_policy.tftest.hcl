@@ -35,11 +35,12 @@ mock_provider "azapi" {
 }
 
 variables {
-  subscription_id         = "00000000-0000-0000-0000-000000000001"
-  postgres_admin_password = "mock-password-never-used"
-  postgres_client_ipv4    = "192.0.2.1"
-  alert_email             = "example@example.test"
-  review_fqdn             = "review.example.test"
+  subscription_id           = "00000000-0000-0000-0000-000000000001"
+  postgres_admin_password   = "mock-password-never-used"
+  postgres_client_ipv4      = "192.0.2.1"
+  alert_email               = "example@example.test"
+  review_fqdn               = "review.example.test"
+  postgres_entra_admin_name = "owner@example.test"
 }
 
 run "database_and_document_recovery_windows_match" {

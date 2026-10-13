@@ -9,34 +9,26 @@ resource "azurerm_container_app" "review" {
 
   identity {
     type         = "UserAssigned"
-    identity_ids = local.review_identity_ids
+    identity_ids = [azurerm_user_assigned_identity.review.id]
   }
 
   registry {
     server   = azurerm_container_registry.jobfinder.login_server
-    identity = local.review_identity
+    identity = azurerm_user_assigned_identity.review.id
   }
 
   # References to Key Vault addresses, never to the values themselves.
-  dynamic "secret" {
-    for_each = local.database_entra_active ? [] : [1]
-    content {
-      name                = "jobfinder-database-url"
-      key_vault_secret_id = "${azurerm_key_vault.jobfinder.vault_uri}secrets/${local.review_database_secret}"
-      identity            = local.review_identity
-    }
-  }
   secret {
     name                = "aad-client-secret"
     key_vault_secret_id = "${azurerm_key_vault.jobfinder.vault_uri}secrets/ReviewAadClientSecret"
-    identity            = local.review_identity
+    identity            = azurerm_user_assigned_identity.review.id
   }
   # Personal search settings (content of user_settings.local.yaml); they
   # belong neither in the public repo nor in the image.
   secret {
     name                = "jobfinder-user-settings"
     key_vault_secret_id = "${azurerm_key_vault.jobfinder.vault_uri}secrets/JobfinderUserSettings"
-    identity            = local.review_identity
+    identity            = azurerm_user_assigned_identity.review.id
   }
 
   # On creation reachable only within the environment. azapi_resource_action.review_public
@@ -72,16 +64,12 @@ resource "azurerm_container_app" "review" {
         value = "1"
       }
       env {
-        name        = "JOBFINDER_DATABASE_URL"
-        secret_name = local.database_entra_active ? null : "jobfinder-database-url"
-        value       = local.database_entra_active ? local.entra_database_urls.review : null
+        name  = "JOBFINDER_DATABASE_URL"
+        value = local.entra_database_urls.review
       }
-      dynamic "env" {
-        for_each = local.database_entra_active ? [1] : []
-        content {
-          name  = "JOBFINDER_DATABASE_AUTH"
-          value = "managed_identity"
-        }
+      env {
+        name  = "JOBFINDER_DATABASE_AUTH"
+        value = "managed_identity"
       }
       env {
         name        = "JOBFINDER_USER_SETTINGS"
@@ -105,7 +93,7 @@ resource "azurerm_container_app" "review" {
       }
       env {
         name  = "JOBFINDER_MANAGED_IDENTITY_CLIENT_ID"
-        value = local.review_client_id
+        value = azurerm_user_assigned_identity.review.client_id
       }
       # Timings per API request (job_finder/telemetry.py), only route, status and durations.
       env {
@@ -128,8 +116,6 @@ resource "azurerm_container_app" "review" {
   }
 
   depends_on = [
-    azurerm_role_assignment.acr_pull,
-    azurerm_role_assignment.keyvault_secrets_user_worker,
     azurerm_role_assignment.acr_pull_review,
     azurerm_role_assignment.keyvault_review_secret,
     azurerm_role_assignment.storage_blob_data_contributor_review,

@@ -154,15 +154,10 @@ on 05.10.2026 ([result](backup-recovery.md#result-of-the-azure-drill)).
 
 `infrastructure/postgresql.tf` manages the production server: a PostgreSQL
 flexible server (`B_Standard_B1ms`, 32 GiB, France Central), the database
-`jobfinder`, the firewall rules and `require_secure_transport`. In the `split`
-mode, worker, review and hybrid run use their own restricted database roles;
-the cloud URLs are in the worker and review database secrets, which each
-component reads with its own managed identity. Only the earlier `legacy` mode
-shares `jobfinder_app` and `JobfinderDatabaseUrl`. Rights and phases:
-[runtime access](runtime-access.md). The separate switch to token sign-in is
-described in [database sign-in with Entra](database-auth.md); password
-authentication stays the default. The following steps concern administrative
-access from the own computer.
+`jobfinder`, the firewall rules and `require_secure_transport`. Worker, review
+and hybrid run sign in password-free with Entra tokens to their own restricted
+database roles ([runtime access](runtime-access.md)). The following steps
+concern administrative access from the own computer.
 
 The admin password and the IP to allow are kept locally in
 `infrastructure/postgres.auto.tfvars.json`, further private values in
@@ -195,10 +190,9 @@ changes nothing:
 .\.venv\Scripts\python.exe scripts/check_azure_postgres.py
 ```
 
-Create the shared login only for the initial setup in `legacy` mode. Separate
-worker, review and hybrid logins, the rights matrix and the two-stage procedure
-are in [runtime-access.md](runtime-access.md). After `split`, use their
-maintenance path instead of running the old app role command below again.
+The own app role `jobfinder_app` serves local access to the Azure database
+(`.env.postgres-azure`), for example a local review; the runtime logins are in
+[runtime-access.md](runtime-access.md).
 
 ```powershell
 .\.venv\Scripts\python.exe scripts/create_app_role.py --azure
@@ -382,8 +376,10 @@ local Windows task against the same Azure database
 worker currently uses: it looks it up through the local `az` sign-in, signs in
 to the registry and fetches it with `docker pull`. If Docker does not answer,
 the script starts Docker Desktop and stops it again after the run; if it was
-running already, it stays on. The app role's database URL is in
-`.env.postgres-azure`. `user_settings.local.yaml` and `profile.local.yaml` are
+running already, it stays on. The container signs in password-free as
+`jobfinder_hybrid_entra` with the DSN from `.env.runtime-azure` and the service
+principal from `.env.docker-local` ([runtime access](runtime-access.md#token-sign-in)).
+`user_settings.local.yaml` and `profile.local.yaml` are
 passed to the container as `JOBFINDER_USER_SETTINGS` and `JOBFINDER_PROFILE`;
 with the model address from `.env.docker-local` the agent then writes the fact
 sheets of the new jobs. A native Windows connection at times returned outdated
@@ -550,9 +546,9 @@ sign-in, RBAC and TLS, not at the network boundary.
 | Resource | Actual access protection |
 | --- | --- |
 | Review container app | Easy Auth (Entra ID), only the own account; public only after the sign-in configuration, every deploy checks access without sign-in (`review.tf`) |
-| PostgreSQL | TLS with `sslmode=verify-full`, restricted database roles with their password or, after the separate Entra acceptance, a token; firewall: Azure services (`0.0.0.0`, any subscription) and `local-review` |
+| PostgreSQL | TLS with `sslmode=verify-full`, restricted runtime roles with Entra tokens instead of passwords; firewall: Azure services (`0.0.0.0`, any subscription) and `local-review` |
 | Blob Storage | RBAC, account keys switched off; write access only to `application-documents` |
-| Key Vault | RBAC: in `split` each runtime has only `Key Vault Secrets User` on the secrets it needs; `Secrets Officer` only for the own account |
+| Key Vault | RBAC: each runtime has only `Key Vault Secrets User` on the secrets it needs; `Secrets Officer` only for the own account |
 | Azure OpenAI | RBAC without API keys: worker, hybrid run and the own account with `Cognitive Services OpenAI User` |
 | Container Registry | RBAC, `admin_enabled = false` |
 | Worker (Container Apps job) | no ingress, outbound only |

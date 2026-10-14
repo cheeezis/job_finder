@@ -19,6 +19,7 @@ from job_finder.operations import RunLog, create_backup, timed_step
 from job_finder.paths import JOBS_FILE, MEMORY_FILE
 from job_finder.persistence.database import lock, transaction, worker_lock
 from job_finder.persistence.health import backlog
+from job_finder.persistence.listing_archive import archive_listings, listing_records
 from job_finder.persistence.runs import finish_run, reconcile_runs, start_run
 from job_finder.persistence.storage import publish_results
 from job_finder.sources import (
@@ -259,6 +260,8 @@ def run_pipeline(exclude_sources=frozenset(), run_id=None):
                 if job.id in closed_ids:
                     job.workflow_status = WorkflowStatus.IGNORED
                     job.is_new = False
+        # The archive keeps each listing as seen, before listings become one card.
+        archived_listings = listing_records(jobs)
         # Canonical IDs are resolved under the lock: several listings become one card.
         evaluated_jobs = combine_listings(evaluated_jobs)
         jobs = [job for job, _result in evaluated_jobs]
@@ -271,6 +274,9 @@ def run_pipeline(exclude_sources=frozenset(), run_id=None):
             exclude_sources=set(exclude_sources) | (run_sources - complete_sources),
         )
         notification_stats = queue_notifications(results, aliases=aliases)
+
+    with timed_step("Anzeigen archivieren", "archive"):
+        archive_snapshot(archived_listings, run_id=run_id)
 
     if closed_ids:
         print(f"Nicht mehr verfügbar: {len(closed_ids)} Stelle(n) auf Nicht interessant gesetzt")
@@ -384,6 +390,20 @@ def print_review_diagnostics(results, memory_stats):
         f"{pending} unbearbeitet einschließlich Sonderfilter",
         flush=True,
     )
+
+
+def archive_snapshot(records, run_id=None):
+    """Archive the run's listings for later analysis; a failure costs only this snapshot."""
+    try:
+        archived = archive_listings(records, run_id=run_id)
+    except Exception as error:
+        print(f"  Archiv: fehlgeschlagen ({type(error).__name__})")
+        log_event("listings_archive_failed", run_id=run_id, level="warning", error=type(error).__name__)
+        return
+    if archived:
+        _name, size = archived
+        print(f"  Archiv: {len(records)} Anzeigen, {size / 1_000_000:.1f} MB")
+        log_event("listings_archived", run_id=run_id, listings=len(records), bytes=size)
 
 
 def collect_jobs(sources, run_id=None):

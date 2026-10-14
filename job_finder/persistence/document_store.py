@@ -13,26 +13,24 @@ from pathlib import Path
 from job_finder.errors import DocumentAccessError
 from job_finder.paths import APPLICATION_DOCUMENTS_DIR
 
-_container_client = None
+_container_clients = {}
 
 
 def _backend():
     return os.environ.get("JOBFINDER_DOCUMENTS_BACKEND", "local")
 
 
-def _blob_container():
-    """Reuse one authenticated client.
+def blob_container(name):
+    """Reuse one authenticated client per container of JOBFINDER_STORAGE_ACCOUNT.
 
     DefaultAzureCredential resolves to the Container App's managed identity
     in Azure, or the developer's az login locally.
     """
-    global _container_client
-    if _container_client is None:
+    if name not in _container_clients:
         from azure.identity import DefaultAzureCredential
         from azure.storage.blob import BlobServiceClient
 
         account = os.environ["JOBFINDER_STORAGE_ACCOUNT"]
-        container = os.environ["JOBFINDER_STORAGE_CONTAINER"]
         # A user-assigned identity isn't auto-detected like a system-assigned
         # one; without its client ID, ManagedIdentityCredential can't tell
         # which identity to use and DefaultAzureCredential falls through to
@@ -42,8 +40,12 @@ def _blob_container():
             account_url=f"https://{account}.blob.core.windows.net",
             credential=DefaultAzureCredential(managed_identity_client_id=client_id),
         )
-        _container_client = service.get_container_client(container)
-    return _container_client
+        _container_clients[name] = service.get_container_client(name)
+    return _container_clients[name]
+
+
+def _blob_container():
+    return blob_container(os.environ["JOBFINDER_STORAGE_CONTAINER"])
 
 
 def local_path(key, root=APPLICATION_DOCUMENTS_DIR):

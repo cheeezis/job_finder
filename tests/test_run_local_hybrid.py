@@ -229,6 +229,7 @@ class LocalHybridRunTests(unittest.TestCase):
         self.assertEqual(full["JOBFINDER_REVIEW_HOST"], "review.test")
         self.assertEqual(full["JOBFINDER_PROFILE"], "profil: ja\n")
         self.assertIn("sslrootcert=/etc/ssl/certs/ca-certificates.crt", full["JOBFINDER_DATABASE_URL"])
+        self.assertEqual(full["JOBFINDER_ARCHIVE_CONTAINER"], "listing-archive")
 
     def test_the_hybrid_signs_in_password_free_to_the_azure_database(self):
         with tempfile.TemporaryDirectory() as directory:

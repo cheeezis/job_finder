@@ -49,6 +49,7 @@ RESOURCE_GROUP = "rg-jobfinder"
 WORKER_JOB = "jobfinder-worker"
 STORAGE_ACCOUNT = "stjobfindere64bfdce"
 STORAGE_CONTAINER = "application-documents"
+ARCHIVE_CONTAINER = "listing-archive"
 LOCAL_ONLY_SOURCES = "stepstone,remotely"
 FIREWALL_RULE = "local-review"
 # Answers with nothing but the caller's public IPv4 address.
@@ -122,6 +123,8 @@ def container_environment():
         "JOBFINDER_DOCUMENTS_BACKEND": "blob",
         "JOBFINDER_STORAGE_ACCOUNT": STORAGE_ACCOUNT,
         "JOBFINDER_STORAGE_CONTAINER": STORAGE_CONTAINER,
+        # Each run adds a snapshot of its listings (job_finder/persistence/listing_archive.py).
+        "JOBFINDER_ARCHIVE_CONTAINER": ARCHIVE_CONTAINER,
         # The container is removed after the run, so a ZIP backup would be lost.
         "JOBFINDER_SKIP_RUN_BACKUP": "1",
         # The runs table and the review name this run as the local hybrid one.

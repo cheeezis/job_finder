@@ -74,22 +74,11 @@ of this test database.
 - `agent_usage` / `agent_fact_sheets`: the agent's cost ledger and fact sheets.
 
 Single review changes lock the affected job; status and timeline are saved
-together. Finder reconciliations lock the changes to the job stock and write
-back only changed records; a lock prevents two finders at once. The manual
-import writes sources, memory and results in one transaction, with the HTTP
-fetch before it. The finder writes memory, confirmed closings, both result
-views and Discord jobs together in one transaction. Sending and acknowledging
-follow after the commit. The existing table `notifications` holds the card
-data, a stable event key and the delivery state; this outbox needed no schema
-change.
-
-Open jobs are retried in the next successful finder run, even without a new
-find. Source failures and split schedules do not remove them. A newly set
-review decision or a prefilter exclusion can discard the job. Successful
-partial deliveries are saved one by one. An abort after Discord succeeded but
-before the acknowledgement can cause a duplicate message. The run summary is
-still sent straight away. Details and abort tests:
-[developer docs](development.md#publishing-and-discord-outbox).
+together. Finder reconciliations write back only changed records, and a lock
+prevents two finders at once. The manual import and the finder each write their
+results in one transaction, with network requests before it; Discord delivery
+follows after the commit, at least once
+([details](development.md#publishing-and-discord-outbox)).
 
 Documents are kept under `data/internal/application_documents` by default;
 `JOBFINDER_DOCUMENTS_DIR` can point at another permanent location. With
@@ -198,64 +187,35 @@ The own app role `jobfinder_app` serves local access to the Azure database
 .\.venv\Scripts\python.exe scripts/create_app_role.py --azure
 ```
 
-New tables and columns are created only by explicit Alembic migrations through
-`job_finder.db migrate`; `init` is a compatible alias for the same path. Worker
-and review never change the schema. An empty database gets the schema through
-the unchanged baseline revision `0001_baseline` and the following revisions up
-to `head`. An existing database without an Alembic version is adopted only
-after the complete baseline structure and the earlier version marker have been
-checked. Deviations abort; missing tables or columns are not repaired
-automatically on adoption. The known old import log table `migration_runs` may
-exist with its original structure, which is checked as well. It and its data
-are kept; fresh databases no longer get it since the data migration has ended.
+New tables and columns come only from explicit Alembic migrations through
+`job_finder.db migrate` (`init` is an alias); worker and review never change the
+schema. An empty database gets the baseline `0001_baseline` and the following
+revisions up to `head`. An existing database without an Alembic version is
+adopted only after its complete baseline structure has been checked; deviations
+abort and are not repaired.
 
 `schema-status` checks structure and migration state with the admin login,
-technically read-only. It shows `empty`, `legacy`, `current` or `outdated`, the
-current revision and the target `head`, without row counts or connection
-details. `migrate` performs the check, the baseline stamp, the upgrade and the
-protection of the version tables in one transaction under the existing schema
-lock. Inherited table rights are revoked for the version tables as well;
-application tables keep their rights.
+technically read-only, and shows `empty`, `legacy`, `current` or `outdated` with
+the current revision and `head`. `migrate` runs the check, the baseline stamp,
+the upgrade and the protection of the version tables in one transaction under
+the schema lock.
 
-Before a production migration, back up the data and check `schema-status`. On a
-deviation, investigate the cause and the actual data; no unchecked
-`alembic stamp`. The baseline keeps the earlier `schema_version = 2` and all
-existing data. A rollback to the previous app image needs no schema downgrade;
-a baseline downgrade is refused on purpose because it would delete all data.
-New revisions need their own compatibility and return plan.
-`0003_agent_fact_sheet_state` only adds columns with defaults to
-`agent_fact_sheets` (retry, attempts, basis, outdated parts): the previous image
-keeps writing as before, so an image rollback needs no downgrade. The migration
-runs before the merge of the matching release, because the new image reads the
-columns.
-`0004_review_lookup_indexes` creates two GIN indexes on `job_state.extra`
-(listing URLs and linked IDs) that the review uses to find remembered jobs of a
-listing; without them PostgreSQL reads the whole table for every job list. The
-structure check expects exactly these two definitions. This migration also runs
-before the merge of the matching release.
-`0005_job_listings` (F17, stage 1) creates the tables `job_listings` (a job's
-listings: position, URL, source) and `job_links` (linked jobs) and the columns
-`first_seen_at`, `last_seen_at` and `locations` on `job_state`, takes over the
-values from `job_state.extra` and gives the tables the same rights as
-`job_state`; until stage 4 the JSON fields stayed the source and every save
-derived the tables from them.
-`0007_job_state_contract` (F17, stage 4) makes the tables and columns the store:
-it derives them one last time, removes the fields `source_urls`,
-`source_names`, `linked_job_ids`, `first_seen_at`, `last_seen_at` and
-`locations` from `job_state.extra` and drops the two GIN indexes of `0004`.
-This is the first migration an older image cannot run on. Its way back is a
-downgrade, which writes the fields back from the tables and restores the
-indexes; only then may the previous image be rolled back:
+Before a production migration, back up the data and check `schema-status`; on a
+deviation, investigate instead of an unchecked `alembic stamp`. Migrations run
+separately from the deploy ([Deploy and rollback](#deploy-and-rollback)).
+Additive revisions (new tables, columns, indexes) run before the merge of the
+release that needs them, so the previous image keeps working and an image
+rollback needs no downgrade. `0007_job_state_contract` is the first revision an
+older image cannot run on. Its way back is a downgrade that writes the earlier
+JSON fields back from the tables; only then may an older image be rolled back:
 
 ```powershell
 .\.venv\Scripts\python.exe -m job_finder.db downgrade 0006_runs
 ```
 
 Run it like `migrate` below, with the Azure connection details set for the
-call. Revisions before `0007` refuse a downgrade.
-
-Migrations run separately from the deploy on purpose (see
-[Deploy and rollback](#deploy-and-rollback)).
+call. Revisions before `0007` refuse a downgrade, the baseline above all,
+because it would delete all data.
 
 After an approved schema change, the command runs once against Azure, with the
 connection details from `.env.postgres-azure` set only for this call. `check`
@@ -346,20 +306,13 @@ the image noted under "Way back" (`…/jobfinder@sha256:…`). It also runs only
 after approval in `production`, resets only the image of worker and review and
 runs the same checks. Terraform and database stay unchanged.
 
-Vor dem Image-Update liest der Workflow ausschließlich die Tags des
-angegebenen Digests und prüft den eindeutigen CI-Commit `sha-<12>` mit der
-vollständigen Git-Historie. Dieser muss Contract 0007
-(`c55e17787bbe6e95cc6666771f9f890f3c4c4cf6`) enthalten. Fehlende, unbekannte
-oder mehrdeutige Commit-Zuordnungen brechen immer ab. Für ein bekanntes Image
-vor dieser Grenze sind `allow_precontract=true` und `rollback_reason`
-erforderlich. Zuerst den separaten Schema-Downgrade-/Restore-Rückweg prüfen
-und ausdrücklich freigeben; der Workflow führt keinen DB-Downgrade aus.
-Die Commit-Prüfung ersetzt diese Prüfung des Zielschemas nicht. Die
-Begründung wird nicht in die Workflow-Ausgabe geschrieben.
-
-Rückweg für eine Änderung an diesen Workflow-Prüfungen: den betreffenden
-Commit per Revert-PR zurücknehmen. Für Laufzeitcode bleibt das zuvor notierte
-Image der Rückweg, sofern es die oben genannte Contract-Grenze erfüllt.
+Before the image update the workflow reads only the tags of the given digest
+and checks the image's CI commit (`sha-<12>`) against the full Git history: it
+must contain the commit that introduced revision `0007`. Missing, unknown or
+ambiguous commits always abort. An older image needs `allow_precontract=true` and
+a `rollback_reason`, after the schema downgrade above has been checked and
+approved separately; the workflow never touches the database, and the reason
+does not appear in the log.
 
 That works only as long as the schema fits the old image. Migrations are
 therefore additive (new tables and columns, nothing removed) and run before the
@@ -385,13 +338,12 @@ with the model address from `.env.docker-local` the agent then writes the fact
 sheets of the new jobs. A native Windows connection at times returned outdated
 reads from Azure; the container avoids that, the cause is still unexplained.
 
-Der Docker-Prozess erhält Containerwerte über eine explizite Child-Environment;
-in der Kommandozeile steht nur `-e KEY`, kein Secretwert oder Profilinhalt.
-Die übrigen geerbten Variablen sind auf den Docker-CLI-Kontext begrenzt.
-Lokale dotenv-Dateien werden mit `python-dotenv` gelesen: Quotes und Kommentare
-werden berücksichtigt, `${...}` wird nicht interpoliert. Der Docker-Daemon
-und sein `docker inspect` haben weiterhin Zugriff auf die Container-Environment;
-der vertrauenswürdige lokale Host bleibt Teil dieser Betriebsgrenze.
+The script passes the container values through an explicit child environment:
+the command line only names the keys (`-e KEY`), never secret values or profile
+contents, and other inherited variables are limited to the Docker CLI context.
+The dotenv files are read with `python-dotenv` (quotes and comments respected,
+no `${...}` interpolation). The Docker daemon can still see the container
+environment, so the local host stays part of the trust boundary.
 
 The output of every run goes to `data/logs/hybrid-<time>.log` (kept for 14
 days, without the secret start parameters). If a step fails, for example
@@ -400,10 +352,11 @@ reports the reason and the log file to Discord (`DISCORD_WEBHOOK_URL` as a user
 variable).
 
 The container has neither a managed identity nor an `az` sign-in. Instead there
-is a separate service principal with exactly two roles: `Storage Blob Data
-Contributor` only on the container `application-documents`
-(`infrastructure/storage.tf`) and `Cognitive Services OpenAI User` for the agent
-(`infrastructure/openai.tf`). Set it up once:
+is a separate service principal. It signs in to PostgreSQL as
+`jobfinder_hybrid_entra` ([runtime access](runtime-access.md)) and has one Azure
+role, `Cognitive Services OpenAI User` for the agent (`infrastructure/openai.tf`);
+it needs no document access, because the hybrid run skips document backups. Set
+it up once:
 
 ```powershell
 az ad app create --display-name "jobfinder-local-docker"
@@ -424,7 +377,8 @@ JOBFINDER_OPENAI_ENDPOINT=<address of the Azure OpenAI account, for the agent>
 
 Then enter the service principal's object ID
 (`az ad sp show --id <appId> --query id`) as `local_docker_sp_object_id` in
-`infrastructure/variables.tf` and apply the role assignments.
+`infrastructure/variables.tf`, apply the role assignment and set up its database
+login ([runtime access](runtime-access.md#setting-up-groups-and-logins)).
 
 ## Logs and traces
 
@@ -493,13 +447,10 @@ worker job, `hybrid` from the local hybrid run, otherwise `local`, set through
 the key figures. So the hybrid runs, which send no logs to Azure, show up as
 well. The review's landing page shows the latest run per place (`/api/runs`).
 
-Nach Erwerb des exklusiven Worker-Locks markiert der nächste Finder-Start alle
-verwaisten `running`-Einträge als `failed`, bevor er den eigenen Lauf anlegt.
-`finished_at` ist dabei der Zeitpunkt der Erkennung, nicht die unbekannte
-Abbruchzeit. Ein parallel aktiver Worker hält den Lock und wird nicht verändert.
-Diese Korrektur benötigt weder eine neue Statusart noch eine Migration. Ein
-Image-Rollback nimmt den Code zurück; bereits auf `failed` gesetzte Einträge
-bleiben abgeschlossene Historie.
+After taking the exclusive worker lock, the next finder start marks orphaned
+`running` entries as `failed` before it records its own run; `finished_at` is
+then the time of detection, not the unknown time of the abort. A worker running
+in parallel holds the lock and stays untouched.
 
 At the end of every run, after the agent, comes a `run_summary` line: duration,
 jobs, new jobs in total and per source (`new_by_source`), new review cards,
@@ -570,6 +521,5 @@ server, on the other hand, would shut out the hybrid run and admin access
 without a VPN. A NAT gateway (about 31 € a month including the public IP) would
 only be needed for a fixed outbound address, for example to limit the firewall
 to the containers. For a single user without third-party data and without
-compliance requirements, TLS, RBAC and the app role's password carry the
-protection. If more users or third-party applicant data were added, this would
+compliance requirements, TLS, RBAC and the Entra sign-in carry the protection. If more users or third-party applicant data were added, this would
 be the first thing to change.

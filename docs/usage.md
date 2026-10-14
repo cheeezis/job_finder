@@ -348,21 +348,11 @@ course of a run.
   and Germany-wide for remote jobs. Salary ranges from GermanTechJobs count as
   euros gross per year.
 
-## Tests and development
+## Development
 
-```powershell
-uv sync
-uv run python scripts/test_postgres.py
-uv run ruff check .
-node --test tests/frontend.test.cjs
-```
-
-The Python tests need their own test database
-([Operations](operations.md#local-database)), Node.js 18 or newer only the
-frontend tests. The [developer guide](development.md) explains structure, data
-flow, new sources and style rules. GitHub Actions check every pull request;
-after a merge to `main` they roll out infrastructure and image only after
-manual approval.
+The [developer guide](development.md) covers checks, tests, structure, new
+sources and style rules. GitHub Actions check every pull request; after a merge
+to `main` they roll out infrastructure and image only after manual approval.
 
 ```text
 job_finder/            core logic, review and applications
@@ -376,7 +366,3 @@ run_finder.py          entry point for a finder run
 review_jobs.bat        starts the local interface
 data/                  local run data (not versioned)
 ```
-
-## License
-
-MIT, see [LICENSE](../LICENSE).

@@ -3,33 +3,12 @@
 An older application status is only restored once the documents that belong to
 it can be opened as well. A longer backup period alone does not prove that.
 
-## Status and next steps
+## Status
 
-The starting point before the change was:
-
-| Part | Retention | Restore |
-| --- | --- | --- |
-| PostgreSQL | seven days | point-in-time restore (PITR) into a new server |
-| Blob versions | old versions scheduled for deletion after 30 days | read a chosen version and copy it to a target of its own |
-| Blob and container soft delete | 14 days | make deleted versions or containers available again |
-| Local application backup | seven ZIP archives, no fixed number of days | empty database and empty document folder |
-
-The three steps for the joint restore are:
-
-1. **Prepare locally:** document the procedure, practise with made-up data and
-   files, check checksums and document references. The drill described below
-   creates only its own local test databases.
-2. **Align retention and document versions:** prepare the chosen window of 14
-   days, check the Terraform changes and their cost; assign document versions
-   unambiguously. Preparing the code does not yet change the production
-   infrastructure.
-3. **Prove it in Azure:** restore a chosen database point in time together
-   with at least one document of that time into isolated targets. Check
-   sign-in, document access, references and duration. Only this proof completes
-   the acceptance of the Azure restore.
-
-All three steps are done; the Azure drill passed on 05.10.2026 (see
-[Result of the Azure drill](#result-of-the-azure-drill)).
+Database point-in-time restore and document delete protection share a window
+of 14 days. A local drill with made-up data proves the application backup, and a
+drill in Azure on 05.10.2026 restored database and documents of an older state
+together ([result](#result-of-the-azure-drill)).
 
 ## Chosen backup window: 14 days
 

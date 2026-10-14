@@ -57,25 +57,15 @@ schema and sees neither `schema_version` nor `alembic_version` (a separate test
 role, so a real `jobfinder_app` on the same server stays untouched), and a
 second concurrent finder run is refused (`tests/test_database_boundaries.py`).
 
-`tests/test_schema_migrations.py` creates its own temporary `_test` databases on
-the already isolated test instance and removes them after each test. The test
-login needs `CREATEDB` for that and `CREATEROLE` for the role check (the local
-and the CI test instance use a superuser). Freshly migrated and adopted
-databases are compared through the PostgreSQL catalogs. An independent
-historical DDL fixture checks the adoption, including unchanged decisions,
-document references, notifications and cost ledger. Structure deviations,
-unknown versions, inherited app rights and aborts after DDL or the baseline
-stamp are regressions of their own. These tests run in the normal PostgreSQL
-suite and so in CI as well.
-
-`tests/test_runtime_permissions.py` checks F09 with unique local worker, review
-and hybrid roles and capability groups for each test. Besides allowed real
-review flows, it checks direct rights violations, indirect deletion through
-record cascades, `SET ROLE` and later tables. The tests remove their roles and
-restore the policy afterwards. The Terraform tests in
-`infrastructure/tests/runtime_access.tftest.hcl` check the separate identities,
-the token sign-in and the guards for the Entra administrator with fully
-simulated providers (`terraform test`). They create no Azure resources.
+`tests/test_schema_migrations.py` creates and removes its own temporary `_test`
+databases (the test login needs `CREATEDB` and `CREATEROLE`) and compares freshly
+migrated and adopted databases through the PostgreSQL catalogs.
+`tests/test_runtime_permissions.py` checks the runtime groups with their own
+local roles: allowed review flows, direct rights violations, indirect deletion
+through record cascades, `SET ROLE` and later tables.
+`infrastructure/tests/*.tftest.hcl` check identities, token sign-in and recovery
+settings with fully simulated providers (`terraform test`), without creating
+Azure resources.
 
 The browser tests (`tests/test_review_browser.py`) click through the review in
 Chromium on freshly filled demo data: fact sheet, decision with note, waiting
@@ -89,39 +79,20 @@ $env:JOBFINDER_BROWSER_TESTS = "1"; uv run python scripts/test_postgres.py tests
 ```
 
 The [GitHub workflow](../.github/workflows/checks.yml) tests Python 3.11 and
-3.13 on Linux with PostgreSQL and shows the coverage in the run's summary; it
-checks style, types, frontend and whether `uv.lock` matches `pyproject.toml`;
-separate jobs run the browser tests and the quickstart from the README. For
-pull requests it also builds the image, starts it briefly as a restricted user
-and scans it for known vulnerabilities with Trivy; tflint and Trivy check the
-Terraform code and fail on every new finding (deliberate trade-offs are listed
-with their reason in [.trivyignore.yaml](../infrastructure/.trivyignore.yaml)),
-and a `terraform plan` against the stored state (`-refresh=false`) shows the
-consequences for Azure (not for forks and Dependabot, which have no Azure
-access). CodeQL analyses Python, JavaScript and the workflows
-([codeql.yml](../.github/workflows/codeql.yml)), Dependabot proposes updates
-weekly, and all actions are pinned to commit SHAs. After a merge to `main` it
-builds the image, checks it again and pushes it to the registry. Then it creates
-a Terraform plan reconciled with the real Azure state, stores it privately next
-to the state and shows in the run only which resources would change how. The
-manual approval in the environment `production` applies to exactly this plan:
-the apply loads it, checks its checksum and applies it; if the state has changed
-since, Terraform aborts. Afterwards it rolls out the image by digest to worker
-and review, checks the sign-in protection and waits until the new review
-revision runs healthily. Deploys run one at a time: a newer deploy waits behind
-one that waits for approval, so cancel the older run when only the newer should
-go out. After the approval a deploy rolls out only if its commit is still the
-current `main`.
-Terraform does not manage the image version; a local `terraform apply` therefore
-never resets the app. [Operations](operations.md#deploy-and-rollback) describes
-the way back.
-
-Für jeden PR, einschließlich Forks und Dependabot, führt
-`infrastructure-checks` zusätzlich `terraform init -backend=false`,
-`terraform validate` und `terraform test` mit Mock Providern aus. Dieser Job
-hat weder Azure-Login noch OIDC-Schreibrecht oder Zugriff auf Repo-Secrets.
-Die bestehenden Image-Probestarts prüfen außerdem `TZ=Europe/Berlin` und die
-UTC-Abweichung im Januar und Juli.
+3.13 on Linux with PostgreSQL (coverage in the run summary), checks style, types,
+the frontend and whether `uv.lock` matches `pyproject.toml`, and runs the browser
+tests and the README quickstart. Pull requests also build the image, start it
+briefly as a restricted user (including the Berlin time zone in January and
+July) and scan it with Trivy; tflint and Trivy fail on every new Terraform
+finding (accepted ones are listed with their reason in
+[.trivyignore.yaml](../infrastructure/.trivyignore.yaml)). Every pull request,
+forks and Dependabot included, gets `terraform validate` and `terraform test`
+with mock providers, without Azure sign-in or secrets; own pull requests also
+get a `terraform plan` against the stored state. CodeQL analyses Python,
+JavaScript and the workflows ([codeql.yml](../.github/workflows/codeql.yml)),
+Dependabot proposes updates weekly, and all actions are pinned to commit SHAs.
+What happens after a merge to `main` is described in
+[Deploy and rollback](operations.md#deploy-and-rollback).
 
 New general changes start on a current `main`, for example on `docs/...`,
 `fix/...` or `feat/...`. Commit content changes and large purely mechanical
@@ -193,21 +164,13 @@ flowchart TD
 2. A first prefilter determines the candidates for optional detail fetches.
    Sources may replace their job objects or remove confirmed closed listings
    from the list.
-3. The enriched jobs are scored finally. These results stay attached to the job
-   objects while the memory afterwards assigns IDs, first-seen attributes and
-   existing workflow decisions. Old board names in the employer field of
-   StudySmarter entries are removed on the way, even if the listing was not
-   found again in this run. The StudySmarter adapter also removes such
-   placeholders from reused detail caches and freshly loaded detail pages
-   before they reach the memory. Real employer names and manual decisions are
-   kept. Listings with the same title and a matching company get the same ID,
-   also across boards and runs; an already decided job only without a new place
-   or when both are fully remote. Then they become one card, led by the
-   best-scored listing. For completed applications, other listings are taken
-   over only if their publication dates are at most 30 days apart. Older
-   stored entries use the first-seen date instead; the date of the last fetch
-   does not count. Running applications and assignments through the same
-   listing ID or URL keep their assignment.
+3. The enriched jobs are scored finally. The memory then assigns IDs,
+   first-seen attributes and existing workflow decisions; real employer names
+   and manual decisions are kept. Listings with the same title and a matching
+   company get the same ID, also across boards and runs (an already decided job
+   only without a new place, or when both are fully remote), and become one
+   card led by the best-scored listing. A completed application takes over
+   other listings only if they were published at most 30 days apart.
 4. The offline check looks at missing interesting jobs without an application
    timeline, and only if all known sources of the job that this run queries
    were completely successful; the memory counts missed runs the same way.
@@ -223,30 +186,20 @@ follows the workflow status and its visibility filters. These attributes must
 not be equated when changing things: an abort after saving the memory and a
 restart therefore do not remove unhandled jobs from "Neu".
 
-### Offline check
+### Offline check and run output
 
-Only missing interesting jobs without an application timeline are checked, not
-unhandled jobs with status new. Current matches are skipped, outdated cache
-matches count as missing. The requests run one after the other, at most 200 URLs
-per run; after two minutes no new one starts, a running one may finish. Results
-count for 24 hours, unclear ones too; open checks spread over later runs and do
-not change the status. A job becomes "Nicht interessant" only if all its URLs
-were clearly confirmed as closed in the last 24 hours; missing search matches,
-sign-in redirects and fetch errors are not enough.
+Only missing interesting jobs without an application timeline are checked, one
+URL after the other, at most 200 per run and for at most two minutes; results
+count for 24 hours. A job becomes "Nicht interessant" only if all its URLs were
+clearly confirmed as closed; missing search matches, sign-in redirects and fetch
+errors are not enough.
 
-### Run output
-
-Every source gets a result line with matches, duration and, if so, a partial
-result or an error. Console and run log also show the duration of the detail
-enrichment and the pipeline steps, for aborted steps the time elapsed until
-then; nested times overlap and do not add up to the total run time. In a
-terminal, progress lines are replaced; without a terminal, timestamped
-intermediate states appear at most every 30 seconds per activity. Sources run in
-threads, so their lines interleave; the run log writes one line at a time, and
-JSON events stay whole. The offline check shows done and planned unique URLs,
-but no URLs or job contents. The review diagnosis separates first-stored and
-known matches, matching and excluded new matches, and the status new from the
-default filter "Neu".
+Every source gets a result line with matches, duration and any partial result or
+error, and the pipeline steps log their durations (nested times overlap). In a
+terminal, progress lines are replaced; without one, timestamped states appear at
+most every 30 seconds per activity. Source threads interleave their lines, but
+every log line and JSON event stays whole, and no URLs or job contents are
+printed.
 
 ### Publishing and Discord outbox
 
@@ -263,10 +216,8 @@ card data and a stable `event_key` (`job-found:<ID of the first find>`); on a
 merge, job and delivery state are assigned to the canonical job ID. Finds
 already sent are not scheduled again.
 
-The existing table `notifications` stores card data and event keys in its
-existing JSONB field. This change therefore needs no new table or Alembic
-revision. The backup format and revision `0001_baseline` stay compatible;
-application backups contain the complete outbox as well.
+The table `notifications` holds the card data and event keys in its JSONB field;
+application backups contain the complete outbox.
 
 Only after the commit does `deliver_notifications` call Discord. A session lock
 prevents parallel senders; network calls hold no write transaction open. Before
@@ -280,10 +231,8 @@ open.
 
 Delivery happens at least once as long as the job stays allowed: after Discord
 succeeded and an abort before the acknowledgement, a message can appear twice.
-The compact run summary stays an immediate operational report. A rollback to an
-earlier image is possible without a schema downgrade, but does not offer the new
-guarantee of joint publishing and repeatable delivery. Explicit JSON export
-paths have no joint transaction with PostgreSQL.
+The compact run summary stays an immediate operational report. Explicit JSON
+export paths have no joint transaction with PostgreSQL.
 
 `tests/test_notification_outbox.py` checks aborts before/after commit and
 before/after delivery, partial deliveries, parallel senders, review changes,
@@ -309,27 +258,27 @@ For an update, change the version and both `sha384` checksums in `docs.html`
 together with the version in `SWAGGER` (`review_app.py`); a test checks that
 every external file has a checksum and is in the policy.
 
-#### Fehlervertrag
+The review API maps POST routes to short action methods; host and origin
+check, size limit and JSON object check happen once before the action is called.
 
-Alle Fehlerantworten der Review-API verwenden `{"error": "…"}` und die
-Security Headers. Nur explizite Fehler an der jeweiligen Grenze bestimmen
-den Status; Basistypen wie `ValueError`, `KeyError` oder `psycopg.Error`
-werden nicht pauschal als Benutzer- oder Verbindungsfehler behandelt.
+#### Error contract
 
-| Status | Bedeutung |
+Every error response uses `{"error": "…"}` and the security headers. Only
+explicit errors at their boundary decide the status; base types such as
+`ValueError`, `KeyError` or `psycopg.Error` are not treated as user or
+connection errors across the board.
+
+| Status | Meaning |
 | --- | --- |
-| 400 | Ungültige Payload oder bekannte Eingabevalidierung (`UserInputError`); deutsche Validierungsmeldung |
-| 404 | Unbekannte Job-/Dokument-ID, fehlende Datei oder Blob-Version; auch verweigerter Dokumentzugriff über unsichere Metadaten |
-| 502 | Erwarteter HTTP-/Transportfehler oder Größenlimit beim Download einer manuell importierten Anzeige (`ManualImportError`) |
-| 503 | Fehlgeschlagene Laufzeitanmeldung oder Datenbankverbindung (`DatabaseUnavailableError`); kein Retry von Änderungen und kein Wechsel der Identität |
-| 500 | Interner Fehler, SQL-Fehler nach dem Verbindungsaufbau, Storageausfall oder verletzte Dokument-Prüfsumme (`DocumentIntegrityError`) |
+| 400 | Invalid payload or known input validation (`UserInputError`), with a German message |
+| 404 | Unknown job or document ID, missing file or blob version; also document access refused because of unsafe metadata |
+| 502 | Expected HTTP or transport error or size limit while downloading a manually imported listing (`ManualImportError`) |
+| 503 | Failed runtime sign-in or database connection (`DatabaseUnavailableError`); changes are not retried and the identity is not switched |
+| 500 | Internal error, SQL error after connecting, storage outage or a violated document checksum (`DocumentIntegrityError`) |
 
-Bei 500 bleiben Response und Telemetrie frei von Exception-Text, DSN,
-Tokens, Dokumentnamen und Bytes. Der Request-Span enthält Route und Status;
-bei unerwarteten Fehlern nur den Exception-Typ als Fehlerbeschreibung.
-Rollback: über den Workflow `Rollback` das vorherige Image aus „Way back“
-wiederherstellen (siehe [Operations](operations.md#deploy-and-rollback)).
-Diese Änderung benötigt keine Datenbankmigration.
+On a 500, response and telemetry contain no exception text, DSN, token,
+document name or bytes; the request span records route and status and, for
+unexpected errors, only the exception type.
 
 ### Manual import
 
@@ -341,17 +290,11 @@ recommendations in one PostgreSQL transaction. With explicitly different file
 paths, for example in tests, these writes run one after the other without a
 joint transaction.
 
-The page parser prefers `JobPosting` data and otherwise `main`, `article` or
-`role="main"`. If these areas are missing, it accepts the page content only with
-a visible H1 heading and recognised headings for tasks and profile or
-requirements. Navigation, forms and footer are skipped when collecting the
-readable text.
-
-Manual listing IDs are built from the complete canonical URL, even when schema
-IDs exist. The same URL endings of different employers must not share
-application states. Fresh old cache entries get this URL ID as well; the memory
-still recognises existing applications by their source links and keeps their
-earlier ID and timeline.
+The page parser prefers `JobPosting` data and otherwise the main content area;
+without one it accepts the page only with a visible H1 and recognised headings
+for tasks and requirements. Manual listing IDs come from the complete canonical
+URL, so equal URL endings of different employers never share application states;
+existing applications are still recognised by their source links.
 
 Explicitly added listings stay visible despite the optional filters for
 international listings and junior-hybrid special cases. Direct review links also
@@ -546,22 +489,21 @@ modules.
 
 ## State changes and configuration
 
-### Checkliste für neue Tabellen
+### Checklist for new tables
 
-- Neue Alembic-Revision mit `upgrade` und überprüftem `downgrade`; bestehende
-  Revisions-Snapshots bleiben unverändert. Bei einem Contract muss zusätzlich
-  die Commit-Grenze in `.github/scripts/check_rollback_commit.py` geprüft und
-  vor einem produktiven Einsatz mit dem Owner abgestimmt werden.
-- Runtime Grants, RLS und unzulässige direkte sowie indirekte Schreibzugriffe
-  in den lokalen Rechtetests berücksichtigen; `job-finder-db check` um die
-  neue Anwendungstabelle ergänzen.
-- Backup-/Restore-Abdeckung festlegen: entweder unter einer vorhandenen
-  Datenwurzel mit Foreign Key oder als eigener Eintrag mit Prüfsumme und
-  Leerzielprüfung. Roundtrip, alte Archive und Abbruch ohne verbleibende
-  DB-/Dokumentänderungen über `scripts/test_postgres.py` prüfen. Der Vertrag
-  steht in [backup-recovery.md](backup-recovery.md).
+- A new Alembic revision with `upgrade` and a checked `downgrade`; existing
+  revision snapshots stay unchanged. A contract revision (one an older image
+  cannot run on) also moves the commit boundary in
+  `.github/scripts/check_rollback_commit.py`.
+- Cover runtime grants, row security and forbidden direct and indirect writes in
+  the local rights tests, and add the table to `job-finder-db check`.
+- Decide the backup and restore coverage: under an existing data root with a
+  foreign key, or as an entry of its own with checksum and empty-target check.
+  Test the round trip, old archives and an abort that leaves no database or
+  document changes through `scripts/test_postgres.py`; the contract is in
+  [backup-recovery.md](backup-recovery.md).
 
-### Bestehende Zustandswege
+### Where state lives
 
 `paths.py` defines all paths relative to the project. There is no general
 `DATA_DIR` environment switch; only the document folder can be moved through
@@ -644,47 +586,24 @@ The 32 fixed comparison cases in `tests/fixtures/scoring_parity.json` record
 complete scoring results. Changes to single detection errors are tested
 separately; personal listings and ratings stay outside the repository.
 
-The review API maps POST routes to short action methods. Host/origin check,
-size limit and JSON object check happen together before the action is called;
-error responses and response headers stay central. In the browser, the
-application forms use the same saving flow, which also releases their action
-buttons after an error.
-
-Domain functions are imported from their responsible module. Location rules get
-local settings passed in explicitly from the scoring entry point.
-
 ## Python style and helpful documentation
 
 [PEP 8](https://peps.python.org/pep-0008/) and
-[PEP 257](https://peps.python.org/pep-0257/) give the direction. The concrete,
-reproducible configuration is in [pyproject.toml](../pyproject.toml).
+[PEP 257](https://peps.python.org/pep-0257/) give the direction; the concrete
+configuration is in [pyproject.toml](../pyproject.toml).
 
-- Indent with four spaces; use English identifiers, comments, docstrings and
-  documentation. Texts the user sees (review, console, Discord) and the agent's
-  rules stay German.
-- Ruff formats with 120 characters as a guide and puts everything on one line
-  that fits; a trailing comma does not force a line break. Long URLs, regular
-  expressions or test data can stay longer when splitting would hurt
-  readability. `E501` is therefore not enforced across the board; wrap long
-  comment and docstring paragraphs by hand at about 72 characters.
-- Group imports into standard library, third-party packages and project code.
-  For modules with initialisation side effects, check changes to the import
-  order for their content as well.
+- English identifiers, comments, docstrings and documentation; texts the user
+  sees (review, console, Discord) and the agent's rules stay German.
+- Ruff formats with 120 characters as a guide; long URLs, regular expressions or
+  test data may stay longer, so `E501` is not enforced. Wrap long comment and
+  docstring paragraphs by hand at about 72 characters.
 - A docstring belongs where it says more than the name: purpose, reason, edge
-  cases or state changes. One that only repeats the name is left out; Ruff
-  therefore does not require docstrings (`D1xx` is off). It starts with a short
-  description of what the code does and a full stop; further paragraphs follow
-  after a blank line.
-- For complex functions, describe inputs, return values, state changes and
-  relevant errors. Explain especially `None`, empty values and changing the
-  objects passed in. Do not merely repeat obvious parameters in other words. A
-  fixed Google or NumPy section scheme is not required.
-- Comments justify special cases or preconditions. They should not retell every
-  loop and assignment. Update outdated comments together with the behaviour.
-- Test cases get descriptive names. Constructors and standard protocol methods
-  need no mere repetition; deviating behaviour is still documented.
-- Type annotations help for data models and new clear interfaces. A complete
-  type migration is no precondition for a documentation change.
+  cases or state changes (Ruff does not require docstrings, `D1xx` is off). For
+  complex functions, explain inputs, return values, `None` and empty values and
+  changes to the objects passed in.
+- Comments justify special cases and preconditions instead of retelling the
+  code; update them together with the behaviour. Test cases get descriptive
+  names.
 
 Format automatically and check afterwards:
 

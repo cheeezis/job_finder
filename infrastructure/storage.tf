@@ -97,6 +97,10 @@ resource "azurerm_storage_container" "listing_archive" {
   name                  = "listing-archive"
   storage_account_id    = azurerm_storage_account.jobfinder.id
   container_access_type = "private"
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "azurerm_role_assignment" "listing_archive_worker" {

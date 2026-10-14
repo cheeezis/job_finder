@@ -226,6 +226,10 @@ resource "azurerm_container_app_job" "finder" {
         name        = "STARTUP_JOBS_API_KEY"
         secret_name = "startup-jobs-api-key"
       }
+      env {
+        name  = "JOBFINDER_ARCHIVE_CONTAINER"
+        value = azurerm_storage_container.listing_archive.name
+      }
     }
   }
 
@@ -243,5 +247,6 @@ resource "azurerm_container_app_job" "finder" {
   depends_on = [
     azurerm_role_assignment.acr_pull,
     azurerm_role_assignment.keyvault_worker_secret,
+    azurerm_role_assignment.listing_archive_worker,
   ]
 }

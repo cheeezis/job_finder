@@ -99,6 +99,15 @@ database URL with read access:
 .\.venv\Scripts\python.exe -m job_finder.db orphaned-documents --delete
 ```
 
+Every finder run in Azure and every hybrid run also add one gzip-compressed JSON
+Lines snapshot of all listings they saw to the private blob container
+`listing-archive` (`YYYY/MM/DD/<time>-<run_id>.jsonl.gz`, about 8 MB). It keeps the
+listing fields with description, sources and dates for later market analysis,
+but no decisions, notes or scores, and is not part of the application backup.
+`JOBFINDER_ARCHIVE_CONTAINER` switches it on; local runs and tests write nothing,
+and a failed upload costs only that snapshot, not the run
+(`job_finder/persistence/listing_archive.py`).
+
 Automatic cache entries not saved again or changed for at least 30 days can be
 pruned; writing them again unchanged does not reset the period. Manual sources,
 jobs, applications, delivery state and documents are not affected:
@@ -353,10 +362,10 @@ variable).
 
 The container has neither a managed identity nor an `az` sign-in. Instead there
 is a separate service principal. It signs in to PostgreSQL as
-`jobfinder_hybrid_entra` ([runtime access](runtime-access.md)) and has one Azure
-role, `Cognitive Services OpenAI User` for the agent (`infrastructure/openai.tf`);
-it needs no document access, because the hybrid run skips document backups. Set
-it up once:
+`jobfinder_hybrid_entra` ([runtime access](runtime-access.md)) and has two Azure
+roles: `Cognitive Services OpenAI User` for the agent (`infrastructure/openai.tf`)
+and write access to the listing archive (`infrastructure/storage.tf`). It needs no
+document access, because the hybrid run skips document backups. Set it up once:
 
 ```powershell
 az ad app create --display-name "jobfinder-local-docker"
@@ -498,7 +507,7 @@ sign-in, RBAC and TLS, not at the network boundary.
 | --- | --- |
 | Review container app | Easy Auth (Entra ID), only the own account; public only after the sign-in configuration, every deploy checks access without sign-in (`review.tf`) |
 | PostgreSQL | TLS with `sslmode=verify-full`, restricted runtime roles with Entra tokens instead of passwords; firewall: Azure services (`0.0.0.0`, any subscription) and `local-review` |
-| Blob Storage | RBAC, account keys switched off; write access only to `application-documents` |
+| Blob Storage | RBAC, account keys switched off; the review writes only `application-documents`, worker and hybrid run only `listing-archive` |
 | Key Vault | RBAC: each runtime has only `Key Vault Secrets User` on the secrets it needs; `Secrets Officer` only for the own account |
 | Azure OpenAI | RBAC without API keys: worker, hybrid run and the own account with `Cognitive Services OpenAI User` |
 | Container Registry | RBAC, `admin_enabled = false` |

@@ -64,6 +64,17 @@ run "runtimes_use_separate_identities" {
   }
   assert {
     condition = (
+      azurerm_role_assignment.listing_archive_worker.scope == azurerm_storage_container.listing_archive.id &&
+      azurerm_role_assignment.listing_archive_worker.principal_id == azurerm_user_assigned_identity.jobfinder.principal_id &&
+      azurerm_role_assignment.listing_archive_hybrid.scope == azurerm_storage_container.listing_archive.id &&
+      azurerm_role_assignment.listing_archive_hybrid.principal_id == var.local_docker_sp_object_id &&
+      one([for env in azurerm_container_app_job.finder.template[0].container[0].env : env.value if env.name == "JOBFINDER_ARCHIVE_CONTAINER"]) == "listing-archive" &&
+      !contains([for env in azurerm_container_app.review.template[0].container[0].env : env.name], "JOBFINDER_ARCHIVE_CONTAINER")
+    )
+    error_message = "Only the two finder runtimes may write the listing archive, and only that container."
+  }
+  assert {
+    condition = (
       azurerm_container_app.review.identity[0].identity_ids == toset([azurerm_user_assigned_identity.review.id]) &&
       azurerm_container_app.review.registry[0].identity == azurerm_user_assigned_identity.review.id &&
       alltrue([for secret in azurerm_container_app.review.secret : secret.identity == azurerm_user_assigned_identity.review.id]) &&

@@ -90,6 +90,29 @@ resource "azurerm_storage_container" "application_documents" {
   }
 }
 
+# Every finder run in Azure and the hybrid run add one compressed snapshot of
+# their listings for later market analysis (job_finder/persistence/listing_archive.py).
+# Only these two runtimes may write; blob versioning and soft delete protect it.
+resource "azurerm_storage_container" "listing_archive" {
+  name                  = "listing-archive"
+  storage_account_id    = azurerm_storage_account.jobfinder.id
+  container_access_type = "private"
+}
+
+resource "azurerm_role_assignment" "listing_archive_worker" {
+  scope                = azurerm_storage_container.listing_archive.id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = azurerm_user_assigned_identity.jobfinder.principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+resource "azurerm_role_assignment" "listing_archive_hybrid" {
+  scope                = azurerm_storage_container.listing_archive.id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = var.local_docker_sp_object_id
+  principal_type       = "ServicePrincipal"
+}
+
 # Provides only the tenant ID now (keyvault.tf, review.tf); object_id is
 # deliberately NOT read from here any more, see var.owner_object_id.
 data "azurerm_client_config" "current" {}

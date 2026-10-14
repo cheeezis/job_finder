@@ -14,6 +14,7 @@ flowchart LR
     worker --> kvw[Key Vault: four worker secrets]
     review --> kvr[Key Vault: two review secrets]
     review --> blob[(Blob container<br/>application-documents)]
+    worker & hybrid --> archive[(Blob container<br/>listing-archive)]
     worker --> model[Azure OpenAI<br/>caller role]
     hybrid --> model
     worker & review --> acr[Registry: pull]
@@ -25,7 +26,7 @@ flowchart LR
 | ACR | AcrPull | AcrPull | pull through the host's sign-in |
 | Key Vault | `DiscordWebhookUrl`, `StartupJobsApiKey`, `JobfinderUserSettings`, `JobfinderProfile` | `ReviewAadClientSecret`, `JobfinderUserSettings` | no vault role; local ignored configuration |
 | Model | caller role | no model role | optional caller role |
-| Blob documents | no data access | Contributor only on the document container | no data access |
+| Blob Storage | Contributor only on `listing-archive` | Contributor only on the document container | Contributor only on `listing-archive` |
 | Terraform state | no access | no access | no access |
 | Database login | `jobfinder_worker_entra` | `jobfinder_review_entra` | `jobfinder_hybrid_entra` |
 | Database group | `jobfinder_worker_access` | `jobfinder_review_access` | `jobfinder_worker_access` |

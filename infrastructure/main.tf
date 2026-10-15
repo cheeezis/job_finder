@@ -146,9 +146,11 @@ resource "azurerm_container_app_job" "finder" {
       command = ["python", "run_finder.py", "--exclude-sources", "stepstone,remotely"]
       # Only for the initial setup; afterwards the CI/CD pipeline sets the image
       # (see lifecycle below).
-      image  = "${azurerm_container_registry.jobfinder.login_server}/jobfinder:${var.image_tag}"
-      cpu    = 0.5
-      memory = "1Gi"
+      image = "${azurerm_container_registry.jobfinder.login_server}/jobfinder:${var.image_tag}"
+      # A run holds every listing with its text and the job memory at once; at
+      # 1 GiB the peak reached the limit in October 2026 and the job was killed.
+      cpu    = 1
+      memory = "2Gi"
 
       # Print Python output straight away, so progress appears promptly in the Azure logs.
       env {

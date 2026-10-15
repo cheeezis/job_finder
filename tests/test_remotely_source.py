@@ -125,6 +125,21 @@ class RemotelySourceTests(unittest.TestCase):
         self.assertEqual(job.published_at.isoformat(), "2026-08-22")
         self.assertEqual(job.sources[0].application_url, "https://example.test/apply?from=remotely")
 
+    def test_company_in_a_div_after_the_logo_mark_beats_later_paragraphs(self):
+        # Since October 2026 the name sits in a <div>; a promotional <p> follows later.
+        html = DETAIL_HTML.replace(
+            """<p class="flex flex-wrap items-center gap-2 text-body font-semibold text-foreground">
+      Example GmbH
+    </p>""",
+            '<div class="flex flex-wrap items-center gap-2.5 text-body font-semibold">Example GmbH<!--$--><!--/$--></div>',
+        ).replace("<h3>Eckdaten</h3>", "<p>Immer mehr Remote-Jobs setzen KI-Kenntnisse voraus.</p><h3>Eckdaten</h3>")
+        html = html.replace("<span>E-</span>", '<img alt="Logo von Example GmbH" src="/logo.png">')
+
+        job = remotely.job_from_html("https://www.remotely.de/job/example", html, today=date(2026, 8, 28))
+
+        self.assertEqual(job.company, "Example GmbH")
+        self.assertEqual(job.published_at.isoformat(), "2026-08-22")
+
     def test_key_facts_without_location_fall_back_to_remote(self):
         # Some fully remote ads list only a category, which used to become the location.
         html = DETAIL_HTML.replace(

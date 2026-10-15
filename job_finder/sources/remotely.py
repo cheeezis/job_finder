@@ -22,7 +22,9 @@ BASE_URL = "https://www.remotely.de"
 LIST_URL = f"{BASE_URL}/alle-jobs"
 # v2: location and employment type come from the right key facts; older entries could hold the
 # employment type or the category as location. A new name rebuilds the detail cache once.
-CACHE_FILE = cache_file("remotely_v2")
+CACHE_FILE = cache_file("remotely_v3")
+# Elements without an end tag; they never close the company mark around them.
+VOID_TAGS = {"area", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "wbr"}
 LINKEDIN_STATUS_FILE = REMOTELY_LINKEDIN_STATUS_FILE
 MAX_LIST_PAGES = 100
 OLD_PAGE_STOP_COUNT = 2
@@ -402,8 +404,8 @@ class _RemotelyDetailParser(HTMLParser):
         self.application_url = ""
         self.description_parts = []
         self.capture_title = False
-        self.capture_company = False
-        self.pending_company_mark = False
+        self.company_mark_depth = 0
+        self.awaiting_company = False
         self.awaiting_published_label = False
         self.capture_published_label = False
         self.capture_heading = False
@@ -431,9 +433,6 @@ class _RemotelyDetailParser(HTMLParser):
         elif tag == "h3":
             self.capture_heading = True
             self.heading_parts = []
-        elif tag == "p" and not self.company and self.pending_company_mark:
-            self.capture_company = True
-            self.pending_company_mark = False
         elif tag == "span" and self.active_section == "eckdaten":
             self.key_fact_has_tooltip = "data-state" in values
         elif tag == "span" and self.awaiting_published_label and not self.published_label:
@@ -443,8 +442,14 @@ class _RemotelyDetailParser(HTMLParser):
             href = values.get("href", "")
             if href.startswith(("http://", "https://")):
                 self.application_url = unescape(href)
-        if "bg-company-mark" in classes.split():
-            self.pending_company_mark = True
+        # The employer's name is the first text after its logo mark, in a
+        # <p> or <div> depending on the page version; the mark itself only
+        # holds initials or a logo.
+        if self.company_mark_depth:
+            if tag not in VOID_TAGS:
+                self.company_mark_depth += 1
+        elif "bg-company-mark" in classes.split() and not self.company:
+            self.company_mark_depth = 1
 
     def handle_startendtag(self, tag, attrs):
         if self.description_depth:
@@ -458,12 +463,12 @@ class _RemotelyDetailParser(HTMLParser):
                     return
             self.description_parts.append(f"</{tag}>")
             return
+        if self.company_mark_depth:
+            self.company_mark_depth -= 1
+            self.awaiting_company = not self.company_mark_depth
+            return
         if tag == "h1":
             self.capture_title = False
-        elif tag == "p":
-            if self.capture_company:
-                self.awaiting_published_label = True
-            self.capture_company = False
         elif tag == "span" and self.capture_published_label:
             self.capture_published_label = False
         elif tag == "h3" and self.capture_heading:
@@ -480,8 +485,13 @@ class _RemotelyDetailParser(HTMLParser):
             return
         if self.capture_title:
             self.title += data
-        if self.capture_company:
-            self.company += data
+        if self.company_mark_depth:
+            return
+        if self.awaiting_company:
+            self.company = text
+            self.awaiting_company = False
+            self.awaiting_published_label = True
+            return
         if self.capture_published_label:
             self.published_label += data
         if self.capture_heading:

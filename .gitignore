@@ -63,6 +63,8 @@ openapi.json
 /audit/
 /final-bloat-masterplan.zip
 
-# Local Claude launch configuration and permission settings
+# Local Claude launch configuration, permission settings and private notes
 /.claude/launch.json
 /.claude/settings.local.json
+/.claude/worktrees/
+/CLAUDE.local.md

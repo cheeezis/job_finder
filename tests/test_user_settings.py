@@ -63,6 +63,8 @@ class UserSettingsTests(unittest.TestCase):
                 }
             },
             "search.terms": {"search": {"terms": [" "]}},
+            "matching.excluded_role_groups.0": {"matching": {"excluded_role_groups": ["sap"]}},
+            "matching.minimum_match_percent": {"matching": {"minimum_match_percent": 101}},
         }
         for field, change in cases.items():
             with self.subTest(field=field), self.assertRaisesRegex(ValueError, f"Einstellung {re.escape(field)}"):

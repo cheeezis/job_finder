@@ -104,6 +104,9 @@ def score_job(job: Job, today=None):
         reasons.append(f"-{penalty['points']} {penalty['label']}")
 
     score = max(0, min(100, score))
+    minimum = current_settings().matching.minimum_match_percent
+    if minimum is not None and score < minimum:
+        return excluded_result(f"Unter der Mindestpunktzahl: {score} von mindestens {minimum}")
     return {
         "filter_status": "included",
         "match_percent": score,
@@ -153,6 +156,9 @@ def hard_filter_reason(title, description, full_text, role, career_levels, requi
 
     if not role:
         return "Titel ist keine erkennbare IT-Rolle"
+
+    if role["id"] in current_settings().matching.excluded_role_groups:
+        return f"Rollengruppe in den Einstellungen ausgeschlossen: {role['label']}"
 
     advanced_level = structured_advanced_level(career_levels)
     if advanced_level and not is_entry_level(title, description):
@@ -252,7 +258,7 @@ def score_profile_connection(text):
 
 
 def analyze_location_for_role(title, location, remote, description):
-    """Allow explicit entry roles with hybrid work to reach manual review."""
+    """Allow explicit entry roles with hybrid work to reach manual review unless the settings turn this off."""
     matching = current_settings().matching
     result = location_rules.analyze_location(
         location,
@@ -262,7 +268,7 @@ def analyze_location_for_role(title, location, remote, description):
         commuter_locations=[item.model_dump() for item in matching.commuter_locations],
         radius=local_search_radius_km(),
     )
-    if result["allowed"]:
+    if result["allowed"] or not matching.junior_hybrid_outside_area:
         return result
     if is_entry_level(title, title) and is_hybrid(remote) and remote_possible_from_germany(location, description):
         return {"allowed": True, "points": 0, "label": "Junior-Hybrid außerhalb des Suchgebiets; Präsenzumfang prüfen"}

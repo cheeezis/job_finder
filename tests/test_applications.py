@@ -699,6 +699,31 @@ class TrialDayTests(unittest.TestCase):
         self.assertFalse(row["has_response"])
         self.assertEqual((statistics["open"], statistics["trial_days"], statistics["interviews"]), (1, 1, 0))
 
+    def test_a_rejection_closes_the_application_although_the_interview_is_dated_later(self):
+        entry = {"workflow_status": "applied", "workflow_history": [{"status": "applied", "occurred_on": "2026-10-01"}]}
+        record_status_change(entry, WorkflowStatus.INTERVIEW, "2099-10-20", "2099-10-20T10:00")
+        status = record_status_change(entry, WorkflowStatus.REJECTED, "2026-10-10")
+
+        row = application_row("job:1", entry, date(2026, 10, 11))
+
+        self.assertEqual((status, row["workflow_status"]), ("rejected", "rejected"))
+        self.assertIsNone(row["next_appointment_at"])
+        self.assertTrue(row["has_interview"])
+        self.assertEqual(application_statistics([row])["completed"], 1)
+
+    def test_withdrawing_from_a_later_dated_trial_day_closes_the_application(self):
+        entry = {"workflow_status": "applied", "workflow_history": [{"status": "applied", "occurred_on": "2026-10-01"}]}
+        record_status_change(entry, WorkflowStatus.TRIAL_DAY, "2099-10-20", "2099-10-20T09:00")
+
+        self.assertEqual(record_status_change(entry, WorkflowStatus.WITHDRAWN, "2026-10-10"), "withdrawn")
+
+    def test_a_new_application_after_a_rejection_reopens_it(self):
+        entry = {"workflow_status": "applied", "workflow_history": [{"status": "applied", "occurred_on": "2026-10-01"}]}
+        record_status_change(entry, WorkflowStatus.REJECTED, "2026-10-10")
+
+        self.assertEqual(record_status_change(entry, WorkflowStatus.APPLIED, "2026-11-01"), "applied")
+        self.assertEqual(record_status_change(entry, WorkflowStatus.INTERVIEW, "2026-11-05"), "interview")
+
     def test_only_interviews_and_trial_days_take_an_appointment(self):
         entry = {"workflow_status": "applied"}
         with self.assertRaisesRegex(ValueError, "Hospitation/Probearbeiten"):

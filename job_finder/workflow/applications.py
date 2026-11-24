@@ -27,6 +27,9 @@ RESPONSE_STATUSES = {
     WorkflowStatus.REJECTED.value,
     WorkflowStatus.OFFER.value,
 }
+# A rejection or a withdrawal ends an application even when an appointment
+# event carries a later date.
+ENDING_STATUSES = {WorkflowStatus.REJECTED.value, WorkflowStatus.WITHDRAWN.value}
 NO_RESPONSE_AFTER_DAYS = 14
 # The availability check sets an offline shortlisted job to ignored with this
 # reason and marks it; "ignored" plus the marker means archived.
@@ -190,18 +193,34 @@ def editable_history_event(entry, event_index, previous_status, previous_occurre
 
 
 def synchronize_current_status(entry):
-    """Use the chronologically latest valid event as current status.
+    """Use the current event of the valid history as current status.
 
     The availability check's archive marker belongs to its own ignored event.
     Once another event is current, the user decided, and the marker goes: the
     job is then neither archived nor hidden from the agent's past decisions.
     """
-    history = valid_history(entry.get("workflow_history", []))
-    status = history[-1]["status"] if history else WorkflowStatus.NEW.value
+    event = current_event(valid_history(entry.get("workflow_history", [])))
+    status = event["status"] if event else WorkflowStatus.NEW.value
     entry["workflow_status"] = status
-    if not history or history[-1].get("reason") != UNAVAILABLE_REASON:
+    if not event or event.get("reason") != UNAVAILABLE_REASON:
         entry.pop(ARCHIVE_MARKER, None)
     return status
+
+
+def current_event(history):
+    """Return the event that sets the current status of a sorted history, or None.
+
+    That is the latest event, except that an interview or trial day dated after
+    a rejection or withdrawal does not reopen the application: its date is often
+    the appointment that will no longer take place. Any other later event, such
+    as a new application, does.
+    """
+    current = None
+    for event in history:
+        if current and current["status"] in ENDING_STATUSES and event["status"] in APPOINTMENT_STATUSES:
+            continue
+        current = event
+    return current
 
 
 def review_links(memory, recommendations):
@@ -389,8 +408,8 @@ def next_appointment(history):
 
 
 def last_past_appointment(history):
-    """Return the latest event while it is a past appointment, or None."""
-    latest = history[-1] if history else {}
+    """Return the current event while it is a past appointment, or None."""
+    latest = current_event(history) or {}
     appointment = latest.get("scheduled_for")
     if latest.get("status") not in APPOINTMENT_STATUSES or not appointment:
         return None

@@ -17,6 +17,7 @@ from typing import Annotated, Any
 import yaml
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, PrivateAttr, StrictInt, ValidationError
 
+from job_finder.matching.matching_rules import GENERAL_IT_ROLE, ROLE_GROUPS
 from job_finder.paths import PROJECT_DIR
 
 SETTINGS_ENV = "JOBFINDER_USER_SETTINGS"
@@ -31,7 +32,17 @@ def nonblank(value):
     return value
 
 
+ROLE_GROUP_IDS = sorted(role["id"] for role in [*ROLE_GROUPS, GENERAL_IT_ROLE])
+
+
+def known_role_group(value):
+    if value not in ROLE_GROUP_IDS:
+        raise ValueError(f"unbekannte Rollengruppe, bekannt sind: {', '.join(ROLE_GROUP_IDS)}")
+    return value
+
+
 Text = Annotated[str, AfterValidator(nonblank)]
+RoleGroup = Annotated[str, AfterValidator(known_role_group)]
 PositiveInt = Annotated[StrictInt, Field(gt=0)]
 TextList = Annotated[list[Text], Field(min_length=1)]
 
@@ -65,6 +76,10 @@ class MatchingSettings(Section):
     profile_domain_keywords: list[Text]
     salary_target_eur: PositiveInt | None = None
     salary_minimum_eur: PositiveInt | None = None
+    # Optional limits for a shorter review list; the defaults keep every job the rules allow.
+    excluded_role_groups: list[RoleGroup] = []
+    minimum_match_percent: Annotated[StrictInt, Field(ge=0, le=100)] | None = None
+    junior_hybrid_outside_area: bool = True
 
 
 class SourceSettings(Section):

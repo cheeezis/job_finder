@@ -562,6 +562,13 @@ preferences.
 training. Unknown keys are ignored on loading. `profile.local.yaml` is the AI
 agent's base of facts; the prefilter does not read it.
 
+Three optional matching settings shorten the review list: `excluded_role_groups`
+drops whole role groups (`general_it` is the fallback group),
+`minimum_match_percent` drops jobs below a score, and
+`junior_hybrid_outside_area: false` drops junior hybrid jobs outside the local
+area and the commuter places. Without them every job the rules allow stays.
+Manually imported jobs stay reviewable with the reason as a warning.
+
 The scoring stays a complete, rule-based sorting aid:
 
 | Component | Points |

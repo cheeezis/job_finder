@@ -274,6 +274,51 @@ class ScoringTests(unittest.TestCase):
         self.assertIn("Pendelort Beispielstadt", accepted["reasons"][3])
         self.assertEqual(rejected["filter_status"], "excluded")
 
+    def test_settings_can_exclude_role_groups(self):
+        job = make_job(title="IT-Spezialist", description="Keine Berufserfahrung erforderlich.")
+        self.assertEqual(score_job(job)["role_group"], "general_it")
+
+        with with_settings(matching={"excluded_role_groups": ["general_it"]}):
+            result = score_job(job)
+            python_role = score_job(make_job())
+
+        self.assertEqual(result["filter_status"], "excluded")
+        self.assertIn("Allgemeine IT-Rolle", result["reasons"][0])
+        self.assertEqual(python_role["filter_status"], "included")
+
+    def test_minimum_score_excludes_weaker_jobs(self):
+        weak = make_job(title="IT-Spezialist", description="Keine Berufserfahrung erforderlich.")
+        strong = make_job()
+        weak_score = score_job(weak)["match_percent"]
+        strong_score = score_job(strong)["match_percent"]
+        self.assertLess(weak_score, strong_score)
+
+        with with_settings(matching={"minimum_match_percent": strong_score}):
+            weak_result = score_job(weak)
+            strong_result = score_job(strong)
+
+        self.assertEqual(weak_result["filter_status"], "excluded")
+        self.assertEqual(
+            weak_result["reasons"], [f"Unter der Mindestpunktzahl: {weak_score} von mindestens {strong_score}"]
+        )
+        self.assertEqual(strong_result["filter_status"], "included")
+
+    def test_settings_can_drop_distant_junior_hybrid_roles(self):
+        job = make_job(title="Junior Python Developer", location="Berlin", remote="homeoffice")
+        self.assertEqual(score_job(job)["filter_status"], "included")
+
+        with with_settings(matching={"junior_hybrid_outside_area": False}):
+            self.assertEqual(score_job(job)["filter_status"], "excluded")
+
+    def test_manual_jobs_stay_reviewable_under_strict_settings(self):
+        job = make_job(title="IT-Spezialist", source="manual")
+
+        with with_settings(matching={"excluded_role_groups": ["general_it"], "minimum_match_percent": 100}):
+            result = score_jobs([job])
+
+        self.assertEqual(len(result["included"]), 1)
+        self.assertIn("Allgemeine IT-Rolle", result["included"][0]["prefilter_warning"])
+
     def test_remote_days_are_converted_to_weekly_percentage(self):
         self.assertEqual(detect_remote("Drei Tage pro Woche im Homeoffice"), "60%")
         self.assertEqual(detect_remote("Zwei Präsenztage pro Woche"), "60%")

@@ -30,6 +30,15 @@ matching:
   # Optionale Jahresbrutto-Präferenzen in Euro.
   salary_target_eur: null
   salary_minimum_eur: null
+  # Optional strengere Review-Liste. Ohne Eintrag bleibt alles, was die Regeln
+  # erlauben. Rollengruppen siehe job_finder/matching/matching_rules.py
+  # (ROLE_GROUPS) sowie general_it für die allgemeine IT-Rolle.
+  # excluded_role_groups: [general_it, junior_sap]
+  # Stellen unter dieser Punktzahl (0–100) fallen ganz heraus.
+  # minimum_match_percent: 60
+  # false: Junior-Hybridstellen außerhalb von Nahbereich und Pendelorten fallen
+  # heraus, statt zur manuellen Prüfung in der Liste zu landen.
+  # junior_hybrid_outside_area: true
 
 # Optional: nur diese Karriereseiten einzelner Firmen durchsuchen. Ohne Eintrag
 # alle: compose_it, bytewerk, rhoenenergie, jumo, edag, css, proemion, nethinks.

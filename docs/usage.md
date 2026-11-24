@@ -25,7 +25,8 @@ an English gloss where the meaning is not obvious.
   and inactive jobs
 - a rule-based prefilter for location, remote share, experience, employment
   type, travel and IT fit; junior-hybrid special cases and international jobs
-  can be switched on in the review
+  can be switched on in the review; optional settings drop role groups, jobs
+  below a minimum score or junior-hybrid jobs outside the search area
 - review with interesting, inquiry, waiting list, ignore and apply, plus an own
   note; if an application at the same company is already running, the card
   names it with its status

@@ -397,15 +397,16 @@ class RunFinderTests(unittest.TestCase):
             collect_jobs([failing, working], run_id="test-run-1")
 
         steps = [item for item in spans.get_finished_spans() if item.name == "source"]
+        # Sources run in parallel, so their spans finish in any order.
         self.assertEqual(
-            [
+            sorted(
                 (
                     item.attributes["jobfinder.source"],
                     item.attributes["jobfinder.status"],
                     item.attributes["jobfinder.jobs"],
                 )
                 for item in steps
-            ],
+            ),
             [("broken", "failed", 0), ("working", "success", 1)],
         )
 
